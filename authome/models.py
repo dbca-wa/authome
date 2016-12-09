@@ -2,8 +2,10 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.signals import user_logged_in
 from django.core import management
+from django.utils import timezone
 from django.db import models
 from ipware.ip import get_ip
+import hashlib
 
 from django.contrib.sessions.models import Session
 
@@ -19,12 +21,10 @@ class UserSession(models.Model):
 
 
 def user_logged_in_handler(sender, request, user, **kwargs):
-    logging.debug('user_logged_in_handler')
     request.session.save()
     usersession, created = UserSession.objects.get_or_create(user=user, session_id=request.session.session_key)
     usersession.ip = get_ip(request)
     usersession.save()
-    logging.debug('user_logged_in_handler saving stuff')
     management.call_command("clearsessions", verbosity=0)
 
 user_logged_in.connect(user_logged_in_handler)

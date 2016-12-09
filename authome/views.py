@@ -179,6 +179,7 @@ def auth(request):
         return response
 
     cache_basic = False
+    user = None
     if not request.user.is_authenticated():
         # Check basic auth against Azure AD as an alternative to SSO.
         try:
@@ -217,19 +218,21 @@ def auth(request):
                 "WWW-Authenticate"] = 'Basic realm="Please login with your email address"'
             response.content = str(e)
             return response
+    else:
+        user = request.user
 
-    us = UserSession.objects.filter(user=user).order_by('-session__expire_date')[0]
-    response_data = json.dumps({
+    us = UserSession.objects.filter(user__email=user.email).order_by('-session__expire_date')[0]
+    response_contents = {
         'email': user.email,
         'username': user.username,
         'first_name': user.first_name,
         'last_name': user.last_name,
         'shared_id': us.shared_id,
         'session_key': request.session.session_key,
-        'client_logon_ip': ip
-    })
-    response = HttpResponse(response_data, content_type='application/json')
-    headers = json.loads(response_data.decode('utf-8'))
+        'client_logon_ip': current_ip
+    }
+    response = HttpResponse(json.dumps(response_contents), content_type='application/json')
+    headers = response_contents
     headers["full_name"] = u"{}, {}".format(
         headers.get("last_name", ""), 
         headers.get("first_name", "")
