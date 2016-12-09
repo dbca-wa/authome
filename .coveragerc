@@ -1,0 +1,7 @@
+[report]
+omit =
+    venv/*
+    venv2/*
+    authome/migrations/*
+    manage.py
+    wsgi.py
