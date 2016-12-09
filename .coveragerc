@@ -3,5 +3,5 @@ omit =
     venv/*
     venv2/*
     authome/migrations/*
+    authome/wsgi.py
     manage.py
-    wsgi.py
