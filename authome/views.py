@@ -5,6 +5,7 @@ from django.core.cache import cache
 from django.shortcuts import render
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
+from django.utils.http import urlencode
 from ipware.ip import get_ip
 import json
 import base64
@@ -256,15 +257,16 @@ def auth(request):
 def logout_view(request):
     logout(request)
     return HttpResponseRedirect(
-        "https://login.windows.net/common/oauth2/logout")
-
-
-def redirect(request):
-    path = request.get_full_path().replace("/sso/auth_redirect/", "", 1)
-    return HttpResponseRedirect("https://{}".format(path))
+        'https://login.windows.net/common/oauth2/logout')
 
 
 def home(request):
+    next_url = request.GET.get('next', None)
     if not request.user.is_authenticated():
-        return HttpResponseRedirect(reverse('social:begin', args=['azuread-oauth2']))
+        url = reverse('social:begin', args=['azuread-oauth2'])
+        if next_url:
+            url += '?{}'.format(urlencode({'next': next_url}))
+        return HttpResponseRedirect(url)
+    if next_url:
+        return HttpResponseRedirect('https://{}'.format(next_url))
     return HttpResponseRedirect(reverse('auth'))
