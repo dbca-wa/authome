@@ -1,5 +1,6 @@
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden
 from django.contrib.auth import login, logout, get_user_model
+from django.core.urlresolvers import reverse
 from django.core.cache import cache
 from django.shortcuts import render
 from django.conf import settings
@@ -237,7 +238,7 @@ def auth(request):
         headers.get("last_name", ""), 
         headers.get("first_name", "")
     )
-    headers["logout_url"] = "/auth_logout"
+    headers["logout_url"] = "/sso/auth_logout"
    
     # cache response
     cache_headers = dict()
@@ -259,6 +260,11 @@ def logout_view(request):
 
 
 def redirect(request):
-    path = request.get_full_path().replace("/redirect/", "", 1)
+    path = request.get_full_path().replace("/sso/auth_redirect/", "", 1)
     return HttpResponseRedirect("https://{}".format(path))
 
+
+def home(request):
+    if not request.user.is_authenticated():
+        return HttpResponseRedirect(reverse('social:begin', args=['azuread-oauth2']))
+    return HttpResponseRedirect(reverse('auth'))

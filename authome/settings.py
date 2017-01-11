@@ -7,7 +7,10 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Define the following in the environment:
 SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG', False)
-ALLOWED_HOSTS = [env('ALLOWED_DOMAIN'), ]
+if DEBUG:
+    ALLOWED_HOSTS = ['*']
+else:
+    ALLOWED_HOSTS = [env('ALLOWED_DOMAIN'), ]
 INTERNAL_IPS = ['127.0.0.1', '::1']
 
 
@@ -24,7 +27,7 @@ INSTALLED_APPS = [
 
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
-    'social.backends.azuread.AzureADOAuth2',
+    'social_core.backends.azuread.AzureADOAuth2',
 )
 
 # Azure AD settings
