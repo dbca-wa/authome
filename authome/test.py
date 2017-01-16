@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.shortcuts import reverse
 from django.test import TestCase, Client
 
 import base64
@@ -8,9 +9,9 @@ import adal
 
 class AuthTestCase(TestCase):
     client = Client()
-    auth_url = '/auth'
-    auth_ip_url = '/auth_ip'
-    auth_dual_url = '/auth_dual'
+    auth_url = reverse('auth')
+    auth_ip_url = reverse('auth_ip')
+    auth_dual_url = reverse('auth_dual')
     username = 'testu'
     email = 'test.user@test.domain'
     password = 'testpass'
