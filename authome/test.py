@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from django.contrib.auth.models import User
 from django.shortcuts import reverse
 from django.test import TestCase, Client
@@ -82,7 +83,7 @@ class AuthTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 401)
         response = self.client.get(self.auth_url,
-            HTTP_AUTHORIZATION='Basic 😭😭😭😕😕😕'
+            HTTP_AUTHORIZATION=u'Basic 😭😭😭😕😕😕'
         )
         self.assertEqual(response.status_code, 401)
         response = self.client.get(self.auth_url,
