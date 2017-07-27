@@ -1,3 +1,6 @@
+[![Build
+status](https://travis-ci.org/parksandwildlife/authome.svg?branch=master)](https://travis-ci.org/parksandwildlife/authome/builds) [![Coverage Status](https://coveralls.io/repos/github/parksandwildlife/authome/badge.svg?branch=master)](https://coveralls.io/github/parksandwildlife/authome?branch=master)
+
 # authome
 
 HTTP service for single sign-on session tracking authenticated against Microsoft Azure AD.
