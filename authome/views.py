@@ -29,7 +29,7 @@ def force_email(username):
 def parse_basic(basic_auth):
     if not basic_auth:
         raise Exception('Missing credentials')
-    match = re.match(b'^Basic\\s+([a-zA-Z0-9+/=]+)$', basic_auth)
+    match = re.match('^Basic\\s+([a-zA-Z0-9+/=]+)$', basic_auth)
     if not match:
         raise Exception('Malformed Authorization header')
     basic_auth_raw = base64.b64decode(match.group(1)).decode('utf-8')
@@ -103,7 +103,7 @@ def auth_ip(request):
     current_ip = get_ip(request)
 
     # If there's a basic auth header, perform a check.
-    basic_auth = request.META.get("HTTP_AUTHORIZATION").strip()
+    basic_auth = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else ''
     if basic_auth:
         # Check basic auth against Azure AD as an alternative to SSO.
         username, password = parse_basic(basic_auth)
@@ -150,7 +150,7 @@ def auth_ip(request):
 @csrf_exempt
 def auth(request):
     # grab the basic auth data from the request
-    basic_auth = request.META.get("HTTP_AUTHORIZATION").strip()
+    basic_auth = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else ''
     basic_hash = hashlib.sha1(basic_auth.encode('utf-8')).hexdigest() if basic_auth else None
     # grab IP address from the request
     current_ip = get_ip(request)
