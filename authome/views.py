@@ -18,11 +18,9 @@ from authome.models import UserSession
 
 def force_email(username):
     if username.find("@") == -1:
-        candidates = User.objects.filter(
-            username__iexact=username)
-        if not candidates:
-            return None
-        return candidates[0].email
+        candidate = User.objects.filter(
+            username__iexact=username).first()
+        return candidate.email if candidate else None
     return username
 
 
@@ -50,18 +48,15 @@ def adal_authenticate(email, password):
     except adal.adal_error.AdalError:
         return None
 
-    candidates = User.objects.filter(email__iexact=token['userId'])
-    if candidates.exists():
-        return candidates[0]
-    else:
-        return None
+    candidates = User.objects.filter(email__iexact=token['userId']).first()
+    return candidates
 
 
 def shared_id_authenticate(email, shared_id):
-    us = UserSession.objects.filter(user__email__iexact=email).order_by('-session__expire_date')
-    if (not us.exists()) or (us[0].shared_id != shared_id):
+    us = UserSession.objects.filter(user__email__iexact=email).order_by('-session__expire_date').first()
+    if (not us) or (us.shared_id != shared_id):
         return None
-    return us[0].user
+    return us.user
 
 
 @csrf_exempt
@@ -127,17 +122,16 @@ def auth_ip(request):
     if request.user.is_authenticated():
         return auth(request)
 
-    # We can assume that the Session and UserSession tables only contain
-    # current sessions.
-    qs = UserSession.objects.filter(
-        session__isnull=False,
-        ip=current_ip).order_by("-session__expire_date")
-
     headers = {'client_logon_ip': current_ip}
 
-    if qs.exists():
-        user = qs[0].user
-        headers["email"] = user.email
+    # We can assume that the Session and UserSession tables only contain
+    # current sessions.
+    usersession = UserSession.objects.filter(
+                      session__isnull=False,
+                      ip=current_ip).order_by("-session__expire_date").first()
+
+    if usersession:
+        headers["email"] = usersession.user.email
 
     response = HttpResponse(json.dumps(headers), content_type='application/json')
     for key, val in headers.items():
