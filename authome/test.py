@@ -92,6 +92,9 @@ class AuthTestCase(TestCase):
         self.assertEqual(response.status_code, 401)
         # legit header, but invalid payload
         response = self.client.get(self.auth_url,
+            HTTP_AUTHORIZATION='Basic 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/==='
+        )
+        response = self.client.get(self.auth_url,
             HTTP_AUTHORIZATION='Basic '+base64.b64encode(b'notlegit').decode('utf-8')
         )
         self.assertEqual(response.status_code, 401)
