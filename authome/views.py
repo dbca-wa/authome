@@ -11,6 +11,7 @@ import json
 import base64
 import hashlib
 import adal
+import re
 
 from django.contrib.auth.models import User
 from authome.models import UserSession
@@ -23,6 +24,18 @@ def force_email(username):
             return None
         return candidates[0].email
     return username
+
+
+def parse_basic(basic_auth):
+    if not basic_auth:
+        raise Exception('Missing credentials')
+    match = re.match(b'^Basic\\s+([a-zA-Z0-9+/=]+)$', basic_auth)
+    if not match:
+        raise Exception('Malformed Authorization header')
+    basic_auth_raw = base64.b64decode(match.group(1)).decode('utf-8')
+    if ':' not in basic_auth_raw:
+        raise Exception('Missing password')
+    return basic_auth_raw.split(":", 1)
 
 
 def adal_authenticate(email, password):
@@ -90,11 +103,10 @@ def auth_ip(request):
     current_ip = get_ip(request)
 
     # If there's a basic auth header, perform a check.
-    basic_auth = request.META.get("HTTP_AUTHORIZATION")
+    basic_auth = request.META.get("HTTP_AUTHORIZATION").strip()
     if basic_auth:
         # Check basic auth against Azure AD as an alternative to SSO.
-        username, password = base64.b64decode(
-            basic_auth.split(" ", 1)[1].strip()).decode('utf-8').split(":", 1)
+        username, password = parse_basic(basic_auth)
         username = force_email(username)
         user = shared_id_authenticate(username, password)
         
@@ -138,7 +150,7 @@ def auth_ip(request):
 @csrf_exempt
 def auth(request):
     # grab the basic auth data from the request
-    basic_auth = request.META.get("HTTP_AUTHORIZATION")
+    basic_auth = request.META.get("HTTP_AUTHORIZATION").strip()
     basic_hash = hashlib.sha1(basic_auth.encode('utf-8')).hexdigest() if basic_auth else None
     # grab IP address from the request
     current_ip = get_ip(request)
@@ -146,8 +158,14 @@ def auth(request):
 
     # store the access IP in the current user session 
     if request.user.is_authenticated():
-        usersession = UserSession.objects.get(
-            session_id=request.session.session_key)
+        usersession = UserSession.objects.filter(
+            session_id=request.session.session_key).order_by("-session__expire_date").first()
+        if not usersession:
+            usersession, created = UserSession.objects.get_or_create(user=request.user,
+                                                    session_id=request.session.session_key,
+                                                    ip=current_ip)
+            usersession.save()
+
         if usersession.ip != current_ip:
             usersession.ip = current_ip
             usersession.save()
@@ -185,10 +203,7 @@ def auth(request):
     if not request.user.is_authenticated():
         # Check basic auth against Azure AD as an alternative to SSO.
         try:
-            if basic_auth is None:
-                raise Exception('Missing credentials')
-            username, password = base64.b64decode(
-                basic_auth.split(" ", 1)[1].strip()).decode('utf-8').split(":", 1)
+            username, password = parse_basic(basic_auth)
             username = force_email(username)
 
             # first check for a shared_id match
@@ -223,7 +238,7 @@ def auth(request):
     else:
         user = request.user
 
-    us = UserSession.objects.filter(user__email=user.email).order_by('-session__expire_date')[0]
+    us = UserSession.objects.filter(user__email=user.email).order_by('-session__expire_date').first()
     response_contents = {
         'email': user.email,
         'username': user.username,
