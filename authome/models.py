@@ -10,8 +10,8 @@ import hashlib
 from django.contrib.sessions.models import Session
 
 class UserSession(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL)
-    session = models.ForeignKey(Session)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,)
+    session = models.ForeignKey(Session, on_delete=models.CASCADE,)
     ip = models.GenericIPAddressField(null=True)
 
     @property
