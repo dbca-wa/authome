@@ -1,6 +1,6 @@
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden
 from django.contrib.auth import login, logout, get_user_model
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.core.cache import cache
 from django.shortcuts import render
 from django.conf import settings
@@ -62,7 +62,7 @@ def shared_id_authenticate(email, shared_id):
 @csrf_exempt
 def auth_get(request):
     # If user is using SSO, do a normal auth check.
-    if request.user.is_authenticated():
+    if request.user.is_authenticated:
         return auth(request)
 
     if 'sso_user' in request.GET and 'sso_shared_id' in request.GET:
@@ -84,7 +84,7 @@ def auth_get(request):
 @csrf_exempt
 def auth_dual(request):
     # If user has a SSO cookie, do a normal auth check.
-    if request.user.is_authenticated():
+    if request.user.is_authenticated:
         return auth(request)
 
     # else return an empty response
@@ -119,7 +119,7 @@ def auth_ip(request):
             return response
 
     # If user has a SSO cookie, do a normal auth check.
-    if request.user.is_authenticated():
+    if request.user.is_authenticated:
         return auth(request)
 
     headers = {'client_logon_ip': current_ip}
@@ -151,7 +151,7 @@ def auth(request):
 
 
     # store the access IP in the current user session 
-    if request.user.is_authenticated():
+    if request.user.is_authenticated:
         usersession = UserSession.objects.filter(
             session_id=request.session.session_key).order_by("-session__expire_date").first()
         if not usersession:
@@ -175,7 +175,7 @@ def auth(request):
             response["X-auth-cache-hit"] = "success"
 
             # for a new session using cached basic auth, reauthenticate
-            if not request.user.is_authenticated():
+            if not request.user.is_authenticated:
                 user = User.objects.get(email__iexact=content[1]['X-email'])
                 user.backend = "django.contrib.auth.backends.ModelBackend"
                 login(request, user)
@@ -185,7 +185,7 @@ def auth(request):
     cachekey = "auth_cache_{}".format(request.session.session_key)
     content = cache.get(cachekey)
     # return a cached response ONLY if the current session has an authenticated user
-    if content and request.user.is_authenticated():
+    if content and request.user.is_authenticated:
         response = HttpResponse(content[0], content_type='application/json')
         for key, val in content[1].items():
             response[key] = val
@@ -194,7 +194,7 @@ def auth(request):
 
     cache_basic = False
     user = None
-    if not request.user.is_authenticated():
+    if not request.user.is_authenticated:
         # Check basic auth against Azure AD as an alternative to SSO.
         try:
             username, password = parse_basic(basic_auth)
@@ -271,7 +271,7 @@ def logout_view(request):
 
 def home(request):
     next_url = request.GET.get('next', None)
-    if not request.user.is_authenticated():
+    if not request.user.is_authenticated:
         url = reverse('social:begin', args=['azuread-oauth2'])
         if next_url:
             url += '?{}'.format(urlencode({'next': next_url}))

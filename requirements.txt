@@ -1,12 +1,13 @@
-Django<1.12
+Django==2.1.5
 django-confy==1.0.4
-django-ipware==1.1.6
-social-auth-app-django==1.2.0
-social-auth-core==1.4.0
+django-ipware==2.1.0
+social-auth-app-django==3.1.0
+social-auth-core==3.0.0
 # fork of Microsoft Azure AD auth library with password authentication fix
 git+https://github.com/scottp-dpaw/azure-activedirectory-library-for-python.git@passwordauth#egg=adal
 psycopg2-binary==2.7.7
-coverage==4.2
-coveralls==1.1
+coverage==4.5.2
+coveralls==1.5.1
 mock==2.0.0
-gevent==1.1.2
+gevent==1.4.0
+gunicorn==19.9.0
