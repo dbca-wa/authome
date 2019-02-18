@@ -1,5 +1,5 @@
 [![Build
-status](https://travis-ci.org/parksandwildlife/authome.svg?branch=master)](https://travis-ci.org/parksandwildlife/authome/builds) [![Coverage Status](https://coveralls.io/repos/github/parksandwildlife/authome/badge.svg?branch=master)](https://coveralls.io/github/parksandwildlife/authome?branch=master)
+status](https://travis-ci.org/dbca-wa/authome.svg?branch=master)](https://travis-ci.org/dbca-wa/authome/builds) [![Coverage Status](https://coveralls.io/repos/github/dbca-wa/authome/badge.svg?branch=master)](https://coveralls.io/github/dbca-wa/authome?branch=master)
 
 # authome
 
