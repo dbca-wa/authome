@@ -1,26 +1,28 @@
 import os
-from confy import env, database, cache
+from authome.utils import env
+import dj_database_url
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Define the following in the environment:
-SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG', False)
-if DEBUG:
-    ALLOWED_HOSTS = ['*']
+SECRET_KEY = env('SECRET_KEY', 'PlaceholderSecretKey')
+if not DEBUG:
+    ALLOWED_HOSTS = env('ALLOWED_DOMAINS', '').split(',')
 else:
-    ALLOWED_HOSTS = [env('ALLOWED_DOMAIN'), ]
+    ALLOWED_HOSTS = ['*']
 INTERNAL_IPS = ['127.0.0.1', '::1']
+ROOT_URLCONF = 'authome.urls'
+WSGI_APPLICATION = 'authome.wsgi.application'
 
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'django_extensions',
     'social_django',
     'authome'
 ]
@@ -62,7 +64,6 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_HTTPONLY = env('SESSION_COOKIE_HTTPONLY', False)
 SESSION_COOKIE_SECURE = env('SESSION_COOKIE_SECURE', False)
 CSRF_COOKIE_SECURE = env('CSRF_COOKIE_SECURE', False)
-CACHES = {'default': cache.config()}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -78,8 +79,7 @@ MIDDLEWARE = [
 # Internationalization
 LANGUAGE_CODE = 'en-gb'
 TIME_ZONE = 'Australia/Perth'
-USE_I18N = True
-USE_L10N = True
+USE_I18N = False
 USE_TZ = True
 DATE_FORMAT = 'd M Y'
 DATETIME_FORMAT = 'l d F Y, h:i A'
@@ -101,7 +101,7 @@ TEMPLATES = [
 ]
 
 
-DATABASES = {'default': database.config()}
-ROOT_URLCONF = 'authome.urls'
-WSGI_APPLICATION = 'authome.wsgi.application'
-
+DATABASES = {
+    # Defined in DATABASE_URL env variable.
+    'default': dj_database_url.config(),
+}

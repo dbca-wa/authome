@@ -1,5 +1,4 @@
 Django==2.1.5
-django-confy==1.0.4
 django-ipware==2.1.0
 social-auth-app-django==3.1.0
 social-auth-core==3.0.0
@@ -10,4 +9,7 @@ coverage==4.5.2
 coveralls==1.5.1
 mock==2.0.0
 gevent==1.4.0
-gunicorn==19.9.0
+gunicorn==20.0.4
+dj-database-url==0.5.0
+django-dotenv==1.4.2
+django-extensions==3.0.8

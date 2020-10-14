@@ -1,18 +1,17 @@
 """
 WSGI config for authome project.
-
 It exposes the WSGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/1.10/howto/deployment/wsgi/
 """
-
-import os
-import confy
+import dotenv
 from django.core.wsgi import get_wsgi_application
+import os
+from pathlib import Path
 
-confy.read_environment_file(".env")
+# These lines are required for interoperability between local and container environments.
+d = Path(__file__).resolve().parents[1]
+dot_env = os.path.join(str(d), '.env')
+if os.path.exists(dot_env):
+    dotenv.read_dotenv(dot_env)
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "authome.settings")
-
 application = get_wsgi_application()
