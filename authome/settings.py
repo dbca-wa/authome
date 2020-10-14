@@ -24,7 +24,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django_extensions',
     'social_django',
-    'authome'
+    'authome',
 ]
 
 AUTHENTICATION_BACKENDS = (

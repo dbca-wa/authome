@@ -4,7 +4,7 @@ from django.contrib.auth.signals import user_logged_in
 from django.core import management
 from django.utils import timezone
 from django.db import models
-from ipware.ip import get_ip
+from ipware.ip import get_client_ip
 import hashlib
 
 from django.contrib.sessions.models import Session
@@ -23,7 +23,7 @@ class UserSession(models.Model):
 def user_logged_in_handler(sender, request, user, **kwargs):
     request.session.save()
     usersession, created = UserSession.objects.get_or_create(user=user, session_id=request.session.session_key)
-    usersession.ip = get_ip(request)
+    usersession.ip = get_client_ip(request)
     usersession.save()
     management.call_command("clearsessions", verbosity=0)
 

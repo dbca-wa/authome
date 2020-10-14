@@ -1,12 +1,11 @@
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden
-from django.contrib.auth import login, logout, get_user_model
+from django.contrib.auth import login, logout
 from django.urls import reverse
 from django.core.cache import cache
-from django.shortcuts import render
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.http import urlencode
-from ipware.ip import get_ip
+from ipware.ip import get_client_ip
 import json
 import base64
 import hashlib
@@ -15,6 +14,7 @@ import re
 
 from django.contrib.auth.models import User
 from authome.models import UserSession
+
 
 def force_email(username):
     if username.find("@") == -1:
@@ -66,11 +66,10 @@ def auth_get(request):
         return auth(request)
 
     if 'sso_user' in request.GET and 'sso_shared_id' in request.GET:
-        user = shared_id_authenticate(request.GET.get('sso_user'), 
-            request.GET.get('sso_shared_id'))
+        user = shared_id_authenticate(request.GET.get('sso_user'), request.GET.get('sso_shared_id'))
         if user:
             response_data = json.dumps({
-                'email': user.email, 
+                'email': user.email,
                 'shared_id': request.GET.get('sso_shared_id')
             })
             response = HttpResponse(response_data, content_type='application/json')
@@ -91,11 +90,11 @@ def auth_dual(request):
     response = HttpResponse('{}', content_type='application/json')
     return response
 
-    
+
 @csrf_exempt
 def auth_ip(request):
     # Get the IP of the current user, try and match it up to a session.
-    current_ip = get_ip(request)
+    current_ip = get_client_ip(request)
 
     # If there's a basic auth header, perform a check.
     basic_auth = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else ''
@@ -104,13 +103,13 @@ def auth_ip(request):
         username, password = parse_basic(basic_auth)
         username = force_email(username)
         user = shared_id_authenticate(username, password)
-        
+
         if not user:
             user = adal_authenticate(username, password)
 
         if user:
             response_data = json.dumps({
-                'email': user.email, 
+                'email': user.email,
                 'client_logon_ip': current_ip
             })
             response = HttpResponse(response_data, content_type='application/json')
@@ -127,8 +126,7 @@ def auth_ip(request):
     # We can assume that the Session and UserSession tables only contain
     # current sessions.
     usersession = UserSession.objects.filter(
-                      session__isnull=False,
-                      ip=current_ip).order_by("-session__expire_date").first()
+        session__isnull=False, ip=current_ip).order_by("-session__expire_date").first()
 
     if usersession:
         headers["email"] = usersession.user.email
@@ -147,17 +145,15 @@ def auth(request):
     basic_auth = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else ''
     basic_hash = hashlib.sha1(basic_auth.encode('utf-8')).hexdigest() if basic_auth else None
     # grab IP address from the request
-    current_ip = get_ip(request)
+    current_ip = get_client_ip(request)
 
-
-    # store the access IP in the current user session 
+    # Store the access IP in the current user session
     if request.user.is_authenticated:
         usersession = UserSession.objects.filter(
             session_id=request.session.session_key).order_by("-session__expire_date").first()
         if not usersession:
-            usersession, created = UserSession.objects.get_or_create(user=request.user,
-                                                    session_id=request.session.session_key,
-                                                    ip=current_ip)
+            usersession, created = UserSession.objects.get_or_create(
+                user=request.user, session_id=request.session.session_key, ip=current_ip)
             usersession.save()
 
         if usersession.ip != current_ip:
@@ -206,7 +202,7 @@ def auth(request):
             user = shared_id_authenticate(username, password)
             if user:
                 response_data = json.dumps({
-                    'email': user.email, 
+                    'email': user.email,
                     'shared_id': password
                 })
                 response = HttpResponse(response_data, content_type='application/json')
@@ -245,11 +241,11 @@ def auth(request):
     response = HttpResponse(json.dumps(response_contents), content_type='application/json')
     headers = response_contents
     headers["full_name"] = u"{}, {}".format(
-        headers.get("last_name", ""), 
+        headers.get("last_name", ""),
         headers.get("first_name", "")
     )
     headers["logout_url"] = "/sso/auth_logout"
-   
+
     # cache response
     cache_headers = dict()
     for key, val in headers.items():

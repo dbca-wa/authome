@@ -1,13 +1,14 @@
-Django==2.1.5
-django-ipware==2.1.0
+Django==2.2.16
+django-ipware==3.0.1
 social-auth-app-django==3.1.0
 social-auth-core==3.0.0
 # fork of Microsoft Azure AD auth library with password authentication fix
-git+https://github.com/scottp-dpaw/azure-activedirectory-library-for-python.git@passwordauth#egg=adal
-psycopg2-binary==2.7.7
-coverage==4.5.2
-coveralls==1.5.1
-mock==2.0.0
+#git+https://github.com/scottp-dpaw/azure-activedirectory-library-for-python.git@passwordauth#egg=adal
+adal==1.2.4
+psycopg2-binary==2.8.6
+coverage
+coveralls
+mock
 gevent==1.4.0
 gunicorn==20.0.4
 dj-database-url==0.5.0
