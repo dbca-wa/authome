@@ -1,17 +1,27 @@
 # Prepare the base environment.
-FROM python:3.6.6-slim-stretch as builder
+FROM python:3.7.8-slim-buster as builder_base_authome
 MAINTAINER asi@dbca.wa.gov.au
 RUN apt-get update -y \
-  && apt-get install --no-install-recommends -y wget git telnet libmagic-dev gcc binutils libproj-dev gdal-bin python3-dev \
+  && apt-get upgrade -y \
+  && apt-get install --no-install-recommends -y wget python3-dev \
   && rm -rf /var/lib/apt/lists/* \
   && pip install --upgrade pip
 
-# Install the project.
-FROM builder
+# Install Python libs from pyproject.toml.
+FROM builder_base_authome as python_libs_authome
 WORKDIR /app
-COPY . .
-RUN pip install --no-cache-dir -r requirements.txt \
-  && python manage.py
+ENV POETRY_VERSION=1.0.5
+RUN pip install "poetry==$POETRY_VERSION"
+RUN python -m venv /venv
+COPY poetry.lock pyproject.toml /app/
+RUN poetry config virtualenvs.create false \
+  && poetry install --no-dev --no-interaction --no-ansi
+
+# Install the project.
+FROM python_libs_authome
+COPY manage.py gunicorn.py ./
+COPY authome ./authome
+# Run the application as the www-data user.
+USER www-data
 EXPOSE 8080
-HEALTHCHECK --interval=1m --timeout=5s --start-period=10s --retries=3 CMD ["wget", "-q", "-O", "-", "http://localhost:8080/"]
-CMD ["gunicorn", "authome.wsgi", "--config", "gunicorn.ini"]
+CMD ["gunicorn", "authome.wsgi", "--config", "gunicorn.py"]
