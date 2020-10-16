@@ -22,7 +22,7 @@ class UserSession(models.Model):
 def user_logged_in_handler(sender, request, user, **kwargs):
     request.session.save()
     usersession, created = UserSession.objects.get_or_create(user=user, session_id=request.session.session_key)
-    usersession.ip = get_client_ip(request)
+    usersession.ip,routable = get_client_ip(request)
     usersession.save()
     management.call_command("clearsessions", verbosity=0)
 

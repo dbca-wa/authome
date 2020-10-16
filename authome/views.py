@@ -94,7 +94,7 @@ def auth_dual(request):
 @csrf_exempt
 def auth_ip(request):
     # Get the IP of the current user, try and match it up to a session.
-    current_ip = get_client_ip(request)
+    current_ip,routable = get_client_ip(request)
 
     # If there's a basic auth header, perform a check.
     basic_auth = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else ''
@@ -145,7 +145,8 @@ def auth(request):
     basic_auth = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else ''
     basic_hash = hashlib.sha1(basic_auth.encode('utf-8')).hexdigest() if basic_auth else None
     # grab IP address from the request
-    current_ip = get_client_ip(request)
+    current_ip,routable = get_client_ip(request)
+    import ipdb;ipdb.set_trace()
 
     # Store the access IP in the current user session
     if request.user.is_authenticated:
@@ -159,6 +160,28 @@ def auth(request):
         if usersession.ip != current_ip:
             usersession.ip = current_ip
             usersession.save()
+            content = None
+            auth_key = "auth_cache_{}".format(request.session.session_key)
+            auth_content = cache.get(auth_key)
+            if auth_content:
+                content = auth_content
+
+            basic_key = "auth_cache_{}".format(basic_hash)
+            basic_content = cache.get(basic_key)
+            if not content and basic_content:
+                content = basic_content
+
+            if content:
+                content[0] = json.loads(content[0].decode())
+                content[0]['client_logon_ip'] = current_ip
+                content[1]['X-client-logon-ip'] = current_ip
+                content[0] = json.dumps(content[0]).encode()
+    
+            if auth_content:
+                cache.set(auth_key, content, 3600)
+            if basic_content:
+                cache.set(basic_key, content, 3600)
+
 
     # check the cache for a match for the basic auth hash
     if basic_hash:
@@ -253,8 +276,8 @@ def auth(request):
         cache_headers[key], response[key] = val, val
     # cache authentication entries
     if basic_hash and cache_basic:
-        cache.set("auth_cache_{}".format(basic_hash), (response.content, cache_headers), 3600)
-    cache.set("auth_cache_{}".format(request.session.session_key), (response.content, cache_headers), 3600)
+        cache.set("auth_cache_{}".format(basic_hash), [response.content, cache_headers], 3600)
+    cache.set("auth_cache_{}".format(request.session.session_key), [response.content, cache_headers], 3600)
 
     return response
 
