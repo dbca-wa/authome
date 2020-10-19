@@ -1,4 +1,5 @@
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden
+from django.template.response import TemplateResponse
 from django.contrib.auth import login, logout
 from django.urls import reverse
 from django.core.cache import cache
@@ -11,6 +12,7 @@ import base64
 import hashlib
 import adal
 import re
+import traceback
 
 from django.contrib.auth.models import User
 from authome.models import UserSession
@@ -41,11 +43,11 @@ def adal_authenticate(email, password):
         context = adal.AuthenticationContext(settings.AZUREAD_AUTHORITY)
         token = context.acquire_token_with_username_password(
             settings.AZUREAD_RESOURCE, email, password,
-            settings.SOCIAL_AUTH_AZUREAD_OAUTH2_KEY,
-            settings.SOCIAL_AUTH_AZUREAD_OAUTH2_SECRET
+            settings.SOCIAL_AUTH_AZUREAD_OAUTH2_KEY
         )
 
     except adal.adal_error.AdalError:
+        traceback.print_exc()
         return None
 
     candidates = User.objects.filter(email__iexact=token['userId']).first()
@@ -146,7 +148,6 @@ def auth(request):
     basic_hash = hashlib.sha1(basic_auth.encode('utf-8')).hexdigest() if basic_auth else None
     # grab IP address from the request
     current_ip,routable = get_client_ip(request)
-    import ipdb;ipdb.set_trace()
 
     # Store the access IP in the current user session
     if request.user.is_authenticated:
@@ -298,3 +299,7 @@ def home(request):
     if next_url:
         return HttpResponseRedirect('https://{}'.format(next_url))
     return HttpResponseRedirect(reverse('auth'))
+
+
+def user_view(request,user_template):
+    return TemplateResponse(request, 'authome/{}.html'.format(user_template))
