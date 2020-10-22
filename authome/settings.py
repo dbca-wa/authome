@@ -18,10 +18,12 @@ WSGI_APPLICATION = 'authome.wsgi.application'
 
 # Application definition
 INSTALLED_APPS = [
+    'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'django.contrib.staticfiles',
     'django_extensions',
     'social_django',
     'authome',
@@ -106,3 +108,41 @@ DATABASES = {
     # Defined in DATABASE_URL env variable.
     'default': dj_database_url.config(),
 }
+
+# Static files configuration
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_URL = '/static/'
+STATICFILES_DIRS = (os.path.join(BASE_DIR, 'itassets', 'static'),)
+
+# Logging settings - log to stdout/stderr
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'console': {'format': '%(asctime)s %(levelname)-8s %(name)-12s %(message)s'},
+        'verbose': {'format': '%(asctime)s %(levelname)-8s %(message)s'},
+    },
+    'handlers': {
+        'console': {
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'console'
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'propagate': True,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'authome': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if DEBUG else 'INFO'
+        },
+    }
+}
+

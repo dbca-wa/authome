@@ -10,7 +10,7 @@ from ipware.ip import get_client_ip
 import json
 import base64
 import hashlib
-import adal
+import msal
 import re
 import traceback
 
@@ -38,15 +38,28 @@ def parse_basic(basic_auth):
     return basic_auth_raw.split(":", 1)
 
 
-def adal_authenticate(email, password):
+def basic_authenticate(email, password):
     try:
-        context = adal.AuthenticationContext(settings.AZUREAD_AUTHORITY)
-        token = context.acquire_token_with_username_password(
-            settings.AZUREAD_RESOURCE, email, password,
-            settings.SOCIAL_AUTH_AZUREAD_OAUTH2_KEY
-        )
+        app = msal.PublicClientApplication(settings.SOCIAL_AUTH_AZUREAD_OAUTH2_KEY,authority="https://login.microsoftonline.com/organizations")
+        result = None
+    
+        # Firstly, check the cache to see if this end user has signed in before
+        accounts = app.get_accounts(username=email)
+        if accounts:
+            result = app.acquire_token_silent(config["scope"], account=accounts[0])
+    
+        if not result:
+            # See this page for constraints of Username Password Flow.
+            # https://github.com/AzureAD/microsoft-authentication-library-for-python/wiki/Username-Password-Authentication
+            result = app.acquire_token_by_username_password(email, password, scopes=["User.ReadBasic.All"])
 
-    except adal.adal_error.AdalError:
+        if "error" in result:
+            raise Exception(str(result))
+    
+        if "access_token" in result:
+            # Calling graph using the access token
+            toekn = result["access_token"]
+    except :
         traceback.print_exc()
         return None
 
@@ -107,7 +120,7 @@ def auth_ip(request):
         user = shared_id_authenticate(username, password)
 
         if not user:
-            user = adal_authenticate(username, password)
+            user = basic_authenticate(username, password)
 
         if user:
             response_data = json.dumps({
@@ -235,7 +248,7 @@ def auth(request):
                 return response
 
             # after that, check against Azure AD
-            user = adal_authenticate(username, password)
+            user = basic_authenticate(username, password)
             # basic auth using username/password will generate a session cookie
             if user:
                 user.backend = "django.contrib.auth.backends.ModelBackend"

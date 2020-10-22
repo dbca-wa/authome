@@ -1,4 +1,5 @@
 from django.urls import include, path
+from django.contrib import admin
 from authome import views
 
 urlpatterns = [
@@ -9,6 +10,7 @@ urlpatterns = [
     path('sso/auth_get', views.auth_get, name='auth_get'),
     path('ssouser/<slug:user_template>', views.user_view, name='user_view'),
     path('sso/', include('social_django.urls', namespace='social')),
+    path('admin/', admin.site.urls),
     path('', views.home, name='home'),
 ]
 

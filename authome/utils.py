@@ -1,5 +1,6 @@
 import ast
 import os
+
 __version__ = '1.0.0'
 
 
@@ -60,3 +61,5 @@ def env(key, default=None, required=False, value_type=None):
         return float(value)
     else:
         raise Exception("'{0}' is a {1} environment variable, but {1} is not supported now".format(key, value_type))
+
+
