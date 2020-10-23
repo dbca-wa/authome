@@ -37,8 +37,8 @@ class UserGroupTestCase(object):
             obj.clean()
             obj.save()
             users,excluded_users = expected_data
-            self.assertEqual(obj.users,users,msg="The UserGroup(users={},excluded_users={}) is not matched with the expected user".format(obj.users,obj.excluded_users,users))
-            self.assertEqual(obj.excluded_users,excluded_users,msg="The UserGroup(users={},excluded_users={}) is not matched with the expected excluded user".format(obj.users,obj.excluded_users,excluded_users))
+            self.assertEqual(obj.users,users,msg="The UserGroup(users={},excluded_users={}) is not matched with the expected user '{}'".format(obj.users,obj.excluded_users,users))
+            self.assertEqual(obj.excluded_users,excluded_users,msg="The UserGroup(users={},excluded_users={}) is not matched with the expected excluded user '{}'".format(obj.users,obj.excluded_users,excluded_users))
 
     def test_contain(self):
         index = 0
@@ -100,13 +100,52 @@ class UserGroupTestCase(object):
                 group_name = "unittest_{}".format(group_name)
             self.assertEqual(group.name,group_name,msg="{}: matched group({}) is not the expected group({})".format(email,group.name,group_name))
             
-
 class UserRequestTestCase(TestCase):
+    def setUp(self):
+        #clear the unittest data
+        UserRequests.objects.filter(user__startswith="unittest_").delete()
+
+    def test_save(self):
+        index = 0
+        for test_data,expected_data in [
+            (("test01@test.com","app.com",None,None),("app.com",None,None,True,False)),
+            (("test02@test.com","app.com",["*"],None),("app.com",["*"],None,True,False)),
+            (("test03@test.com","app.com",["*","","**"],None),("app.com",["*"],None,True,False)),
+            (("test04@test.com","app.com",["/"],None),("app.com",["/"],None,True,False)),
+            (("test05@test.com","app.com",["/","*"],None),("app.com",["*"],None,True,False)),
+            (("test06@test.com","app.com",["/","*","=/info"],None),("app.com",["*"],None,True,False)),
+
+            (("test12@test.com","app.com",None,["*"]),("app.com",None,["*"],False,True)),
+            (("test13@test.com","app.com",None,["*","","**"]),("app.com",None,["*"],False,True)),
+            (("test14@test.com","app.com",None,["/"]),("app.com",None,["/"],False,True)),
+            (("test15@test.com","app.com",None,["/","*"]),("app.com",None,["*"],False,True)),
+            (("test16@test.com","app.com",None,["/","*","=/info"]),("app.com",None,["*"],False,True)),
+
+            (("test21@test.com","app.com",["*"],["/","*"]),("app.com",["*"],["*"],False,True)),
+
+            (("test31@test.com","app.com",["^.*$"],None),("app.com",["^.*$"],None,True,False)),
+            (("test32@test.com","app.com",["^.*$","/info"],None),("app.com",["^.*$"],None,True,False)),
+
+            (("test41@test.com","app.com",["=/about","^/api/.*/get$","/web"],None),("app.com",["/web","^/api/.*/get$","=/about"],None,False,False))
+        ]:
+            index += 1
+            user,domain,paths,excluded_paths = test_data
+            expected_domain,expected_paths,expected_excluded_paths,expected_allow_all,expected_deny_all = expected_data
+            obj = UserRequests(user="unittest_{}".format(user),domain=domain,paths=paths,excluded_paths=excluded_paths)
+            obj.clean()
+            obj.save()
+            self.assertEqual(obj.domain,expected_domain,msg="The UserRequests({},domain={}) is not matched with the expected domain '{}'".format(user,obj.domain,expected_domain))
+            self.assertEqual(obj.paths,expected_paths,msg="The UserRequests({},paths={}) is not matched with the expected paths '{}'".format(user,obj.paths,expected_paths))
+            self.assertEqual(obj.excluded_paths,expected_excluded_paths,msg="The UserRequests({},excluded_paths={}) is not matched with the expected excluded_paths '{}'".format(user,obj.excluded_paths,expected_excluded_paths))
+            self.assertEqual(obj.allow_all,expected_allow_all,msg="The UserRequests({},allow_all={}) is not matched with the expected allow_all '{}'".format(user,obj.allow_all,expected_allow_all))
+            self.assertEqual(obj.deny_all,expected_deny_all,msg="The UserRequests({},deny_all={}) is not matched with the expected deny_all '{}'".format(user,obj.deny_all,expected_deny_all))
+
+class UserGroupRequestTestCase(object):
     def setUp(self):
         #clear the unittest data
         UserGroup.objects.filter(name__startswith="unittest_").exclude(users=["*"],excluded_users__isnull=True).delete()
 
-    def test_find(self):
+    def aatest_find(self):
         test_datas = [
             ("all_user",["*@*"],None,[
                 ("testcompany",["@test1.com"],None,[

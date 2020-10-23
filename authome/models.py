@@ -15,7 +15,7 @@ from django.dispatch import receiver
 from ipware.ip import get_client_ip
 import hashlib
 
-from . import cache
+from .cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ class DbObjectMixin(object):
             self._db_obj = self.__class__.objects.get(id=self.id)
         return self._db_obj
 
-class UserGroup(models.Model):
+class UserGroup(DbObjectMixin,models.Model):
     _useremails = None
     _excluded_useremails = None
 
@@ -147,7 +147,7 @@ class UserGroup(models.Model):
                 self.modified = timezone.now()
                 self._changed = True
                 self._config_changed = True
-            elif self.name != db_obj.name:
+            elif self.name != self.db_obj.name:
                 self._changed = True
 
         if not self.parent_group and not self.is_public_group():
@@ -169,9 +169,9 @@ class UserGroup(models.Model):
     def save(self,*args,**kwargs):
         if self.id is not None and not self._changed:
             #nothing was changed
-            return
+            return 
         with transaction.atomic():
-            return super().save(*args,**kwargs)
+            super().save(*args,**kwargs)
 
     def get_useremails(self,users):
         if users:
@@ -210,7 +210,7 @@ class UserGroup(models.Model):
 
     @classmethod
     def grouptrees(cls):
-        if not cls._usergroup_trees or cache.is_local_cache_expired(cache.KEY_USER_GROUP_TREE):
+        if not cache.usergrouptree:
             logger.debug("Populate UserGroup trees")
             group_trees = {}
             modified = None
@@ -226,10 +226,9 @@ class UserGroup(models.Model):
                 if group.parent_group:
                     group_trees[group.parent_group.id][1].append(val)
             group_trees = [v for v in group_trees.values() if not v[0].parent_group]
-            cls._usergroup_trees = group_trees
-            cache.set_local_cache_ts(cache.KEY_USER_GROUP_TREE,modified)
+            cache.usergrouptree = group_trees
 
-        return cls._usergroup_trees
+        return cache.usergrouptree
 
     def contain(self,email):
         """
@@ -440,17 +439,16 @@ class RegexRequestPath(RequestPath):
         return True if self._re.search(path) else False
 
 
-class RequestsMixin(models.Model):
+class RequestsMixin(DbObjectMixin,models.Model):
     _changed = False
     _config_changed = False
 
     _request_domain = None
     _excluded_request_paths = None
     _request_paths = None
-    _db_obj = None
 
-    allow_all = False
-    deny_all = False
+    _allow_all = None
+    _deny_all = None
 
     domain = models.CharField(max_length=64,null=False)
     paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True)
@@ -459,13 +457,27 @@ class RequestsMixin(models.Model):
     modified = models.DateTimeField(editable=False,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
-    def __init__(self,*args,**kwargs):
-        super().__init__(*args,**kwargs)
-        if (not self.request_paths or all(p.match_all for p in self.request_paths)) and not self.excluded_request_paths:
-            self.allow_all = True
-        elif all(p.match_all for p in self.excluded_request_paths):
-            self.deny_all = True
+    @property
+    def allow_all(self):
+        if self._allow_all is None:
+            if (not self.request_paths or all(p.match_all for p in self.request_paths)) and not self.excluded_request_paths:
+                self._allow_all = True
+            else:
+                self._allow_all = False
 
+        return self._allow_all
+
+    @property
+    def deny_all(self):
+        if self._deny_all is None:
+            if self.allow_all:
+                self._deny_all = False
+            elif self.excluded_request_paths and all(p.match_all for p in self.excluded_request_paths):
+               self._deny_all = True
+            else:
+               self._deny_all = False
+
+        return self._deny_all
 
     def clean(self):
         request_domain = RequestDomain.get_instance(self.domain)
@@ -493,16 +505,16 @@ class RequestsMixin(models.Model):
         if self.id is None:
             self.modified = timezone.now()
         else:
-            self._db_obj = self._db_obj or self.__class__.objects.get(id=self.id)
-            if self._db_obj.domain != self.domain or self._db_obj.excluded_paths != self.excluded_paths or self._db_obj.paths != self.paths:
+            if self.db_obj.domain != self.domain or self.db_obj.excluded_paths != self.excluded_paths or self.db_obj.paths != self.paths:
                 self.modified = timezone.now()
                 self._changed = True
                 self._config_changed = True
 
+
     @property
     def request_domain(self):
         if self._request_domain is None:
-            self._request_domain = RequestDomain.get_instance(self._paths)
+            self._request_domain = RequestDomain.get_instance(self.domain)
 
         return self._request_domain
         
@@ -544,10 +556,10 @@ class RequestsMixin(models.Model):
     def save(self,*args,**kwargs):
         if self.id is not None and not self._changed:
             #nothing was changed
-            return
+            return 
         logger.debug("Save the changed {}({})".format(self.__class__.__name__,self))
         with transaction.atomic():
-            return super().save(*args,**kwargs)
+            super().save(*args,**kwargs)
 
     def allow(self,path):
         if self.allow_all:
@@ -579,49 +591,101 @@ class RequestsMixin(models.Model):
         return matched UserRequests or UserGroupRequests;return None if can't found
         """
         #try to find the matched userrequests
-        userequests = UserRequests.objects.filter(user=email).order_by("sortkey")
+        userequests = UserRequests.get_requests(email)
         for request in userequests:
             if request.request_domain.match(domain):
                 return request
-
+        
         #try to find the matched usergrouprequests 
         usergroup = UserGroup.find(email)
         while usergroup:
-            grouprequests = UserGroupRequests.objects.filter(usergroup=usergroup).order_by("sortkey")
-            for request in grouprequests:
-                if request.request_domain.match(domain):
-                    return request
+            grouprequests = UserGroupRequests.get_requests(usergroup)
+            if grouprequests:
+                for request in grouprequests:
+                    if request.request_domain.match(domain):
+                        return request
             usergroup = usergroup.parent_group
 
         #can't find the matched object
         return None
 
-    @staticmethod
-    def can_access(email,domain,path):
-        """
-        Return True if the user(email) can access domain/path; otherwise return False
-        """
-        requests = RequestsMixin.find(email,domain)
-        if requests:
-            return requests.allow(path)
-        else:
-            return False
-
     class Meta:
         abstract = True
+
+def can_access(email,domain,path):
+    """
+    Return True if the user(email) can access domain/path; otherwise return False
+    """
+    requests = cache.get_requests(email,domain)
+    if not requests:
+        requests = RequestsMixin.find(email,domain)
+        if requests:
+            cache.set_requests(email,domain,requests)
+    if requests:
+        return requests.allow(path)
+    else:
+        return False
 
 class UserRequests(RequestsMixin):
     user = models.CharField(max_length=64)
 
+    @classmethod
+    def get_requests(cls,useremail):
+        if not cache.userrequests:
+            logger.debug("Populate UserRequests map")
+            userrequests = {}
+            previous_user = None
+            for request in UserRequests.objects.all().order_by("user","sortkey"):
+                if not previous_user:
+                    userrequests[request.user] = [request]
+                    previous_user = request.user
+                elif previous_user == request.user:
+                    userrequests[request.user].append(request)
+                else:
+                    userrequests[request.user] = [request]
+                    previous_user = request.user
+            
+            cache.userrequests = userrequests
+
+        return cache.userrequests.get(useremail)
+
+        
+
     def __str__(self):
         return self.user
+
+    class Meta:
+        unique_together = [["user","domain"]]
 
 class UserGroupRequests(RequestsMixin):
     usergroup = models.ForeignKey(UserGroup, on_delete=models.CASCADE)
 
+    @classmethod
+    def get_requests(cls,usergroup):
+        if not cache.usergrouprequests :
+            logger.debug("Populate UserGroupRequests map")
+            usergrouprequests = {}
+            previous_usergroup = None
+            for request in UserGroupRequests.objects.all().order_by("usergroup","sortkey"):
+                if not previous_usergroup:
+                    usergrouprequests[request.usergroup] = [request]
+                    previous_usergroup = request.usergroup
+                elif previous_usergroup == request.usergroup:
+                    usergrouprequests[request.usergroup].append(request)
+                else:
+                    usergrouprequests[request.usergroup] = [request]
+                    previous_usergroup = request.usergroup
+            
+
+            cache.usergrouprequests = usergrouprequests
+
+        return cache.usergrouprequests.get(usergroup)
+
     def __str__(self):
         return str(self.usergroup)
 
+    class Meta:
+        unique_together = [["usergroup","domain"]]
 
 def user_logged_in_handler(sender, request, user, **kwargs):
     request.session.save()

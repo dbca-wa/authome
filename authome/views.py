@@ -6,6 +6,7 @@ from django.core.cache import cache
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.http import urlencode
+from django.utils import timezone
 from ipware.ip import get_client_ip
 import json
 import base64
@@ -13,10 +14,13 @@ import hashlib
 import msal
 import re
 import traceback
+import logging
+from datetime import datetime
 
 from django.contrib.auth.models import User
-from authome.models import UserSession
+from authome.models import UserSession,can_access
 
+logger = logging.getLogger(__name__)
 
 def force_email(username):
     if username.find("@") == -1:
@@ -153,6 +157,25 @@ def auth_ip(request):
 
     return response
 
+def check_authorization(request,useremail):
+   """
+   Return None if authorized;otherwise return Authorized failed response
+   """
+   start = datetime.now()
+   try:
+       domain = request.headers["x-upstream-server-name"]
+       path = request.headers["x-upstream-request-uri"].split("?")[0]
+       if can_access(useremail,domain,path):
+           return None
+       else:
+           return HttpResponseForbidden()
+   finally:
+       diff = datetime.now() - start
+       if diff.seconds > 0 or diff.microseconds > 1000:
+           logger.warning("spend {3}.{4:0>6} seconds to authorize the request (https://{1}{2}) for the user({0})".format(useremail,domain,path,diff.seconds,diff.microseconds))
+       else:
+           logger.debug("spend {3}.{4:0>6} seconds to authorize the request (https://{1}{2}) for the user({0})".format(useremail,domain,path,diff.seconds,diff.microseconds))
+
 
 @csrf_exempt
 def auth(request):
@@ -202,16 +225,25 @@ def auth(request):
         cachekey = "auth_cache_{}".format(basic_hash)
         content = cache.get(cachekey)
         if content:
-            response = HttpResponse(content[0], content_type='application/json')
-            for key, val in content[1].items():
-                response[key] = val
-            response["X-auth-cache-hit"] = "success"
 
             # for a new session using cached basic auth, reauthenticate
             if not request.user.is_authenticated:
                 user = User.objects.get(email__iexact=content[1]['X-email'])
                 user.backend = "django.contrib.auth.backends.ModelBackend"
                 login(request, user)
+                useremail = user.email
+            else:
+                useremail = request.user.email
+            
+            response = check_authorization(request,useremail)
+            if response:
+                return response
+
+
+            response = HttpResponse(content[0], content_type='application/json')
+            for key, val in content[1].items():
+                response[key] = val
+            response["X-auth-cache-hit"] = "success"
             return response
 
     # check the cache for a match for the current session key
@@ -219,6 +251,10 @@ def auth(request):
     content = cache.get(cachekey)
     # return a cached response ONLY if the current session has an authenticated user
     if content and request.user.is_authenticated:
+        response = check_authorization(request,request.user.email)
+        if response:
+            return response
+
         response = HttpResponse(content[0], content_type='application/json')
         for key, val in content[1].items():
             response[key] = val
@@ -238,6 +274,10 @@ def auth(request):
             # (hence it'll only work against certain endpoints)
             user = shared_id_authenticate(username, password)
             if user:
+                response = check_authorization(request,user.email)
+                if response:
+                    return response
+
                 response_data = json.dumps({
                     'email': user.email,
                     'shared_id': password
@@ -292,6 +332,10 @@ def auth(request):
     if basic_hash and cache_basic:
         cache.set("auth_cache_{}".format(basic_hash), [response.content, cache_headers], 3600)
     cache.set("auth_cache_{}".format(request.session.session_key), [response.content, cache_headers], 3600)
+
+    res = check_authorization(request,user.email)
+    if res:
+        return res
 
     return response
 

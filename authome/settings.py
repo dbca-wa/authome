@@ -114,6 +114,8 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/static/'
 STATICFILES_DIRS = (os.path.join(BASE_DIR, 'itassets', 'static'),)
 
+AUTHORIZATION_CACHE_DELAY=env("AUTHORIZATION_CACHE_DELAY",default=0)
+
 # Logging settings - log to stdout/stderr
 LOGGING = {
     'version': 1,
