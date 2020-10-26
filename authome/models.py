@@ -1,5 +1,6 @@
 import re
 import logging
+from datetime import datetime
 
 from django.conf import settings
 from django.contrib.auth.signals import user_logged_in
@@ -73,7 +74,7 @@ class AllUserEmail(UserEmail):
         return True
 
 class ExactUserEmail(UserEmail):
-    base_sort_key = 6
+    base_sort_key = 8
 
     def match(self,email):
         return self.config == email
@@ -85,7 +86,7 @@ class DomainEmail(UserEmail):
         return email.endswith(self.config)
 
 class RegexUserEmail(UserEmail):
-    base_sort_key = 8
+    base_sort_key = 6
     def __init__(self,email):
         super().__init__(email)
         try:
@@ -170,6 +171,7 @@ class UserGroup(DbObjectMixin,models.Model):
         if self.id is not None and not self._changed:
             #nothing was changed
             return 
+        logger.debug("Save the changed {}({})".format(self.__class__.__name__,self))
         with transaction.atomic():
             super().save(*args,**kwargs)
 
@@ -209,7 +211,7 @@ class UserGroup(DbObjectMixin,models.Model):
         return self.name
 
     @classmethod
-    def grouptrees(cls):
+    def get_grouptree(cls):
         if not cache.usergrouptree:
             logger.debug("Populate UserGroup trees")
             group_trees = {}
@@ -256,7 +258,7 @@ class UserGroup(DbObjectMixin,models.Model):
         """
         Return the matched user group; if not found, return None
         """
-        trees = cls.grouptrees()
+        trees = cls.get_grouptree()
         matched_group = None
         matched = False
         while trees:
@@ -342,12 +344,12 @@ class RegexRequestDomain(RequestDomain):
     def __init__(self,domain):
         super().__init__(domain)
         try:
-            self._re = re.compile("^{}$".format(domain.replace("*","[a-zA-Z0-9_\-]*")))
+            self._re = re.compile("^{}$".format(domain.replace("*","[a-zA-Z0-9\._\-]*")))
         except Exception as ex:
             raise ValidationError("The regex domain config({}) is invalid.{}".format(domain,str(ex)))
 
     def match(self,domain):
-        if not path:
+        if not domain:
             return False
 
         return True if self._re.search(domain) else False
@@ -591,19 +593,20 @@ class RequestsMixin(DbObjectMixin,models.Model):
         return matched UserRequests or UserGroupRequests;return None if can't found
         """
         #try to find the matched userrequests
-        userequests = UserRequests.get_requests(email)
-        for request in userequests:
-            if request.request_domain.match(domain):
-                return request
+        userrequests = UserRequests.get_requests(email)
+        if userrequests:
+            for requests in userrequests:
+                if requests.request_domain.match(domain):
+                    return requests
         
         #try to find the matched usergrouprequests 
         usergroup = UserGroup.find(email)
         while usergroup:
             grouprequests = UserGroupRequests.get_requests(usergroup)
             if grouprequests:
-                for request in grouprequests:
-                    if request.request_domain.match(domain):
-                        return request
+                for requests in grouprequests:
+                    if requests.request_domain.match(domain):
+                        return requests
             usergroup = usergroup.parent_group
 
         #can't find the matched object
@@ -612,7 +615,7 @@ class RequestsMixin(DbObjectMixin,models.Model):
     class Meta:
         abstract = True
 
-def can_access(email,domain,path):
+def _can_access(email,domain,path):
     """
     Return True if the user(email) can access domain/path; otherwise return False
     """
@@ -625,6 +628,37 @@ def can_access(email,domain,path):
         return requests.allow(path)
     else:
         return False
+
+def _can_access_debug(email,domain,path):
+    """
+    Return True if the user(email) can access domain/path; otherwise return False
+    """
+    start = datetime.now()
+    requests = None
+    try:
+        requests = cache.get_requests(email,domain)
+        if not requests:
+            requests = RequestsMixin.find(email,domain)
+            if requests:
+                cache.set_requests(email,domain,requests)
+        if requests:
+            return requests.allow(path)
+        else:
+            return False
+    finally:
+        diff = datetime.now() - start
+        if diff.seconds > 0 or diff.microseconds > 3000:
+            logger.warning("spend {0}.{1:0>6} seconds to check the authroization.user={2}, request=https://{3}{4}, requests={5})".format(
+                diff.seconds,diff.microseconds,
+                email,domain,path,
+                "{}({},domain={},paths={},excluded_paths={})".format(requests.__class__.__name__,requests,requests.domain,requests.paths,requests.excluded_paths) if requests else "None"))
+        else:
+            logger.debug("spend {0}.{1:0>6} seconds to check the authroization.user={2}, request=https://{3}{4}, requests={5})".format(
+                diff.seconds,diff.microseconds,
+                email,domain,path,
+                "{}({},domain={},paths={},excluded_paths={})".format(requests.__class__.__name__,requests,requests.domain,requests.paths,requests.excluded_paths) if requests else "None"))
+
+can_access = _can_access_debug if settings.DEBUG else _can_access
 
 class UserRequests(RequestsMixin):
     user = models.CharField(max_length=64)

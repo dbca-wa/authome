@@ -1,19 +1,16 @@
 # -*- coding: utf-8 -*-
 from django.test import TestCase, Client
 
-from .models import UserGroup,UserGroupRequests,UserRequests
+from .models import UserGroup,UserGroupRequests,UserRequests,can_access
+from .cache import cache
 
 
 #class UserGroupTestCase(TestCase):
 class UserGroupTestCase(object):
     def setUp(self):
         #clear the unittest data
-        UserGroup.objects.filter(name__startswith="unittest_").exclude(users=["*"],excluded_users__isnull=True).delete()
+        UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
 
-    def tearDown(self):
-        #clear the unittest data
-        #UserGroup.objects.filter(name__startswith="unittest_").exclude(users=["*"],excluded_users__isnull=True).delete()
-        pass
 
     def test_delete_public_group(self):
         with self.assertRaises(Exception,msg="Delete public user group should throw exception."):
@@ -33,7 +30,7 @@ class UserGroupTestCase(object):
             ((["test2@test1.com","",None,"test1@test1.com","*1@*.com","@test3.com"],None),(["@test3.com","test1@test1.com","test2@test1.com","*1@*.com"],None)),
         ]:
             index += 1
-            obj = UserGroup(name="unittest_test_{}".format(index),users=test_data[0],excluded_users=test_data[1])
+            obj = UserGroup(name="test_{}".format(index),users=test_data[0],excluded_users=test_data[1])
             obj.clean()
             obj.save()
             users,excluded_users = expected_data
@@ -54,7 +51,7 @@ class UserGroupTestCase(object):
             ((["@test1.com"],["@test1.com"]),[("test1@test1.com",False),("test2@test2.com",False)]),
         ]:
             index += 1
-            obj = UserGroup(name="unittest_test_{}".format(index),users=test_data[0],excluded_users=test_data[1])
+            obj = UserGroup(name="test_{}".format(index),users=test_data[0],excluded_users=test_data[1])
             obj.clean()
             obj.save()
             for email,result in testcases:
@@ -88,50 +85,57 @@ class UserGroupTestCase(object):
         while pending_datas:
             parent_obj,subgroup_datas = pending_datas.pop()
             for name,users,excluded_users,subgroups in subgroup_datas:
-                obj = UserGroup(name="unittest_{}".format(name),users=users,excluded_users=excluded_users,parent_group=parent_obj)
+                obj = UserGroup(name=name,users=users,excluded_users=excluded_users,parent_group=parent_obj)
                 obj.clean()
                 obj.save()
                 if subgroups:
                     pending_datas.append((obj,subgroups))
+
+        cache.refresh(True)
   
         for email,group_name in testcases:
             group = UserGroup.find(email)
-            if group_name != UserGroup.public_group().name:
-                group_name = "unittest_{}".format(group_name)
             self.assertEqual(group.name,group_name,msg="{}: matched group({}) is not the expected group({})".format(email,group.name,group_name))
             
-class UserRequestTestCase(TestCase):
+class UserRequestsTestCase(object):
     def setUp(self):
         #clear the unittest data
-        UserRequests.objects.filter(user__startswith="unittest_").delete()
+        UserRequests.objects.all().delete()
+
+    def get_role(self,index):
+        return "test{:0>3}".format(index)
+
+    def get_role_requests(self,role,domain,paths,excluded_paths):
+        return UserRequests(user=role,domain=domain,paths=paths,excluded_paths=excluded_paths)
 
     def test_save(self):
         index = 0
         for test_data,expected_data in [
-            (("test01@test.com","app.com",None,None),("app.com",None,None,True,False)),
-            (("test02@test.com","app.com",["*"],None),("app.com",["*"],None,True,False)),
-            (("test03@test.com","app.com",["*","","**"],None),("app.com",["*"],None,True,False)),
-            (("test04@test.com","app.com",["/"],None),("app.com",["/"],None,True,False)),
-            (("test05@test.com","app.com",["/","*"],None),("app.com",["*"],None,True,False)),
-            (("test06@test.com","app.com",["/","*","=/info"],None),("app.com",["*"],None,True,False)),
+            (("gunfire.com",None,None),("gunfire.com",None,None,True,False)),
+            (("gunfire.com",["*"],None),("gunfire.com",["*"],None,True,False)),
+            (("gunfire.com",["*","","**"],None),("gunfire.com",["*"],None,True,False)),
+            (("gunfire.com",["/"],None),("gunfire.com",["/"],None,True,False)),
+            (("gunfire.com",["/","*"],None),("gunfire.com",["*"],None,True,False)),
+            (("gunfire.com",["/","*","=/info"],None),("gunfire.com",["*"],None,True,False)),
 
-            (("test12@test.com","app.com",None,["*"]),("app.com",None,["*"],False,True)),
-            (("test13@test.com","app.com",None,["*","","**"]),("app.com",None,["*"],False,True)),
-            (("test14@test.com","app.com",None,["/"]),("app.com",None,["/"],False,True)),
-            (("test15@test.com","app.com",None,["/","*"]),("app.com",None,["*"],False,True)),
-            (("test16@test.com","app.com",None,["/","*","=/info"]),("app.com",None,["*"],False,True)),
+            (("gunfire.com",None,["*"]),("gunfire.com",None,["*"],False,True)),
+            (("gunfire.com",None,["*","","**"]),("gunfire.com",None,["*"],False,True)),
+            (("gunfire.com",None,["/"]),("gunfire.com",None,["/"],False,True)),
+            (("gunfire.com",None,["/","*"]),("gunfire.com",None,["*"],False,True)),
+            (("gunfire.com",None,["/","*","=/info"]),("gunfire.com",None,["*"],False,True)),
 
-            (("test21@test.com","app.com",["*"],["/","*"]),("app.com",["*"],["*"],False,True)),
+            (("gunfire.com",["*"],["/","*"]),("gunfire.com",["*"],["*"],False,True)),
 
-            (("test31@test.com","app.com",["^.*$"],None),("app.com",["^.*$"],None,True,False)),
-            (("test32@test.com","app.com",["^.*$","/info"],None),("app.com",["^.*$"],None,True,False)),
+            (("gunfire.com",["^.*$"],None),("gunfire.com",["^.*$"],None,True,False)),
+            (("gunfire.com",["^.*$","/info"],None),("gunfire.com",["^.*$"],None,True,False)),
 
-            (("test41@test.com","app.com",["=/about","^/api/.*/get$","/web"],None),("app.com",["/web","^/api/.*/get$","=/about"],None,False,False))
+            (("gunfire.com",["=/about","^/api/.*/get$","/web"],None),("gunfire.com",["/web","^/api/.*/get$","=/about"],None,False,False))
         ]:
             index += 1
-            user,domain,paths,excluded_paths = test_data
+            domain,paths,excluded_paths = test_data
+            user = self.get_role(index)
             expected_domain,expected_paths,expected_excluded_paths,expected_allow_all,expected_deny_all = expected_data
-            obj = UserRequests(user="unittest_{}".format(user),domain=domain,paths=paths,excluded_paths=excluded_paths)
+            obj = self.get_role_requests(user,domain,paths,excluded_paths)
             obj.clean()
             obj.save()
             self.assertEqual(obj.domain,expected_domain,msg="The UserRequests({},domain={}) is not matched with the expected domain '{}'".format(user,obj.domain,expected_domain))
@@ -140,89 +144,197 @@ class UserRequestTestCase(TestCase):
             self.assertEqual(obj.allow_all,expected_allow_all,msg="The UserRequests({},allow_all={}) is not matched with the expected allow_all '{}'".format(user,obj.allow_all,expected_allow_all))
             self.assertEqual(obj.deny_all,expected_deny_all,msg="The UserRequests({},deny_all={}) is not matched with the expected deny_all '{}'".format(user,obj.deny_all,expected_deny_all))
 
-class UserGroupRequestTestCase(object):
+    def test_allow(self):
+        index = 0
+        for test_data,testcases in [
+            (("gunfire.com",None,None),[("/info",True),("/update",True)]),
+            (("gunfire.com",["*"],None),[("/info",True),("/update",True)]),
+            (("gunfire.com",["/"],None),[("/info",True),("/update",True)]),
+            (("gunfire.com",["^.*$"],None),[("/info",True),("/update",True)]),
+
+            (("gunfire.com",None,["*"]),[("/info",False),("/update",False)]),
+            (("gunfire.com",None,["/"]),[("/info",False),("/update",False)]),
+            (("gunfire.com",None,["^.*$"]),[("/info",False),("/update",False)]),
+
+            (("gunfire.com",["*"],["*"]),[("/info",False),("/update",False)]),
+            (("gunfire.com",["*"],["/"]),[("/info",False),("/update",False)]),
+            (("gunfire.com",["*"],["^.*$"]),[("/info",False),("/update",False)]),
+
+            (("gunfire.com",["/info"],None),[("/info",True),("/info/list",True),("/data",False),("/information",True),("/",False)]),
+            (("gunfire.com",["=/about"],None),[("/info",False),("/about",True),("/about1",False),("/about/contact",False)]),
+            (("gunfire.com",["^.*/get$"],None),[("/get",True),("/usr/get",True),("/list",False),("/user/info",False)]),
+
+            (("gunfire.com",None,["/info"]),[("/info",False),("/info/list",False),("/data",True),("/information",False),("/",True)]),
+            (("gunfire.com",None,["=/about"]),[("/info",True),("/about",False),("/about1",True),("/about/contact",True)]),
+            (("gunfire.com",None,["^.*/get$"]),[("/get",False),("/usr/get",False),("/list",True),("/user/info",True)])
+        ]:
+            index += 1
+            domain,paths,excluded_paths = test_data
+            user = self.get_role(index)
+            obj = self.get_role_requests(user,domain,paths,excluded_paths)
+            obj.clean()
+            obj.save()
+            for path,result in testcases:
+                self.assertEqual(obj.allow(path),result,msg="The UserRequests({},paths={},excluded_paths={}) can {} the path '{}'".format(user,obj.paths,obj.excluded_paths,"access" if result else "not access",path))
+
+
+class UserGroupRequestsTestCase(UserRequestsTestCase):
     def setUp(self):
         #clear the unittest data
-        UserGroup.objects.filter(name__startswith="unittest_").exclude(users=["*"],excluded_users__isnull=True).delete()
+        UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
 
-    def aatest_find(self):
-        test_datas = [
+    def get_role(self,index):
+        group = UserGroup(name="test{:0>3}".format(index),users=["@test.com"])
+        group.clean()
+        group.save()
+        return group
+
+    def get_role_requests(self,role,domain,paths,excluded_paths):
+        return UserGroupRequests(usergroup=role,domain=domain,paths=paths,excluded_paths=excluded_paths)
+
+
+class AuthorizatioinTestCase(TestCase):
+    def setUp(self):
+        #clear the unittest data
+        UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
+        UserRequests.objects.all().delete()
+
+    def test_authorize(self):
+        test_usergroups = [
             ("all_user",["*@*"],None,[
-                ("testcompany",["@test1.com"],None,[
-                    ("developers",["dev_*@test1.com"],None,[
-                        ("app_developers",["dev_app_*@test1.com"],["dev_app_test*@test1.com"],[
-                            ("app_dev_leaders",["dev_app_leader1@test1.com","dev_app_leader2@test1.com","dev_app_leader3@test1.com","dev_app_leader4@test1.com"],None,[
-                                ("app_dev_managers",["dev_app_leader1@test1.com","dev_app_leader2@test1.com"],None,None)
+                ("gunfire",["@gunfire.com"],None,[
+                    ("dev",["dev_*@gunfire.com"],None,[
+                        ("dev_map",["dev_map_*@gunfire.com"],["dev_map_external_*@gunfire.com"],[
+                            ("dev_map_leader",["dev_map_leader1@gunfire.com","dev_map_leader2@gunfire.com","dev_map_leader3@gunfire.com","dev_map_leader4@gunfire.com"],None,[
+                                ("dev_map_manager",["dev_map_leader1@gunfire.com","dev_map_leader2@gunfire.com"],None,None)
                             ])
-                        ])
+                        ]),
+                        ("dev_role",["dev_role_*@gunfire.com"],["dev_role_external_*@gunfire.com"],[
+                            ("dev_role_leader",["dev_role_leader1@gunfire.com","dev_role_leader2@gunfire.com","dev_role_leader3@gunfire.com","dev_role_leader4@gunfire.com"],None,[
+                                ("dev_role_manager",["dev_role_leader1@gunfire.com","dev_role_leader2@gunfire.com"],None,None)
+                            ])
+                        ]),
                     ]),
-                    ("supporters",["support_*@test1.com"],None,[])
+                    ("support",["support_*@gunfire.com"],None,[])
                 ])
             ])
         ]
+        test_usergrouprequests = [
+            ("all_user","*",None,"*"),
+            ("all_user","game.gunfire.com",None,None),
+            ("all_user","gunfire.com",None,["/register"]),
+
+            ("gunfire",".gunfire.com",None,None),
+            ("gunfire","gunfire.com",None,["/register","/unregister"]),
+            ("gunfire","*dev.gunfire.com",None,["*"]),
+            ("gunfire","*support.gunfire.com",None,["*"]),
+
+            ("support","gunfire.com",None,["/unregister"]),
+
+            ("dev","dev.gunfire.com",None,None),
+
+            ("dev_map","map.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/approve$","^.*/deploy$","^.*/remove$"]),
+
+            ("dev_map_leader","map.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/remove$"]),
+
+            ("dev_map_manager","map.dev.gunfire.com",None,["=/start","=/shutdown"]),
+
+            ("dev_role","map.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/approve$","^.*/deploy$","^.*/remove$"]),
+
+            ("dev_role_leader","map.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/remove$"]),
+
+            ("dev_role_manager","map.dev.gunfire.com",None,["=/start","=/shutdown"])
+        ]
+
+        test_userrequests = [
+            ("dev_map_leader1@gunfire.com","map.dev.gunfire.com",None,None),
+
+            ("dev_role_leader1@gunfire.com","role.dev.gunfire.com",None,None),
+
+            ("hacker1@hacker.com",".gunfire.com",None,None),
+            ("hacker1@hacker.com","map.dev.gunfire.com",None,["=/start"]),
+            ("hacker1@hacker.com","role.dev.gunfire.com",None,["^.*/remove$"])
+        ]
         testcases = [
-            ("test@test2.com",UserGroup.public_group().name),
-            ("sales@test1.com","testcompany"),
-            ("support_1@test1.com","supporters"),
-            ("dev_1@test1.com","developers"),
-            ("dev_app_1@test1.com","app_developers"),
-            ("dev_app_leader2@test1.com","app_dev_leaders"),
-            ("dev_app_leader1@test1.com","app_dev_manager")
+            ("test@gmail.com","test.com","/play",False),
+            ("test@gmail.com","dev.gunfire.com","/",False),
+            ("test@gmail.com","dev.gunfire.com","/info",False),
+            ("test@gmail.com","gunfire.com","/about",True),
+            ("test@gmail.com","gunfire.com","/",True),
+            ("test@gmail.com","gunfire.com","/games",True),
+            ("test@gmail.com","gunfire.com","/register",False),
+            ("test@gmail.com","game.gunfire.com","/play",True),
+
+            ("hacker1@hacker.com","test.com","/play",False),
+            ("hacker1@hacker.com","gunfire.com","/register",False),
+            ("hacker1@hacker.com","map.dev.gunfire.com","/start",False),
+            ("hacker1@hacker.com","map.dev.gunfire.com","/shutdown",True),
+            ("hacker1@hacker.com","map.dev.gunfire.com","/tasks",True),
+            ("hacker1@hacker.com","map.dev.gunfire.com","/tasks/self",True),
+            ("hacker1@hacker.com","map.dev.gunfire.com","/test/deploy",True),
+            ("hacker1@hacker.com","role.dev.gunfire.com","/start",True),
+            ("hacker1@hacker.com","role.dev.gunfire.com","/test/remove",False),
+            ("hacker1@hacker.com","role.dev.gunfire.com","/remove",False),
+
+            ("staff1@gunfire.com","test.com","/test/remove",False),
+            ("staff1@gunfire.com","gunfire.com","/about",True),
+            ("staff1@gunfire.com","gunfire.com","/register",False),
+            ("staff1@gunfire.com","gunfire.com","/unregister",False),
+            ("staff1@gunfire.com","gunfire.com","/",True),
+            ("staff1@gunfire.com","dev.gunfire.com","/",False),
+            ("staff1@gunfire.com","map.dev.gunfire.com","/",False),
+            ("staff1@gunfire.com","support.gunfire.com","/",False),
+            ("staff1@gunfire.com","shop.gunfire.com","/",True),
+            ("staff1@gunfire.com","shop.gunfire.com","/register",True),
+
+            ("support_1@gunfire.com","test.com","/test/remove",False),
+            ("support_1@gunfire.com","gunfire.com","/about",True),
+            ("support_1@gunfire.com","gunfire.com","/register",True),
+            ("support_1@gunfire.com","gunfire.com","/unregister",False),
+            ("support_1@gunfire.com","gunfire.com","/",True),
+            ("support_1@gunfire.com","dev.gunfire.com","/",False),
+            ("support_1@gunfire.com","map.dev.gunfire.com","/",False),
+            ("support_1@gunfire.com","support.gunfire.com","/",False),
+            ("support_1@gunfire.com","shop.gunfire.com","/",True),
+            ("support_1@gunfire.com","shop.gunfire.com","/register",True),
+
+            ("dev_1@gunfire.com","test.com","/test/remove",False),
+            ("dev_1@gunfire.com","gunfire.com","/about",True),
+            ("dev_1@gunfire.com","gunfire.com","/register",False),
+            ("dev_1@gunfire.com","gunfire.com","/unregister",False),
+            ("dev_1@gunfire.com","gunfire.com","/",True),
+            ("dev_1@gunfire.com","dev.gunfire.com","/",True),
+            ("dev_1@gunfire.com","map.dev.gunfire.com","/",False),
+            ("dev_1@gunfire.com","support.gunfire.com","/",False),
+            ("dev_1@gunfire.com","shop.gunfire.com","/",True),
+            ("dev_1@gunfire.com","shop.gunfire.com","/register",True),
         ]
         #popuate UserGroup objects
-        pending_datas = [(UserGroup.public_group(),test_datas)]
-        while pending_datas:
-            parent_obj,subgroup_datas = pending_datas.pop()
+        uncreated_usergroups = [(UserGroup.public_group(),test_usergroups)]
+        while uncreated_usergroups:
+            parent_obj,subgroup_datas = uncreated_usergroups.pop()
             for name,users,excluded_users,subgroups in subgroup_datas:
-                obj = UserGroup(name="unittest_{}".format(name),users=users,excluded_users=excluded_users,parent_group=parent_obj)
+                obj = UserGroup(name=name,users=users,excluded_users=excluded_users,parent_group=parent_obj)
                 obj.clean()
                 obj.save()
                 if subgroups:
-                    pending_datas.append((obj,subgroups))
+                    uncreated_usergroups.append((obj,subgroups))
 
-        test_group_requests_datas = [
-            ("all_user","*",None,"*"),
-            ("testcompany","test.com",["/get","/list","=/login","^.*/info$"],None),
-            ("testcompany","test-*.au",["*"],None),
-            ("testcompany","test-dev.au",["*"],["/api"]),
-            ("testcompany","company.com",["*"],["/update","=/login","^.*/delete$"]),
-            ("supporters","sale.com",["*"],None),
-            ("developers",".dev.com",["*"],None),
-            ("developers","dev.com",["*"],["/admin","/register","^.*/create$"]),
-            ("app_developers","dev.com",["*"],["/admin","/register"]),
-            ("app_developers","app.dev.com",["*"],["/admin"]),
-            ("app_dev_leaders","dev.com",["*"],["/register"]),
-            ("app_dev_leaders","app.dev.com",["*"],None),
-            ("app_dev_managers",".dev.com",["*"],None),
-            ("app_dev_managers","admin.dev.com",["/register"],None),
-        ]
-        for groupname,domain,paths,excluded_paths in test_group_requests_datas:
-            if groupname != UserGroup.public_group().name:
-                groupname = "unittest_{}".format(groupname)
+        for groupname,domain,paths,excluded_paths in test_usergrouprequests:
             obj = UserGroupRequests(usergroup=UserGroup.objects.get(name=groupname),domain=domain,paths=paths,excluded_paths=excluded_paths)
             obj.clean()
             obj.save()
     
-        test_user_requests_datas = [
-            ("dev_app_leader1@test1.com","admin.dev.com",None,None),
-            ("dev_app_leader3@test1.com","admin.dev.com",["/test"],["^.*/delete$"]),
-            ("dev_app_1@test1.com","app.dev.com",None,None),
-            ("dev_1@test1.com","test.dev.com",None,["/admin"]),
-            ("test1@test1.com","company.com",None,["^.*/delete$"]),
-            ("super@user.com","company.com",None,None),
-        ]
-        for email,domain,paths,excluded_paths in test_group_requests_datas:
-            obj = UserRequests(user=email,domain=domain,paths=paths,excluded_paths=excluded_paths)
+        for user,domain,paths,excluded_paths in test_userrequests:
+            obj = UserRequests(user=user,domain=domain,paths=paths,excluded_paths=excluded_paths)
             obj.clean()
             obj.save()
-  
-        testcases = [
-            ("public_1@public.com",[("test.com","/info",False),("edu.com","/",False)]),
-        ]
 
-            
-        for email,cases in testcases:
-            for domain,path,result in cases:
-                self.assertEqual(RequestsMixin.can_access(email,domain,path),result,msg="{} can {} https://{}{}".format(email,"access" if result else "not access",domain,path))
+        cache.refresh(True)
+        for email,domain,path,result in testcases:
+            if domain == "map.dev.gunfire.com" and email=="staff1@gunfire.com":
+                #import ipdb;ipdb.set_trace()
+                pass
+            self.assertEqual(can_access(email,domain,path),result,msg="{} should {} the permission to access https://{}{}".format(email,"have" if result else "not have",domain,path))
             
 

@@ -161,21 +161,12 @@ def check_authorization(request,useremail):
    """
    Return None if authorized;otherwise return Authorized failed response
    """
-   start = datetime.now()
-   try:
-       domain = request.headers["x-upstream-server-name"]
-       path = request.headers["x-upstream-request-uri"].split("?")[0]
-       if can_access(useremail,domain,path):
-           return None
-       else:
-           return HttpResponseForbidden()
-   finally:
-       diff = datetime.now() - start
-       if diff.seconds > 0 or diff.microseconds > 1000:
-           logger.warning("spend {3}.{4:0>6} seconds to authorize the request (https://{1}{2}) for the user({0})".format(useremail,domain,path,diff.seconds,diff.microseconds))
-       else:
-           logger.debug("spend {3}.{4:0>6} seconds to authorize the request (https://{1}{2}) for the user({0})".format(useremail,domain,path,diff.seconds,diff.microseconds))
-
+   domain = request.headers["x-upstream-server-name"]
+   path = request.headers["x-upstream-request-uri"].split("?")[0]
+   if can_access(useremail,domain,path):
+       return None
+   else:
+       return HttpResponseForbidden()
 
 @csrf_exempt
 def auth(request):
@@ -198,6 +189,7 @@ def auth(request):
             usersession.ip = current_ip
             usersession.save()
             content = None
+            #change the client-logon-ip in cached authenticated data
             auth_key = "auth_cache_{}".format(request.session.session_key)
             auth_content = cache.get(auth_key)
             if auth_content:
@@ -225,7 +217,6 @@ def auth(request):
         cachekey = "auth_cache_{}".format(basic_hash)
         content = cache.get(cachekey)
         if content:
-
             # for a new session using cached basic auth, reauthenticate
             if not request.user.is_authenticated:
                 user = User.objects.get(email__iexact=content[1]['X-email'])
@@ -238,7 +229,6 @@ def auth(request):
             response = check_authorization(request,useremail)
             if response:
                 return response
-
 
             response = HttpResponse(content[0], content_type='application/json')
             for key, val in content[1].items():
