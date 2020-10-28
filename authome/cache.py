@@ -22,7 +22,7 @@ class _Cache(object):
 
     @property
     def usergrouptree(self):
-        if self._usergrouptree and settings.AUTHORIZATION_CACHE_DELAY == 0:
+        if self._usergrouptree :
             from .models import UserGroup
             if UserGroup.objects.filter(modified__gt=self._usergrouptree_ts).exists():
                 self._usergrouptree = None
@@ -37,7 +37,7 @@ class _Cache(object):
         
     @property
     def userrequests(self):
-        if self._userrequests and settings.AUTHORIZATION_CACHE_DELAY == 0:
+        if self._userrequests :
             from .models import UserRequests
             if UserRequests.objects.filter(modified__gt=self._userrequests_ts).exists():
                 self._userrequests = None
@@ -52,7 +52,7 @@ class _Cache(object):
         
     @property
     def usergrouprequests(self):
-        if self._usergrouprequests and settings.AUTHORIZATION_CACHE_DELAY == 0:
+        if self._usergrouprequests :
             from .models import UserGroupRequests
             if UserGroupRequests.objects.filter(modified__gt=self._usergrouprequests_ts).exists():
                 self._usergrouprequests = None
@@ -67,7 +67,7 @@ class _Cache(object):
         
     def get_requests(self,user,domain):
         requests = self._user_requests_map.get((user,domain))
-        if requests and settings.AUTHORIZATION_CACHE_DELAY == 0:
+        if requests :
             from .models import UserGroupRequests,UserRequests,UserGroup
             if self._usergrouptree and UserGroup.objects.filter(modified__gt=self._usergrouptree_ts).exists():
                 self._user_requests_map.clear()

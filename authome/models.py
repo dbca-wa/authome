@@ -24,15 +24,25 @@ class _ArrayField(ArrayField):
     def clean(self, value, model_instance):
         return super().clean([v for v in value if v],model_instance)
 
-class UserSession(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,)
-    session = models.ForeignKey(Session, on_delete=models.CASCADE,)
-    ip = models.GenericIPAddressField(null=True)
+def get_shared_id(useremail):
+    now = timezone.localtime()
+    return hashlib.sha256('{}|{}|{}|{}'.format(now.year,now.month, useremail, settings.SECRET_KEY).lower().encode('utf-8')).hexdigest()
+
+class UserToken(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,primary_key=True,related_name="token",editable=False)
+    enabled = models.BooleanField(default=False,editable=False)
+    token = models.CharField(max_length=128,null=True,editable=False)
+    created = models.DateTimeField(null=True,editable=False)
+    expired = models.DateField(null=True,editable=False)
 
     @property
-    def shared_id(self):
-        return hashlib.sha256('{}{}{}'.format(
-            timezone.now().month, self.user.email, settings.SECRET_KEY).lower().encode('utf-8')).hexdigest()
+    def is_expired(self):
+        if not self.enabled or not self.token:
+            return True
+        elif self.expired:
+            return timezone.localdate() > self.expired
+        else:
+            return False
 
 class UserEmail(object):
     match_all = False
@@ -343,6 +353,7 @@ class RegexRequestDomain(RequestDomain):
     base_sort_key = 40
     def __init__(self,domain):
         super().__init__(domain)
+        self.sort_key = "{}:{:0>3}-{}".format(self.base_sort_key,len(domain),domain)
         try:
             self._re = re.compile("^{}$".format(domain.replace("*","[a-zA-Z0-9\._\-]*")))
         except Exception as ex:
