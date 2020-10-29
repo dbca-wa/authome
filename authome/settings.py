@@ -1,5 +1,6 @@
 import os
 from authome.utils import env
+from datetime import timedelta
 import dj_database_url
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -115,6 +116,18 @@ STATIC_URL = '/static/'
 #STATICFILES_DIRS = (os.path.join(BASE_DIR, 'itassets', 'static'),)
 
 AUTHORIZATION_CACHE_DELAY=env("AUTHORIZATION_CACHE_DELAY",default=0)
+
+USER_ACCESS_TOKEN_LIFETIME=env('USER_ACCESS_TOKEN_LIFETIME',default=28) #user access token life time in days
+if USER_ACCESS_TOKEN_LIFETIME > 0:
+    USER_ACCESS_TOKEN_LIFETIME = timedelta(days=USER_ACCESS_TOKEN_LIFETIME)
+else:
+    USER_ACCESS_TOKEN_LIFETIME = None
+
+USER_ACCESS_TOKEN_WARNING=env('USER_ACCESS_TOKEN_WARNING',default=7) #warning the user when the remaining lifetime is less than the configured days
+if USER_ACCESS_TOKEN_WARNING > 0:
+    USER_ACCESS_TOKEN_WARNING = timedelta(days=USER_ACCESS_TOKEN_WARNING)
+else:
+    USER_ACCESS_TOKEN_WARNING = None
 
 # Logging settings - log to stdout/stderr
 LOGGING = {

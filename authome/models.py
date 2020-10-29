@@ -1,6 +1,6 @@
 import re
 import logging
-from datetime import datetime
+from datetime import datetime,timedelta
 
 from django.conf import settings
 from django.contrib.auth.signals import user_logged_in
@@ -24,11 +24,13 @@ class _ArrayField(ArrayField):
     def clean(self, value, model_instance):
         return super().clean([v for v in value if v],model_instance)
 
-def get_shared_id(useremail):
-    now = timezone.localtime()
-    return hashlib.sha256('{}|{}|{}|{}'.format(now.year,now.month, useremail, settings.SECRET_KEY).lower().encode('utf-8')).hexdigest()
-
 class UserToken(models.Model):
+    DISABLED = -1
+    NOT_CREATED = -2
+    EXPIRED = -3
+    GOOD = 1
+    WARNING = 2
+
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,primary_key=True,related_name="token",editable=False)
     enabled = models.BooleanField(default=False,editable=False)
     token = models.CharField(max_length=128,null=True,editable=False)
@@ -43,6 +45,45 @@ class UserToken(models.Model):
             return timezone.localdate() > self.expired
         else:
             return False
+
+    @property
+    def status(self):
+        if not self.enabled:
+            return self.DISABLED
+        elif not self.token:
+            return self.NOT_CREATED
+        elif not self.expired:
+            return self.GOOD
+        else:
+            today = timezone.localdate()
+            if today > self.expired:
+                return self.EXPIRED
+            elif not settings.USER_ACCESS_TOKEN_WARNING:
+                return self.GOOD
+            elif today + settings.USER_ACCESS_TOKEN_WARNING >= self.expired:
+                return self.WARNING
+            else:
+                return self.GOOD
+
+    def is_valid(self,token):
+        if not self.enabled or not self.token or self.token != token:
+            return False
+        elif self.is_expired:
+            return False
+        else:
+            return True
+
+    def generate_token(self):
+        """
+        generate an access token
+        """
+        self.created = timezone.localtime()
+        if settings.USER_ACCESS_TOKEN_LIFETIME:
+            self.expired = self.created.date() + settings.USER_ACCESS_TOKEN_LIFETIME
+        else:
+            self.expired = None
+        self.token = hashlib.sha256('{}|{}|{}|{}|{}|{}|{}'.format(self.user.email,self.user.is_superuser,self.user.is_staff,self.user.is_active,self.created.timestamp(),self.expired.isoformat() if self.expired else "9999-12-31",settings.SECRET_KEY).lower().encode('utf-8')).hexdigest()
+
 
 class UserEmail(object):
     match_all = False
