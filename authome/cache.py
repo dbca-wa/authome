@@ -12,11 +12,11 @@ class _Cache(object):
     _usergrouptree = None
     _usergrouptree_ts = None
 
-    _userrequests = None
-    _userrequests_ts = None
+    _userauthorization = None
+    _userauthorization_ts = None
 
-    _usergrouprequests = None
-    _usergrouprequests_ts = None
+    _usergroupauthorization = None
+    _usergroupauthorization_ts = None
 
     _user_requests_map = {}
 
@@ -36,53 +36,53 @@ class _Cache(object):
         self._usergrouptree_ts = timezone.now()
         
     @property
-    def userrequests(self):
-        if self._userrequests :
-            from .models import UserRequests
-            if UserRequests.objects.filter(modified__gt=self._userrequests_ts).exists():
-                self._userrequests = None
-                self._userrequests_ts = None
+    def userauthorization(self):
+        if self._userauthorization :
+            from .models import UserAuthorization
+            if UserAuthorization.objects.filter(modified__gt=self._userauthorization_ts).exists():
+                self._userauthorization = None
+                self._userauthorization_ts = None
 
-        return self._userrequests
+        return self._userauthorization
 
-    @userrequests.setter
-    def userrequests(self,value):
-        self._userrequests = value
-        self._userrequests_ts = timezone.now()
+    @userauthorization.setter
+    def userauthorization(self,value):
+        self._userauthorization = value
+        self._userauthorization_ts = timezone.now()
         
     @property
-    def usergrouprequests(self):
-        if self._usergrouprequests :
-            from .models import UserGroupRequests
-            if UserGroupRequests.objects.filter(modified__gt=self._usergrouprequests_ts).exists():
-                self._usergrouprequests = None
-                self._usergrouprequests_ts = None
+    def usergroupauthorization(self):
+        if self._usergroupauthorization :
+            from .models import UserGroupAuthorization
+            if UserGroupAuthorization.objects.filter(modified__gt=self._usergroupauthorization_ts).exists():
+                self._usergroupauthorization = None
+                self._usergroupauthorization_ts = None
 
-        return self._usergrouprequests
+        return self._usergroupauthorization
 
-    @usergrouprequests.setter
-    def usergrouprequests(self,value):
-        self._usergrouprequests = value
-        self._usergrouprequests_ts = timezone.now()
+    @usergroupauthorization.setter
+    def usergroupauthorization(self,value):
+        self._usergroupauthorization = value
+        self._usergroupauthorization_ts = timezone.now()
         
     def get_requests(self,user,domain):
         requests = self._user_requests_map.get((user,domain))
         if requests :
-            from .models import UserGroupRequests,UserRequests,UserGroup
+            from .models import UserGroupAuthorization,UserAuthorization,UserGroup
             if self._usergrouptree and UserGroup.objects.filter(modified__gt=self._usergrouptree_ts).exists():
                 self._user_requests_map.clear()
                 self._usergrouptree = None
                 self._usergrouptree_ts = None
                 requests = None
-            elif self._usergrouprequests and UserGroupRequests.objects.filter(modified__gt=self._usergrouprequests_ts).exists():
+            elif self._usergroupauthorization and UserGroupAuthorization.objects.filter(modified__gt=self._usergroupauthorization_ts).exists():
                 self._user_requests_map.clear()
-                self._usergrouprequests = None
-                self._usergrouprequests_ts = None
+                self._usergroupauthorization = None
+                self._usergroupauthorization_ts = None
                 requests = None
-            elif self._userrequests and UserRequests.objects.filter(modified__gt=self._userrequests_ts).exists():
+            elif self._userauthorization and UserAuthorization.objects.filter(modified__gt=self._userauthorization_ts).exists():
                 self._user_requests_map.clear()
-                self._userrequests = None
-                self._userrequests_ts = None
+                self._userauthorization = None
+                self._userauthorization_ts = None
                 requests = None
 
         return requests
@@ -95,11 +95,11 @@ class _Cache(object):
             self._usergrouptree = None
             self._usergrouptree_ts = None
     
-            self._userrequests = None
-            self._userrequests_ts = None
+            self._userauthorization = None
+            self._userauthorization_ts = None
     
-            self._usergrouprequests = None
-            self._usergrouprequests_ts = None
+            self._usergroupauthorization = None
+            self._usergroupauthorization_ts = None
     
             self._user_requests_map.clear()
 
@@ -120,28 +120,28 @@ class _DelayCache(_Cache):
         self._usergrouptree_ts = timezone.now()
         
     @property
-    def userrequests(self):
-        return self._userrequests
+    def userauthorization(self):
+        return self._userauthorization
 
-    @userrequests.setter
-    def userrequests(self,value):
-        self._userrequests = value
-        self._userrequests_ts = timezone.now()
+    @userauthorization.setter
+    def userauthorization(self,value):
+        self._userauthorization = value
+        self._userauthorization_ts = timezone.now()
 
     @property
-    def usergrouprequests(self):
-        return self._usergrouprequests
+    def usergroupauthorization(self):
+        return self._usergroupauthorization
 
-    @usergrouprequests.setter
-    def usergrouprequests(self,value):
-        self._usergrouprequests = value
-        self._usergrouprequests_ts = timezone.now()
+    @usergroupauthorization.setter
+    def usergroupauthorization(self,value):
+        self._usergroupauthorization = value
+        self._usergroupauthorization_ts = timezone.now()
         
     def get_requests(self,user,domain):
         return self._user_requests_map.get((user,domain))
 
     def refresh(self,force=False):
-        from .models import UserGroup,UserRequests,UserGroupRequests
+        from .models import UserGroup,UserAuthorization,UserGroupAuthorization
         if force or not cache._usergrouptree or UserGroup.objects.filter(modified__gt=cache._usergrouptree_ts).exists():
             logger.debug("UserGroup was changed, clean cache usergroupptree and user_requests_map")
             cache._usergrouptree = None
@@ -151,21 +151,21 @@ class _DelayCache(_Cache):
             get_grouptree = UserGroup.get_grouptree()
 
 
-        if force or not cache._userrequests or UserRequests.objects.filter(modified__gt=cache._userrequests_ts).exists():
-            logger.debug("UserRequests was changed, clean cache userrequests and user_requests_map")
-            cache._userrequests = None
-            cache._userrequests_ts = None
+        if force or not cache._userauthorization or UserAuthorization.objects.filter(modified__gt=cache._userauthorization_ts).exists():
+            logger.debug("UserAuthorization was changed, clean cache userauthorization and user_requests_map")
+            cache._userauthorization = None
+            cache._userauthorization_ts = None
             cache._user_requests_map.clear()
             #reload user requests
-            UserRequests.get_requests(None)
+            UserAuthorization.get_requests(None)
 
-        if force or not cache._usergrouprequests or UserGroupRequests.objects.filter(modified__gt=cache._usergrouprequests_ts).exists():
-            logger.debug("UserGroupRequests was changed, clean cache usergrouprequests and user_requests_map")
-            cache._usergrouprequests = None
-            cache._usergrouprequests_ts = None
+        if force or not cache._usergroupauthorization or UserGroupAuthorization.objects.filter(modified__gt=cache._usergroupauthorization_ts).exists():
+            logger.debug("UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map")
+            cache._usergroupauthorization = None
+            cache._usergroupauthorization_ts = None
             cache._user_requests_map.clear()
             #reload user group requests
-            UserGroupRequests.get_requests(None)
+            UserGroupAuthorization.get_requests(None)
 
     def check(self):
         index = 0

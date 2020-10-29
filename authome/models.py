@@ -642,19 +642,19 @@ class RequestsMixin(DbObjectMixin,models.Model):
     @staticmethod
     def find(email,domain):
         """
-        return matched UserRequests or UserGroupRequests;return None if can't found
+        return matched UserAuthorization or UserGroupAuthorization;return None if can't found
         """
-        #try to find the matched userrequests
-        userrequests = UserRequests.get_requests(email)
-        if userrequests:
-            for requests in userrequests:
+        #try to find the matched userauthorization
+        userauthorization = UserAuthorization.get_requests(email)
+        if userauthorization:
+            for requests in userauthorization:
                 if requests.request_domain.match(domain):
                     return requests
         
-        #try to find the matched usergrouprequests 
+        #try to find the matched usergroupauthorization 
         usergroup = UserGroup.find(email)
         while usergroup:
-            grouprequests = UserGroupRequests.get_requests(usergroup)
+            grouprequests = UserGroupAuthorization.get_requests(usergroup)
             if grouprequests:
                 for requests in grouprequests:
                     if requests.request_domain.match(domain):
@@ -712,28 +712,28 @@ def _can_access_debug(email,domain,path):
 
 can_access = _can_access_debug if settings.DEBUG else _can_access
 
-class UserRequests(RequestsMixin):
+class UserAuthorization(RequestsMixin):
     user = models.CharField(max_length=64)
 
     @classmethod
     def get_requests(cls,useremail):
-        if not cache.userrequests:
-            logger.debug("Populate UserRequests map")
-            userrequests = {}
+        if not cache.userauthorization:
+            logger.debug("Populate UserAuthorization map")
+            userauthorization = {}
             previous_user = None
-            for request in UserRequests.objects.all().order_by("user","sortkey"):
+            for request in UserAuthorization.objects.all().order_by("user","sortkey"):
                 if not previous_user:
-                    userrequests[request.user] = [request]
+                    userauthorization[request.user] = [request]
                     previous_user = request.user
                 elif previous_user == request.user:
-                    userrequests[request.user].append(request)
+                    userauthorization[request.user].append(request)
                 else:
-                    userrequests[request.user] = [request]
+                    userauthorization[request.user] = [request]
                     previous_user = request.user
             
-            cache.userrequests = userrequests
+            cache.userauthorization = userauthorization
 
-        return cache.userrequests.get(useremail)
+        return cache.userauthorization.get(useremail)
 
         
 
@@ -743,29 +743,29 @@ class UserRequests(RequestsMixin):
     class Meta:
         unique_together = [["user","domain"]]
 
-class UserGroupRequests(RequestsMixin):
+class UserGroupAuthorization(RequestsMixin):
     usergroup = models.ForeignKey(UserGroup, on_delete=models.CASCADE)
 
     @classmethod
     def get_requests(cls,usergroup):
-        if not cache.usergrouprequests :
-            logger.debug("Populate UserGroupRequests map")
-            usergrouprequests = {}
+        if not cache.usergroupauthorization :
+            logger.debug("Populate UserGroupAuthorization map")
+            usergroupauthorization = {}
             previous_usergroup = None
-            for request in UserGroupRequests.objects.all().order_by("usergroup","sortkey"):
+            for request in UserGroupAuthorization.objects.all().order_by("usergroup","sortkey"):
                 if not previous_usergroup:
-                    usergrouprequests[request.usergroup] = [request]
+                    usergroupauthorization[request.usergroup] = [request]
                     previous_usergroup = request.usergroup
                 elif previous_usergroup == request.usergroup:
-                    usergrouprequests[request.usergroup].append(request)
+                    usergroupauthorization[request.usergroup].append(request)
                 else:
-                    usergrouprequests[request.usergroup] = [request]
+                    usergroupauthorization[request.usergroup] = [request]
                     previous_usergroup = request.usergroup
             
 
-            cache.usergrouprequests = usergrouprequests
+            cache.usergroupauthorization = usergroupauthorization
 
-        return cache.usergrouprequests.get(usergroup)
+        return cache.usergroupauthorization.get(usergroup)
 
     def __str__(self):
         return str(self.usergroup)

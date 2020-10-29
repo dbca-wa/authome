@@ -2,7 +2,7 @@
 from django import forms
 from django.contrib.postgres.forms import SimpleArrayField
 
-from  .models import UserGroup,UserGroupRequests,UserRequests
+from  .models import UserGroup,UserGroupAuthorization,UserAuthorization
 from .widgets import (ReadonlyWidget,text_readonly_widget)
 
 
@@ -14,7 +14,7 @@ class UserGroupForm(forms.ModelForm):
         fields = "__all__"
         
 
-class UserGroupRequestsForm(forms.ModelForm):
+class UserGroupAuthorizationForm(forms.ModelForm):
     paths = SimpleArrayField(forms.CharField(required=False),delimiter="\n",required=False,widget=forms.Textarea(attrs={"style":"width:80%","rows":10}))
     excluded_paths = SimpleArrayField(forms.CharField(required=False),delimiter="\n",required=False,widget=forms.Textarea(attrs={"style":"width:80%","rows":10}))
 
@@ -26,10 +26,10 @@ class UserGroupRequestsForm(forms.ModelForm):
                     self.fields["usergroup"].widget = ReadonlyWidget(lambda d:UserGroup.objects.get(id = int(d)) if d else "")
 
     class Meta:
-        model = UserGroupRequests
+        model = UserGroupAuthorization
         fields = "__all__"
 
-class UserGroupRequestsForm(forms.ModelForm):
+class UserGroupAuthorizationForm(forms.ModelForm):
     paths = SimpleArrayField(forms.CharField(required=False),delimiter="\n",required=False,widget=forms.Textarea(attrs={"style":"width:80%","rows":10}))
     excluded_paths = SimpleArrayField(forms.CharField(required=False),delimiter="\n",required=False,widget=forms.Textarea(attrs={"style":"width:80%","rows":10}))
 
@@ -41,7 +41,7 @@ class UserGroupRequestsForm(forms.ModelForm):
                     self.fields["user"].widget = text_readonly_widget
 
     class Meta:
-        model = UserRequests
+        model = UserAuthorization
         fields = "__all__"
         
 

@@ -39,21 +39,21 @@ class UserGroupAdmin(DatetimeMixin,admin.ModelAdmin):
     ordering = ('parent_group','name',)
     form = forms.UserGroupForm
 
-@admin.register(models.UserGroupRequests)
-class UserGroupRequestsAdmin(DatetimeMixin,admin.ModelAdmin):
+@admin.register(models.UserGroupAuthorization)
+class UserGroupAuthorizationAdmin(DatetimeMixin,admin.ModelAdmin):
     list_display = ('usergroup','domain','paths','excluded_paths','_modified','_created')
     readonly_fields = ('_modified',)
     fields = ('usergroup','domain','paths','excluded_paths','_modified')
     ordering = ('usergroup','sortkey',)
-    form = forms.UserGroupRequestsForm
+    form = forms.UserGroupAuthorizationForm
 
-@admin.register(models.UserRequests)
-class UserRequestsAdmin(DatetimeMixin,admin.ModelAdmin):
+@admin.register(models.UserAuthorization)
+class UserAuthorizationAdmin(DatetimeMixin,admin.ModelAdmin):
     list_display = ('user','domain','paths','excluded_paths','_modified','_created')
     readonly_fields = ('_modified',)
     fields = ('user','domain','paths','excluded_paths','_modified')
     ordering = ('user','sortkey',)
-    form = forms.UserGroupRequestsForm
+    form = forms.UserGroupAuthorizationForm
 
 class UserAccessToken(User):
     class Meta:

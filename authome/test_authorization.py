@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from django.test import TestCase, Client
 
-from .models import UserGroup,UserGroupRequests,UserRequests,can_access
+from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access
 from .cache import cache
 
 
@@ -97,16 +97,16 @@ class UserGroupTestCase(object):
             group = UserGroup.find(email)
             self.assertEqual(group.name,group_name,msg="{}: matched group({}) is not the expected group({})".format(email,group.name,group_name))
             
-class UserRequestsTestCase(object):
+class UserAuthorizationTestCase(object):
     def setUp(self):
         #clear the unittest data
-        UserRequests.objects.all().delete()
+        UserAuthorization.objects.all().delete()
 
     def get_role(self,index):
         return "test{:0>3}".format(index)
 
     def get_role_requests(self,role,domain,paths,excluded_paths):
-        return UserRequests(user=role,domain=domain,paths=paths,excluded_paths=excluded_paths)
+        return UserAuthorization(user=role,domain=domain,paths=paths,excluded_paths=excluded_paths)
 
     def test_save(self):
         index = 0
@@ -138,11 +138,11 @@ class UserRequestsTestCase(object):
             obj = self.get_role_requests(user,domain,paths,excluded_paths)
             obj.clean()
             obj.save()
-            self.assertEqual(obj.domain,expected_domain,msg="The UserRequests({},domain={}) is not matched with the expected domain '{}'".format(user,obj.domain,expected_domain))
-            self.assertEqual(obj.paths,expected_paths,msg="The UserRequests({},paths={}) is not matched with the expected paths '{}'".format(user,obj.paths,expected_paths))
-            self.assertEqual(obj.excluded_paths,expected_excluded_paths,msg="The UserRequests({},excluded_paths={}) is not matched with the expected excluded_paths '{}'".format(user,obj.excluded_paths,expected_excluded_paths))
-            self.assertEqual(obj.allow_all,expected_allow_all,msg="The UserRequests({},allow_all={}) is not matched with the expected allow_all '{}'".format(user,obj.allow_all,expected_allow_all))
-            self.assertEqual(obj.deny_all,expected_deny_all,msg="The UserRequests({},deny_all={}) is not matched with the expected deny_all '{}'".format(user,obj.deny_all,expected_deny_all))
+            self.assertEqual(obj.domain,expected_domain,msg="The UserAuthorization({},domain={}) is not matched with the expected domain '{}'".format(user,obj.domain,expected_domain))
+            self.assertEqual(obj.paths,expected_paths,msg="The UserAuthorization({},paths={}) is not matched with the expected paths '{}'".format(user,obj.paths,expected_paths))
+            self.assertEqual(obj.excluded_paths,expected_excluded_paths,msg="The UserAuthorization({},excluded_paths={}) is not matched with the expected excluded_paths '{}'".format(user,obj.excluded_paths,expected_excluded_paths))
+            self.assertEqual(obj.allow_all,expected_allow_all,msg="The UserAuthorization({},allow_all={}) is not matched with the expected allow_all '{}'".format(user,obj.allow_all,expected_allow_all))
+            self.assertEqual(obj.deny_all,expected_deny_all,msg="The UserAuthorization({},deny_all={}) is not matched with the expected deny_all '{}'".format(user,obj.deny_all,expected_deny_all))
 
     def test_allow(self):
         index = 0
@@ -175,10 +175,10 @@ class UserRequestsTestCase(object):
             obj.clean()
             obj.save()
             for path,result in testcases:
-                self.assertEqual(obj.allow(path),result,msg="The UserRequests({},paths={},excluded_paths={}) can {} the path '{}'".format(user,obj.paths,obj.excluded_paths,"access" if result else "not access",path))
+                self.assertEqual(obj.allow(path),result,msg="The UserAuthorization({},paths={},excluded_paths={}) can {} the path '{}'".format(user,obj.paths,obj.excluded_paths,"access" if result else "not access",path))
 
 
-class UserGroupRequestsTestCase(UserRequestsTestCase):
+class UserGroupAuthorizationTestCase(UserAuthorizationTestCase):
     def setUp(self):
         #clear the unittest data
         UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
@@ -190,14 +190,14 @@ class UserGroupRequestsTestCase(UserRequestsTestCase):
         return group
 
     def get_role_requests(self,role,domain,paths,excluded_paths):
-        return UserGroupRequests(usergroup=role,domain=domain,paths=paths,excluded_paths=excluded_paths)
+        return UserGroupAuthorization(usergroup=role,domain=domain,paths=paths,excluded_paths=excluded_paths)
 
 
 class AuthorizatioinTestCase(TestCase):
     def setUp(self):
         #clear the unittest data
         UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
-        UserRequests.objects.all().delete()
+        UserAuthorization.objects.all().delete()
 
     def test_authorize(self):
         test_usergroups = [
@@ -219,7 +219,7 @@ class AuthorizatioinTestCase(TestCase):
                 ])
             ])
         ]
-        test_usergrouprequests = [
+        test_usergroupauthorization = [
             ("all_user","*",None,"*"),
             ("all_user","game.gunfire.com",None,None),
             ("all_user","gunfire.com",None,["/register"]),
@@ -246,7 +246,7 @@ class AuthorizatioinTestCase(TestCase):
             ("dev_role_manager","map.dev.gunfire.com",None,["=/start","=/shutdown"])
         ]
 
-        test_userrequests = [
+        test_userauthorization = [
             ("dev_map_leader2@gunfire.com","map.dev.gunfire.com",None,None),
 
             ("dev_map_leader4@gunfire.com","map.dev.gunfire.com",None,["=/shutdown"]),
@@ -451,13 +451,13 @@ class AuthorizatioinTestCase(TestCase):
                 if subgroups:
                     uncreated_usergroups.append((obj,subgroups))
 
-        for groupname,domain,paths,excluded_paths in test_usergrouprequests:
-            obj = UserGroupRequests(usergroup=UserGroup.objects.get(name=groupname),domain=domain,paths=paths,excluded_paths=excluded_paths)
+        for groupname,domain,paths,excluded_paths in test_usergroupauthorization:
+            obj = UserGroupAuthorization(usergroup=UserGroup.objects.get(name=groupname),domain=domain,paths=paths,excluded_paths=excluded_paths)
             obj.clean()
             obj.save()
     
-        for user,domain,paths,excluded_paths in test_userrequests:
-            obj = UserRequests(user=user,domain=domain,paths=paths,excluded_paths=excluded_paths)
+        for user,domain,paths,excluded_paths in test_userauthorization:
+            obj = UserAuthorization(user=user,domain=domain,paths=paths,excluded_paths=excluded_paths)
             obj.clean()
             obj.save()
 
