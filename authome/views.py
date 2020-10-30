@@ -1,4 +1,4 @@
-from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden
+from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden,JsonResponse 
 from django.template.response import TemplateResponse
 from django.contrib.auth import login, logout
 from django.core.exceptions import ObjectDoesNotExist
@@ -36,20 +36,23 @@ def parse_basic(basic_auth):
 
 NON_AUTHORIZED_RESPONSE = HttpResponseForbidden()
 def check_authorization(request,useremail):
-   """
-   Return None if authorized;otherwise return Authorized failed response
-   """
-   domain = request.headers["x-upstream-server-name"] or request.get_host()
-   path = request.headers["x-upstream-request-uri"] or request.path
-   try:
-       path = path[:path.index("?")]
-   except:
-       pass
+    """
+    Return None if authorized;otherwise return Authorized failed response
+    """
+    domain = request.headers.get("x-upstream-server-name") or request.get_host()
+    path = request.headers.get("x-upstream-request-uri") or request.path
+    try:
+        path = path[:path.index("?")]
+    except:
+        pass
 
-   if can_access(useremail,domain,path):
-       return None
-   else:
-       return NON_AUTHORIZED_RESPONSE
+    
+    if can_access(useremail,domain,path):
+        logger.debug("User({}) can access https://{}{}".format(useremail,domain,path))
+        return None
+    else:
+        logger.debug("User({}) can't access https://{}{}".format(useremail,domain,path))
+        return NON_AUTHORIZED_RESPONSE
 
 
 def basic_authenticate(email, password):
@@ -86,9 +89,11 @@ def _populate_response(request,cache_key,user,current_ip):
         'username': user.username,
         'first_name': user.first_name,
         'last_name': user.last_name,
-        'session_key': request.session.session_key,
         'client_logon_ip': current_ip
     }
+    if request.session.session_key:
+        response_contents['session_key'] = request.session.session_key
+
 
     response = HttpResponse(json.dumps(response_contents), content_type='application/json')
     headers = response_contents
@@ -102,7 +107,7 @@ def _populate_response(request,cache_key,user,current_ip):
         cache_headers[key], response[key] = val, val
     # cache authentication entries
     cache.set(cache_key,[response.content, cache_headers],3600)
-    logger.debug("{}:cache the sso auth data with key({})".format(user.email,cache_key))
+    logger.debug("cache the sso auth data for the user({}) with key({})".format(user.email,cache_key))
 
     return response
 
@@ -119,7 +124,7 @@ def _auth(request):
         logger.debug("User is not authenticated")
         return None
 
-    logger.debug("{} is authenticated".format(request.user.email))
+    logger.debug("The user({}) is authenticated".format(request.user.email))
 
     user = request.user
     current_ip,routable = get_client_ip(request)
@@ -127,7 +132,7 @@ def _auth(request):
     auth_content = cache.get(auth_key)
 
     if auth_content:
-        logger.debug("{}:sso auth is authenticated and cached".format(request.user.email))
+        logger.debug("The user({}) is authenticated and cached".format(request.user.email))
 
         if auth_content[1]['X-client-logon-ip'] != current_ip:
             auth_content[0] = json.loads(auth_content[0].decode())
@@ -154,7 +159,7 @@ def _auth(request):
         return response
 
 AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
-AUTH_REQUIRED_RESPONSE.content = "Basic auth required"
+AUTH_REQUIRED_RESPONSE.content = "Authentication required"
 
 @csrf_exempt
 def auth(request):
@@ -164,9 +169,9 @@ def auth(request):
     else:
         return res
 
-basic_auth_REQUIRED_RESPONSE = HttpResponse(status=401)
-basic_auth_REQUIRED_RESPONSE["WWW-Authenticate"] = 'Basic realm="Please login with your email address"'
-basic_auth_REQUIRED_RESPONSE.content = "Basic auth required"
+BASIC_AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
+BASIC_AUTH_REQUIRED_RESPONSE["WWW-Authenticate"] = 'Basic realm="Please login with your email address"'
+BASIC_AUTH_REQUIRED_RESPONSE.content = "Basic auth required"
 
 @csrf_exempt
 def auth_basic(request):
@@ -182,7 +187,7 @@ def auth_basic(request):
             return res
         else:
             #require the user to provide credential using basic auth
-            return basic_auth_REQUIRED_RESPONSE
+            return BASIC_AUTH_REQUIRED_RESPONSE
 
     basic_hash = hashlib.sha1(basic_auth.encode('utf-8')).hexdigest() 
     # grab IP address from the request
@@ -214,7 +219,7 @@ def auth_basic(request):
             return response
         else:
 
-            return _populate_response_from_cache(auth_content)
+            return _populate_response_from_cache(basic_auth_content)
     else:
         username = ""
         try:
@@ -273,7 +278,7 @@ def auth_token(request):
             return res
         else:
             #require the user to provide credential using basic auth
-            return token_auth_REQUIRED_RESPONSE
+            return BASIC_AUTH_REQUIRED_RESPONSE
 
     token_hash = hashlib.sha1(token_auth.encode('utf-8')).hexdigest() 
     # grab IP address from the request
@@ -304,8 +309,7 @@ def auth_token(request):
             #not authorized
             return response
         else:
-
-            return _populate_response_from_cache(auth_content)
+            return _populate_response_from_cache(token_auth_content)
     else:
         username = ""
         try:
@@ -367,6 +371,36 @@ def home(request):
         return HttpResponseRedirect('https://{}'.format(next_url))
     return HttpResponseRedirect(reverse('auth'))
 
+@csrf_exempt
+def access_token(request):
+    user = request.user
+    if not user.is_authenticated:
+        return AUTH_REQUIRED_RESPONSE
+    else:
+        data = {
+            'email': user.email,
+            'username': user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+        }
+        try:
+            if not user.token or not user.token.enabled:
+                data["error"] = "Access token is not enabled, please ask administrator to enable."
+            elif not user.token.token:
+                data["error"] = "Access token is created, please ask administrator to create"
+            elif user.token.is_expired:
+                data["error"] = "Access token is expired, please ask administroator to recreate"
+                data["access_token"] = user.token.token
+                data["created"] = timezone.localtime(user.token.created).strftime("%Y-%m-%d %H:%M:%S")
+                data["expired"] = user.token.expired.strftime("%Y-%m-%d")
+            else:
+                data["access_token"] = user.token.token
+                data["created"] = timezone.localtime(user.token.created).strftime("%Y-%m-%d %H:%M:%S")
+                if user.token.expired:
+                    data["expired"] = user.token.expired.strftime("%Y-%m-%d")
+        except Exception as ex:
+            logger.error("Failed to get access token for the user({}).{}".format(user.email,traceback.format_exc()))
+            data["error"] = str(ex)
 
-def auth_view(request,user_template):
-    return TemplateResponse(request, 'authome/{}.html'.format(user_template))
+    return JsonResponse(data)
+

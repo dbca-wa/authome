@@ -3,7 +3,6 @@ import logging
 from datetime import datetime,timedelta
 
 from django.conf import settings
-from django.contrib.auth.signals import user_logged_in
 from django.contrib.sessions.models import Session
 from django.core import management
 from django.core.exceptions import ValidationError
@@ -267,7 +266,9 @@ class UserGroup(DbObjectMixin,models.Model):
             logger.debug("Populate UserGroup trees")
             group_trees = {}
             modified = None
+            size = 0
             for group in cls.objects.all():
+                size += 1
                 group_trees[group.id] = (group,[])
                 if not modified:
                     modified = group.modified
@@ -279,7 +280,7 @@ class UserGroup(DbObjectMixin,models.Model):
                 if group.parent_group:
                     group_trees[group.parent_group.id][1].append(val)
             group_trees = [v for v in group_trees.values() if not v[0].parent_group]
-            cache.usergrouptree = group_trees
+            cache.usergrouptree = (group_trees,size)
 
         return cache.usergrouptree
 
@@ -645,7 +646,7 @@ class RequestsMixin(DbObjectMixin,models.Model):
         return matched UserAuthorization or UserGroupAuthorization;return None if can't found
         """
         #try to find the matched userauthorization
-        userauthorization = UserAuthorization.get_requests(email)
+        userauthorization = UserAuthorization.get_authorization(email)
         if userauthorization:
             for requests in userauthorization:
                 if requests.request_domain.match(domain):
@@ -654,7 +655,7 @@ class RequestsMixin(DbObjectMixin,models.Model):
         #try to find the matched usergroupauthorization 
         usergroup = UserGroup.find(email)
         while usergroup:
-            grouprequests = UserGroupAuthorization.get_requests(usergroup)
+            grouprequests = UserGroupAuthorization.get_authorization(usergroup)
             if grouprequests:
                 for requests in grouprequests:
                     if requests.request_domain.match(domain):
@@ -671,11 +672,11 @@ def _can_access(email,domain,path):
     """
     Return True if the user(email) can access domain/path; otherwise return False
     """
-    requests = cache.get_requests(email,domain)
+    requests = cache.get_authorization(email,domain)
     if not requests:
         requests = RequestsMixin.find(email,domain)
         if requests:
-            cache.set_requests(email,domain,requests)
+            cache.set_authorization(email,domain,requests)
     if requests:
         return requests.allow(path)
     else:
@@ -688,11 +689,11 @@ def _can_access_debug(email,domain,path):
     start = datetime.now()
     requests = None
     try:
-        requests = cache.get_requests(email,domain)
+        requests = cache.get_authorization(email,domain)
         if not requests:
             requests = RequestsMixin.find(email,domain)
             if requests:
-                cache.set_requests(email,domain,requests)
+                cache.set_authorization(email,domain,requests)
         if requests:
             return requests.allow(path)
         else:
@@ -716,12 +717,14 @@ class UserAuthorization(RequestsMixin):
     user = models.CharField(max_length=64)
 
     @classmethod
-    def get_requests(cls,useremail):
+    def get_authorization(cls,useremail):
         if not cache.userauthorization:
             logger.debug("Populate UserAuthorization map")
             userauthorization = {}
             previous_user = None
+            size = 0
             for request in UserAuthorization.objects.all().order_by("user","sortkey"):
+                size += 1
                 if not previous_user:
                     userauthorization[request.user] = [request]
                     previous_user = request.user
@@ -731,6 +734,7 @@ class UserAuthorization(RequestsMixin):
                     userauthorization[request.user] = [request]
                     previous_user = request.user
             
+            userauthorization["__size__"] = size
             cache.userauthorization = userauthorization
 
         return cache.userauthorization.get(useremail)
@@ -747,12 +751,14 @@ class UserGroupAuthorization(RequestsMixin):
     usergroup = models.ForeignKey(UserGroup, on_delete=models.CASCADE)
 
     @classmethod
-    def get_requests(cls,usergroup):
+    def get_authorization(cls,usergroup):
         if not cache.usergroupauthorization :
             logger.debug("Populate UserGroupAuthorization map")
             usergroupauthorization = {}
             previous_usergroup = None
+            size = 0
             for request in UserGroupAuthorization.objects.all().order_by("usergroup","sortkey"):
+                size += 1
                 if not previous_usergroup:
                     usergroupauthorization[request.usergroup] = [request]
                     previous_usergroup = request.usergroup
@@ -763,6 +769,7 @@ class UserGroupAuthorization(RequestsMixin):
                     previous_usergroup = request.usergroup
             
 
+            usergroupauthorization["__size__"] = size
             cache.usergroupauthorization = usergroupauthorization
 
         return cache.usergroupauthorization.get(usergroup)
@@ -772,13 +779,6 @@ class UserGroupAuthorization(RequestsMixin):
 
     class Meta:
         unique_together = [["usergroup","domain"]]
-
-def user_logged_in_handler(sender, request, user, **kwargs):
-    request.session.save()
-    usersession, created = UserSession.objects.get_or_create(user=user, session_id=request.session.session_key)
-    usersession.ip,routable = get_client_ip(request)
-    usersession.save()
-    management.call_command("clearsessions", verbosity=0)
 
 class UserGroupListener(object):
     @staticmethod
@@ -793,4 +793,3 @@ class UserGroupListener(object):
         if instance.id is None and instance.is_public_group() and instance.public_group(False):
             raise Exception("Public user group already exists")
 
-user_logged_in.connect(user_logged_in_handler)
