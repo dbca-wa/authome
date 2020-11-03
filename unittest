@@ -1,4 +1,7 @@
 #!/bin/bash
 
 #source venv/bin/activate && python manage.py test --pattern="test_authorization.py" --keepdb
-source venv/bin/activate && python manage.py test --pattern="test_auth.py" --keepdb
+#source venv/bin/activate && python manage.py test --pattern="test_auth.py" --keepdb
+
+
+source venv/bin/activate && python manage.py test --pattern="test_authorization_cache.py" --keepdb

@@ -2,11 +2,10 @@
 from django.test import TestCase, Client
 
 from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access
-from .cache import cache
+from .cache import get_cache
 
 
-#class UserGroupTestCase(TestCase):
-class UserGroupTestCase(object):
+class UserGroupTestCase(TestCase):
     def setUp(self):
         #clear the unittest data
         UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
@@ -27,7 +26,7 @@ class UserGroupTestCase(object):
         index = 0
         for test_data,expected_data in [
             ((None,["*"]),(["*"],["*"])),
-            ((["test2@test1.com","",None,"test1@test1.com","*1@*.com","@test3.com"],None),(["@test3.com","test1@test1.com","test2@test1.com","*1@*.com"],None)),
+            ((["test2@test1.com","",None,"test1@test1.com","*1@*.com","@test3.com"],None),(["@test3.com","*1@*.com","test1@test1.com","test2@test1.com"],None)),
         ]:
             index += 1
             obj = UserGroup(name="test_{}".format(index),users=test_data[0],excluded_users=test_data[1])
@@ -59,6 +58,7 @@ class UserGroupTestCase(object):
 
 
     def test_find(self):
+        cache = get_cache()
         test_datas = [
             ("testcompany",["@test1.com"],None,[
                 ("developers",["dev_*@test1.com"],None,[
@@ -91,13 +91,13 @@ class UserGroupTestCase(object):
                 if subgroups:
                     pending_datas.append((obj,subgroups))
 
-        cache.refresh(True)
+        cache.refresh_authorization_cache(True)
   
         for email,group_name in testcases:
             group = UserGroup.find(email)
             self.assertEqual(group.name,group_name,msg="{}: matched group({}) is not the expected group({})".format(email,group.name,group_name))
             
-class UserAuthorizationTestCase(object):
+class UserAuthorizationTestCase(TestCase):
     def setUp(self):
         #clear the unittest data
         UserAuthorization.objects.all().delete()
@@ -193,13 +193,14 @@ class UserGroupAuthorizationTestCase(UserAuthorizationTestCase):
         return UserGroupAuthorization(usergroup=role,domain=domain,paths=paths,excluded_paths=excluded_paths)
 
 
-class AuthorizatioinTestCase(TestCase):
+class AuthorizationTestCase(TestCase):
     def setUp(self):
         #clear the unittest data
         UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
         UserAuthorization.objects.all().delete()
 
     def test_authorize(self):
+        cache = get_cache()
         test_usergroups = [
             ("all_user",["*@*"],None,[
                 ("gunfire",["@gunfire.com"],None,[
@@ -461,7 +462,7 @@ class AuthorizatioinTestCase(TestCase):
             obj.clean()
             obj.save()
 
-        cache.refresh(True)
+        cache.refresh_authorization_cache(True)
         for email,domain,path,result in testcases:
             if domain == "map.dev.gunfire.com" and email=="staff1@gunfire.com":
                 #import ipdb;ipdb.set_trace()

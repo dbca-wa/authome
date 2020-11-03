@@ -6,7 +6,7 @@ from django.test import TestCase, Client
 import base64
 
 from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access
-from .cache import cache
+from .cache import get_cache
 
 class AuthTestCase(TestCase):
     client = Client()
@@ -58,7 +58,8 @@ class AuthTestCase(TestCase):
                 obj.clean()
                 obj.save()
 
-        cache.refresh(True)
+        cache = get_cache()
+        cache.refresh_authorization_cache(True)
 
     def test_auth(self):
         self.test_usergroups = [
