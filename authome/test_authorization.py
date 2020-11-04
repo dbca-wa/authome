@@ -2,7 +2,7 @@
 from django.test import TestCase, Client
 
 from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access
-from .cache import get_cache
+from .cache import cache
 
 
 class UserGroupTestCase(TestCase):
@@ -58,7 +58,6 @@ class UserGroupTestCase(TestCase):
 
 
     def test_find(self):
-        cache = get_cache()
         test_datas = [
             ("testcompany",["@test1.com"],None,[
                 ("developers",["dev_*@test1.com"],None,[
@@ -200,7 +199,6 @@ class AuthorizationTestCase(TestCase):
         UserAuthorization.objects.all().delete()
 
     def test_authorize(self):
-        cache = get_cache()
         test_usergroups = [
             ("all_user",["*@*"],None,[
                 ("gunfire",["@gunfire.com"],None,[

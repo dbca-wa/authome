@@ -1,7 +1,11 @@
 #!/bin/bash
-
+cp -f .env .env.bak
 #source venv/bin/activate && python manage.py test --pattern="test_authorization.py" --keepdb
 #source venv/bin/activate && python manage.py test --pattern="test_auth.py" --keepdb
 
+cp -f .unitest.cache.env .env
+#source venv/bin/activate && python manage.py test --pattern="test_authorization_cache.py" --keepdb
+source venv/bin/activate && python manage.py test --pattern="test_auth_cache.py" --keepdb
 
-source venv/bin/activate && python manage.py test --pattern="test_authorization_cache.py" --keepdb
+cp -f .env.bak .env
+rm -f .env.bak

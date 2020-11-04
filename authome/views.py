@@ -19,7 +19,7 @@ from datetime import datetime
 
 from django.contrib.auth.models import User
 from authome.models import can_access,UserToken
-from authome.cache import get_cache
+from authome.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,6 @@ def _auth(request):
         return None
 
     logger.debug("The user({}) is authenticated".format(request.user.email))
-    cache = get_cache()
     user = request.user
     current_ip,routable = get_client_ip(request)
     auth_key = cache.get_auth_key(user.email,request.session.session_key)
@@ -178,8 +177,8 @@ def auth_token(request):
     """
     First authenticate the token and then fall back to session authentication
     """
-    token_auth = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else ''
-    if not token_auth:
+    auth_token = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else ''
+    if not auth_token:
         #not provide basic auth data,check whether session is already authenticated or not.
         res = _auth(request)
         if res:
@@ -189,46 +188,37 @@ def auth_token(request):
             #require the user to provide credential using basic auth
             return BASIC_AUTH_REQUIRED_RESPONSE
 
-    cache = get_cache()
-
-    username, token = parse_basic(token_auth)
+    username, token = parse_basic(auth_token)
     # grab IP address from the request
     current_ip,routable = get_client_ip(request)
 
-    token_auth_key = cache.get_token_auth_key(username,token) 
-    token_auth_content = cache.get_token_auth(token_auth_key)
-    if token_auth_content[2] != token:
-        # token does not match
-        cache.delete_token_auth(token_auth_key)
-        token_auth_content = None
-
-    if token_auth_content:
+    auth_token_key = cache.get_auth_token_key(username,token) 
+    auth_token_content = cache.get_auth_token(auth_token_key)
+    if auth_token_content:
         #already authenticated with token auth data, using the token auth data instead of current session authentication data (if have)
-        user = User.objects.get(email__iexact=token_auth_content[1]['X-email'])
+        user = User.objects.get(email__iexact=auth_token_content[1]['X-email'])
         request.user = user
         request.session.modified = False
         useremail = user.email
 
-        if token_auth_content[1]['X-client-logon-ip'] != current_ip:
-            token_auth_content[0] = json.loads(token_auth_content[0].decode())
+        if auth_token_content[1]['X-client-logon-ip'] != current_ip:
+            auth_token_content[0] = json.loads(auth_token_content[0].decode())
 
-            token_auth_content[0]['client_logon_ip'] = current_ip
-            token_auth_content[1]['X-client-logon-ip'] = current_ip
+            auth_token_content[0]['client_logon_ip'] = current_ip
+            auth_token_content[1]['X-client-logon-ip'] = current_ip
                     
-            token_auth_content[0] = json.dumps(token_auth_content[0]).encode()
+            auth_token_content[0] = json.dumps(auth_token_content[0]).encode()
 
-            cache.update_token_auth(token_auth_key, token_auth_content, 3600)
+            cache.update_auth_token(auth_token_key, auth_token_content, 3600)
             
         response = check_authorization(request,useremail)
         if response:
             #not authorized
             return response
         else:
-            return _populate_response_from_cache(token_auth_content)
+            return _populate_response_from_cache(auth_token_content)
     else:
-        username = ""
         try:
-            username, token = parse_basic(token_auth)
             if "@" in username:
                 user = User.objects.get(email__iexact=username)
             else:
@@ -245,7 +235,7 @@ def auth_token(request):
                 request.user = user
                 request.session.modified = False
 
-                response = _populate_response(request,cache.set_token_auth,token_auth_key,user,current_ip)
+                response = _populate_response(request,cache.set_auth_token,auth_token_key,user,current_ip)
                 res = check_authorization(request,user.email)
                 if res:
                     return res

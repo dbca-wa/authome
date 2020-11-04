@@ -33,11 +33,11 @@ class MemoryCache(object):
         self._user_authorization_map = {} if settings.AUTHORIZATION_CACHE_SIZE <= 0 else OrderedDict() 
     
         self._auth_map = OrderedDict() 
-        self._token_auth_map = OrderedDict() 
+        self._auth_token_map = OrderedDict() 
 
         self._next_check_authorization_cache = None
         self._next_remove_expired_authdata = timezone.now() + settings.AUTH_CACHE_EXPIRETIME
-        self._next_remove_expired_tokenauthdata = timezone.now() + settings.TOKEN_AUTH_CACHE_EXPIRETIME
+        self._next_remove_expired_tokenauthdata = timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME
 
     @property
     def usergrouptree(self):
@@ -129,18 +129,18 @@ class MemoryCache(object):
             #not found
             pass
 
-    def get_token_auth_key(self,name_or_email,token):
+    def get_auth_token_key(self,name_or_email,token):
         return (name_or_email,token)
 
-    def get_token_auth(self,key):
+    def get_auth_token(self,key):
         try:
-            data = self._token_auth_map.pop(key[0])
+            data = self._auth_token_map.pop(key[0])
             if data[1] == key[1]:
                 #token is matched
-                if settings.TOKEN_AUTH_CACHE_EXPIRETIME :
-                    data[2] = timezone.now() + settings.TOKEN_AUTH_CACHE_EXPIRETIME
+                if settings.AUTH_TOKEN_CACHE_EXPIRETIME :
+                    data[2] = timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME
                 #readd the key to ordereddict
-                self._token_auth_map[key[0]] = data
+                self._auth_token_map[key[0]] = data
                 return data[0]
             else:
                 #token is not matched, and is already removed,
@@ -149,27 +149,27 @@ class MemoryCache(object):
             #not cached token found
             return None
 
-    def set_token_auth(self,key,value):
-        if not settings.TOKEN_AUTH_CACHE_EXPIRETIME :
-            self._token_auth_map[key[0]] = [value,key[1]]
+    def set_auth_token(self,key,value):
+        if not settings.AUTH_TOKEN_CACHE_EXPIRETIME :
+            self._auth_token_map[key[0]] = [value,key[1]]
         else:
-            self._token_auth_map[key[0]] = [value,key[1],timezone.now() + settings.TOKEN_AUTH_CACHE_EXPIRETIME]
+            self._auth_token_map[key[0]] = [value,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
 
-        if settings.TOKEN_AUTH_CACHE_SIZE > 0:
-            self._enforce_maxsize("token auth map",self._token_auth_map,settings.TOKEN_AUTH_CACHE_SIZE)
+        if settings.AUTH_TOKEN_CACHE_SIZE > 0:
+            self._enforce_maxsize("token auth map",self._auth_token_map,settings.AUTH_TOKEN_CACHE_SIZE)
         self.remove_expired_tokenauthdata()
 
-    def update_token_auth(self,key,value):
-        self.delete_token_auth(key)
-        self.set_token_auth(key,value)
+    def update_auth_token(self,key,value):
+        self.delete_auth_token(key)
+        self.set_auth_token(key,value)
         try:
-            data = self._token_auth_map.pop(key[0])
+            data = self._auth_token_map.pop(key[0])
             if data[1] == key[1]:
                 #token is matched
-                if settings.TOKEN_AUTH_CACHE_EXPIRETIME :
-                    data[2] = timezone.now() + settings.TOKEN_AUTH_CACHE_EXPIRETIME
+                if settings.AUTH_TOKEN_CACHE_EXPIRETIME :
+                    data[2] = timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME
                 #readd the key to ordereddict
-                self._token_auth_map[key[0]] = data
+                self._auth_token_map[key[0]] = data
                 return data[0]
             else:
                 #token is not matched, and is already removed,
@@ -178,9 +178,9 @@ class MemoryCache(object):
             #not cached token found
             return None
 
-    def delete_token_auth(self,key):
+    def delete_auth_token(self,key):
         try:
-            del self._token_auth_map[key[0]]
+            del self._auth_token_map[key[0]]
         except:
             #not found
             pass
@@ -192,7 +192,7 @@ class MemoryCache(object):
             while oversize > 0:
                 cache.popitem(last=False)
                 oversize -= 1
-            logger.debug("Remove earliest data from cache {0} to enforce the maximum cache size {}".format(name,max_size))
+            logger.debug("Remove earliest data from cache {0} to enforce the maximum cache size {1}".format(name,max_size))
 
     def _remove_expireddata(self,name,cache):
         #clean the expired data
@@ -224,8 +224,8 @@ class MemoryCache(object):
 
     def remove_expired_tokenauthdata(self):
         if timezone.now() >= self._next_remove_expired_tokenauthdata:
-            self._remove_expireddata('token auth map',self._token_auth_map)
-            self._next_remove_expired_tokenauthdata = timezone.now() + settings.TOKEN_AUTH_CACHE_EXPIRETIME
+            self._remove_expireddata('token auth map',self._auth_token_map)
+            self._next_remove_expired_tokenauthdata = timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME
 
     def refresh_usergrouptree(self,force=False):
         from .models import UserGroup
@@ -271,9 +271,7 @@ class MemoryCache(object):
             self.refresh_usergroupauthorization(force)
             self._next_check_authorization_cache = timezone.now() + settings.AUTHORIZATION_CACHE_DELAY
 
-_cache = MemoryCache()
-def get_cache():
-    return _cache
+cache = MemoryCache()
 
         
 

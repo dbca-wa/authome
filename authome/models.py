@@ -15,7 +15,7 @@ from django.dispatch import receiver
 from ipware.ip import get_client_ip
 import hashlib
 
-from .cache import get_cache
+from .cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -262,7 +262,6 @@ class UserGroup(DbObjectMixin,models.Model):
 
     @classmethod
     def get_grouptree(cls,refresh=False):
-        cache = get_cache()
         if refresh or not cache.usergrouptree:
             logger.debug("Populate UserGroup trees")
             group_trees = {}
@@ -673,7 +672,6 @@ def _can_access(email,domain,path):
     """
     Return True if the user(email) can access domain/path; otherwise return False
     """
-    cache = get_cache()
     requests = cache.get_authorization(email,domain)
     if not requests:
         requests = AuthorizationMixin.find(email,domain)
@@ -690,7 +688,6 @@ def _can_access_debug(email,domain,path):
     """
     start = datetime.now()
     requests = None
-    cache = get_cache()
     try:
         requests = cache.get_authorization(email,domain)
         if not requests:
@@ -721,7 +718,6 @@ class UserAuthorization(AuthorizationMixin):
 
     @classmethod
     def get_authorization(cls,useremail,refresh=False):
-        cache = get_cache()
         if refresh or not cache.userauthorization:
             logger.debug("Populate UserAuthorization map")
             userauthorization = {}
@@ -761,7 +757,6 @@ class UserGroupAuthorization(AuthorizationMixin):
 
     @classmethod
     def get_authorization(cls,usergroup,refresh=False):
-        cache = get_cache()
         if refresh or not cache.usergroupauthorization :
             logger.debug("Populate UserGroupAuthorization map")
             usergroupauthorization = {}
