@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
+from datetime import timedelta
+
 from django.contrib.auth.models import User
 from django.urls import reverse
+from django.utils import timezone
 from django.test import TestCase, Client
 
 import base64
@@ -71,6 +74,76 @@ class AuthTestCase(BaseAuthTestCase):
             res = self.client.get(self.auth_token_url,HTTP_AUTHORIZATION=self.basic_auth(username,"faketoken"))
             self.assertEqual(res.status_code,401,msg="Should return 401 response for unauthenticated request")
 
+    def test_auth_token_negative(self):
+        self.test_users = [
+            ("staff_1","staff_1@gunfire.com",True)
+        ]
+        self.test_usergroups = [
+            ("all_user",["*@*"],None,None)
+        ]
+        self.test_usergroupauthorization = [
+            ("all_user","*","*",None)
+        ]
+        self.populate_testdata()
+
+        #test sso token auth
+        user=self.test_users["staff_1"]
+        for username,usertoken in ((user.username,user.token),(user.email,user.token)):
+            token = usertoken.token
+            res = self.client.get(self.auth_token_url,HTTP_AUTHORIZATION=self.basic_auth(username,token))
+            self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
+            self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
+
+            usertoken.enabled = False
+            usertoken.save()
+            cache.clean_auth_cache(True)
+            res = self.client.get(self.auth_token_url,HTTP_AUTHORIZATION=self.basic_auth(username,token))
+            self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
+            self.assertEqual(res.status_code,401,msg="Should return 401 response because user's token was disabled")
+            
+            usertoken.enabled = True
+            usertoken.save()
+            res = self.client.get(self.auth_token_url,HTTP_AUTHORIZATION=self.basic_auth(username,token))
+            self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
+            self.assertEqual(res.status_code,200,msg="Should return 200 response because user's token was enabled")
+
+            usertoken.expired = timezone.now() - timedelta(days=1)
+            usertoken.save()
+            cache.clean_auth_cache(True)
+            res = self.client.get(self.auth_token_url,HTTP_AUTHORIZATION=self.basic_auth(username,token))
+            self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
+            self.assertEqual(res.status_code,401,msg="Should return 401 response because user's token was expired")
+
+            usertoken.expired = timezone.now() + timedelta(days=1)
+            usertoken.save()
+            res = self.client.get(self.auth_token_url,HTTP_AUTHORIZATION=self.basic_auth(username,token))
+            self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
+            self.assertEqual(res.status_code,200,msg="Should return 200 response because user's token was extended")
+
+            usertoken.token = None
+            usertoken.save()
+            cache.clean_auth_cache(True)
+            res = self.client.get(self.auth_token_url,HTTP_AUTHORIZATION=self.basic_auth(username,token))
+            self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
+            self.assertEqual(res.status_code,401,msg="Should return 401 response because user's token was cleared")
+
+            usertoken.token = token
+            usertoken.save()
+            res = self.client.get(self.auth_token_url,HTTP_AUTHORIZATION=self.basic_auth(username,token))
+            self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
+            self.assertEqual(res.status_code,200,msg="Should return 401 response because user's token was resaved")
+
+            usertoken.generate_token()
+            usertoken.save()
+            cache.clean_auth_cache(True)
+            res = self.client.get(self.auth_token_url,HTTP_AUTHORIZATION=self.basic_auth(username,token))
+            self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
+            self.assertEqual(res.status_code,401,msg="Should return 401 response because user's token was regenerated")
+
+            res = self.client.get(self.auth_token_url,HTTP_AUTHORIZATION=self.basic_auth(username,usertoken.token))
+            self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
+            self.assertEqual(res.status_code,200,msg="Should return 200 response because new token was used")
+    
     def test_auth_token_over_auth(self):
         self.test_users = [
             ("staff_1","staff_1@gunfire.com",True)

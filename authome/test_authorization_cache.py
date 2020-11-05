@@ -1,10 +1,11 @@
-import time
 # -*- coding: utf-8 -*-
+from datetime import timedelta
 from django.conf import settings
+from django.utils import timezone
 from django.test import TestCase, Client
 
 from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access
-from .cache import cache
+from .cache import cache,TaskRunTime
 
 class AuthorizationCacheTestCase(TestCase):
     def setUp(self):
@@ -309,9 +310,14 @@ class AuthorizationCacheTestCase(TestCase):
                 else:
                     raise Exception("Unknown table '{}'".format(table))
 
-            print("Waiting {} seconds .........................".format(settings.AUTHORIZATION_CACHE_DELAY.seconds + 1))
-            time.sleep(settings.AUTHORIZATION_CACHE_DELAY.seconds + 1)
+
+            cache._authorization_cache_check_time = TaskRunTime(settings.AUTHORIZATION_CACHE_CHECK_HOURS)
+            cache._authorization_cache_check_time.can_run(timezone.localtime() - timedelta(hours=1))
+            
             for email,domain,path,result in testcases:
+                if index == 1 and path == "/about":
+                    #import ipdb;ipdb.set_trace()
+                    pass
                 if domain == "map.dev.gunfire.com" and email=="staff1@gunfire.com":
                     #import ipdb;ipdb.set_trace()
                     pass

@@ -1,6 +1,7 @@
 import traceback
 import logging
 import time
+from datetime import datetime,timedelta
 from collections import OrderedDict
 
 from django.core.cache import caches
@@ -14,6 +15,50 @@ try:
 except:
     logger.info("SSO cache is not configured, use memory cache instead")
     ssocache = None
+
+class TaskRunTime(object):
+    def __init__(self,hours):
+        self._next_time = None
+        self._index = None
+        self._hours = hours
+        if len(self._hours) == 1:
+            self._timediffs = [timedelta(hours=24)]
+        else:
+            self._timediffs = []
+
+        i = 0
+        while i < len(self._hours):
+            if i == 0:
+                self._timediffs.append(timedelta(hours=24 + self._hours[i] - self._hours[-1]))
+            else:
+                self._timediffs.append(timedelta(hours=self._hours[i] - self._hours[i-1]))
+            i += 1
+
+    def can_run(self,dt=None):
+        if not dt:
+            dt = timezone.localtime()
+
+        if not self._next_time:
+            dt = timezone.localtime(dt)
+            self._index = 0
+            self._next_time = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo) + timedelta(hours=self._hours[0])
+            while self._next_time <= dt:
+                if self._index == len(self._hours) - 1:
+                    self._index = 0
+                else:
+                    self._index += 1
+                self._next_time += self._timediffs[self._index]
+            return False
+        elif self._next_time > dt:
+            return False
+        else:
+            while self._next_time <= dt:
+                if self._index == len(self._hours) - 1:
+                    self._index = 0
+                else:
+                    self._index += 1
+                self._next_time += self._timediffs[self._index]
+        return True
 
 class MemoryCache(object):
     def __init__(self):
@@ -30,14 +75,13 @@ class MemoryCache(object):
         self._usergroupauthorization_size = None
         self._usergroupauthorization_ts = None
     
-        self._user_authorization_map = {} if settings.AUTHORIZATION_CACHE_SIZE <= 0 else OrderedDict() 
+        self._user_authorization_map = OrderedDict() 
     
         self._auth_map = OrderedDict() 
         self._auth_token_map = OrderedDict() 
 
-        self._next_check_authorization_cache = None
-        self._next_remove_expired_authdata = timezone.now() + settings.AUTH_CACHE_EXPIRETIME
-        self._next_remove_expired_tokenauthdata = timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME
+        self._auth_cache_clean_time = TaskRunTime(settings.AUTH_CACHE_CLEAN_HOURS)
+        self._authorization_cache_check_time = TaskRunTime(settings.AUTHORIZATION_CACHE_CHECK_HOURS)
 
     @property
     def usergrouptree(self):
@@ -78,49 +122,34 @@ class MemoryCache(object):
 
     def set_authorization(self,user,domain,requests):
         self._user_authorization_map[(user,domain)] = requests
+        self._enforce_maxsize("user authorization map",self._user_authorization_map,settings.AUTHORIZATION_CACHE_SIZE)
 
     def get_auth_key(self,email,session_key):
         return session_key
 
     def get_auth(self,key):
-        try:
-            data = self._auth_map.pop(key)
-            if settings.AUTH_CACHE_EXPIRETIME:
-                data[1] = timezone.now() + settings.AUTH_CACHE_EXPIRETIME
-                self._auth_map[key] = data
+        data = self._auth_map.get(key)
+        if data:
+            if timezone.now() <= data[1]:
                 return data[0]
             else:
-                self._auth_map[key] = data
-                return data
-        except KeyError as ex:
+                del self._auth_map[key]
+                return None
+        else:
             return None
 
     def set_auth(self,key,value):
-        if settings.AUTH_CACHE_EXPIRETIME:
-            self._auth_map[key] = [value,timezone.now() + settings.AUTH_CACHE_EXPIRETIME]
-        else:
-            self._auth_map[key] = value
+        self._auth_map[key] = [value,timezone.now() + settings.AUTH_CACHE_EXPIRETIME]
 
-        if settings.AUTH_CACHE_SIZE > 0:
-            self._enforce_maxsize("auth map",self._auth_map,settings.AUTH_CACHE_SIZE)
-        self.remove_expired_authdata()
+        self._enforce_maxsize("auth map",self._auth_map,settings.AUTH_CACHE_SIZE)
+        self.clean_auth_cache()
 
     def update_auth(self,key,value):
-        try:
-            data = self._auth_map.pop(key)
-            if settings.AUTH_CACHE_EXPIRETIME:
-                data[0] = value
-                data[1] = timezone.now() + settings.AUTH_CACHE_EXPIRETIME
-            else:
-                data = value
-        except KeyError as ex:
-            if settings.AUTH_CACHE_EXPIRETIME:
-                data = [value,timezone.now() + settings.AUTH_CACHE_EXPIRETIME]
-            else:
-                data = value
-
-        self._auth_map[key] = data
-
+        data = self._auth_map.get(key)
+        if data:
+            data[0] = value
+        else:
+            self._auth_map[key] = [value,timezone.now() + settings.AUTH_CACHE_EXPIRETIME]
 
     def delete_auth(self,key):
         try:
@@ -133,50 +162,38 @@ class MemoryCache(object):
         return (name_or_email,token)
 
     def get_auth_token(self,key):
-        try:
-            data = self._auth_token_map.pop(key[0])
-            if data[1] == key[1]:
-                #token is matched
-                if settings.AUTH_TOKEN_CACHE_EXPIRETIME :
-                    data[2] = timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME
-                #readd the key to ordereddict
-                self._auth_token_map[key[0]] = data
+        data = self._auth_token_map.get(key[0])
+        if data:
+            if data[1] == key[1] and timezone.now() <= data[2]:
+                #token is matched and not expired
                 return data[0]
             else:
-                #token is not matched, and is already removed,
+                #token is not matched, remove the data
+                del self._auth_token_map[key[0]]
                 return None
-        except KeyError as ex:
+        else:
             #not cached token found
             return None
 
     def set_auth_token(self,key,value):
-        if not settings.AUTH_TOKEN_CACHE_EXPIRETIME :
-            self._auth_token_map[key[0]] = [value,key[1]]
-        else:
-            self._auth_token_map[key[0]] = [value,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
+        self._auth_token_map[key[0]] = [value,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
 
-        if settings.AUTH_TOKEN_CACHE_SIZE > 0:
-            self._enforce_maxsize("token auth map",self._auth_token_map,settings.AUTH_TOKEN_CACHE_SIZE)
-        self.remove_expired_tokenauthdata()
+        self._enforce_maxsize("token auth map",self._auth_token_map,settings.AUTH_TOKEN_CACHE_SIZE)
+        self.clean_auth_cache()
 
     def update_auth_token(self,key,value):
-        self.delete_auth_token(key)
-        self.set_auth_token(key,value)
-        try:
-            data = self._auth_token_map.pop(key[0])
-            if data[1] == key[1]:
+        data = self._auth_token_map.get(key[0])
+        if data:
+            if data[1] == key[1] and timezone.now() <= data[2]:
                 #token is matched
-                if settings.AUTH_TOKEN_CACHE_EXPIRETIME :
-                    data[2] = timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME
-                #readd the key to ordereddict
-                self._auth_token_map[key[0]] = data
-                return data[0]
+                data[0] = value
             else:
-                #token is not matched, and is already removed,
-                return None
-        except KeyError as ex:
+                #token is not matched, remove the old one, add a new one
+                del self._auth_token_map[key[0]]
+                self._auth_token_map[key[0]] = [value,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
+        else:
             #not cached token found
-            return None
+            self._auth_token_map[key[0]] = [value,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
 
     def delete_auth_token(self,key):
         try:
@@ -217,15 +234,10 @@ class MemoryCache(object):
                 index -= 1
             logger.debug("Remove expired datas from cache {0}".format(name))
 
-    def remove_expired_authdata(self):
-        if timezone.now() >= self._next_remove_expired_authdata:
-            self._remove_expireddata('auth map',self._auth_map)
-            self._next_remove_expired_authdata = timezone.now() + settings.AUTH_CACHE_EXPIRETIME
-
-    def remove_expired_tokenauthdata(self):
-        if timezone.now() >= self._next_remove_expired_tokenauthdata:
-            self._remove_expireddata('token auth map',self._auth_token_map)
-            self._next_remove_expired_tokenauthdata = timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME
+    def clean_auth_cache(self,force=False):
+        if self._auth_cache_clean_time.can_run() or force:
+            self._auth_map.clear()
+            self._auth_token_map.clear()
 
     def refresh_usergrouptree(self,force=False):
         from .models import UserGroup
@@ -265,11 +277,10 @@ class MemoryCache(object):
             UserGroupAuthorization.get_authorization(None,refresh=True)
 
     def refresh_authorization_cache(self,force=False):
-        if force or not self._next_check_authorization_cache or timezone.now() >= self._next_check_authorization_cache:
+        if self._authorization_cache_check_time.can_run() or force:
             self.refresh_usergrouptree(force)
             self.refresh_userauthorization(force)
             self.refresh_usergroupauthorization(force)
-            self._next_check_authorization_cache = timezone.now() + settings.AUTHORIZATION_CACHE_DELAY
 
 cache = MemoryCache()
 
