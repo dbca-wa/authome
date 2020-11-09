@@ -7,6 +7,7 @@ from collections import OrderedDict
 from django.core.cache import caches
 from django.conf import settings
 from django.utils import timezone
+from django.http import HttpResponse
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +79,21 @@ class MemoryCache(object):
         self._user_authorization_map = OrderedDict() 
     
         self._auth_map = OrderedDict() 
-        self._auth_token_map = OrderedDict() 
+        self._token_auth_map = OrderedDict() 
 
         self._auth_cache_clean_time = TaskRunTime(settings.AUTH_CACHE_CLEAN_HOURS)
         self._authorization_cache_check_time = TaskRunTime(settings.AUTHORIZATION_CACHE_CHECK_HOURS)
+
+    def populate_response(self,content):
+        response = HttpResponse(content[0], content_type='application/json')
+        for key, val in content[1].items():
+            response[key] = val
+        return response
+
+    def populate_response_from_cache(self,content):
+        response = self.populate_response(content)
+        response["X-auth-cache-hit"] = "success"
+        return response
 
     @property
     def usergrouptree(self):
@@ -128,6 +140,9 @@ class MemoryCache(object):
         return session_key
 
     def get_auth(self,key):
+        """
+        Return the populated http reponse
+        """
         data = self._auth_map.get(key)
         if data:
             if timezone.now() <= data[1]:
@@ -139,17 +154,29 @@ class MemoryCache(object):
             return None
 
     def set_auth(self,key,value):
-        self._auth_map[key] = [value,timezone.now() + settings.AUTH_CACHE_EXPIRETIME]
+        """
+        cache the auth response content and return the populated http response 
+        """
+        res = self.populate_response(value)
+        cached_res = self.populate_response_from_cache(value)
+        
+        self._auth_map[key] = [cached_res,timezone.now() + settings.AUTH_CACHE_EXPIRETIME]
 
         self._enforce_maxsize("auth map",self._auth_map,settings.AUTH_CACHE_SIZE)
         self.clean_auth_cache()
+        return res
 
     def update_auth(self,key,value):
+        """
+        cache the updated auth response content and return the populated http response 
+        """
+        res= self.populate_response_from_cache(value)
         data = self._auth_map.get(key)
         if data:
-            data[0] = value
+            data[0] = res
         else:
-            self._auth_map[key] = [value,timezone.now() + settings.AUTH_CACHE_EXPIRETIME]
+            self._auth_map[key] = [res,timezone.now() + settings.AUTH_CACHE_EXPIRETIME]
+        return res
 
     def delete_auth(self,key):
         try:
@@ -158,46 +185,63 @@ class MemoryCache(object):
             #not found
             pass
 
-    def get_auth_token_key(self,name_or_email,token):
+    def get_token_auth_key(self,name_or_email,token):
         return (name_or_email,token)
 
-    def get_auth_token(self,key):
-        data = self._auth_token_map.get(key[0])
+    def get_token_auth(self,key):
+        """
+        Return the populated http reponse
+        """
+        data = self._token_auth_map.get(key[0])
         if data:
             if data[1] == key[1] and timezone.now() <= data[2]:
                 #token is matched and not expired
                 return data[0]
             else:
                 #token is not matched, remove the data
-                del self._auth_token_map[key[0]]
+                del self._token_auth_map[key[0]]
                 return None
         else:
             #not cached token found
             return None
 
-    def set_auth_token(self,key,value):
-        self._auth_token_map[key[0]] = [value,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
+    def set_token_auth(self,key,value):
+        """
+        cache the auth token response content and return the populated http response 
+        """
+        res = self.populate_response(value)
+        cached_res = self.populate_response_from_cache(value)
+        
+        self._token_auth_map[key[0]] = [cached_res,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
 
-        self._enforce_maxsize("token auth map",self._auth_token_map,settings.AUTH_TOKEN_CACHE_SIZE)
+        self._enforce_maxsize("token auth map",self._token_auth_map,settings.AUTH_TOKEN_CACHE_SIZE)
         self.clean_auth_cache()
 
-    def update_auth_token(self,key,value):
-        data = self._auth_token_map.get(key[0])
+        return res
+
+    def update_token_auth(self,key,value):
+        """
+        cache the updated auth token response content and return the populated http response 
+        """
+        res= self.populate_response_from_cache(value)
+        data = self._token_auth_map.get(key[0])
         if data:
             if data[1] == key[1] and timezone.now() <= data[2]:
                 #token is matched
-                data[0] = value
+                data[0] = res
             else:
                 #token is not matched, remove the old one, add a new one
-                del self._auth_token_map[key[0]]
-                self._auth_token_map[key[0]] = [value,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
+                del self._token_auth_map[key[0]]
+                self._token_auth_map[key[0]] = [res,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
         else:
             #not cached token found
-            self._auth_token_map[key[0]] = [value,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
+            self._token_auth_map[key[0]] = [res,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
 
-    def delete_auth_token(self,key):
+        return res
+
+    def delete_token_auth(self,key):
         try:
-            del self._auth_token_map[key[0]]
+            del self._token_auth_map[key[0]]
         except:
             #not found
             pass
@@ -237,7 +281,7 @@ class MemoryCache(object):
     def clean_auth_cache(self,force=False):
         if self._auth_cache_clean_time.can_run() or force:
             self._auth_map.clear()
-            self._auth_token_map.clear()
+            self._token_auth_map.clear()
 
     def refresh_usergrouptree(self,force=False):
         from .models import UserGroup

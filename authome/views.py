@@ -11,7 +11,6 @@ from ipware.ip import get_client_ip
 import json
 import base64
 import hashlib
-import msal
 import re
 import traceback
 import logging
@@ -34,7 +33,7 @@ def parse_basic(basic_auth):
         raise Exception('Missing password')
     return basic_auth_raw.split(":", 1)
 
-NON_AUTHORIZED_RESPONSE = HttpResponseForbidden()
+NOT_AUTHORIZED_RESPONSE = HttpResponseForbidden()
 def check_authorization(request,useremail):
     """
     Return None if authorized;otherwise return Authorized failed response
@@ -52,50 +51,21 @@ def check_authorization(request,useremail):
         return None
     else:
         logger.debug("User({}) can't access https://{}{}".format(useremail,domain,path))
-        return NON_AUTHORIZED_RESPONSE
+        return NOT_AUTHORIZED_RESPONSE
 
 
-def basic_authenticate(email, password):
-    try:
-        app = msal.PublicClientApplication(settings.SOCIAL_AUTH_AZUREAD_OAUTH2_KEY,authority="https://login.microsoftonline.com/organizations")
-        result = None
-    
-        # Firstly, check the cache to see if this end user has signed in before
-        accounts = app.get_accounts(username=email)
-        if accounts:
-            result = app.acquire_token_silent(config["scope"], account=accounts[0])
-    
-        if not result:
-            # See this page for constraints of Username Password Flow.
-            # https://github.com/AzureAD/microsoft-authentication-library-for-python/wiki/Username-Password-Authentication
-            result = app.acquire_token_by_username_password(email, password, scopes=["User.ReadBasic.All"])
-
-        if "error" in result:
-            raise Exception(str(result))
-    
-        if "access_token" in result:
-            # Calling graph using the access token
-            toekn = result["access_token"]
-    except :
-        traceback.print_exc()
-        return None
-
-    candidates = User.objects.filter(email__iexact=token['userId']).first()
-    return candidates
-
-def _populate_response(request,f_cache,cache_key,user,current_ip):
+def _populate_response(request,f_cache,cache_key,user,session_key=None):
     response_contents = {
         'email': user.email,
         'username': user.username,
         'first_name': user.first_name,
-        'last_name': user.last_name,
-        'client_logon_ip': current_ip
+        'last_name': user.last_name
     }
-    if request.session.session_key:
-        response_contents['session_key'] = request.session.session_key
+    if session_key:
+        response_contents['session_key'] = session_key
 
+    content = json.dumps(response_contents)
 
-    response = HttpResponse(json.dumps(response_contents), content_type='application/json')
     headers = response_contents
     headers["full_name"] = u"{}, {}".format(user.last_name,user.first_name)
     headers["logout_url"] = "/sso/auth_logout"
@@ -104,20 +74,12 @@ def _populate_response(request,f_cache,cache_key,user,current_ip):
     cache_headers = dict()
     for key, val in headers.items():
         key = "X-" + key.replace("_", "-")
-        cache_headers[key], response[key] = val, val
+        cache_headers[key] = val
     # cache authentication entries
-    f_cache(cache_key,[response.content, cache_headers])
+    response = f_cache(cache_key,[content, cache_headers])
     logger.debug("cache the sso auth data for the user({}) with key({})".format(user.email,cache_key))
 
     return response
-
-def _populate_response_from_cache(content):
-    response = HttpResponse(content[0], content_type='application/json')
-    for key, val in content[1].items():
-        response[key] = val
-    response["X-auth-cache-hit"] = "success"
-    return response
-
 
 def _auth(request):
     if not request.user.is_authenticated:
@@ -125,37 +87,21 @@ def _auth(request):
         return None
 
     logger.debug("The user({}) is authenticated".format(request.user.email))
+
+    res = check_authorization(request,request.user.email)
+    if res:
+        #user has no permission to access this url
+        return res
+
     user = request.user
-    current_ip,routable = get_client_ip(request)
     auth_key = cache.get_auth_key(user.email,request.session.session_key)
-    auth_content = cache.get_auth(auth_key)
+    response = cache.get_auth(auth_key)
 
-    if auth_content:
+    if response:
         logger.debug("The user({}) is authenticated and cached".format(request.user.email))
-
-        if auth_content[1]['X-client-logon-ip'] != current_ip:
-            auth_content[0] = json.loads(auth_content[0].decode())
-
-            auth_content[0]['client_logon_ip'] = current_ip
-            auth_content[1]['X-client-logon-ip'] = current_ip
-                    
-            auth_content[0] = json.dumps(auth_content[0]).encode()
-
-            cache.update_auth(auth_key, auth_content, 3600)
-
-        response = check_authorization(request,request.user.email)
-        if response:
-            return response
-        else:
-            return _populate_response_from_cache(auth_content)
-    else:
-        response = _populate_response(request,cache.set_auth,auth_key,user,current_ip)
-
-        res = check_authorization(request,request.user.email)
-        if res:
-            return res
-
         return response
+    else:
+        return _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
 
 AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
 AUTH_REQUIRED_RESPONSE.content = "Authentication required"
@@ -169,7 +115,7 @@ def auth(request):
         return res
 
 BASIC_AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
-BASIC_AUTH_REQUIRED_RESPONSE["WWW-Authenticate"] = 'Basic realm="Please login with your email address"'
+BASIC_AUTH_REQUIRED_RESPONSE["WWW-Authenticate"] = 'Basic realm="Please login with your email address and access token"'
 BASIC_AUTH_REQUIRED_RESPONSE.content = "Basic auth required"
 
 @csrf_exempt
@@ -189,34 +135,37 @@ def auth_token(request):
             return BASIC_AUTH_REQUIRED_RESPONSE
 
     username, token = parse_basic(auth_token)
-    # grab IP address from the request
-    current_ip,routable = get_client_ip(request)
 
-    auth_token_key = cache.get_auth_token_key(username,token) 
-    auth_token_content = cache.get_auth_token(auth_token_key)
-    if auth_token_content:
+    auth_token_key = cache.get_token_auth_key(username,token) 
+    response= cache.get_token_auth(auth_token_key)
+    if response:
         #already authenticated with token auth data, using the token auth data instead of current session authentication data (if have)
-        user = User.objects.get(email__iexact=auth_token_content[1]['X-email'])
-        request.user = user
+        useremail = response['X-email']
+        if settings.CHECK_AUTH_TOKEN_PER_REQUEST:
+            user = User.objects.get(email__iexact=useremail)
+            if not user.token or not user.token.is_valid(token):
+                #token is invalid, fallback to session authentication
+                cache.delete_token_auth(auth_token_key)
+                res = _auth(request)
+                if res:
+                    #already authenticated
+                    logger.debug("Failed to authenticate the user({}) with token, fall back to use session authentication".format(username))
+                    return res
+                else:
+                    #require the user to provide credential using basic auth
+                    logger.debug("Failed to authenticate the user({}) with token".format(username))
+                    return BASIC_AUTH_REQUIRED_RESPONSE
+
+            useremail = user.email
+
         request.session.modified = False
-        useremail = user.email
-
-        if auth_token_content[1]['X-client-logon-ip'] != current_ip:
-            auth_token_content[0] = json.loads(auth_token_content[0].decode())
-
-            auth_token_content[0]['client_logon_ip'] = current_ip
-            auth_token_content[1]['X-client-logon-ip'] = current_ip
-                    
-            auth_token_content[0] = json.dumps(auth_token_content[0]).encode()
-
-            cache.update_auth_token(auth_token_key, auth_token_content, 3600)
             
-        response = check_authorization(request,useremail)
-        if response:
+        res = check_authorization(request,useremail)
+        if res:
             #not authorized
-            return response
+            return res
         else:
-            return _populate_response_from_cache(auth_token_content)
+            return response
     else:
         try:
             if "@" in username:
@@ -224,7 +173,8 @@ def auth_token(request):
             else:
                 user = User.objects.filter(username__iexact=username).first()
                 if not user:
-                    raise Exception("User({}) doesn't exist".format(username))
+                    logger.debug("User({}) doesn't exist".format(username))
+                    return BASIC_AUTH_REQUIRED_RESPONSE
 
             if request.user.is_authenticated and user.email == request.user.email:
                 #the user of the token auth is the same as the authenticated session user;use the session authentication data directly
@@ -235,7 +185,7 @@ def auth_token(request):
                 request.user = user
                 request.session.modified = False
 
-                response = _populate_response(request,cache.set_auth_token,auth_token_key,user,current_ip)
+                response = _populate_response(request,cache.set_token_auth,auth_token_key,user)
                 res = check_authorization(request,user.email)
                 if res:
                     return res
@@ -250,13 +200,10 @@ def auth_token(request):
                 else:
                     #require the user to provide credential using basic auth
                     logger.debug("Failed to authenticate the user({}) with token".format(username))
-                    raise Exception('Authentication failed')
+                    return BASIC_AUTH_REQUIRED_RESPONSE
 
         except Exception as e:
-            response = HttpResponse(status=401)
-            response["WWW-Authenticate"] = 'Basic realm="Please login with your email address and access token"'
-            response.content = str(e)
-            return response
+            return BASIC_AUTH_REQUIRED_RESPONSE
 
 
 def logout_view(request):
@@ -277,35 +224,39 @@ def home(request):
     return HttpResponseRedirect(reverse('auth'))
 
 @csrf_exempt
-def access_token(request):
-    user = request.user
-    if not user.is_authenticated:
+def profile(request):
+    response = _auth(request)
+    if not response:
         return AUTH_REQUIRED_RESPONSE
-    else:
-        data = {
-            'email': user.email,
-            'username': user.username,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-        }
-        try:
-            if not user.token or not user.token.enabled:
-                data["error"] = "Access token is not enabled, please ask administrator to enable."
-            elif not user.token.token:
-                data["error"] = "Access token is created, please ask administrator to create"
-            elif user.token.is_expired:
-                data["error"] = "Access token is expired, please ask administroator to recreate"
-                data["access_token"] = user.token.token
-                data["created"] = timezone.localtime(user.token.created).strftime("%Y-%m-%d %H:%M:%S")
-                data["expired"] = user.token.expired.strftime("%Y-%m-%d")
-            else:
-                data["access_token"] = user.token.token
-                data["created"] = timezone.localtime(user.token.created).strftime("%Y-%m-%d %H:%M:%S")
-                if user.token.expired:
-                    data["expired"] = user.token.expired.strftime("%Y-%m-%d")
-        except Exception as ex:
-            logger.error("Failed to get access token for the user({}).{}".format(user.email,traceback.format_exc()))
-            data["error"] = str(ex)
 
-    return JsonResponse(data)
+    user = request.user
+
+    content = json.loads(response.content)
+    current_ip,routable = get_client_ip(request)
+    content['client-logon-ip'] = current_ip
+    try:
+        if not user.token or not user.token.enabled:
+            content["access_token_error"] = "Access token is not enabled, please ask administrator to enable."
+        elif not user.token.token:
+            content["access_token_error"] = "Access token is created, please ask administrator to create"
+        elif user.token.is_expired:
+            content["access_token"] = user.token.token
+            content["access_token_created"] = timezone.localtime(user.token.created).strftime("%Y-%m-%d %H:%M:%S")
+            content["access_token_expired"] = user.token.expired.strftime("%Y-%m-%d")
+            content["access_token_error"] = "Access token is expired, please ask administroator to recreate"
+        else:
+            content["access_token"] = user.token.token
+            content["access_token_created"] = timezone.localtime(user.token.created).strftime("%Y-%m-%d %H:%M:%S")
+            if user.token.expired:
+                content["access_token_expired"] = user.token.expired.strftime("%Y-%m-%d 23:59:59")
+    except Exception as ex:
+        logger.error("Failed to get access token for the user({}).{}".format(user.email,traceback.format_exc()))
+        content["access_token_error"] = str(ex)
+
+    res = HttpResponse(content=json.dumps(content),status=response.status_code,content_type="application/json")
+    res['X-client-logon-ip'] = current_ip
+    for name,value in response.items():
+        res[name] = value
+
+    return res
 

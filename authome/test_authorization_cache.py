@@ -6,12 +6,9 @@ from django.test import TestCase, Client
 
 from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access
 from .cache import cache,TaskRunTime
+from .basetest import BaseAuthCacheTestCase
 
-class AuthorizationCacheTestCase(TestCase):
-    def setUp(self):
-        #clear the unittest data
-        UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
-        UserAuthorization.objects.all().delete()
+class AuthorizationCacheTestCase(BaseAuthCacheTestCase):
 
     def test_authorize(self):
         test_datas = [

@@ -35,6 +35,7 @@ class UserToken(models.Model):
     token = models.CharField(max_length=128,null=True,editable=False)
     created = models.DateTimeField(null=True,editable=False)
     expired = models.DateField(null=True,editable=False)
+    modified = models.DateTimeField(editable=False,db_index=True,auto_now=True)
 
     @property
     def is_expired(self):
@@ -96,6 +97,7 @@ class UserEmail(object):
         email = email.strip() if email else None
         if not email:
             return None
+        email = email.lower()
         if cls.all_email_re.search(email):
             return AllUserEmail()
         if "@" not in email:
@@ -175,6 +177,7 @@ class UserGroup(DbObjectMixin,models.Model):
     created = models.DateTimeField(auto_now_add=timezone.now)
 
     def clean(self):
+        super().clean()
         self.name = self.name.strip()
         if not self.name:
             raise ValidationError("Name is empty")
@@ -194,7 +197,7 @@ class UserGroup(DbObjectMixin,models.Model):
         if self.id is None:
             self.modified = timezone.now()
         else:
-            if self.users != self.db_obj.users or self.parent_group != self.db_obj.parent_group or self.excluded_users != self.db_obj.parent_group:
+            if self.users != self.db_obj.users or self.parent_group != self.db_obj.parent_group or self.excluded_users != self.db_obj.excluded_users:
                 self.modified = timezone.now()
                 self._changed = True
                 self._config_changed = True
@@ -348,6 +351,7 @@ class RequestDomain(object):
         if not domain:
             return None
 
+        domain = domain.lower()
         for prefix in ("https://","http://"):
             if domain.startswith(prefix):
                 domain = domain[len(prefix):]
@@ -535,6 +539,7 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
         return self._deny_all
 
     def clean(self):
+        super().clean()
         request_domain = RequestDomain.get_instance(self.domain)
         if not request_domain:
             raise ValidationError("Please configure domain.")
@@ -672,6 +677,7 @@ def _can_access(email,domain,path):
     """
     Return True if the user(email) can access domain/path; otherwise return False
     """
+    email = email.lower()
     requests = cache.get_authorization(email,domain)
     if not requests:
         requests = AuthorizationMixin.find(email,domain)
@@ -686,6 +692,7 @@ def _can_access_debug(email,domain,path):
     """
     Return True if the user(email) can access domain/path; otherwise return False
     """
+    email = email.lower()
     start = datetime.now()
     requests = None
     try:
@@ -714,7 +721,13 @@ def _can_access_debug(email,domain,path):
 can_access = _can_access_debug if settings.DEBUG else _can_access
 
 class UserAuthorization(AuthorizationMixin):
-    user = models.CharField(max_length=64)
+    user = models.EmailField(max_length=64)
+
+    def clean(self):
+        super().clean()
+        self.user = self.user.strip().lower()
+        if not self.user:
+            raise ValidationError("Useremail is empty")
 
     @classmethod
     def get_authorization(cls,useremail,refresh=False):

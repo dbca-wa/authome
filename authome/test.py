@@ -7,7 +7,6 @@ import base64
 import mock
 import adal
 
-
 class AuthTestCase(TestCase):
     client = Client()
     home_url = reverse('home')

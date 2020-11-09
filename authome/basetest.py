@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
+from datetime import timedelta
 
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.test import TestCase, Client
+from django.conf import settings
 
 import base64
 
@@ -25,10 +27,24 @@ class BaseAuthTestCase(TestCase):
         return Client()
 
     def setUp(self):
+        settings.AUTH_CACHE_SIZE=2000
+        settings.AUTH_TOKEN_CACHE_SIZE=1000
+        settings.AUTH_TOKEN_CACHE_EXPIRETIME=timedelta(seconds=3600)
+        settings.AUTH_CACHE_EXPIRETIME=timedelta(seconds=3600)
+        settings.AUTH_CACHE_CLEAN_HOURS = [0]
+        settings.AUTHORIZATION_CACHE_CHECK_HOURS = [0,12]
+
+        settings.CHECK_AUTH_TOKEN_PER_REQUEST = False
         User.objects.filter(email__endswith="@gunfire.com").delete()
+        User.objects.filter(email__endswith="@gunfire.com.au").delete()
+        User.objects.filter(email__endswith="@hacker.com").delete()
         UserToken.objects.all().delete()
         UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
         UserAuthorization.objects.all().delete()
+
+        cache.clean_auth_cache(True)
+        cache.refresh_authorization_cache(True)
+
 
     def basic_auth(self, username, password):
         return 'Basic {}'.format(base64.b64encode('{}:{}'.format(username, password).encode('utf-8')).decode('utf-8'))
@@ -71,4 +87,14 @@ class BaseAuthTestCase(TestCase):
                 obj.save()
 
 
+
+class BaseAuthCacheTestCase(BaseAuthTestCase):
+    def setUp(self):
+        super().setUp()
+        settings.AUTH_CACHE_SIZE=3
+        settings.AUTH_TOKEN_CACHE_SIZE=3
+        settings.AUTH_TOKEN_CACHE_EXPIRETIME=timedelta(seconds=5)
+        settings.AUTH_CACHE_EXPIRETIME=timedelta(seconds=5)
+        settings.AUTH_CACHE_CLEAN_HOURS = [i for i in range(0,24)]
+        settings.AUTHORIZATION_CACHE_CHECK_HOURS = [i for i in range(0,24)]
 
