@@ -4,8 +4,8 @@ social-auth-app-django==3.1.0
 social-auth-core==3.0.0
 # fork of Microsoft Azure AD auth library with password authentication fix
 #git+https://github.com/scottp-dpaw/azure-activedirectory-library-for-python.git@passwordauth#egg=adal
-adal==1.2.4
-msal==1.5.0
+#adal==1.2.4
+#msal==1.5.0
 psycopg2-binary==2.8.6
 coverage
 coveralls

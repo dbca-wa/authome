@@ -17,6 +17,35 @@ except:
     logger.info("SSO cache is not configured, use memory cache instead")
     ssocache = None
 
+class IntervalTaskRunTime(object):
+    """
+    Interval is the number of seconds between the continuous run of a task
+    A day can divided by a valid interval.
+    """
+    def __init__(self,interval):
+        self._interval = interval
+        self._next_time = None
+
+    def can_run(self,dt=None):
+        if dt:
+            dt = timezone.localtime(dt)
+        else:
+            dt = timezone.localtime()
+
+        if not self._next_time:
+            today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo) 
+            self._next_time = today + timedelta(seconds = (int((dt - today).seconds / self._interval) + 1) * self._interval)
+            logger.debug("No need to run task, next runtime is {}".format(self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            return False
+        elif self._next_time > dt:
+            logger.debug("No need to run task, next runtime is {}".format(self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            return False
+        else:
+            today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo) 
+            self._next_time = today + timedelta(seconds = (int((dt - today).seconds / self._interval) + 1) * self._interval)
+            logger.debug("Run task now, next runtime is {}".format(self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            return True
+
 class TaskRunTime(object):
     def __init__(self,hours):
         self._next_time = None
@@ -36,11 +65,12 @@ class TaskRunTime(object):
             i += 1
 
     def can_run(self,dt=None):
-        if not dt:
+        if dt:
+            dt = timezone.localtime(dt)
+        else:
             dt = timezone.localtime()
 
         if not self._next_time:
-            dt = timezone.localtime(dt)
             self._index = 0
             self._next_time = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo) + timedelta(hours=self._hours[0])
             while self._next_time <= dt:
@@ -59,7 +89,7 @@ class TaskRunTime(object):
                 else:
                     self._index += 1
                 self._next_time += self._timediffs[self._index]
-        return True
+            return True
 
 class MemoryCache(object):
     def __init__(self):
@@ -82,7 +112,7 @@ class MemoryCache(object):
         self._token_auth_map = OrderedDict() 
 
         self._auth_cache_clean_time = TaskRunTime(settings.AUTH_CACHE_CLEAN_HOURS)
-        self._authorization_cache_check_time = TaskRunTime(settings.AUTHORIZATION_CACHE_CHECK_HOURS)
+        self._authorization_cache_check_time = IntervalTaskRunTime(settings.AUTHORIZATION_CACHE_CHECK_INTERVAL) if settings.AUTHORIZATION_CACHE_CHECK_INTERVAL > 0 else TaskRunTime(settings.AUTHORIZATION_CACHE_CHECK_HOURS) 
 
     def populate_response(self,content):
         response = HttpResponse(content[0], content_type='application/json')

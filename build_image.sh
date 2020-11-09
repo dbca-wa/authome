@@ -1,4 +1,4 @@
-#!/bin/bash
+!/bin/bash
 
 action="$1"
 env="$2"
@@ -65,6 +65,5 @@ if [[ "$action" = "all" ]] || [[ "$action" = "push"  ]]; then
     	exit 1
     fi
     echo "Succeed to publish imgage to docker hub"
-    echo "Please logon to the docker runtime server to run the image "
 fi
 

@@ -156,6 +156,11 @@ else:
 AUTH_CACHE_CLEAN_HOURS=env('AUTH_CACHE_CLEAN_HOURS',default=[0]) #the hours in the day when auth cache can be cleared.
 
 AUTHORIZATION_CACHE_CHECK_HOURS=env('AUTHORIZATION_CACHE_CHECK_HOURS',default=[0,12]) #the hours in the day when authorization cache can be checked.
+AUTHORIZATION_CACHE_CHECK_INTERVAL=env('AUTHORIZATION_CACHE_CHECK_INTERVAL',default=0) #the interval to check authorization cache, if it is not greater than 0, use AUTHORIZATION_CACHE_CHECK_HOURS
+if AUTHORIZATION_CACHE_CHECK_INTERVAL < 0:
+    AUTHORIZATION_CACHE_CHECK_INTERVAL = 0
+
+
 
 # Logging settings - log to stdout/stderr
 LOGGING = {
