@@ -708,15 +708,11 @@ def _can_access_debug(email,domain,path):
     finally:
         diff = datetime.now() - start
         if diff.seconds > 0 or diff.microseconds > 3000:
-            logger.warning("spend {0}.{1:0>6} seconds to check the authroization.user={2}, request=https://{3}{4}, requests={5})".format(
-                diff.seconds,diff.microseconds,
-                email,domain,path,
-                "{}({},domain={},paths={},excluded_paths={})".format(requests.__class__.__name__,requests,requests.domain,requests.paths,requests.excluded_paths) if requests else "None"))
+            logger.warning("spend {0}.{1:0>6} seconds to check the authroization.user={2}, request=https://{3}{4}, requests={5})".format(diff.seconds,diff.microseconds,email,domain,path,"{}({},domain={},paths={},excluded_paths={})".format(requests.__class__.__name__,requests,requests.domain,requests.paths,requests.excluded_paths) if requests else "None"))
+            pass
         else:
-            logger.debug("spend {0}.{1:0>6} seconds to check the authroization.user={2}, request=https://{3}{4}, requests={5})".format(
-                diff.seconds,diff.microseconds,
-                email,domain,path,
-                "{}({},domain={},paths={},excluded_paths={})".format(requests.__class__.__name__,requests,requests.domain,requests.paths,requests.excluded_paths) if requests else "None"))
+            logger.debug("spend {0}.{1:0>6} seconds to check the authroization.user={2}, request=https://{3}{4}, requests={5})".format(diff.seconds,diff.microseconds,email,domain,path,"{}({},domain={},paths={},excluded_paths={})".format(requests.__class__.__name__,requests,requests.domain,requests.paths,requests.excluded_paths) if requests else "None"))
+            pass
 
 can_access = _can_access_debug if settings.DEBUG else _can_access
 
