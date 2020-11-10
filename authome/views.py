@@ -235,20 +235,21 @@ def profile(request):
     current_ip,routable = get_client_ip(request)
     content['client-logon-ip'] = current_ip
     try:
-        if not user.token or not user.token.enabled:
+        token = UserToken.objects.filter(user = user).first()
+        if not token or not token.enabled:
             content["access_token_error"] = "Access token is not enabled, please ask administrator to enable."
-        elif not user.token.token:
+        elif not token.token:
             content["access_token_error"] = "Access token is created, please ask administrator to create"
-        elif user.token.is_expired:
-            content["access_token"] = user.token.token
-            content["access_token_created"] = timezone.localtime(user.token.created).strftime("%Y-%m-%d %H:%M:%S")
-            content["access_token_expired"] = user.token.expired.strftime("%Y-%m-%d")
+        elif token.is_expired:
+            content["access_token"] = token.token
+            content["access_token_created"] = timezone.localtime(token.created).strftime("%Y-%m-%d %H:%M:%S")
+            content["access_token_expired"] = token.expired.strftime("%Y-%m-%d")
             content["access_token_error"] = "Access token is expired, please ask administroator to recreate"
         else:
-            content["access_token"] = user.token.token
-            content["access_token_created"] = timezone.localtime(user.token.created).strftime("%Y-%m-%d %H:%M:%S")
-            if user.token.expired:
-                content["access_token_expired"] = user.token.expired.strftime("%Y-%m-%d 23:59:59")
+            content["access_token"] = token.token
+            content["access_token_created"] = timezone.localtime(token.created).strftime("%Y-%m-%d %H:%M:%S")
+            if token.expired:
+                content["access_token_expired"] = token.expired.strftime("%Y-%m-%d 23:59:59")
     except Exception as ex:
         logger.error("Failed to get access token for the user({}).{}".format(user.email,traceback.format_exc()))
         content["access_token_error"] = str(ex)
