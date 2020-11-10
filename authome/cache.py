@@ -11,12 +11,6 @@ from django.http import HttpResponse
 
 logger = logging.getLogger(__name__)
 
-try:
-    ssocache = cachese["ssocache"]
-except:
-    logger.info("SSO cache is not configured, use memory cache instead")
-    ssocache = None
-
 class IntervalTaskRunTime(object):
     """
     Interval is the number of seconds between the continuous run of a task
