@@ -19,6 +19,33 @@ from .cache import cache
 
 logger = logging.getLogger(__name__)
 
+help_text_users = """
+List all possible user emails in this group separated by new line character.
+The following lists all valid options in the checking order
+    1. All emails    : *
+    2. Domain emails : starts with '@', followed by email domain. For example@dbca.wa.gov.au
+    3. Email pattern : '*' represents any strings. For example test_*@dbca.wa.gov.au
+    4. User email    : represent a single user email, For example test_user01@dbca.wa.gov.au
+"""
+
+help_text_domain = """
+A domain or domain pattern 
+The following lists all valid options in the checking order
+    1. Single Domain : Represent a single domain. For example oim.dbca.wa.gov.au  
+    2. Regex Domain  : '*" represents any strings. For example  pbs*dbca.wa.gov.au
+    3. Suffix Domain : Starts with '.' followed by a domain. For example .dbca.wa.gov.au
+    4. All Domain    : '*'
+"""
+
+help_text_paths = """
+List all possible paths separated by new line character.
+The following lists all valid options in the checking order
+    1. All path      : *
+    2. Prefix path   : the paths except All path, regex path and exact path. For example /admin
+    3. Regex path    : A regex string starts with '^'. For example ^.*/add$
+    4. Exact path  : Starts with '=', represents a single request path . For example =/register
+"""
+
 class _ArrayField(ArrayField):
     def clean(self, value, model_instance):
         return super().clean([v for v in value if v],model_instance)
@@ -171,8 +198,8 @@ class UserGroup(DbObjectMixin,models.Model):
 
     name = models.CharField(max_length=32,unique=True)
     parent_group = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
-    users = _ArrayField(models.CharField(max_length=64,null=False))
-    excluded_users = _ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True)
+    users = _ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
+    excluded_users = _ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
     modified = models.DateTimeField(editable=False,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
@@ -509,9 +536,9 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
     _allow_all = None
     _deny_all = None
 
-    domain = models.CharField(max_length=64,null=False)
-    paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True)
-    excluded_paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True)
+    domain = models.CharField(max_length=64,null=False,help_text=help_text_domain)
+    paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
+    excluded_paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
     sortkey = models.CharField(max_length=96,editable=False)
     modified = models.DateTimeField(editable=False,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
