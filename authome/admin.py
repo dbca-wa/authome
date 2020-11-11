@@ -53,7 +53,7 @@ class UserAuthorizationAdmin(DatetimeMixin,admin.ModelAdmin):
     readonly_fields = ('_modified',)
     fields = ('user','domain','paths','excluded_paths','_modified')
     ordering = ('user','sortkey',)
-    form = forms.UserGroupAuthorizationForm
+    form = forms.UserAuthorizationForm
 
 class UserAccessToken(User):
     class Meta:
