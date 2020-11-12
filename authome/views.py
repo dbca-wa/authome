@@ -55,28 +55,29 @@ def check_authorization(request,useremail):
 
 
 def _populate_response(request,f_cache,cache_key,user,session_key=None):
-    response_contents = {
+    headers = {
         'email': user.email,
         'username': user.username,
         'first_name': user.first_name,
-        'last_name': user.last_name
+        'last_name': user.last_name,
+        'full_name' : "{}, {}".format(user.first_name,user.last_name),
+        'logout_url' : "/sso/auth_logout"
     }
     if session_key:
-        response_contents['session_key'] = session_key
+        headers['session_key'] = session_key
 
-    content = json.dumps(response_contents)
-
-    headers = response_contents
-    headers["full_name"] = u"{}, {}".format(user.last_name,user.first_name)
-    headers["logout_url"] = "/sso/auth_logout"
-
-    # cache response
-    cache_headers = dict()
+    response = HttpResponse(content="Succeed")
+    cached_response = HttpResponse(content="Succeed")
     for key, val in headers.items():
         key = "X-" + key.replace("_", "-")
-        cache_headers[key] = val
+        response[key] = val
+        cached_response[key] = val
+
+    cached_response["X-auth-cache-hit"] = "success"
+    response["remote-user"] = user.email
+    cached_response["remote-user"] = user.email
     # cache authentication entries
-    response = f_cache(cache_key,[content, cache_headers])
+    f_cache(cache_key,cached_response)
     logger.debug("cache the sso auth data for the user({}) with key({})".format(user.email,cache_key))
 
     return response
@@ -231,9 +232,14 @@ def profile(request):
 
     user = request.user
 
-    content = json.loads(response.content)
+    content = {}
+    for key,value in response.items():
+        if key.startswith("X-"):
+            key = key[2:].replace("-","_")
+            content[key] = value
+
     current_ip,routable = get_client_ip(request)
-    content['client-logon-ip'] = current_ip
+    content['client_logon_ip'] = current_ip
     try:
         token = UserToken.objects.filter(user = user).first()
         if not token or not token.enabled:
@@ -253,11 +259,7 @@ def profile(request):
     except Exception as ex:
         logger.error("Failed to get access token for the user({}).{}".format(user.email,traceback.format_exc()))
         content["access_token_error"] = str(ex)
-
-    res = HttpResponse(content=json.dumps(content),status=response.status_code,content_type="application/json")
-    res['X-client-logon-ip'] = current_ip
-    for name,value in response.items():
-        res[name] = value
-
-    return res
+        
+    content = json.dumps(content)
+    return HttpResponse(content=content,content_type="application/json")
 

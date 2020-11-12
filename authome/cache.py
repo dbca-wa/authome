@@ -111,17 +111,6 @@ class MemoryCache(object):
         self._auth_cache_clean_time = TaskRunTime(settings.AUTH_CACHE_CLEAN_HOURS)
         self._authorization_cache_check_time = IntervalTaskRunTime(settings.AUTHORIZATION_CACHE_CHECK_INTERVAL) if settings.AUTHORIZATION_CACHE_CHECK_INTERVAL > 0 else TaskRunTime(settings.AUTHORIZATION_CACHE_CHECK_HOURS) 
 
-    def populate_response(self,content):
-        response = HttpResponse(content[0], content_type='application/json')
-        for key, val in content[1].items():
-            response[key] = val
-        return response
-
-    def populate_response_from_cache(self,content):
-        response = self.populate_response(content)
-        response["X-auth-cache-hit"] = "success"
-        return response
-
     @property
     def usergrouptree(self):
         return self._usergrouptree
@@ -180,30 +169,24 @@ class MemoryCache(object):
         else:
             return None
 
-    def set_auth(self,key,value):
+    def set_auth(self,key,response):
         """
         cache the auth response content and return the populated http response 
         """
-        res = self.populate_response(value)
-        cached_res = self.populate_response_from_cache(value)
-        
-        self._auth_map[key] = [cached_res,timezone.now() + settings.AUTH_CACHE_EXPIRETIME]
+        self._auth_map[key] = [response,timezone.now() + settings.AUTH_CACHE_EXPIRETIME]
 
         self._enforce_maxsize("auth map",self._auth_map,settings.AUTH_CACHE_SIZE)
         self.clean_auth_cache()
-        return res
 
-    def update_auth(self,key,value):
+    def update_auth(self,key,response):
         """
         cache the updated auth response content and return the populated http response 
         """
-        res= self.populate_response_from_cache(value)
         data = self._auth_map.get(key)
         if data:
-            data[0] = res
+            data[0] = response
         else:
-            self._auth_map[key] = [res,timezone.now() + settings.AUTH_CACHE_EXPIRETIME]
-        return res
+            self._auth_map[key] = [response,timezone.now() + settings.AUTH_CACHE_EXPIRETIME]
 
     def delete_auth(self,key):
         try:
@@ -232,39 +215,31 @@ class MemoryCache(object):
             #not cached token found
             return None
 
-    def set_token_auth(self,key,value):
+    def set_token_auth(self,key,response):
         """
         cache the auth token response content and return the populated http response 
         """
-        res = self.populate_response(value)
-        cached_res = self.populate_response_from_cache(value)
-        
-        self._token_auth_map[key[0]] = [cached_res,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
+        self._token_auth_map[key[0]] = [response,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
 
         self._enforce_maxsize("token auth map",self._token_auth_map,settings.AUTH_TOKEN_CACHE_SIZE)
         self.clean_auth_cache()
 
-        return res
-
-    def update_token_auth(self,key,value):
+    def update_token_auth(self,key,response):
         """
         cache the updated auth token response content and return the populated http response 
         """
-        res= self.populate_response_from_cache(value)
         data = self._token_auth_map.get(key[0])
         if data:
             if data[1] == key[1] and timezone.now() <= data[2]:
                 #token is matched
-                data[0] = res
+                data[0] = response
             else:
                 #token is not matched, remove the old one, add a new one
                 del self._token_auth_map[key[0]]
-                self._token_auth_map[key[0]] = [res,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
+                self._token_auth_map[key[0]] = [response,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
         else:
             #not cached token found
-            self._token_auth_map[key[0]] = [res,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
-
-        return res
+            self._token_auth_map[key[0]] = [response,key[1],timezone.now() + settings.AUTH_TOKEN_CACHE_EXPIRETIME]
 
     def delete_token_auth(self,key):
         try:
