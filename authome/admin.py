@@ -33,9 +33,9 @@ class DatetimeMixin(object):
 
 @admin.register(models.UserGroup)
 class UserGroupAdmin(DatetimeMixin,admin.ModelAdmin):
-    list_display = ('name','parent_group','users','excluded_users','_modified','_created')
+    list_display = ('name','parent_group','users','excluded_users','identity_provider','_modified','_created')
     readonly_fields = ('_modified',)
-    fields = ('name','parent_group','users','excluded_users','_modified')
+    fields = ('name','parent_group','users','excluded_users','identity_provider','_modified')
     ordering = ('parent_group','name',)
     form = forms.UserGroupForm
 
@@ -267,5 +267,10 @@ class UserTokenAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
-
+@admin.register(models.IdentityProvider)
+class IdentityProviderAdmin(DatetimeMixin,admin.ModelAdmin):
+    list_display = ('name','idp','userflow','_modified','_created')
+    readonly_fields = ('idp','_modified','_created')
+    fields = ('name','idp','userflow','_modified','_created')
+    ordering = ('name','idp')
 

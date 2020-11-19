@@ -33,17 +33,25 @@ INSTALLED_APPS = [
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
     'social_core.backends.azuread.AzureADOAuth2',
+    'authome.backends.AzureADB2COAuth2',
 )
 
 # Azure AD settings
 AZUREAD_AUTHORITY = env('AZUREAD_AUTHORITY', 'https://login.microsoftonline.com')
 AZUREAD_RESOURCE = env('AZUREAD_RESOURCE', '00000002-0000-0000-c000-000000000000')
+
 SOCIAL_AUTH_AZUREAD_OAUTH2_KEY = env('AZUREAD_CLIENTID', 'clientid')
 SOCIAL_AUTH_AZUREAD_OAUTH2_SECRET = env('AZUREAD_SECRETKEY', 'secret')
+
+SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_BASE_URL = env('AZUREAD_B2C_BASE_URL', 'baseurl')
+SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_KEY = env('AZUREAD_B2C_CLIENTID', 'clientid')
+SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_SECRET = env('AZUREAD_B2C_SECRETKEY', 'secret')
+SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_TENANT_ID = env('AZUREAD_B2C_TENANT_ID', 'tentid')
+SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_POLICY = env('AZUREAD_B2C_POLICY', 'policy')
+
 SOCIAL_AUTH_REDIRECT_IS_HTTPS = True
 SOCIAL_AUTH_TRAILING_SLASH = False
 SOCIAL_AUTH_LOGIN_REDIRECT_URL = "/"
-SOCIAL_AUTH_INACTIVE_USER_URL = "/ssouser/inactive-user"
 SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.social_auth.social_details',
     'social_core.pipeline.social_auth.social_uid',
@@ -55,6 +63,8 @@ SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.social_auth.associate_user',
     'social_core.pipeline.social_auth.load_extra_data',
     'social_core.pipeline.user.user_details',
+    'authome.pipelines.associate_idp',
+    'authome.pipelines.set_backend_logout_url'
 )
 # set the domain-global session cookie
 SESSION_COOKIE_DOMAIN = env('SESSION_COOKIE_DOMAIN', None)
@@ -77,6 +87,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'authome.middlewares.PreferedIDPMiddleware'
 ]
 
 
@@ -159,7 +170,11 @@ AUTHORIZATION_CACHE_CHECK_HOURS=env('AUTHORIZATION_CACHE_CHECK_HOURS',default=[0
 AUTHORIZATION_CACHE_CHECK_INTERVAL=env('AUTHORIZATION_CACHE_CHECK_INTERVAL',default=0) #the interval to check authorization cache, if it is not greater than 0, use AUTHORIZATION_CACHE_CHECK_HOURS
 if AUTHORIZATION_CACHE_CHECK_INTERVAL < 0:
     AUTHORIZATION_CACHE_CHECK_INTERVAL = 0
+IDP_CACHE_CHECK_HOURS=env('IDP_CACHE_CHECK_HOURS',default=[0]) #the hours in the day when idp cach can be checked
 
+
+ALLOWED_EMAIL_DOMAINS=env('ALLOWED_EMAIL_DOMAINS',default=["@dbca.wa.gov.au","@dpaw.wa.gov.au"])
+PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
 
 
 # Logging settings - log to stdout/stderr

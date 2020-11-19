@@ -108,8 +108,13 @@ class MemoryCache(object):
         self._auth_map = OrderedDict() 
         self._token_auth_map = OrderedDict() 
 
+        self._idps = None
+        self._idps_size = None
+        self._idps_ts = None
+
         self._auth_cache_clean_time = TaskRunTime(settings.AUTH_CACHE_CLEAN_HOURS)
         self._authorization_cache_check_time = IntervalTaskRunTime(settings.AUTHORIZATION_CACHE_CHECK_INTERVAL) if settings.AUTHORIZATION_CACHE_CHECK_INTERVAL > 0 else TaskRunTime(settings.AUTHORIZATION_CACHE_CHECK_HOURS) 
+        self._idp_cache_check_time = TaskRunTime(settings.IDP_CACHE_CHECK_HOURS)
 
     @property
     def usergrouptree(self):
@@ -151,6 +156,19 @@ class MemoryCache(object):
     def set_authorization(self,user,domain,requests):
         self._user_authorization_map[(user,domain)] = requests
         self._enforce_maxsize("user authorization map",self._user_authorization_map,settings.AUTHORIZATION_CACHE_SIZE)
+
+    @property
+    def idps(self):
+        self.refresh_idp_cache()
+        return self._idps
+
+    @idps.setter
+    def idps(self,value):
+        if value:
+            self._idps,self._idps_size,self._idps_ts = value
+        else:
+            self._idps,self._idps_size,self._idps_ts = None,None,None
+
 
     def get_auth_key(self,email,session_key):
         return session_key
@@ -328,6 +346,18 @@ class MemoryCache(object):
             self.refresh_userauthorization(force)
             self.refresh_usergroupauthorization(force)
 
+    def refresh_idp_cache(self,force=False):
+        if self._idp_cache_check_time.can_run() or force:
+            from .models import IdentityProvider
+            if (force or 
+                not self.idps or 
+                IdentityProvider.objects.filter(modified__gt=self._idp_ts).exists() or  
+                IdentityProvider.objects.all().count() != self._idp_size
+            ):
+                IdentityProvider.get_userflow(None,refresh=True)
+
+
+cache = MemoryCache()
 cache = MemoryCache()
 
         

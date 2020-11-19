@@ -7,6 +7,9 @@ from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.http import urlencode
 from django.utils import timezone
+from django.contrib.auth.models import User
+from django.contrib.auth.decorators import login_required
+
 from ipware.ip import get_client_ip
 import json
 import base64
@@ -208,29 +211,36 @@ def auth_token(request):
 
 
 def logout_view(request):
+    backend_logout_url = request.session.get("backend_logout_url")
     logout(request)
-    return HttpResponseRedirect(
-        'https://login.windows.net/common/oauth2/logout')
+    if backend_logout_url:
+        domain = request.headers.get("x-upstream-server-name") or request.get_host()
+        path = "/" if request.headers.get("x-upstream-server-name") else "/sso/profile"
+        return HttpResponseRedirect("{}?post_logout_redirect_uri=https://{}/static/signout.html".format(backend_logout_url,request.get_host()))
+    else:
+        return HttpResponseRedirect("/static/signout.html")
 
 
 def home(request):
     next_url = request.GET.get('next', None)
     if not request.user.is_authenticated:
-        url = reverse('social:begin', args=['azuread-oauth2'])
+        url = reverse('social:begin', args=['azuread-b2c-oauth2'])
         if next_url:
             url += '?{}'.format(urlencode({'next': next_url}))
+        logger.debug("sso auth url = {}".format(url))
         return HttpResponseRedirect(url)
     if next_url:
         return HttpResponseRedirect('https://{}'.format(next_url))
     return HttpResponseRedirect(reverse('auth'))
 
+
+
+@login_required
 @csrf_exempt
 def profile(request):
-    response = _auth(request)
-    if not response:
-        return AUTH_REQUIRED_RESPONSE
-
     user = request.user
+    auth_key = cache.get_auth_key(user.email,request.session.session_key)
+    response = cache.get_auth(auth_key)
 
     content = {}
     for key,value in response.items():
@@ -262,4 +272,55 @@ def profile(request):
         
     content = json.dumps(content)
     return HttpResponse(content=content,content_type="application/json")
+
+API_VERSION = "0.0.1"
+@csrf_exempt
+def check_signup(request):
+    body = {"version": API_VERSION}
+    try:
+        request_body = json.loads(request.body.decode())
+        logger.debug("signup data is '{}'".format(request_body))
+        email = request_body.get("email",None)
+        body = {"version": API_VERSION}
+        status_code = 200
+        if not email :
+            body["action"] = "ValidationError"
+            body["userMessage"] = "User Email is empty"
+            status_code = 400
+        elif "@" not in email:
+            body["action"] = "ValidationError"
+            body["userMessage"] = "User Email is empty"
+            status_code = 400
+        elif any(email.endswith(domain) for domain in settings.ALLOWED_EMAIL_DOMAINS):
+            status_code = 200
+            body["action"] = "Continue"
+        else:
+            users = User.objects.filter(email__iexact=email)
+            if len(users) == 1:
+                user = users[0]
+                update_fields = []
+                for col,prop in [("first_name","givenName"),("last_name","surname")]:
+                    val = request_body.get(prop,None)
+                    if val and val != getattr(user,col):
+                        setattr(user,col,val)
+                        update_fields.append(col)
+                if update_fields:
+                    user.save(update_fields=update_fields)
+                status_code = 200
+                body["action"] = "Continue"
+            elif len(users) > 1:
+                status_code = 200
+                body["action"] = "ShowBlockPage"
+                body["userMessage"] = "You are registered multiple times. Please ask dbca admin to register you properly before you can sign-up"
+            else:
+                status_code = 200
+                body["action"] = "ShowBlockPage"
+                body["userMessage"] = "Please ask dbca admin to register you first before you can sign-up"
+    except Exception as ex:
+        logger.error("Failed to check user sign-up.{}".format(traceback.format_exc()))
+        status_code = 200
+        body["action"] = "ShowBlockPage"
+        body["userMessage"] = "Failed to check user sign-up with error {}".format(str(ex))
+
+    return JsonResponse(body,status=status_code)
 

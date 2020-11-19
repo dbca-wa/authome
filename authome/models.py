@@ -50,6 +50,38 @@ class _ArrayField(ArrayField):
     def clean(self, value, model_instance):
         return super().clean([v for v in value if v],model_instance)
 
+class IdentityProvider(models.Model):
+    name = models.SlugField(max_length=32,blank=True,unique=True,null=True)
+    idp = models.CharField(max_length=256,unique=True,null=False,editable=False)
+    userflow = models.CharField(max_length=64,blank=True,null=True)
+    modified = models.DateTimeField(auto_now=timezone.now)
+    created = models.DateTimeField(auto_now_add=timezone.now)
+
+    @classmethod
+    def get_userflow(cls,name,refresh=False):
+        idps = cache.idps
+        if refresh or not idps:
+            logger.debug("Refresh idp cache")
+            modified = None
+            size = 0
+            idps = {}
+            for obj in cls.objects.all():
+                size += 1
+                idps[obj.name] = obj
+                if not modified:
+                    modified = obj.modified
+                elif modified < obj.modified:
+                    modified = obj.modified
+            cache.idps = (idps,size,modified)
+        idp = idps.get(name) if name else None
+        if idp and idp.userflow:
+            return idp.userflow
+        else:
+            return settings.SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_POLICY
+
+    def __str__(self):
+        return self.name if self.name else self.idp
+
 class UserToken(models.Model):
     DISABLED = -1
     NOT_CREATED = -2
@@ -200,6 +232,7 @@ class UserGroup(DbObjectMixin,models.Model):
     parent_group = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
     users = _ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
     excluded_users = _ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
+    identity_provider = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,null=True,blank=True)
     modified = models.DateTimeField(editable=False,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
@@ -224,7 +257,7 @@ class UserGroup(DbObjectMixin,models.Model):
         if self.id is None:
             self.modified = timezone.now()
         else:
-            if self.users != self.db_obj.users or self.parent_group != self.db_obj.parent_group or self.excluded_users != self.db_obj.excluded_users:
+            if self.users != self.db_obj.users or self.parent_group != self.db_obj.parent_group or self.excluded_users != self.db_obj.excluded_users or self.identity_provider != self.db_obj.identity_provider:
                 self.modified = timezone.now()
                 self._changed = True
                 self._config_changed = True
@@ -233,7 +266,6 @@ class UserGroup(DbObjectMixin,models.Model):
 
         if not self.parent_group and not self.is_public_group():
             self.parent_group = self.public_group()
-
 
     @classmethod
     def public_group(cls,auto_create=True):
@@ -338,6 +370,7 @@ class UserGroup(DbObjectMixin,models.Model):
     @classmethod
     def find(cls,email):
         """
+        email should be in lower case
         Return the matched user group; if not found, return None
         """
         trees = cls.get_grouptree()
@@ -358,6 +391,18 @@ class UserGroup(DbObjectMixin,models.Model):
                 trees = None
 
         return matched_group
+
+    @classmethod
+    def get_identity_provider(cls,email):
+        email = email.lower()
+        group = cls.find(email)
+        while group:
+            if group.identity_provider:
+                return group.identity_provider
+            else:
+                group = group.parent_group
+
+        return None
 
     class Meta:
         unique_together = [["users","excluded_users"]]
@@ -675,6 +720,8 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
     @staticmethod
     def find(email,domain):
         """
+        email should be in lower case
+        domain should be in lower case
         return matched UserAuthorization or UserGroupAuthorization;return None if can't found
         """
         #try to find the matched userauthorization
@@ -705,6 +752,7 @@ def _can_access(email,domain,path):
     Return True if the user(email) can access domain/path; otherwise return False
     """
     email = email.lower()
+    domain = domain.lower()
     requests = cache.get_authorization(email,domain)
     if not requests:
         requests = AuthorizationMixin.find(email,domain)
@@ -720,6 +768,7 @@ def _can_access_debug(email,domain,path):
     Return True if the user(email) can access domain/path; otherwise return False
     """
     email = email.lower()
+    domain = domain.lower()
     start = datetime.now()
     requests = None
     try:
@@ -748,7 +797,7 @@ class UserAuthorization(AuthorizationMixin):
 
     def clean(self):
         super().clean()
-        self.user = self.user.strip().lower()
+        self.user = self.user.strip().lower() if self.user else None
         if not self.user:
             raise ValidationError("Useremail is empty")
 
