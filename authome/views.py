@@ -216,7 +216,7 @@ def logout_view(request):
     if backend_logout_url:
         domain = request.headers.get("x-upstream-server-name") or request.get_host()
         path = "/" if request.headers.get("x-upstream-server-name") else "/sso/profile"
-        return HttpResponseRedirect("{}?post_logout_redirect_uri=https://{}/static/signout.html".format(backend_logout_url,request.get_host()))
+        return HttpResponseRedirect(backend_logout_url)
     else:
         return HttpResponseRedirect("/static/signout.html")
 

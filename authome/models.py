@@ -54,6 +54,7 @@ class IdentityProvider(models.Model):
     name = models.SlugField(max_length=32,blank=True,unique=True,null=True)
     idp = models.CharField(max_length=256,unique=True,null=False,editable=False)
     userflow = models.CharField(max_length=64,blank=True,null=True)
+    logout_url = models.CharField(max_length=512,blank=True,null=True)
     modified = models.DateTimeField(auto_now=timezone.now)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
@@ -395,6 +396,7 @@ class UserGroup(DbObjectMixin,models.Model):
     @classmethod
     def get_identity_provider(cls,email):
         email = email.lower()
+        cache.refresh_authorization_cache()
         group = cls.find(email)
         while group:
             if group.identity_provider:

@@ -16,7 +16,8 @@ class IntervalTaskRunTime(object):
     Interval is the number of seconds between the continuous run of a task
     A day can divided by a valid interval.
     """
-    def __init__(self,interval):
+    def __init__(self,name,interval):
+        self._name = name
         self._interval = interval
         self._next_time = None
 
@@ -29,19 +30,20 @@ class IntervalTaskRunTime(object):
         if not self._next_time:
             today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo) 
             self._next_time = today + timedelta(seconds = (int((dt - today).seconds / self._interval) + 1) * self._interval)
-            logger.debug("No need to run task, next runtime is {}".format(self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         elif self._next_time > dt:
-            logger.debug("No need to run task, next runtime is {}".format(self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         else:
             today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo) 
             self._next_time = today + timedelta(seconds = (int((dt - today).seconds / self._interval) + 1) * self._interval)
-            logger.debug("Run task now, next runtime is {}".format(self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            logger.debug("Run task({}) now, next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return True
 
 class TaskRunTime(object):
-    def __init__(self,hours):
+    def __init__(self,name,hours):
+        self._name = name
         self._next_time = None
         self._index = None
         self._hours = hours
@@ -73,10 +75,10 @@ class TaskRunTime(object):
                 else:
                     self._index += 1
                 self._next_time += self._timediffs[self._index]
-            logger.debug("No need to run task, next runtime is {}".format(self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         elif self._next_time > dt:
-            logger.debug("No need to run task, next runtime is {}".format(self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         else:
             while self._next_time <= dt:
@@ -85,7 +87,7 @@ class TaskRunTime(object):
                 else:
                     self._index += 1
                 self._next_time += self._timediffs[self._index]
-            logger.debug("Run task now, next runtime is {}".format(self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            logger.debug("Run task({}) now, next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return True
 
 class MemoryCache(object):
@@ -112,9 +114,9 @@ class MemoryCache(object):
         self._idps_size = None
         self._idps_ts = None
 
-        self._auth_cache_clean_time = TaskRunTime(settings.AUTH_CACHE_CLEAN_HOURS)
-        self._authorization_cache_check_time = IntervalTaskRunTime(settings.AUTHORIZATION_CACHE_CHECK_INTERVAL) if settings.AUTHORIZATION_CACHE_CHECK_INTERVAL > 0 else TaskRunTime(settings.AUTHORIZATION_CACHE_CHECK_HOURS) 
-        self._idp_cache_check_time = TaskRunTime(settings.IDP_CACHE_CHECK_HOURS)
+        self._auth_cache_clean_time = TaskRunTime("authentication cache",settings.AUTH_CACHE_CLEAN_HOURS)
+        self._authorization_cache_check_time = IntervalTaskRunTime("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_INTERVAL) if settings.AUTHORIZATION_CACHE_CHECK_INTERVAL > 0 else TaskRunTime("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_HOURS) 
+        self._idp_cache_check_time = IntervalTaskRunTime("idp cache",settings.IDP_CACHE_CHECK_INTERVAL) if settings.IDP_CACHE_CHECK_INTERVAL > 0 else TaskRunTime("idp cache",settings.IDP_CACHE_CHECK_HOURS) 
 
     @property
     def usergrouptree(self):
@@ -351,15 +353,10 @@ class MemoryCache(object):
             from .models import IdentityProvider
             if (force or 
                 not self.idps or 
-                IdentityProvider.objects.filter(modified__gt=self._idp_ts).exists() or  
-                IdentityProvider.objects.all().count() != self._idp_size
+                IdentityProvider.objects.filter(modified__gt=self._idps_ts).exists() or  
+                IdentityProvider.objects.all().count() != self._idps_size
             ):
                 IdentityProvider.get_userflow(None,refresh=True)
 
 
 cache = MemoryCache()
-cache = MemoryCache()
-
-        
-
-

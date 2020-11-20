@@ -64,7 +64,6 @@ SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.social_auth.load_extra_data',
     'social_core.pipeline.user.user_details',
     'authome.pipelines.associate_idp',
-    'authome.pipelines.set_backend_logout_url'
 )
 # set the domain-global session cookie
 SESSION_COOKIE_DOMAIN = env('SESSION_COOKIE_DOMAIN', None)
@@ -170,11 +169,16 @@ AUTHORIZATION_CACHE_CHECK_HOURS=env('AUTHORIZATION_CACHE_CHECK_HOURS',default=[0
 AUTHORIZATION_CACHE_CHECK_INTERVAL=env('AUTHORIZATION_CACHE_CHECK_INTERVAL',default=0) #the interval to check authorization cache, if it is not greater than 0, use AUTHORIZATION_CACHE_CHECK_HOURS
 if AUTHORIZATION_CACHE_CHECK_INTERVAL < 0:
     AUTHORIZATION_CACHE_CHECK_INTERVAL = 0
+
 IDP_CACHE_CHECK_HOURS=env('IDP_CACHE_CHECK_HOURS',default=[0]) #the hours in the day when idp cach can be checked
+IDP_CACHE_CHECK_INTERVAL=env('IDP_CACHE_CHECK_INTERVAL',default=0) #in seconds,the interval to check idp cache, if it is not greater than 0, use IDP_CACHE_CHECK_HOURS
+if IDP_CACHE_CHECK_INTERVAL < 0:
+    IDP_CACHE_CHECK_INTERVAL = 0
 
 
 ALLOWED_EMAIL_DOMAINS=env('ALLOWED_EMAIL_DOMAINS',default=["@dbca.wa.gov.au","@dpaw.wa.gov.au"])
 PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
+BACKEND_LOGOUT_URL=env('BACKEND_LOGOUT_URL')
 
 
 # Logging settings - log to stdout/stderr

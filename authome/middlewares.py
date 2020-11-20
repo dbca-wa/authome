@@ -13,11 +13,12 @@ _max_age = 100 * 365 * 24 * 60 * 60
 class PreferedIDPMiddleware(MiddlewareMixin):
     def process_response(self, request, response):
         if (request.path == "/" or request.path == "") and not request.GET.get('next', None):
-            response.delete_cookie(
-                settings.PREFERED_IDP_COOKIE_NAME,
-                path="/sso/",
-                samesite=None
-            )
+            if not request.user.is_authenticated:
+                response.delete_cookie(
+                    settings.PREFERED_IDP_COOKIE_NAME,
+                    path="/sso/",
+                    samesite=None
+                )
         elif request.path.startswith("/sso/complete/") and request.user.is_authenticated:
             res_idp = request.session.get("idp",None)
             if res_idp:
@@ -29,7 +30,7 @@ class PreferedIDPMiddleware(MiddlewareMixin):
                     logout(request)
                     if backend_logout_url:
                         logger.debug("Redirect to '{}' to logout from identity provider".format(backend_logout_url))
-                        response = HttpResponseRedirect("{}?post_logout_redirect_uri=https://{}/static/signout.html".format(backend_logout_url,request.get_host()))
+                        response = HttpResponseRedirect(backend_logout_url)
                     else:
                         response = HttpResponseForbidden()
                     if configed_idp_obj.name:
@@ -48,9 +49,7 @@ class PreferedIDPMiddleware(MiddlewareMixin):
                             samesite=None
                         )
                     #clear the session
-                    print("=========clear session")
                     request.session.flush()
-                    print("session empty={}".format(request.session.is_empty()))
                 else:
                     req_idp = request.COOKIES.get(settings.PREFERED_IDP_COOKIE_NAME,None)
                     if req_idp != res_idp :
