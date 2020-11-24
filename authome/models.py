@@ -31,7 +31,7 @@ The following lists all valid options in the checking order
 help_text_domain = """
 A domain or domain pattern 
 The following lists all valid options in the checking order
-    1. Single Domain : Represent a single domain. For example oim.dbca.wa.gov.au. Only single domain can config path and exlucded path
+    1. Single Domain : Represent a single domain. For example oim.dbca.wa.gov.au. Only single domain can config path and excluded path
     2. Regex Domain  : '*" represents any strings. For example  pbs*dbca.wa.gov.au
     3. Suffix Domain : Starts with '.' followed by a domain. For example .dbca.wa.gov.au
     4. All Domain    : '*'
