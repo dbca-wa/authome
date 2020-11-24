@@ -16,3 +16,5 @@ gmon.out
 *.dump
 *.db
 *.sqlite3
+start_server
+build_image*
