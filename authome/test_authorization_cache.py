@@ -308,7 +308,7 @@ class AuthorizationCacheTestCase(BaseAuthCacheTestCase):
                     raise Exception("Unknown table '{}'".format(table))
 
 
-            cache._authorization_cache_check_time = TaskRunTime(settings.AUTHORIZATION_CACHE_CHECK_HOURS)
+            cache._authorization_cache_check_time = TaskRunTime("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_HOURS)
             cache._authorization_cache_check_time.can_run(timezone.localtime() - timedelta(hours=1))
             
             for email,domain,path,result in testcases:

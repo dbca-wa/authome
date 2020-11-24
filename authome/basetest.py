@@ -16,7 +16,7 @@ class BaseAuthTestCase(TestCase):
     client = Client()
     home_url = reverse('home')
     auth_url = reverse('auth')
-    auth_token_url = reverse('auth_token')
+    auth_basic_url = reverse('auth_basic')
     test_usergroups = None
     test_usergroupauthorization = None
     test_userauthorization = None
@@ -28,13 +28,13 @@ class BaseAuthTestCase(TestCase):
 
     def setUp(self):
         settings.AUTH_CACHE_SIZE=2000
-        settings.AUTH_TOKEN_CACHE_SIZE=1000
-        settings.AUTH_TOKEN_CACHE_EXPIRETIME=timedelta(seconds=3600)
+        settings.AUTH_BASIC_CACHE_SIZE=1000
+        settings.AUTH_BASIC_CACHE_EXPIRETIME=timedelta(seconds=3600)
         settings.AUTH_CACHE_EXPIRETIME=timedelta(seconds=3600)
         settings.AUTH_CACHE_CLEAN_HOURS = [0]
         settings.AUTHORIZATION_CACHE_CHECK_HOURS = [0,12]
 
-        settings.CHECK_AUTH_TOKEN_PER_REQUEST = False
+        settings.CHECK_AUTH_BASIC_PER_REQUEST = False
         User.objects.filter(email__endswith="@gunfire.com").delete()
         User.objects.filter(email__endswith="@gunfire.com.au").delete()
         User.objects.filter(email__endswith="@hacker.com").delete()
@@ -92,8 +92,8 @@ class BaseAuthCacheTestCase(BaseAuthTestCase):
     def setUp(self):
         super().setUp()
         settings.AUTH_CACHE_SIZE=3
-        settings.AUTH_TOKEN_CACHE_SIZE=3
-        settings.AUTH_TOKEN_CACHE_EXPIRETIME=timedelta(seconds=5)
+        settings.AUTH_BASIC_CACHE_SIZE=3
+        settings.AUTH_BASIC_CACHE_EXPIRETIME=timedelta(seconds=5)
         settings.AUTH_CACHE_EXPIRETIME=timedelta(seconds=5)
         settings.AUTH_CACHE_CLEAN_HOURS = [i for i in range(0,24)]
         settings.AUTHORIZATION_CACHE_CHECK_HOURS = [i for i in range(0,24)]

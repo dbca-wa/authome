@@ -48,7 +48,6 @@ def check_authorization(request,useremail):
     except:
         pass
 
-    
     if can_access(useremail,domain,path):
         logger.debug("User({}) can access https://{}{}".format(useremail,domain,path))
         return None
@@ -123,12 +122,12 @@ BASIC_AUTH_REQUIRED_RESPONSE["WWW-Authenticate"] = 'Basic realm="Please login wi
 BASIC_AUTH_REQUIRED_RESPONSE.content = "Basic auth required"
 
 @csrf_exempt
-def auth_token(request):
+def auth_basic(request):
     """
     First authenticate the token and then fall back to session authentication
     """
-    auth_token = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else ''
-    if not auth_token:
+    auth_basic = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else ''
+    if not auth_basic:
         #not provide basic auth data,check whether session is already authenticated or not.
         res = _auth(request)
         if res:
@@ -138,18 +137,18 @@ def auth_token(request):
             #require the user to provide credential using basic auth
             return BASIC_AUTH_REQUIRED_RESPONSE
 
-    username, token = parse_basic(auth_token)
+    username, token = parse_basic(auth_basic)
 
-    auth_token_key = cache.get_token_auth_key(username,token) 
-    response= cache.get_token_auth(auth_token_key)
+    auth_basic_key = cache.get_basic_auth_key(username,token) 
+    response= cache.get_basic_auth(auth_basic_key)
     if response:
         #already authenticated with token auth data, using the token auth data instead of current session authentication data (if have)
         useremail = response['X-email']
-        if settings.CHECK_AUTH_TOKEN_PER_REQUEST:
+        if settings.CHECK_AUTH_BASIC_PER_REQUEST:
             user = User.objects.get(email__iexact=useremail)
             if not user.token or not user.token.is_valid(token):
                 #token is invalid, fallback to session authentication
-                cache.delete_token_auth(auth_token_key)
+                cache.delete_basic_auth(auth_basic_key)
                 res = _auth(request)
                 if res:
                     #already authenticated
@@ -189,7 +188,7 @@ def auth_token(request):
                 request.user = user
                 request.session.modified = False
 
-                response = _populate_response(request,cache.set_token_auth,auth_token_key,user)
+                response = _populate_response(request,cache.set_basic_auth,auth_basic_key,user)
                 res = check_authorization(request,user.email)
                 if res:
                     return res
@@ -214,8 +213,6 @@ def logout_view(request):
     backend_logout_url = request.session.get("backend_logout_url")
     logout(request)
     if backend_logout_url:
-        domain = request.headers.get("x-upstream-server-name") or request.get_host()
-        path = "/" if request.headers.get("x-upstream-server-name") else "/sso/profile"
         return HttpResponseRedirect(backend_logout_url)
     else:
         return HttpResponseRedirect("/static/signout.html")
@@ -231,7 +228,11 @@ def home(request):
         return HttpResponseRedirect(url)
     if next_url:
         return HttpResponseRedirect('https://{}'.format(next_url))
-    return HttpResponseRedirect(reverse('auth'))
+    res = _auth(request)
+    if res.status_code >= 400:
+        return res
+    else:
+        return profile(request)
 
 
 
