@@ -3,7 +3,7 @@ from django import forms
 from django.contrib.postgres.forms import SimpleArrayField
 from django.utils.safestring import mark_safe
 
-from  .models import UserGroup,UserGroupAuthorization,UserAuthorization
+from  .models import UserGroup,UserGroupAuthorization,UserAuthorization,ExactRequestDomain
 from .widgets import (ReadonlyWidget,text_readonly_widget)
 
 def get_help_text(model_class,field):
@@ -16,12 +16,32 @@ class UserGroupForm(forms.ModelForm):
         model = UserGroup
         fields = "__all__"
         
+class AuthorizationForm(forms.ModelForm):
+    check_domain_js = """
+value = this.value.trim()
+if (value == "" || value[0] == "." || value.indexOf('*') >= 0) {
+    document.getElementById("id_paths").disabled=true
+    document.getElementById("id_excluded_paths").disabled=true
+} else {
+    document.getElementById("id_paths").disabled=false
+    document.getElementById("id_excluded_paths").disabled=false
+}
+    """
+    path_widget = forms.Textarea(attrs={"style":"width:80%","rows":10})
+    disabled_path_widget = forms.Textarea(attrs={"style":"width:80%","rows":10,"disabled":True})
+    domain = forms.CharField(required=True,widget=forms.TextInput(attrs={"style":"width:80%","onchange":check_domain_js}),help_text=get_help_text(UserGroupAuthorization,"domain"))
+    paths = SimpleArrayField(forms.CharField(required=False),delimiter="\n",required=False,widget=path_widget,help_text=get_help_text(UserGroupAuthorization,"paths"))
+    excluded_paths = SimpleArrayField(forms.CharField(required=False),delimiter="\n",required=False,widget=path_widget,help_text=get_help_text(UserGroupAuthorization,"excluded_paths"))
 
-class UserGroupAuthorizationForm(forms.ModelForm):
-    domain = forms.CharField(required=True,widget=forms.TextInput(attrs={"style":"width:80%"}),help_text=get_help_text(UserGroupAuthorization,"domain"))
-    paths = SimpleArrayField(forms.CharField(required=False),delimiter="\n",required=False,widget=forms.Textarea(attrs={"style":"width:80%","rows":10}),help_text=get_help_text(UserGroupAuthorization,"paths"))
-    excluded_paths = SimpleArrayField(forms.CharField(required=False),delimiter="\n",required=False,widget=forms.Textarea(attrs={"style":"width:80%","rows":10}),help_text=get_help_text(UserGroupAuthorization,"excluded_paths"))
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        if self.instance :
+            if not isinstance(self.instance.request_domain,ExactRequestDomain):
+                self.fields["paths"].widget = self.disabled_path_widget
+                self.fields["excluded_paths"].widget = self.disabled_path_widget
 
+
+class UserGroupAuthorizationForm(AuthorizationForm):
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
         if self.instance :
@@ -33,11 +53,7 @@ class UserGroupAuthorizationForm(forms.ModelForm):
         model = UserGroupAuthorization
         fields = "__all__"
 
-class UserAuthorizationForm(forms.ModelForm):
-    domain = forms.CharField(required=True,widget=forms.TextInput(attrs={"style":"width:80%"}),help_text=get_help_text(UserAuthorization,"domain"))
-    paths = SimpleArrayField(forms.CharField(required=False),delimiter="\n",required=False,widget=forms.Textarea(attrs={"style":"width:80%","rows":10}),help_text=get_help_text(UserAuthorization,"paths"))
-    excluded_paths = SimpleArrayField(forms.CharField(required=False),delimiter="\n",required=False,widget=forms.Textarea(attrs={"style":"width:80%","rows":10}),help_text=get_help_text(UserAuthorization,"excluded_paths"))
-
+class UserAuthorizationForm(AuthorizationForm):
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
         if self.instance :
