@@ -22,6 +22,13 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
 
     backend_logout_url = backend.logout_url if hasattr(backend,"logout_url") else settings.BACKEND_LOGOUT_URL
 
+    if user and not user.is_active:
+        logout(request)
+        logout_url = backend_logout_url.format(get_post_logout_url(request,idp_obj))
+        logger.debug("Redirect to '{}' to logout from identity provider".format(logout_url))
+        response = signout(request,logout_url=logout_url,message="Your account was disabled.")
+        return response
+
     email = details.get("email")
     #check whether identity provider is the same as the configured identity provider
     if email:
@@ -51,6 +58,17 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
         if category[0].contain(email):
             usergroup = category[0]
             break;
+
+    if not usergroup:
+        logout(request)
+        logout_url = backend_logout_url.format(get_post_logout_url(request,idp_obj))
+        logger.debug("Redirect to '{}' to logout from identity provider".format(logout_url))
+        message = "You are not belonging to any user category."
+        response = signout(request,logout_url=logout_url,message=message)
+
+        request.session.flush()
+        return response
+
     dbca_group = UserGroup.dbca_group()
     #the user group must match the signup user category if user already exists, otherwise, only dbca staff is allowed.
     if (user and usergroup != user.usergroup) or (not user and usergroup != dbca_group):
@@ -70,6 +88,8 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     #reset is_staff and is_superuser property based on user category.
     if usergroup == dbca_group:
         details["is_staff"] = True
+        if not user:
+            details["is_superuser"] = False
     else:
         details["is_staff"] = False
         details["is_superuser"] = False
