@@ -11,6 +11,7 @@ from django.db import models,transaction
 from django.contrib.postgres.fields import ArrayField
 from django.db.models.signals import pre_delete,pre_save
 from django.dispatch import receiver
+from django.contrib.auth.models import AbstractUser
 
 from ipware.ip import get_client_ip
 import hashlib
@@ -51,7 +52,7 @@ class _ArrayField(ArrayField):
         return super().clean([v for v in value if v],model_instance)
 
 class IdentityProvider(models.Model):
-    name = models.SlugField(max_length=32,blank=True,unique=True,null=True)
+    name = models.CharField(max_length=64,unique=True,null=True)
     idp = models.CharField(max_length=256,unique=True,null=False,editable=False)
     userflow = models.CharField(max_length=64,blank=True,null=True)
     logout_url = models.CharField(max_length=512,blank=True,null=True)
@@ -59,91 +60,46 @@ class IdentityProvider(models.Model):
     created = models.DateTimeField(auto_now_add=timezone.now)
 
     @classmethod
-    def get_userflow(cls,name,refresh=False):
-        idps = cache.idps
-        if refresh or not idps:
-            logger.debug("Refresh idp cache")
-            modified = None
-            size = 0
-            idps = {}
-            for obj in cls.objects.all():
-                size += 1
-                idps[obj.name] = obj
-                if not modified:
-                    modified = obj.modified
-                elif modified < obj.modified:
-                    modified = obj.modified
-            cache.idps = (idps,size,modified)
-        idp = idps.get(name) if name else None
+    def refresh_idps(cls):
+        logger.debug("Refresh idp cache")
+        modified = None
+        size = 0
+        idps = {}
+        for obj in cls.objects.all():
+            size += 1
+            idps[obj.idp] = obj
+            if not modified:
+                modified = obj.modified
+            elif modified < obj.modified:
+                modified = obj.modified
+        cache.idps = (idps,size,modified)
+
+    @classmethod
+    def get_idp(cls,idpid):
+        return cache.idps.get(idpid) if idpid else None
+  
+  
+    @classmethod
+    def get_userflow(cls,idpid):
+        idp = cls.get_idp(idpid)
         if idp and idp.userflow:
             return idp.userflow
         else:
             return settings.SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_POLICY
 
+    @classmethod
+    def get_logout_url(cls,idpid):
+        idp = cls.get_idp(idpid)
+        if idp:
+            return idp.logout_url
+        else:
+            return None
+
     def __str__(self):
-        return self.name if self.name else self.idp
+        return self.name or self.idp
 
-class UserToken(models.Model):
-    DISABLED = -1
-    NOT_CREATED = -2
-    EXPIRED = -3
-    GOOD = 1
-    WARNING = 2
-
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,primary_key=True,related_name="token",editable=False)
-    enabled = models.BooleanField(default=False,editable=False)
-    token = models.CharField(max_length=128,null=True,editable=False)
-    created = models.DateTimeField(null=True,editable=False)
-    expired = models.DateField(null=True,editable=False)
-    modified = models.DateTimeField(editable=False,db_index=True,auto_now=True)
-
-    @property
-    def is_expired(self):
-        if not self.enabled or not self.token:
-            return True
-        elif self.expired:
-            return timezone.localdate() > self.expired
-        else:
-            return False
-
-    @property
-    def status(self):
-        if not self.enabled:
-            return self.DISABLED
-        elif not self.token:
-            return self.NOT_CREATED
-        elif not self.expired:
-            return self.GOOD
-        else:
-            today = timezone.localdate()
-            if today > self.expired:
-                return self.EXPIRED
-            elif not settings.USER_ACCESS_TOKEN_WARNING:
-                return self.GOOD
-            elif today + settings.USER_ACCESS_TOKEN_WARNING >= self.expired:
-                return self.WARNING
-            else:
-                return self.GOOD
-
-    def is_valid(self,token):
-        if not self.enabled or not self.token or self.token != token:
-            return False
-        elif self.is_expired:
-            return False
-        else:
-            return True
-
-    def generate_token(self):
-        """
-        generate an access token
-        """
-        self.created = timezone.localtime()
-        if settings.USER_ACCESS_TOKEN_LIFETIME:
-            self.expired = self.created.date() + settings.USER_ACCESS_TOKEN_LIFETIME
-        else:
-            self.expired = None
-        self.token = hashlib.sha256('{}|{}|{}|{}|{}|{}|{}'.format(self.user.email,self.user.is_superuser,self.user.is_staff,self.user.is_active,self.created.timestamp(),self.expired.isoformat() if self.expired else "9999-12-31",settings.SECRET_KEY).lower().encode('utf-8')).hexdigest()
-
+    class Meta:
+        verbose_name_plural = " Identity Providers"
 
 class UserEmail(object):
     match_all = False
@@ -265,18 +221,10 @@ class UserGroup(DbObjectMixin,models.Model):
             elif self.name != self.db_obj.name:
                 self._changed = True
 
-        if not self.parent_group and not self.is_public_group():
+        if not self.parent_group and not self.is_public_group:
             self.parent_group = self.public_group()
 
-    @classmethod
-    def public_group(cls,auto_create=True):
-        obj = cls.objects.filter(users=["*"],excluded_users__isnull=True).first()
-        if not obj and auto_create:
-            obj = UserGroup(name="Public User",users=["*"],excluded_users=None)
-            obj.modified = timezone.now()
-            obj.save()
-        return obj
-
+    @property
     def is_public_group(self):
         return self.users == ["*"] and self.excluded_users is None
 
@@ -324,28 +272,55 @@ class UserGroup(DbObjectMixin,models.Model):
         return self.name
 
     @classmethod
-    def get_grouptree(cls,refresh=False):
-        if refresh or not cache.usergrouptree:
-            logger.debug("Populate UserGroup trees")
-            group_trees = {}
-            modified = None
-            size = 0
-            for group in cls.objects.all():
-                size += 1
-                group_trees[group.id] = (group,[])
-                if not modified:
-                    modified = group.modified
-                elif modified < group.modified:
-                    modified = group.modified
-            #build the tree
-            for key,val in group_trees.items():
-                group,subgroups = val
-                if group.parent_group:
-                    group_trees[group.parent_group.id][1].append(val)
-            group_trees = [v for v in group_trees.values() if not v[0].parent_group]
-            cache.usergrouptree = (group_trees,size,modified)
+    def refresh_usergroups(cls,refresh=False):
+        logger.debug("Refresh UserGroup cache")
+        group_trees = {}
+        modified = None
+        size = 0
+        dbca_group = None
+        public_group = None
+        for group in cls.objects.all():
+            size += 1
+            group_trees[group.id] = (group,[])
+            if group.name.lower() == settings.DBCA_STAFF_GROUP_NAME:
+                dbca_group = group
+            if group.is_public_group:
+                public_group = group
 
+            if not modified:
+                modified = group.modified
+            elif modified < group.modified:
+                modified = group.modified
+        if not public_group and group_trees:
+            raise Exception("Missing user group 'Public User'")
+        #build the tree
+        for key,val in group_trees.items():
+            group,subgroups = val
+            if group.parent_group_id:
+                group_trees[group.parent_group_id][1].append(val)
+        group_trees = [v for v in group_trees.values() if not v[0].parent_group_id]
+        cache.usergrouptree = (group_trees,public_group,dbca_group,size,modified)
+
+    @classmethod
+    def get_grouptree(cls):
         return cache.usergrouptree
+
+    @classmethod
+    def dbca_group(cls):
+        return cache.dbca_group
+
+    @classmethod
+    def usercategories(cls):
+        return cache.usergrouptree[0][1]
+
+    @classmethod
+    def public_group(cls):
+        return cache.public_group
+
+    @classmethod
+    def public_groupid(cls):
+        return cache.public_group.id
+
 
     def contain(self,email):
         """
@@ -396,7 +371,6 @@ class UserGroup(DbObjectMixin,models.Model):
     @classmethod
     def get_identity_provider(cls,email):
         email = email.lower()
-        cache.refresh_authorization_cache()
         group = cls.find(email)
         while group:
             if group.identity_provider:
@@ -408,6 +382,8 @@ class UserGroup(DbObjectMixin,models.Model):
 
     class Meta:
         unique_together = [["users","excluded_users"]]
+        verbose_name_plural = "     User Groups"
+
 
 
 class RequestDomain(object):
@@ -804,71 +780,71 @@ class UserAuthorization(AuthorizationMixin):
             raise ValidationError("Useremail is empty")
 
     @classmethod
-    def get_authorization(cls,useremail,refresh=False):
-        if refresh or not cache.userauthorization:
-            logger.debug("Populate UserAuthorization map")
-            userauthorization = {}
-            previous_user = None
-            size = 0
-            modified = None
-            for authorization in UserAuthorization.objects.all().order_by("user","sortkey"):
-                size += 1
-                if not modified:
-                    modified = authorization.modified
-                elif modified < authorization.modified:
-                    modified = authorization.modified
+    def refresh_authorization(cls):
+        logger.debug("Refresh UserAuthorization cache")
+        userauthorization = {}
+        previous_user = None
+        size = 0
+        modified = None
+        for authorization in UserAuthorization.objects.all().order_by("user","sortkey"):
+            size += 1
+            if not modified:
+                modified = authorization.modified
+            elif modified < authorization.modified:
+                modified = authorization.modified
 
-                if not previous_user:
-                    userauthorization[authorization.user] = [authorization]
-                    previous_user = authorization.user
-                elif previous_user == authorization.user:
-                    userauthorization[authorization.user].append(authorization)
-                else:
-                    userauthorization[authorization.user] = [authorization]
-                    previous_user = authorization.user
-            
-            cache.userauthorization = (userauthorization,size,modified)
-
-        return cache.userauthorization.get(useremail)
-
+            if not previous_user:
+                userauthorization[authorization.user] = [authorization]
+                previous_user = authorization.user
+            elif previous_user == authorization.user:
+                userauthorization[authorization.user].append(authorization)
+            else:
+                userauthorization[authorization.user] = [authorization]
+                previous_user = authorization.user
         
+        cache.userauthorization = (userauthorization,size,modified)
+
+    @classmethod
+    def get_authorization(cls,useremail):
+        return cache.userauthorization.get(useremail)
 
     def __str__(self):
         return self.user
 
     class Meta:
         unique_together = [["user","domain"]]
+        verbose_name_plural = "    User Authorizations"
 
 class UserGroupAuthorization(AuthorizationMixin):
     usergroup = models.ForeignKey(UserGroup, on_delete=models.CASCADE)
 
     @classmethod
-    def get_authorization(cls,usergroup,refresh=False):
-        if refresh or not cache.usergroupauthorization :
-            logger.debug("Populate UserGroupAuthorization map")
-            usergroupauthorization = {}
-            previous_usergroup = None
-            size = 0
-            modified = None
-            for authorization in UserGroupAuthorization.objects.all().order_by("usergroup","sortkey"):
-                size += 1
-                if not modified:
-                    modified = authorization.modified
-                elif modified < authorization.modified:
-                    modified = authorization.modified
+    def refresh_authorization(cls):
+        logger.debug("Refresh UserGroupAuthorization cache")
+        usergroupauthorization = {}
+        previous_usergroup = None
+        size = 0
+        modified = None
+        for authorization in UserGroupAuthorization.objects.all().order_by("usergroup","sortkey"):
+            size += 1
+            if not modified:
+                modified = authorization.modified
+            elif modified < authorization.modified:
+                modified = authorization.modified
 
-                if not previous_usergroup:
-                    usergroupauthorization[authorization.usergroup] = [authorization]
-                    previous_usergroup = authorization.usergroup
-                elif previous_usergroup == authorization.usergroup:
-                    usergroupauthorization[authorization.usergroup].append(authorization)
-                else:
-                    usergroupauthorization[authorization.usergroup] = [authorization]
-                    previous_usergroup = authorization.usergroup
-            
+            if not previous_usergroup:
+                usergroupauthorization[authorization.usergroup] = [authorization]
+                previous_usergroup = authorization.usergroup
+            elif previous_usergroup == authorization.usergroup:
+                usergroupauthorization[authorization.usergroup].append(authorization)
+            else:
+                usergroupauthorization[authorization.usergroup] = [authorization]
+                previous_usergroup = authorization.usergroup
 
-            cache.usergroupauthorization = (usergroupauthorization,size,modified)
+        cache.usergroupauthorization = (usergroupauthorization,size,modified)
 
+    @classmethod
+    def get_authorization(cls,usergroup):
         return cache.usergroupauthorization.get(usergroup)
 
     def __str__(self):
@@ -876,17 +852,110 @@ class UserGroupAuthorization(AuthorizationMixin):
 
     class Meta:
         unique_together = [["usergroup","domain"]]
+        verbose_name_plural = "   User Group Authorizations"
+
+class User(AbstractUser):
+    usergroup = models.ForeignKey(UserGroup, on_delete=models.PROTECT,editable=False,null=False)
+    last_idp = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,editable=False,null=True)
+
+    def clean(self):
+        super().clean()
+        self.email = self.email.lower() if self.email else None
+        if not self.username:
+            if '@' in self.email:
+                self.username = self.email[0:self.email.index('@')].replace(".","_")
+            else:
+                raise ValidationError("Invalid Email address")
+        if not self.usergroup_id:
+            for group in UserGroup.objects.filter(parent_group=UserGroup.public_group()):
+                if group.contain(self.email):
+                    self.usergroup = group
+                    self.usergroup_id = group.id
+                    break
+            if not self.usergroup_id:
+                raise ValidationError("The email({}) is not belonging to any usergroup except the public group.".format(self.email))
+
+    class Meta(AbstractUser.Meta):
+        swappable = 'AUTH_USER_MODEL'
+        db_table = "auth_user"
+        verbose_name_plural = "      User"
+        unique_together = [["email"]]
+
+class UserToken(models.Model):
+    DISABLED = -1
+    NOT_CREATED = -2
+    EXPIRED = -3
+    GOOD = 1
+    WARNING = 2
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,primary_key=True,related_name="token",editable=False)
+    enabled = models.BooleanField(default=False,editable=False)
+    token = models.CharField(max_length=128,null=True,editable=False)
+    created = models.DateTimeField(null=True,editable=False)
+    expired = models.DateField(null=True,editable=False)
+    modified = models.DateTimeField(editable=False,db_index=True,auto_now=True)
+
+    @property
+    def is_expired(self):
+        if not self.enabled or not self.token:
+            return True
+        elif self.expired:
+            return timezone.localdate() > self.expired
+        else:
+            return False
+
+    @property
+    def status(self):
+        if not self.enabled:
+            return self.DISABLED
+        elif not self.token:
+            return self.NOT_CREATED
+        elif not self.expired:
+            return self.GOOD
+        else:
+            today = timezone.localdate()
+            if today > self.expired:
+                return self.EXPIRED
+            elif not settings.USER_ACCESS_TOKEN_WARNING:
+                return self.GOOD
+            elif today + settings.USER_ACCESS_TOKEN_WARNING >= self.expired:
+                return self.WARNING
+            else:
+                return self.GOOD
+
+    def is_valid(self,token):
+        if not self.enabled or not self.token or self.token != token:
+            return False
+        elif self.is_expired:
+            return False
+        else:
+            return True
+
+    def generate_token(self):
+        """
+        generate an access token
+        """
+        self.created = timezone.localtime()
+        if settings.USER_ACCESS_TOKEN_LIFETIME:
+            self.expired = self.created.date() + settings.USER_ACCESS_TOKEN_LIFETIME
+        else:
+            self.expired = None
+        self.token = hashlib.sha256('{}|{}|{}|{}|{}|{}|{}'.format(self.user.email,self.user.is_superuser,self.user.is_staff,self.user.is_active,self.created.timestamp(),self.expired.isoformat() if self.expired else "9999-12-31",settings.SECRET_KEY).lower().encode('utf-8')).hexdigest()
+
+    class Meta:
+        verbose_name_plural = "  User Access Tokens"
 
 class UserGroupListener(object):
     @staticmethod
     @receiver(pre_delete, sender=UserGroup)
     def delete_public_group(sender,instance,**kwargs):
-        if instance.is_public_group():
+        if instance.is_public_group:
             raise Exception("Can't delete the public user group")
-
+    """
     @staticmethod
     @receiver(pre_save, sender=UserGroup)
     def check_public_group(sender,instance,**kwargs):
-        if instance.id is None and instance.is_public_group() and instance.public_group(False):
+        if instance.id is None and instance.is_public_group and instance.public_group():
             raise Exception("Public user group already exists")
+    """
 

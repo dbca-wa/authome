@@ -2,14 +2,13 @@
 from collections import OrderedDict
 from datetime import timedelta
 
-from django.contrib.auth.models import User
 from django.urls import reverse
 from django.test import TestCase, Client
 from django.conf import settings
 
 import base64
 
-from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access,UserToken
+from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access,UserToken,User
 from .cache import cache
 
 class BaseAuthTestCase(TestCase):
@@ -42,8 +41,14 @@ class BaseAuthTestCase(TestCase):
         UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
         UserAuthorization.objects.all().delete()
 
+        if not UserGroup.objects.filter(users=["*"], excluded_users__isnull=True).exists():
+            public_group = UserGroup(name="Public User",users=["*"])
+            public_group.clean()
+            public_group.save()
+
         cache.clean_auth_cache(True)
         cache.refresh_authorization_cache(True)
+        print("public user group={}".format(UserGroup.public_group()))
 
 
     def basic_auth(self, username, password):
@@ -51,18 +56,6 @@ class BaseAuthTestCase(TestCase):
 
     def populate_testdata(self):
         #popuate UserGroup objects
-        users = OrderedDict()
-        if self.test_users:
-            for test_user in self.test_users:
-                obj = User(username=test_user[0],email=test_user[1])
-                obj.save()
-                users[test_user[0]] = obj
-                if len(test_user) >= 3 and test_user[2]:
-                    token = UserToken(user=obj,enabled=True)
-                    token.generate_token()
-                    token.save()
-        self.test_users = users
-
         if self.test_usergroups:
             uncreated_usergroups = [(UserGroup.public_group(),self.test_usergroups)]
             while uncreated_usergroups:
@@ -70,9 +63,23 @@ class BaseAuthTestCase(TestCase):
                 for name,users,excluded_users,subgroups in subgroup_datas:
                     obj = UserGroup(name=name,users=users,excluded_users=excluded_users,parent_group=parent_obj)
                     obj.clean()
+                    print("save usergroup={}".format(obj))
                     obj.save()
                     if subgroups:
                         uncreated_usergroups.append((obj,subgroups))
+
+        users = OrderedDict()
+        if self.test_users:
+            for test_user in self.test_users:
+                obj = User(username=test_user[0],email=test_user[1])
+                obj.clean()
+                obj.save()
+                users[test_user[0]] = obj
+                if len(test_user) >= 3 and test_user[2]:
+                    token = UserToken(user=obj,enabled=True)
+                    token.generate_token()
+                    token.save()
+        self.test_users = users
 
         if self.test_usergroupauthorization:
             for groupname,domain,paths,excluded_paths in self.test_usergroupauthorization :
@@ -86,7 +93,7 @@ class BaseAuthTestCase(TestCase):
                 obj.clean()
                 obj.save()
 
-
+        cache.refresh_authorization_cache(True)
 
 class BaseAuthCacheTestCase(BaseAuthTestCase):
     def setUp(self):

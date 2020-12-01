@@ -3,11 +3,16 @@ from django import forms
 from django.contrib.postgres.forms import SimpleArrayField
 from django.utils.safestring import mark_safe
 
-from  .models import UserGroup,UserGroupAuthorization,UserAuthorization,ExactRequestDomain
+from  .models import UserGroup,UserGroupAuthorization,UserAuthorization,ExactRequestDomain,User
 from .widgets import (ReadonlyWidget,text_readonly_widget)
 
 def get_help_text(model_class,field):
     return mark_safe("<pre>{}</pre>".format(model_class._meta.get_field(field).help_text))
+
+class UserCreateForm(forms.ModelForm):
+    class Meta:
+        model = User
+        fields = ("username","email","first_name","last_name","is_active","is_staff","is_superuser")
 
 class UserGroupForm(forms.ModelForm):
     users = SimpleArrayField(forms.CharField(required=False),delimiter="\n",widget=forms.Textarea(attrs={"style":"width:80%","rows":10}),help_text=get_help_text(UserGroup,"users"))

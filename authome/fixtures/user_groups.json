@@ -1,0 +1,28 @@
+[
+{
+    "model": "authome.usergroup",
+    "pk": 1,
+    "fields": {
+        "name": "Public User",
+        "parent_group": null,
+        "users": "[\"*\"]",
+        "excluded_users": null,
+        "identity_provider": null,
+        "modified": "2020-11-26T02:10:53.171Z",
+        "created": "2020-11-26T02:10:56.792Z"
+    }
+},
+{
+    "model": "authome.usergroup",
+    "pk": 2,
+    "fields": {
+        "name": "Dbca Staff",
+        "parent_group": 1,
+        "users": "[\"@dbca.wa.gov.au\", \"@dpaw.wa.gov.au\"]",
+        "excluded_users": null,
+        "identity_provider": null,
+        "modified": "2020-11-26T02:11:36.155Z",
+        "created": "2020-11-26T02:11:39.486Z"
+    }
+}
+]

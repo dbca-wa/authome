@@ -94,6 +94,8 @@ class MemoryCache(object):
     def __init__(self):
         super().__init__()
         self._usergrouptree = None
+        self._dbca_group = None
+        self._public_group = None
         self._usergrouptree_size = None
         self._usergrouptree_ts = None
     
@@ -114,6 +116,7 @@ class MemoryCache(object):
         self._idps_size = None
         self._idps_ts = None
 
+        #start the cache refresh timer
         self._auth_cache_clean_time = TaskRunTime("authentication cache",settings.AUTH_CACHE_CLEAN_HOURS)
         self._authorization_cache_check_time = IntervalTaskRunTime("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_INTERVAL) if settings.AUTHORIZATION_CACHE_CHECK_INTERVAL > 0 else TaskRunTime("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_HOURS) 
         self._idp_cache_check_time = IntervalTaskRunTime("idp cache",settings.IDP_CACHE_CHECK_INTERVAL) if settings.IDP_CACHE_CHECK_INTERVAL > 0 else TaskRunTime("idp cache",settings.IDP_CACHE_CHECK_HOURS) 
@@ -122,12 +125,20 @@ class MemoryCache(object):
     def usergrouptree(self):
         return self._usergrouptree
 
+    @property
+    def dbca_group(self):
+        return self._dbca_group
+
+    @property
+    def public_group(self):
+        return self._public_group
+
     @usergrouptree.setter
     def usergrouptree(self,value):
         if value:
-            self._usergrouptree,self._usergrouptree_size,self._usergrouptree_ts = value
+            self._usergrouptree,self._public_group,self._dbca_group,self._usergrouptree_size,self._usergrouptree_ts = value
         else:
-            self._usergrouptree,self._usergrouptree_size,self._usergrouptree_ts = None,None,None
+            self._usergrouptree,self._public_group,self._dbca_group,self._usergrouptree_size,self._usergrouptree_ts = None,None,None,None
         
     @property
     def userauthorization(self):
@@ -305,7 +316,7 @@ class MemoryCache(object):
             self._auth_map.clear()
             self._basic_auth_map.clear()
 
-    def refresh_usergrouptree(self,force=False):
+    def refresh_usergroups(self,force=False):
         from .models import UserGroup
         if (force or 
             not self._usergrouptree or 
@@ -315,7 +326,7 @@ class MemoryCache(object):
             logger.debug("UserGroup was changed, clean cache usergroupptree and user_requests_map")
             self._user_authorization_map.clear()
             #reload group trees
-            get_grouptree = UserGroup.get_grouptree(True)
+            UserGroup.refresh_usergroups()
 
 
     def refresh_userauthorization(self,force=False):
@@ -328,7 +339,7 @@ class MemoryCache(object):
             logger.debug("UserAuthorization was changed, clean cache userauthorization and user_requests_map")
             self._user_authorization_map.clear()
             #reload user requests
-            UserAuthorization.get_authorization(None,refresh=True)
+            UserAuthorization.refresh_authorization()
 
     def refresh_usergroupauthorization(self,force=False):
         from .models import UserGroupAuthorization
@@ -340,23 +351,22 @@ class MemoryCache(object):
             logger.debug("UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map")
             self._user_authorization_map.clear()
             #reload user group requests
-            UserGroupAuthorization.get_authorization(None,refresh=True)
+            UserGroupAuthorization.refresh_authorization()
 
     def refresh_authorization_cache(self,force=False):
         if self._authorization_cache_check_time.can_run() or force:
-            self.refresh_usergrouptree(force)
-            self.refresh_userauthorization(force)
-            self.refresh_usergroupauthorization(force)
+            self.refresh_usergroups()
+            self.refresh_userauthorization()
+            self.refresh_usergroupauthorization()
 
     def refresh_idp_cache(self,force=False):
         if self._idp_cache_check_time.can_run() or force:
             from .models import IdentityProvider
-            if (force or 
-                not self.idps or 
+            if ( not self._idps or 
                 IdentityProvider.objects.filter(modified__gt=self._idps_ts).exists() or  
                 IdentityProvider.objects.all().count() != self._idps_size
             ):
-                IdentityProvider.get_userflow(None,refresh=True)
+                IdentityProvider.refresh_idps()
 
 
 cache = MemoryCache()

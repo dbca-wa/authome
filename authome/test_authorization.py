@@ -3,13 +3,10 @@ from django.test import TestCase, Client
 
 from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access
 from .cache import cache
+from .basetest import BaseAuthCacheTestCase
 
 
-class UserGroupTestCase(TestCase):
-    def setUp(self):
-        #clear the unittest data
-        UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
-
+class UserGroupTestCase(BaseAuthCacheTestCase):
 
     def test_delete_public_group(self):
         with self.assertRaises(Exception,msg="Delete public user group should throw exception."):
@@ -58,7 +55,7 @@ class UserGroupTestCase(TestCase):
 
 
     def test_find(self):
-        test_datas = [
+        self.test_usergroups = [
             ("testcompany",["@test1.com"],None,[
                 ("developers",["dev_*@test1.com"],None,[
                     ("app_developers",["dev_app_*@test1.com"],["dev_app_test*@test1.com"],[
@@ -80,15 +77,7 @@ class UserGroupTestCase(TestCase):
             ("dev_app_leader1@test1.com","app_dev_manager")
         ]
         #popuate UserGroup objects
-        pending_datas = [(UserGroup.public_group(),test_datas)]
-        while pending_datas:
-            parent_obj,subgroup_datas = pending_datas.pop()
-            for name,users,excluded_users,subgroups in subgroup_datas:
-                obj = UserGroup(name=name,users=users,excluded_users=excluded_users,parent_group=parent_obj)
-                obj.clean()
-                obj.save()
-                if subgroups:
-                    pending_datas.append((obj,subgroups))
+        self.populate_testdata()
 
         cache.refresh_authorization_cache(True)
   
@@ -96,10 +85,7 @@ class UserGroupTestCase(TestCase):
             group = UserGroup.find(email)
             self.assertEqual(group.name,group_name,msg="{}: matched group({}) is not the expected group({})".format(email,group.name,group_name))
             
-class UserAuthorizationTestCase(TestCase):
-    def setUp(self):
-        #clear the unittest data
-        UserAuthorization.objects.all().delete()
+class UserAuthorizationTestCase(BaseAuthCacheTestCase):
 
     def get_role(self,index):
         return "test{:0>3}".format(index)
@@ -178,9 +164,6 @@ class UserAuthorizationTestCase(TestCase):
 
 
 class UserGroupAuthorizationTestCase(UserAuthorizationTestCase):
-    def setUp(self):
-        #clear the unittest data
-        UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
 
     def get_role(self,index):
         group = UserGroup(name="test{:0>3}".format(index),users=["@test.com"])
@@ -192,14 +175,10 @@ class UserGroupAuthorizationTestCase(UserAuthorizationTestCase):
         return UserGroupAuthorization(usergroup=role,domain=domain,paths=paths,excluded_paths=excluded_paths)
 
 
-class AuthorizationTestCase(TestCase):
-    def setUp(self):
-        #clear the unittest data
-        UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
-        UserAuthorization.objects.all().delete()
+class AuthorizationTestCase(BaseAuthCacheTestCase):
 
     def test_authorize(self):
-        test_usergroups = [
+        self.test_usergroups = [
             ("all_user",["*@*"],None,[
                 ("gunfire",["@gunfire.com"],None,[
                     ("dev",["dev_*@gunfire.com"],None,[
@@ -218,7 +197,7 @@ class AuthorizationTestCase(TestCase):
                 ])
             ])
         ]
-        test_usergroupauthorization = [
+        self.test_usergroupauthorization = [
             ("all_user","*",None,"*"),
             ("all_user","game.gunfire.com",None,None),
             ("all_user","gunfire.com",None,["/register"]),
@@ -245,7 +224,7 @@ class AuthorizationTestCase(TestCase):
             ("dev_role_manager","map.dev.gunfire.com",None,["=/start","=/shutdown"])
         ]
 
-        test_userauthorization = [
+        self.test_userauthorization = [
             ("dev_map_leader2@gunfire.com","map.dev.gunfire.com",None,None),
 
             ("dev_map_leader4@gunfire.com","map.dev.gunfire.com",None,["=/shutdown"]),
@@ -439,30 +418,10 @@ class AuthorizationTestCase(TestCase):
             ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/task1/remove/now",True)
 
         ]
-        #popuate UserGroup objects
-        uncreated_usergroups = [(UserGroup.public_group(),test_usergroups)]
-        while uncreated_usergroups:
-            parent_obj,subgroup_datas = uncreated_usergroups.pop()
-            for name,users,excluded_users,subgroups in subgroup_datas:
-                obj = UserGroup(name=name,users=users,excluded_users=excluded_users,parent_group=parent_obj)
-                obj.clean()
-                obj.save()
-                if subgroups:
-                    uncreated_usergroups.append((obj,subgroups))
 
-        for groupname,domain,paths,excluded_paths in test_usergroupauthorization:
-            obj = UserGroupAuthorization(usergroup=UserGroup.objects.get(name=groupname),domain=domain,paths=paths,excluded_paths=excluded_paths)
-            obj.clean()
-            obj.save()
-    
-        for user,domain,paths,excluded_paths in test_userauthorization:
-            obj = UserAuthorization(user=user,domain=domain,paths=paths,excluded_paths=excluded_paths)
-            obj.clean()
-            obj.save()
-
-        cache.refresh_authorization_cache(True)
+        self.populate_testdata()
         for email,domain,path,result in testcases:
-            if domain == "map.dev.gunfire.com" and email=="staff1@gunfire.com":
+            if domain == "gunfire.com" and email=="test@gmail.com" and path=="/about":
                 #import ipdb;ipdb.set_trace()
                 pass
             self.assertEqual(can_access(email,domain,path),result,msg="{} should {} the permission to access https://{}{}".format(email,"have" if result else "not have",domain,path))

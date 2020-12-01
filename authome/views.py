@@ -1,4 +1,4 @@
-from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden,JsonResponse 
+from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden,JsonResponse
 from django.template.response import TemplateResponse
 from django.contrib.auth import login, logout
 from django.core.exceptions import ObjectDoesNotExist
@@ -7,7 +7,6 @@ from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.http import urlencode
 from django.utils import timezone
-from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 
 from ipware.ip import get_client_ip
@@ -18,9 +17,10 @@ import re
 import traceback
 import logging
 from datetime import datetime
+import urllib.parse
 
 from django.contrib.auth.models import User
-from authome.models import can_access,UserToken
+from authome.models import can_access,UserToken,UserGroup,IdentityProvider,User
 from authome.cache import cache
 
 logger = logging.getLogger(__name__)
@@ -213,10 +213,12 @@ def logout_view(request):
     backend_logout_url = request.session.get("backend_logout_url")
     logout(request)
     if backend_logout_url:
-        return HttpResponseRedirect(backend_logout_url)
+        return HttpResponseRedirect(backend_logout_url.format(get_post_logout_url(request)))
+    elif settings.BACKEND_LOGOUT_URL:
+        host = request.headers.get("x-upstream-server-name") or request.get_host()
+        return HttpResponseRedirect(settings.BACKEND_LOGOUT_URL.format(get_post_logout_url(request)))
     else:
-        return HttpResponseRedirect("/static/signout.html")
-
+        return HttpResponseRedirect(get_post_logout_url(request,encode=False))
 
 def home(request):
     next_url = request.GET.get('next', None)
@@ -233,8 +235,6 @@ def home(request):
         return res
     else:
         return profile(request)
-
-
 
 @login_required
 @csrf_exempt
@@ -292,7 +292,7 @@ def check_signup(request):
             body["action"] = "ValidationError"
             body["userMessage"] = "User Email is empty"
             status_code = 400
-        elif any(email.endswith(domain) for domain in settings.ALLOWED_EMAIL_DOMAINS):
+        elif UserGroup.dbca_group().contain(email):
             status_code = 200
             body["action"] = "Continue"
         else:
@@ -324,4 +324,35 @@ def check_signup(request):
         body["userMessage"] = "Failed to check user sign-up with error {}".format(str(ex))
 
     return JsonResponse(body,status=status_code)
+
+
+@csrf_exempt
+def signedout(request):
+    if request.user.is_authenticated:
+        host = request.headers.get("x-upstream-server-name") or request.get_host()
+        return HttpResponseRedirect("https://{}/sso/auth_logout".format(host))
+    return TemplateResponse(request,"authome/signedout.html")
+
+def signout(request,**kwargs):
+    if kwargs.get("message"):
+        kwargs["auto_signout_delay_seconds"] = settings.AUTO_SIGNOUT_DELAY_SECONDS
+        return TemplateResponse(request,"authome/signout.html",context=kwargs)
+    else:
+        return HttpResponseRedirect(kwargs["logout_url"])
+
+
+def get_post_logout_url(request,idp=None,encode=True):
+    """
+    Return 	quoted post logout url
+    """
+    host = request.headers.get("x-upstream-server-name") or request.get_host()
+    post_logout_url = "https://{}/sso/signedout".format(host)
+    idp_logout_url = idp.logout_url if idp else IdentityProvider.get_logout_url(request.session.get("idp"))
+
+    if idp_logout_url:
+        backend_post_logout_url = idp_logout_url.format(post_logout_url)
+    else:
+        backend_post_logout_url = post_logout_url
+
+    return urllib.parse.quote(backend_post_logout_url) if encode else backend_post_logout_url
 

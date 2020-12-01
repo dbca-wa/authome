@@ -15,7 +15,7 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
     OPENID_CONFIGURATION_URL = '{base_url}/v2.0/.well-known/openid-configuration'
     ACCESS_TOKEN_URL = '{base_url}/oauth2/v2.0/token'
     JWKS_URL = '{base_url}/discovery/v2.0/keys'
-    LOGOUT_URL = '{base_url}/oauth2/v2.0/logout'
+    LOGOUT_URL = '{base_url}/oauth2/v2.0/logout?post_logout_redirect_uri={{}}'
 
     @property
     def policy(self):
@@ -23,8 +23,6 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
         idp = request.COOKIES.get(settings.PREFERED_IDP_COOKIE_NAME,None)
         policy = IdentityProvider.get_userflow(idp)
 
-        if not policy:
-            policy = self.setting('POLICY')
         if not policy or not policy.lower().startswith('b2c_'):
             raise AuthException('SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_POLICY is '
                                 'required and should start with `b2c_`')

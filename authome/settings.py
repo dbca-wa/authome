@@ -15,7 +15,7 @@ else:
 INTERNAL_IPS = ['127.0.0.1', '::1']
 ROOT_URLCONF = 'authome.urls'
 WSGI_APPLICATION = 'authome.wsgi.application'
-
+AUTH_USER_MODEL = 'authome.User'
 
 # Application definition
 INSTALLED_APPS = [
@@ -59,11 +59,11 @@ SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.social_auth.social_user',
     'social_core.pipeline.user.get_username',
     'social_core.pipeline.social_auth.associate_by_email',
+    'authome.pipelines.check_idp_and_usergroup',
     'social_core.pipeline.user.create_user',
     'social_core.pipeline.social_auth.associate_user',
     'social_core.pipeline.social_auth.load_extra_data',
-    'social_core.pipeline.user.user_details',
-    'authome.pipelines.associate_idp',
+    'authome.pipelines.user_details',
 )
 # set the domain-global session cookie
 SESSION_COOKIE_DOMAIN = env('SESSION_COOKIE_DOMAIN', None)
@@ -176,9 +176,12 @@ if IDP_CACHE_CHECK_INTERVAL < 0:
     IDP_CACHE_CHECK_INTERVAL = 0
 
 
-ALLOWED_EMAIL_DOMAINS=env('ALLOWED_EMAIL_DOMAINS',default=["@dbca.wa.gov.au","@dpaw.wa.gov.au"]) # The email domains are allowed to self sign up (no pre-registration required).
 PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
 BACKEND_LOGOUT_URL=env('BACKEND_LOGOUT_URL')
+
+DBCA_STAFF_GROUP_NAME=env('DBCA_STAFF_GROUP_NAME',default="dbca staff").lower() # The emails belongs to group 'dbca staff' are allowed to self sign up (no pre-registration required).
+
+AUTO_SIGNOUT_DELAY_SECONDS=env('AUTO_SIGNOUT_DELAY_SECONDS',default=10)
 
 
 # Logging settings - log to stdout/stderr

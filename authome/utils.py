@@ -1,5 +1,6 @@
 import ast
 import os
+import urllib.parse
 
 __version__ = '1.0.0'
 
@@ -88,4 +89,5 @@ def env(key, default=None, required=False, value_type=None,subvalue_type=None):
         raise Exception("Missing required environment variable '%s'" % key)
 
     return _convert(key,value,default=default,required=required,value_type=value_type,subvalue_type=subvalue_type)
+
 

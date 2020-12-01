@@ -4,9 +4,8 @@ import traceback
 from django.contrib import admin
 from django.utils import timezone
 from django.conf import settings
-from django.contrib import messages
+from django.contrib import messages,auth
 from django.core.exceptions import ObjectDoesNotExist
-from django.contrib.auth.models import User
 from django.utils.html import mark_safe
 from django.contrib.staticfiles.templatetags.staticfiles import static
 from django.db.models import Q
@@ -30,6 +29,52 @@ class DatetimeMixin(object):
         else:
             return timezone.localtime(obj.created).strftime("%Y-%m-%d %H:%M:%S")
     _created.short_description = "Created"
+
+    def _last_login(self,obj):
+        if not obj or not obj.last_login :
+            return ""
+        else:
+            return timezone.localtime(obj.last_login).strftime("%Y-%m-%d %H:%M:%S")
+    _last_login.short_description = "Last Login"
+
+    def _date_joined(self,obj):
+        if not obj or not obj.date_joined :
+            return ""
+        else:
+            return timezone.localtime(obj.date_joined).strftime("%Y-%m-%d %H:%M:%S")
+    _date_joined.short_description = "Date Joined"
+
+admin.site.unregister(auth.models.Group)
+
+@admin.register(models.User)
+class UserAdmin(DatetimeMixin,auth.admin.UserAdmin):
+    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff','usergroup','last_idp','_last_login')
+    list_filter = ( 'is_superuser', 'usergroup')
+    add_form_template = 'admin/change_form.html'
+    add_form = forms.UserCreateForm
+    readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","_email")
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ("email",)
+        }),
+    )
+    fieldsets = (
+        (None, {'fields': ('_email', )}),
+        ('Personal info', {'fields': ('username','first_name', 'last_name')}),
+        ('Permissions', {
+            'fields': ('is_active', 'is_staff', 'is_superuser', ),
+        }),
+        ('Important dates', {'fields': ('_last_login', '_date_joined')}),
+    )
+
+    def _email(self,obj):
+        if not obj :
+            return ""
+        else:
+            return obj.email
+    _email.short_description = "Email"
+
 
 @admin.register(models.UserGroup)
 class UserGroupAdmin(DatetimeMixin,admin.ModelAdmin):
@@ -55,9 +100,10 @@ class UserAuthorizationAdmin(DatetimeMixin,admin.ModelAdmin):
     ordering = ('user','sortkey',)
     form = forms.UserAuthorizationForm
 
-class UserAccessToken(User):
+class UserAccessToken(models.User):
     class Meta:
-            proxy = True
+        proxy = True
+        verbose_name_plural = "  User Access Tokens"
 
 class TokenStatusFilter(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
@@ -269,8 +315,8 @@ class UserTokenAdmin(admin.ModelAdmin):
 
 @admin.register(models.IdentityProvider)
 class IdentityProviderAdmin(DatetimeMixin,admin.ModelAdmin):
-    list_display = ('name','idp','userflow','logout_url','_modified','_created')
+    list_display = ('idp','name','userflow','logout_url','_modified','_created')
     readonly_fields = ('idp','_modified','_created')
-    fields = ('name','idp','userflow','logout_url','_modified','_created')
-    ordering = ('name','idp')
+    fields = ('idp','name','userflow','logout_url','_modified','_created')
+    ordering = ('name','idp',)
 
