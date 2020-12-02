@@ -123,14 +123,17 @@ class MemoryCache(object):
 
     @property
     def usergrouptree(self):
+        self.refresh_authorization_cache()
         return self._usergrouptree
 
     @property
     def dbca_group(self):
+        self.refresh_authorization_cache()
         return self._dbca_group
 
     @property
     def public_group(self):
+        self.refresh_authorization_cache()
         return self._public_group
 
     @usergrouptree.setter
