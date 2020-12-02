@@ -211,9 +211,10 @@ def auth_basic(request):
 
 def logout_view(request):
     backend_logout_url = request.session.get("backend_logout_url")
+    logout_url = backend_logout_url.format(get_post_logout_url(request))
     logout(request)
     if backend_logout_url:
-        return HttpResponseRedirect(backend_logout_url.format(get_post_logout_url(request)))
+        return HttpResponseRedirect(logout_url)
     elif settings.BACKEND_LOGOUT_URL:
         host = request.headers.get("x-upstream-server-name") or request.get_host()
         return HttpResponseRedirect(settings.BACKEND_LOGOUT_URL.format(get_post_logout_url(request)))
