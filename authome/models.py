@@ -860,12 +860,15 @@ class User(AbstractUser):
 
     def clean(self):
         super().clean()
-        self.email = self.email.lower() if self.email else None
-        if not self.username:
-            if '@' in self.email:
-                self.username = self.email[0:self.email.index('@')].replace(".","_")
-            else:
-                raise ValidationError("Invalid Email address")
+        self.email = self.email.strip().lower() if self.email else None
+        if not self.email:
+            raise ValidationError("Email is empty")
+
+        self.username = self.email
+
+        if not self.id:
+            self.is_active = True
+
         if not self.usergroup_id:
             for group in UserGroup.objects.filter(parent_group=UserGroup.public_group()):
                 if group.contain(self.email):
@@ -874,6 +877,9 @@ class User(AbstractUser):
                     break
             if not self.usergroup_id:
                 raise ValidationError("The email({}) is not belonging to any usergroup except the public group.".format(self.email))
+
+        if UserGroup.dbca_group() and self.usergroup_id == UserGroup.dbca_group().id:
+            self.is_staff = True
 
     class Meta(AbstractUser.Meta):
         swappable = 'AUTH_USER_MODEL'
