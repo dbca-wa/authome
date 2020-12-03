@@ -16,7 +16,7 @@ _max_age = 100 * 365 * 24 * 60 * 60
 def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     request = backend.strategy.request
 
-    idp = kwargs['response']['idp']
+    idp = kwargs['response'].get("idp","email")
     idp_obj,created = IdentityProvider.objects.get_or_create(idp=idp)
     logger.debug("authenticate the user({}) with identity provider({}={})".format(details.get("email"),idp_obj.idp,idp))
 
@@ -30,6 +30,8 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
         return response
 
     email = details.get("email")
+    email = email.strip().lower() if email else None
+
     #check whether identity provider is the same as the configured identity provider
     if email:
         configed_idp_obj = UserGroup.get_identity_provider(email)
@@ -52,6 +54,7 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
             request.session.flush()
             return response
 
+    """
     #get the user category which is the child of the public group,
     usergroup = None
     for category in UserGroup.usercategories():
@@ -85,8 +88,10 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
 
         request.session.flush()
         return response
+    """
     #reset is_staff and is_superuser property based on user category.
-    if usergroup == dbca_group:
+    usergroup = UserGroup.find(email)
+    if usergroup == UserGroup.dbca_group():
         details["is_staff"] = True
         if not user:
             details["is_superuser"] = False
@@ -94,7 +99,7 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
         details["is_staff"] = False
         details["is_superuser"] = False
     details["usergroup"] = usergroup
-    details["username"] = email
+    details["email"] = email
 
     backend.strategy.session_set("idp", idp_obj.idp)
 
@@ -103,5 +108,6 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     logger.debug("set backend logout url to {}".format(backend_logout_url))
     backend.strategy.session_set("backend_logout_url",backend_logout_url)
 
-    return {"username":email}
+    return {"email":email}
+
 

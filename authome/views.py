@@ -211,15 +211,14 @@ def auth_basic(request):
 
 def logout_view(request):
     backend_logout_url = request.session.get("backend_logout_url")
-    logout_url = backend_logout_url.format(get_post_logout_url(request))
+    post_logout_url = get_post_logout_url(request,encode=False)
     logout(request)
     if backend_logout_url:
-        return HttpResponseRedirect(logout_url)
+        return HttpResponseRedirect(backend_logout_url.format(urllib.parse.quote(post_logout_url)))
     elif settings.BACKEND_LOGOUT_URL:
-        host = request.headers.get("x-upstream-server-name") or request.get_host()
-        return HttpResponseRedirect(settings.BACKEND_LOGOUT_URL.format(get_post_logout_url(request)))
+        return HttpResponseRedirect(settings.BACKEND_LOGOUT_URL.format(urllib.parse.quote(post_logout_url)))
     else:
-        return HttpResponseRedirect(get_post_logout_url(request,encode=False))
+        return HttpResponseRedirect(post_logout_url)
 
 def home(request):
     next_url = request.GET.get('next', None)

@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.db import models,transaction
 from django.contrib.postgres.fields import ArrayField
-from django.db.models.signals import pre_delete,pre_save
+from django.db.models.signals import pre_delete,pre_save,post_save
 from django.dispatch import receiver
 from django.contrib.auth.models import AbstractUser
 
@@ -38,6 +38,15 @@ The following lists all valid options in the checking order
     4. All Domain    : '*'
 """
 
+help_idp_domains = """
+THe domains which use this identity provider as its prefer identity provider
+The following lists all valid options in the checking order
+    1. All Domain    : '*'
+    2. Suffix Domain : Starts with '.' followed by a domain. For example .dbca.wa.gov.au
+    3. Regex Domain  : '*" represents any strings. For example  pbs*dbca.wa.gov.au
+    4. Single Domain : Represent a single domain. For example oim.dbca.wa.gov.au. Only single domain can config path and excluded path
+"""
+
 help_text_paths = """
 List all possible paths separated by new line character.
 The following lists all valid options in the checking order
@@ -51,13 +60,156 @@ class _ArrayField(ArrayField):
     def clean(self, value, model_instance):
         return super().clean([v for v in value if v],model_instance)
 
-class IdentityProvider(models.Model):
+class DbObjectMixin(object):
+    _db_obj = None
+
+    @property
+    def db_obj(self):
+        if not self.id:
+            return None
+
+        if not self._db_obj:
+            self._db_obj = self.__class__.objects.get(id=self.id)
+        return self._db_obj
+
+class RequestDomain(object):
+    all_domain_re = re.compile("^(\*|\.)+$")
+    sufix_re = re.compile("^(\**\.)+(?P<sufix>([a-zA-Z0-9_\-]+)(\.[a-zA-Z0-9_\-]+)+)$")
+    exact_re = re.compile("^([a-zA-Z0-9_\-]+)(\.[a-zA-Z0-9_\-]+)+$")
+
+    match_all = False
+    def __init__(self,config):
+        self.config = config
+        self.sort_key = "{}:{}".format(self.base_sort_key,config)
+
+    @classmethod
+    def get_instance(cls,domain):
+        domain = domain.strip() if domain else None
+        if not domain:
+            return None
+
+        domain = domain.lower()
+        for prefix in ("https://","http://"):
+            if domain.startswith(prefix):
+                domain = domain[len(prefix):]
+                break
+
+        if cls.all_domain_re.search(domain):
+            return AllRequestDomain()
+
+        m = cls.sufix_re.search(domain)
+        if m:
+            return SufixRequestDomain(".{}".format(m.group("sufix")))
+
+        elif cls.exact_re.search(domain):
+            return ExactRequestDomain(domain)
+        else:
+            return RegexRequestDomain(domain)
+
+    def match(self,domain):
+        return False
+
+class AllRequestDomain(RequestDomain):
+    base_sort_key = 80
+    match_all = True
+
+    def __init__(self):
+        super().__init__("*")
+
+    def match(self,email):
+        return True
+
+class ExactRequestDomain(RequestDomain):
+    base_sort_key = 20
+
+    def match(self,domain):
+        return self.config == domain
+
+class SufixRequestDomain(RequestDomain):
+    base_sort_key = 60
+
+    def match(self,domain):
+        if not domain:
+            return False
+        return domain.endswith(self.config)
+
+class RegexRequestDomain(RequestDomain):
+    base_sort_key = 40
+    def __init__(self,domain):
+        super().__init__(domain)
+        self.sort_key = "{}:{:0>3}-{}".format(self.base_sort_key,len(domain),domain)
+        try:
+            self._re = re.compile("^{}$".format(domain.replace("*","[a-zA-Z0-9\._\-]*")))
+        except Exception as ex:
+            raise ValidationError("The regex domain config({}) is invalid.{}".format(domain,str(ex)))
+
+    def match(self,domain):
+        if not domain:
+            return False
+
+        return True if self._re.search(domain) else False
+
+class IdentityProvider(DbObjectMixin,models.Model):
+    _domains = None
+    _changed = False
+
     name = models.CharField(max_length=64,unique=True,null=True)
     idp = models.CharField(max_length=256,unique=True,null=False,editable=False)
     userflow = models.CharField(max_length=64,blank=True,null=True)
     logout_url = models.CharField(max_length=512,blank=True,null=True)
-    modified = models.DateTimeField(auto_now=timezone.now)
+    domains = _ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_idp_domains)
+    modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
+
+    def clean(self):
+        super().clean()
+        self.name = self.name.strip()
+        if not self.name:
+            raise ValidationError("Name is empty")
+
+        requestdomains = self.requestdomains
+        if requestdomains:
+            self.domains = [d.config for d in requestdomains]
+        else:
+            self.domains = None
+
+        if self.id is not None:
+            if self.name != self.db_obj.name or self.userflow != self.db_obj.userflow or self.logout_url != self.db_obj.logout_url or self.domains != self.db_obj.domains:
+                self._changed = True
+
+    def save(self,*args,**kwargs):
+        if self.id is not None and not self._changed:
+            #nothing was changed
+            return 
+        logger.debug("Try to save the changed {}({})".format(self.__class__.__name__,self))
+        with transaction.atomic():
+            super().save(*args,**kwargs)
+
+        self._changed = False
+
+    @property
+    def requestdomains(self):
+        if not self._domains:
+            if self.domains:
+                domains = []
+                for d in self.domains:
+                    try:
+                        domain = RequestDomain.get_instance(d)
+                        if not domain:
+                            continue
+                        domains.append(domain)
+                    except:
+                        continue
+                domains.sort(key=lambda o:o.sort_key,reverse=True)
+                match_all_domain = next((d for d in domains if d.match_all),None)
+                if match_all_domain:
+                    self._domains = [match_all_domain]
+                else:
+                    self._domains = domains
+            else:
+                self._domains = []
+
+        return self._domains
 
     @classmethod
     def refresh_idps(cls):
@@ -78,6 +230,18 @@ class IdentityProvider(models.Model):
     def get_idp(cls,idpid):
         return cache.idps.get(idpid) if idpid else None
   
+    @classmethod
+    def get_idp_by_domain(cls,domain):
+        """
+        Return idp by domain if found; otherwise return None
+        """
+        for obj in cache.idps.values():
+            if not obj.domains:
+                continue
+            for requestdomain in obj.requestdomains:
+                if requestdomain.match(domain):
+                    return obj
+        return None
   
     @classmethod
     def get_userflow(cls,idpid):
@@ -107,7 +271,7 @@ class UserEmail(object):
         self.config = config
         self.sort_key = "{}:{}".format(self.base_sort_key,config)
 
-    all_email_re = re.compile("^\*+$")
+    all_email_re = re.compile("^\*+(@\*+)?$")
     @classmethod
     def get_instance(cls,email):
         email = email.strip() if email else None
@@ -141,11 +305,25 @@ class AllUserEmail(UserEmail):
     def match(self,email):
         return True
 
+    @property
+    def qs_filter(self):
+        return None
+
+    def contain(self,useremail):
+        return True
+
 class ExactUserEmail(UserEmail):
     base_sort_key = 8
 
     def match(self,email):
         return self.config == email
+
+    @property
+    def qs_filter(self):
+        return models.Q(email=self.config)
+
+    def contain(self,useremail):
+        return self.config == useremail.config
 
 class DomainEmail(UserEmail):
     base_sort_key = 4
@@ -153,29 +331,76 @@ class DomainEmail(UserEmail):
     def match(self,email):
         return email.endswith(self.config)
 
+    @property
+    def qs_filter(self):
+        return models.Q(email__endswith=self.config)
+
+    def contain(self,useremail):
+        if isinstance(useremail,AllUserEmail):
+            return False
+        elif isinstance(useremail,ExactUserEmail):
+            return self.match(useremail.config)
+        elif isinstance(useremail,DomainEmail):
+            return self.config == useremail.config
+        else:
+            return useremail.config.endswith(self.config)
+
 class RegexUserEmail(UserEmail):
     base_sort_key = 6
     def __init__(self,email):
         super().__init__(email)
         try:
-            self._re = re.compile("^{}$".format(email.replace('*','[a-zA-Z0-9\._\-]*')))
+            self._qs_re = r"^{}$".format(email.replace('*','[a-zA-Z0-9\._\-]*'))
+            self._re = re.compile(self._qs_re)
         except Exception as ex:
             raise ValidationError("The regex email config({}) is invalid.{}".format(email,str(ex)))
 
     def match(self,email):
         return True if self._re.search(email) else False
 
-class DbObjectMixin(object):
-    _db_obj = None
-
     @property
-    def db_obj(self):
-        if not self.id:
-            return None
+    def qs_filter(self):
+        return models.Q(email__regex=self._qs_re)
 
-        if not self._db_obj:
-            self._db_obj = self.__class__.objects.get(id=self.id)
-        return self._db_obj
+    def contain(self,useremail):
+        if isinstance(useremail,AllUserEmail):
+            return False
+        elif isinstance(useremail,ExactUserEmail):
+            return self.match(useremail.config)
+        elif isinstance(useremail,DomainUserEmail):
+            return self.config == useremail.config
+        else:
+            p_index = 0
+            p_star_index = -1
+            c_index = 0
+            p_char = None
+            c_char = None
+            while c_index < len(useremail.config):
+                p_char = self.config[p_index] if p_index < len(self.config) else None
+                c_char = useremail.config[c_index]
+                if p_start_index == len(self.config) - 1:
+                    #last char is '*'
+                    return True
+                elif p_char == '*':
+                    p_star_index = p_index
+                    p_index += 1
+                    if c_char == '*':
+                        c_index += 1
+                elif c_char == '*':
+                    if p_star_index >= 0:
+                        p_index = p_start_index + 1
+                        c_index += 1
+                    else:
+                        return False
+                elif p_char == c_char:
+                    p_index += 1
+                    c_index += 1
+                elif p_start_index >= 0:
+                    p_index = p_start_index + 1
+                else:
+                    return False
+                
+            return p_index >= len(self.config)
 
 class UserGroup(DbObjectMixin,models.Model):
     _useremails = None
@@ -183,7 +408,6 @@ class UserGroup(DbObjectMixin,models.Model):
 
     _usergroup_trees = None
     _changed = False
-    _config_changed = False
 
     name = models.CharField(max_length=32,unique=True)
     parent_group = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
@@ -217,24 +441,95 @@ class UserGroup(DbObjectMixin,models.Model):
             if self.users != self.db_obj.users or self.parent_group != self.db_obj.parent_group or self.excluded_users != self.db_obj.excluded_users or self.identity_provider != self.db_obj.identity_provider:
                 self.modified = timezone.now()
                 self._changed = True
-                self._config_changed = True
             elif self.name != self.db_obj.name:
                 self._changed = True
 
         if not self.parent_group and not self.is_public_group:
             self.parent_group = self.public_group()
 
+        #check users and excluded_users between parent_group and child_group
+        for excluded_useremail in self.excluded_useremails:
+            contained = False
+            for useremail in self.useremails:
+                if useremail.contain(excluded_useremail):
+                    contained = True
+                    break
+            if not contained:
+                raise ValidationError("The excluded email pattern({}) is not contained by email patterns configured in current group({})".format(excluded_useremail.config,self))
+
+        if self.parent_group:
+            for useremail in self.useremails:
+                contained = False
+                for parent_useremail in self.parent_group.useremails:
+                    if parent_useremail.contain(useremail):
+                        contained = True
+                        break
+                if not contained:
+                    raise ValidationError("The email pattern({}) in the current group({}) is not contained by the parent group({})".format(useremail.config,self,self.parent_group))
+
+            for parent_excluded_useremail in self.parent_group.excluded_useremails:
+                contained = False
+                for useremail in self.useremails:
+                    if useremail.contain(parent_excluded_useremail):
+                        contained = True
+                        break
+                if not contained:
+                    continue
+
+                contained = False
+                for excluded_useremail in self.excluded_useremails:
+                    if excluded_useremail.contain(parent_excluded_useremail):
+                        contained = True
+                        break
+                if not contained:
+                    raise ValidationError("The excluded email pattern({}) in the parent group({}) is not contained by the current group({})".format(parent_excluded_useremail.config,self.parent_group,self))
+
+        if self.id:
+            for child_group in UserGroup.objects.filter(parent_group=self):
+                for child_useremail in child_group.useremails:
+                    contained = False
+                    for useremail in self.useremails:
+                        if useremail.contain(child_useremail):
+                            contained = True
+                            break
+                    if not contained:
+                        raise ValidationError("The email pattern({}) in the child group({}) is not contained by the current group({})".format(child_useremail.config,child_group,self))
+    
+                for excluded_useremail in self.excluded_useremails:
+                    contained = False
+                    for child_useremail in child_group.useremails:
+                        if child_useremail.contain(excluded_useremail):
+                            contained = True
+                            break
+                    if not contained:
+                        continue
+
+                    contained = False
+                    for child_excluded_useremail in child_group.excluded_useremails:
+                        if child_excluded_useremail.contain(excluded_useremail):
+                            contained = True
+                            break
+                    if not contained:
+                        raise ValidationError("The excluded email pattern({}) in the current group({}) is not contained by the child group({})".format(excluded_useremail.config,self,child_group))
+
     @property
     def is_public_group(self):
-        return self.users == ["*"] and self.excluded_users is None
+        return self == cache.public_group
 
     def save(self,*args,**kwargs):
         if self.id is not None and not self._changed:
             #nothing was changed
             return 
-        logger.debug("Save the changed {}({})".format(self.__class__.__name__,self))
+        logger.debug("Try to save the changed {}({})".format(self.__class__.__name__,self))
         with transaction.atomic():
             super().save(*args,**kwargs)
+
+        self._changed = False
+
+    def delete(self,*args,**kwargs):
+        logger.debug("Try to delete the usergroup {}({})".format(self.__class__.__name__,self))
+        with transaction.atomic():
+            super().delete(*args,**kwargs)
 
     def get_useremails(self,users):
         if users:
@@ -284,7 +579,7 @@ class UserGroup(DbObjectMixin,models.Model):
             group_trees[group.id] = (group,[])
             if group.name.lower() == settings.DBCA_STAFF_GROUP_NAME:
                 dbca_group = group
-            if group.is_public_group:
+            if group.users == ["*"] and group.excluded_users is None:
                 public_group = group
 
             if not modified:
@@ -309,7 +604,6 @@ class UserGroup(DbObjectMixin,models.Model):
     def dbca_group(cls):
         return cache.dbca_group
 
-    @classmethod
     def usercategories(cls):
         return cache.usergrouptree[0][1]
 
@@ -383,83 +677,6 @@ class UserGroup(DbObjectMixin,models.Model):
     class Meta:
         unique_together = [["users","excluded_users"]]
         verbose_name_plural = "     User Groups"
-
-
-
-class RequestDomain(object):
-    all_domain_re = re.compile("^(\*|\.)+$")
-    sufix_re = re.compile("^(\**\.)+(?P<sufix>([a-zA-Z0-9_\-]+)(\.[a-zA-Z0-9_\-]+)+)$")
-    exact_re = re.compile("^([a-zA-Z0-9_\-]+)(\.[a-zA-Z0-9_\-]+)+$")
-
-    def __init__(self,config):
-        self.config = config
-        self.sort_key = "{}:{}".format(self.base_sort_key,config)
-
-    @classmethod
-    def get_instance(cls,domain):
-        domain = domain.strip() if domain else None
-        if not domain:
-            return None
-
-        domain = domain.lower()
-        for prefix in ("https://","http://"):
-            if domain.startswith(prefix):
-                domain = domain[len(prefix):]
-                break
-
-        if cls.all_domain_re.search(domain):
-            return AllRequestDomain()
-
-        m = cls.sufix_re.search(domain)
-        if m:
-            return SufixRequestDomain(".{}".format(m.group("sufix")))
-
-        elif cls.exact_re.search(domain):
-            return ExactRequestDomain(domain)
-        else:
-            return RegexRequestDomain(domain)
-
-    def match(self,domain):
-        return False
-
-class AllRequestDomain(RequestDomain):
-    base_sort_key = 80
-
-    def __init__(self):
-        super().__init__("*")
-
-    def match(self,email):
-        return True
-
-class ExactRequestDomain(RequestDomain):
-    base_sort_key = 20
-
-    def match(self,domain):
-        return self.config == domain
-
-class SufixRequestDomain(RequestDomain):
-    base_sort_key = 60
-
-    def match(self,domain):
-        if not domain:
-            return False
-        return domain.endswith(self.config)
-
-class RegexRequestDomain(RequestDomain):
-    base_sort_key = 40
-    def __init__(self,domain):
-        super().__init__(domain)
-        self.sort_key = "{}:{:0>3}-{}".format(self.base_sort_key,len(domain),domain)
-        try:
-            self._re = re.compile("^{}$".format(domain.replace("*","[a-zA-Z0-9\._\-]*")))
-        except Exception as ex:
-            raise ValidationError("The regex domain config({}) is invalid.{}".format(domain,str(ex)))
-
-    def match(self,domain):
-        if not domain:
-            return False
-
-        return True if self._re.search(domain) else False
 
 class RequestPath(object):
     match_all = False
@@ -855,7 +1072,7 @@ class UserGroupAuthorization(AuthorizationMixin):
         verbose_name_plural = "   User Group Authorizations"
 
 class User(AbstractUser):
-    usergroup = models.ForeignKey(UserGroup, on_delete=models.PROTECT,editable=False,null=False)
+    usergroup = models.ForeignKey(UserGroup, on_delete=models.DO_NOTHING,editable=False,null=False)
     last_idp = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,editable=False,null=True)
 
     def clean(self):
@@ -864,21 +1081,14 @@ class User(AbstractUser):
         if not self.email:
             raise ValidationError("Email is empty")
 
-        self.username = self.email
+        if not self.username:
+            self.username = self.email
 
         if not self.id:
             self.is_active = True
+            self.usergroup = UserGroup.find(self.email)
 
-        if not self.usergroup_id:
-            for group in UserGroup.objects.filter(parent_group=UserGroup.public_group()):
-                if group.contain(self.email):
-                    self.usergroup = group
-                    self.usergroup_id = group.id
-                    break
-            if not self.usergroup_id:
-                raise ValidationError("The email({}) is not belonging to any usergroup except the public group.".format(self.email))
-
-        if UserGroup.dbca_group() and self.usergroup_id == UserGroup.dbca_group().id:
+        if UserGroup.dbca_group() and self.usergroup == UserGroup.dbca_group():
             self.is_staff = True
 
     class Meta(AbstractUser.Meta):
@@ -951,17 +1161,59 @@ class UserToken(models.Model):
     class Meta:
         verbose_name_plural = "  User Access Tokens"
 
+class UserListener(object):
+    @staticmethod
+    @receiver(pre_save, sender=User)
+    def pre_save_user(sender,instance,**kwargs):
+        if not instance.id:
+            instance.email = instance.email.strip().lower() if instance.email else None
+            if not instance.email:
+                instance.email = None
+
 class UserGroupListener(object):
     @staticmethod
     @receiver(pre_delete, sender=UserGroup)
-    def delete_public_group(sender,instance,**kwargs):
+    def pre_delete_group(sender,instance,**kwargs):
         if instance.is_public_group:
             raise Exception("Can't delete the public user group")
-    """
+        #update user's group to group's parent group
+        User.objects.filter(usergroup=instance).update(usergroup=instance.parent_group)
+
+    @staticmethod
+    def get_filter_conditions(useremails):
+        conds = None
+        for useremail in useremails:
+            if not useremail.qs_filter:
+                continue
+            if conds:
+                conds = conds | useremail.qs_filter
+            else:
+                conds = useremail.qs_filter
+        return conds
+
+    @staticmethod
+    @receiver(post_save, sender=UserGroup)
+    def post_save_group(sender,instance,created,**kwargs):
+        if not created:
+            #set usergroup of the users whose usergroup is the updated group to its parent group
+            User.objects.filter(usergroup=instance).update(usergroup=instance.parent_group)
+
+        #set usergroup of the users whose usergroup is the group's parent group and also belonging to the updated/created group to the updated/created group
+        qs = User.objects.filter(usergroup=instance.parent_group)
+        conds = UserGroupListener.get_filter_conditions(instance.useremails)
+        if conds:
+            qs = qs.filter(conds)
+
+        conds = UserGroupListener.get_filter_conditions(instance.excluded_useremails)
+        if conds:
+            qs = qs.exclude(conds)
+
+        qs.update(usergroup=instance)
+
+
     @staticmethod
     @receiver(pre_save, sender=UserGroup)
     def check_public_group(sender,instance,**kwargs):
-        if instance.id is None and instance.is_public_group and instance.public_group():
+        if instance.id is None and instance.public_group() and instance.users == ["*"] and instance.excluded_users is None:
             raise Exception("Public user group already exists")
-    """
 

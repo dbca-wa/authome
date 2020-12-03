@@ -315,8 +315,9 @@ class UserTokenAdmin(admin.ModelAdmin):
 
 @admin.register(models.IdentityProvider)
 class IdentityProviderAdmin(DatetimeMixin,admin.ModelAdmin):
-    list_display = ('idp','name','userflow','logout_url','_modified','_created')
+    list_display = ('idp','name','userflow','logout_url','domains','_modified','_created')
     readonly_fields = ('idp','_modified','_created')
-    fields = ('idp','name','userflow','logout_url','_modified','_created')
+    form = forms.IdentityProviderForm
+    fields = ('idp','name','userflow','logout_url','domains','_modified','_created')
     ordering = ('name','idp',)
 

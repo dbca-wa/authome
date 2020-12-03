@@ -141,7 +141,7 @@ class MemoryCache(object):
         if value:
             self._usergrouptree,self._public_group,self._dbca_group,self._usergrouptree_size,self._usergrouptree_ts = value
         else:
-            self._usergrouptree,self._public_group,self._dbca_group,self._usergrouptree_size,self._usergrouptree_ts = None,None,None,None
+            self._usergrouptree,self._public_group,self._dbca_group,self._usergrouptree_size,self._usergrouptree_ts = None,None,None,None,None
         
     @property
     def userauthorization(self):
