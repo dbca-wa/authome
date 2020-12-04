@@ -15,7 +15,7 @@ class AuthorizationCacheTestCase(BaseAuthCacheTestCase):
             #0
             ( 
                 [
-                    ("usergroup","add",["all_user",None,["*@*"],None]),
+                    ("usergroup","add",["all_user",None,["*@*.*"],None]),
                     ("usergroupauthorization","add",["all_user","*",None,["*"]]),
                 ],
                 [

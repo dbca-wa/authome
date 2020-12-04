@@ -19,7 +19,7 @@ class AuthTestCase(BaseAuthTestCase):
             ("staff_1","staff_1@gunfire.com")
         ]
         self.test_usergroups = [
-            ("all_user",["*@*"],None,None)
+            ("all_user",["*@*.*"],None,None)
         ]
         self.test_usergroupauthorization = [
             ("all_user","*","*",None)
@@ -46,7 +46,7 @@ class AuthTestCase(BaseAuthTestCase):
             ("staff_1","staff_1@gunfire.com",True)
         ]
         self.test_usergroups = [
-            ("all_user",["*@*"],None,None)
+            ("all_user",["*@*.*"],None,None)
         ]
         self.test_usergroupauthorization = [
             ("all_user","*","*",None)
@@ -80,7 +80,7 @@ class AuthTestCase(BaseAuthTestCase):
             ("staff_1","staff_1@gunfire.com",True)
         ]
         self.test_usergroups = [
-            ("all_user",["*@*"],None,None)
+            ("all_user",["*@*.*"],None,None)
         ]
         self.test_usergroupauthorization = [
             ("all_user","*","*",None)
@@ -119,7 +119,7 @@ class AuthTestCase(BaseAuthTestCase):
             ("staff_2","staff_2@gunfire.com",True)
         ]
         self.test_usergroups = [
-            ("all_user",["*@*"],None,None)
+            ("all_user",["*@*.*"],None,None)
         ]
         self.test_usergroupauthorization = [
             ("all_user","*","*",None)
@@ -165,7 +165,7 @@ class AuthTestCase(BaseAuthTestCase):
             ("staff_1","staff_1@gunfire.com",True)
         ]
         self.test_usergroups = [
-            ("all_user",["*@*"],None,None)
+            ("all_user",["*@*.*"],None,None)
         ]
         self.test_usergroupauthorization = [
             ("all_user","*","*",None)
@@ -281,7 +281,7 @@ class AuthTestCase(BaseAuthTestCase):
             ("staff_1","staff_1@gunfire.com",True)
         ]
         self.test_usergroups = [
-            ("all_user",["*@*"],None,None)
+            ("all_user",["*@*.*"],None,None)
         ]
         self.test_usergroupauthorization = [
             ("all_user","*","*",None)

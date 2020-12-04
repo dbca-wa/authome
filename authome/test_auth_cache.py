@@ -24,7 +24,7 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
             ("staff_5","staff_5@gunfire.com",True)
         ]
         self.test_usergroups = [
-            ("all_user",["*@*"],None,None)
+            ("all_user",["*@*.*"],None,None)
         ]
         self.test_usergroupauthorization = [
             ("all_user","*","*",None)
@@ -73,7 +73,7 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
             ("staff_5","staff_5@gunfire.com",True)
         ]
         self.test_usergroups = [
-            ("all_user",["*@*"],None,None)
+            ("all_user",["*@*.*"],None,None)
         ]
         self.test_usergroupauthorization = [
             ("all_user","*","*",None)
@@ -124,7 +124,7 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
             ("staff_1","staff_1@gunfire.com",True)
         ]
         self.test_usergroups = [
-            ("all_user",["*@*"],None,None)
+            ("all_user",["*@*.*"],None,None)
         ]
         self.test_usergroupauthorization = [
             ("all_user","*","*",None)
@@ -163,7 +163,7 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
             ("staff_1","staff_1@gunfire.com",True)
         ]
         self.test_usergroups = [
-            ("all_user",["*@*"],None,None)
+            ("all_user",["*@*.*"],None,None)
         ]
         self.test_usergroupauthorization = [
             ("all_user","*","*",None)
@@ -203,7 +203,7 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
             ("staff_1","staff_1@gunfire.com",True)
         ]
         self.test_usergroups = [
-            ("all_user",["*@*"],None,None)
+            ("all_user",["*@*.*"],None,None)
         ]
         self.test_usergroupauthorization = [
             ("all_user","*","*",None)

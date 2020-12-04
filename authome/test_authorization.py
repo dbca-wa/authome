@@ -179,7 +179,7 @@ class AuthorizationTestCase(BaseAuthCacheTestCase):
 
     def test_authorize(self):
         self.test_usergroups = [
-            ("all_user",["*@*"],None,[
+            ("all_user",["*@*.*"],None,[
                 ("gunfire",["@gunfire.com"],None,[
                     ("dev",["dev_*@gunfire.com"],None,[
                         ("dev_map",["dev_map_*@gunfire.com"],["dev_map_external_*@gunfire.com"],[

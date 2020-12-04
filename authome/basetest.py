@@ -41,6 +41,7 @@ class BaseAuthTestCase(TestCase):
         UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
         UserAuthorization.objects.all().delete()
 
+        cache.refresh_authorization_cache(True)
         if not UserGroup.objects.filter(users=["*"], excluded_users__isnull=True).exists():
             public_group = UserGroup(name="Public User",users=["*"])
             public_group.clean()
@@ -48,7 +49,6 @@ class BaseAuthTestCase(TestCase):
 
         cache.clean_auth_cache(True)
         cache.refresh_authorization_cache(True)
-        print("public user group={}".format(UserGroup.public_group()))
 
 
     def basic_auth(self, username, password):

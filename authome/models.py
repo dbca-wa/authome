@@ -139,7 +139,7 @@ class RegexRequestDomain(RequestDomain):
         super().__init__(domain)
         self.sort_key = "{}:{:0>3}-{}".format(self.base_sort_key,len(domain),domain)
         try:
-            self._re = re.compile("^{}$".format(domain.replace("*","[a-zA-Z0-9\._\-]*")))
+            self._re = re.compile("^{}$".format(domain.replace(".","\.").replace("*","[a-zA-Z0-9\._\-]*")))
         except Exception as ex:
             raise ValidationError("The regex domain config({}) is invalid.{}".format(domain,str(ex)))
 
@@ -350,7 +350,7 @@ class RegexUserEmail(UserEmail):
     def __init__(self,email):
         super().__init__(email)
         try:
-            self._qs_re = r"^{}$".format(email.replace('*','[a-zA-Z0-9\._\-]*'))
+            self._qs_re = r"^{}$".format(email.replace(".","\.").replace('*','[a-zA-Z0-9\._\-]*'))
             self._re = re.compile(self._qs_re)
         except Exception as ex:
             raise ValidationError("The regex email config({}) is invalid.{}".format(email,str(ex)))
@@ -367,9 +367,9 @@ class RegexUserEmail(UserEmail):
             return False
         elif isinstance(useremail,ExactUserEmail):
             return self.match(useremail.config)
-        elif isinstance(useremail,DomainUserEmail):
-            return self.config == useremail.config
         else:
+            if isinstance(useremail,DomainEmail):
+                useremail = UserEmail.get_instance("*{}".format(useremail.config))
             p_index = 0
             p_star_index = -1
             c_index = 0
@@ -378,7 +378,7 @@ class RegexUserEmail(UserEmail):
             while c_index < len(useremail.config):
                 p_char = self.config[p_index] if p_index < len(self.config) else None
                 c_char = useremail.config[c_index]
-                if p_start_index == len(self.config) - 1:
+                if p_star_index == len(self.config) - 1:
                     #last char is '*'
                     return True
                 elif p_char == '*':
@@ -388,15 +388,16 @@ class RegexUserEmail(UserEmail):
                         c_index += 1
                 elif c_char == '*':
                     if p_star_index >= 0:
-                        p_index = p_start_index + 1
+                        p_index = p_star_index + 1
                         c_index += 1
                     else:
                         return False
                 elif p_char == c_char:
                     p_index += 1
                     c_index += 1
-                elif p_start_index >= 0:
-                    p_index = p_start_index + 1
+                elif p_star_index >= 0:
+                    p_index = p_star_index + 1
+                    c_index += 1
                 else:
                     return False
                 
