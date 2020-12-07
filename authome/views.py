@@ -341,6 +341,16 @@ def signout(request,**kwargs):
         return HttpResponseRedirect(kwargs["logout_url"])
 
 
+def forbidden(request):
+    context = {}
+    domain = request.headers.get("x-upstream-server-name") or request.get_host()
+    path = request.headers.get("x-upstream-request-uri") or request.path
+    context["domain"] = domain
+    context["path"] = path
+    context["url"] = "https://{}{}".format(domain,path)
+    print("forbidden context = {}".format(context))
+    return TemplateResponse(request,"authome/forbidden.html",context=context)
+
 def get_post_logout_url(request,idp=None,encode=True):
     """
     Return 	quoted post logout url

@@ -102,7 +102,7 @@ DATETIME_FORMAT = 'l d F Y, h:i A'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': ['templates/'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -123,7 +123,7 @@ DATABASES = {
 
 # Static files configuration
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATIC_URL = '/static/'
+STATIC_URL = '/sso/static/'
 #STATICFILES_DIRS = (os.path.join(BASE_DIR, 'itassets', 'static'),)
 AUTH_CACHE_SIZE=env("AUTH_CACHE_SIZE",default=2000)
 if AUTH_CACHE_SIZE <= 0:
