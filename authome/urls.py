@@ -10,6 +10,7 @@ urlpatterns = [
     path('sso/profile', views.profile, name='profile'),
     path('sso/signedout', views.signedout, name='signedout'),
     path('sso/forbidden', views.forbidden, name='forbidden'),
+    path('sso/login.html', views.login_view, name='login_view'),
     path('sso/signup/check', views.check_signup, name='check_signup'),
     path('sso/', include('social_django.urls', namespace='social')),
     path('admin/', admin.site.urls),

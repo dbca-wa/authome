@@ -340,6 +340,9 @@ def signout(request,**kwargs):
     else:
         return HttpResponseRedirect(kwargs["logout_url"])
 
+def login_view(request,**kwargs):
+    return TemplateResponse(request,"authome/login.html")
+
 
 def forbidden(request):
     context = {}
