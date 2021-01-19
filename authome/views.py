@@ -109,11 +109,20 @@ def _auth(request):
 AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
 AUTH_REQUIRED_RESPONSE.content = "Authentication required"
 
+AUTH_NOT_REQUIRED_RESPONSE = HttpResponse(content="Succeed",status=204)
 @csrf_exempt
 def auth(request):
     res = _auth(request)
     if not res:
         return AUTH_REQUIRED_RESPONSE
+    else:
+        return res
+
+@csrf_exempt
+def auth_optional(request):
+    res = _auth(request)
+    if not res:
+        return AUTH_NOT_REQUIRED_RESPONSE
     else:
         return res
 
