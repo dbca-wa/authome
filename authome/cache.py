@@ -107,6 +107,11 @@ class MemoryCache(object):
         self._usergroupauthorization_size = None
         self._usergroupauthorization_ts = None
     
+        self._userflows = None
+        self._defaultuserflow = None
+        self._userflows_size = None
+        self._userflows_ts = None
+    
         self._user_authorization_map = OrderedDict() 
     
         self._auth_map = OrderedDict() 
@@ -119,6 +124,8 @@ class MemoryCache(object):
         #start the cache refresh timer
         self._auth_cache_clean_time = TaskRunTime("authentication cache",settings.AUTH_CACHE_CLEAN_HOURS)
         self._authorization_cache_check_time = IntervalTaskRunTime("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_INTERVAL) if settings.AUTHORIZATION_CACHE_CHECK_INTERVAL > 0 else TaskRunTime("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_HOURS) 
+        self._userflow_cache_check_time = IntervalTaskRunTime("customizable userflow cache",settings.USERFLOW_CACHE_CHECK_INTERVAL) if settings.USERFLOW_CACHE_CHECK_INTERVAL > 0 else TaskRunTime("customizable userflow cache",settings.USERFLOW_CACHE_CHECK_HOURS) 
+
         self._idp_cache_check_time = IntervalTaskRunTime("idp cache",settings.IDP_CACHE_CHECK_INTERVAL) if settings.IDP_CACHE_CHECK_INTERVAL > 0 else TaskRunTime("idp cache",settings.IDP_CACHE_CHECK_HOURS) 
 
     @property
@@ -184,6 +191,31 @@ class MemoryCache(object):
             self._idps,self._idps_size,self._idps_ts = value
         else:
             self._idps,self._idps_size,self._idps_ts = None,None,None
+
+    @property
+    def userflows(self):
+        self.refresh_userflow_cache()
+        return self._userflows
+
+    def get_userflow(self,domain=None):
+        """
+        Get the userflow configured for that domain, if can't find, return default userflow
+        if domain is None, return default userflow
+        """
+        self.refresh_userflow_cache()
+        if domain:
+            return self._userflows.get(domain,self._defaultuserflow)
+        else:
+            return self._defaultuserflow
+
+
+
+    @idps.setter
+    def userflows(self,value):
+        if value:
+            self._userflows,self._defaultuserflow,self._userflows_size,self._userflows_ts = value
+        else:
+            self._userflows,self._defaultuserflow,self._userflows_size,self._userflows_ts = None,None,None,None
 
 
     def get_auth_key(self,email,session_key):
@@ -370,6 +402,16 @@ class MemoryCache(object):
                 IdentityProvider.objects.all().count() != self._idps_size
             ):
                 IdentityProvider.refresh_idps()
+
+
+    def refresh_userflow_cache(self,force=False):
+        if self._userflow_cache_check_time.can_run() or force:
+            from .models import CustomizableUserflow
+            if ( not self._userflows or 
+                CustomizableUserflow.objects.filter(modified__gt=self._userflows_ts).exists() or  
+                CustomizableUserflow.objects.all().count() != self._userflows_size
+            ):
+                CustomizableUserflow.refresh_userflows()
 
 
 cache = MemoryCache()

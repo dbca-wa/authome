@@ -72,7 +72,6 @@ class UserAuthorizationForm(AuthorizationForm):
         
 
 class IdentityProviderForm(forms.ModelForm):
-    domains = SimpleArrayField(forms.CharField(required=False),delimiter="\n",widget=forms.Textarea(attrs={"style":"width:80%","rows":10}),help_text=get_help_text(IdentityProvider,"domains"),required=False)
     class Meta:
         model = IdentityProvider
         fields = "__all__"

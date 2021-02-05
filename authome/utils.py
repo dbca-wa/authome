@@ -1,6 +1,7 @@
 import ast
 import os
 import urllib.parse
+import re
 
 __version__ = '1.0.0'
 
@@ -89,5 +90,20 @@ def env(key, default=None, required=False, value_type=None,subvalue_type=None):
         raise Exception("Missing required environment variable '%s'" % key)
 
     return _convert(key,value,default=default,required=required,value_type=value_type,subvalue_type=subvalue_type)
+
+
+url_re = re.compile("^((h|H)(t|T)(t|T)(p|P)(s|S)?://)?(?P<domain>[a-zA-Z0-9_\-]+(\.[a-zA-Z0-9_\-]+)*)(:(?P<port>[0-9]+))?(\/|\?|$)")
+def get_clientapp_domain(request):
+    next_url = request.session.get(REDIRECT_FIELD_NAME)
+    if next_url:
+        m = url_re.search(next_url)
+        if m :
+            domain = m.group('domain')
+        else:
+            domain = None
+    else:
+        domain = None
+
+    return domain
 
 

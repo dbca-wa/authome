@@ -8,6 +8,12 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.http import urlencode
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.cache import never_cache
+from django.contrib.auth import REDIRECT_FIELD_NAME
+
+import social_django.views
+from social_django.utils import psa
+from social_core.actions import do_auth,do_complete
 
 from ipware.ip import get_client_ip
 import json
@@ -20,8 +26,9 @@ from datetime import datetime
 import urllib.parse
 
 from django.contrib.auth.models import User
-from authome.models import can_access,UserToken,UserGroup,IdentityProvider,User
-from authome.cache import cache
+from .models import can_access,UserToken,UserGroup,IdentityProvider,User,CustomizableUserflow
+from .cache import cache
+from .utils import get_userflow
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +91,7 @@ def _populate_response(request,f_cache,cache_key,user,session_key=None):
 
     return response
 
-def _auth(request):
+def _auth_prod(request):
     if not request.user.is_authenticated:
         logger.debug("User is not authenticated")
         return None
@@ -106,8 +113,19 @@ def _auth(request):
     else:
         return _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
 
+def _auth_debug(request):
+    now = timezone.now()
+    logger.debug("{}:start to authenticate the user".format(now))
+    try:
+        return _auth_prod(request)
+    finally:
+        diff = timezone.now() - now
+        logger.debug("spend {} milliseconds to authenticate the user".format(round((diff.seconds * 1000 + diff.microseconds)/1000)))
+
 AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
 AUTH_REQUIRED_RESPONSE.content = "Authentication required"
+
+_auth = _auth_debug if settings.DEBUG else _auth_prod
 
 AUTH_NOT_REQUIRED_RESPONSE = HttpResponse(content="Succeed",status=204)
 @csrf_exempt
@@ -349,9 +367,11 @@ def signout(request,**kwargs):
     else:
         return HttpResponseRedirect(kwargs["logout_url"])
 
-def login_view(request,**kwargs):
-    return TemplateResponse(request,"authome/login.html")
+def adb2c_view(request,template,**kwargs):
+    return TemplateResponse(request,"authome/{}.html".format(template))
 
+def adb2c_js(request):
+    return TemplateResponse(request,"authome/adb2c.js",context={"email_signup_url":request.build_absolute_uri(reverse("email_signup")),'password_reset_url':request.build_absolute_uri(reverse("password_reset"))},content_type="text/javascript")
 
 def forbidden(request):
     context = {}
@@ -377,4 +397,67 @@ def get_post_logout_url(request,idp=None,encode=True):
         backend_post_logout_url = post_logout_url
 
     return urllib.parse.quote(backend_post_logout_url) if encode else backend_post_logout_url
+
+@never_cache
+@psa("/sso/profile/edit/complete")
+def profile_edit(request,backend):
+    request.policy = get_userflow(request).profile_edit
+    return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
+
+
+def _do_login(*args,**kwargs):
+    pass
+
+@never_cache
+@csrf_exempt
+@psa("/sso/profile/edit/complete")
+def profile_edit_complete(request,backend,*args,**kwargs):
+    request.policy = get_userflow(request).profile_edit
+    request.http_error_code = 417
+    request.http_error_message = "Failed to edit user profile.{}"
+
+    user = request.user
+    auth_key = cache.get_auth_key(user.email,request.session.session_key)
+    response = cache.delete_auth(auth_key)
+
+    return do_complete(request.backend, _do_login, user=request.user,
+                       redirect_name=REDIRECT_FIELD_NAME, request=request,
+                       *args, **kwargs)
+
+
+@never_cache
+@psa("/sso/email/signup/complete")
+def email_signup(request,backend):
+    request.policy = get_userflow(request).email_signup
+    return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
+
+@never_cache
+@csrf_exempt
+@psa("/sso/email/signup/complete")
+def email_signup_complete(request,backend,*args,**kwargs):
+    request.policy = get_userflow(request).email_signup
+    request.http_error_code = 417
+    request.http_error_message = "Failed to signup a local account..{}"
+
+    return do_complete(request.backend, _do_login, user=request.user,
+                       redirect_name=REDIRECT_FIELD_NAME, request=request,
+                       *args, **kwargs)
+
+@never_cache
+@psa("/sso/password/reset/complete")
+def password_reset(request,backend):
+    request.policy = get_userflow(request).password_reset
+    return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
+
+@never_cache
+@csrf_exempt
+@psa("/sso/password/reset/complete")
+def password_reset_complete(request,backend,*args,**kwargs):
+    request.policy = get_userflow(request).password_reset
+    request.http_error_code = 417
+    request.http_error_message = "Failed to reset password..{}"
+
+    return do_complete(request.backend, _do_login, user=request.user,
+                       redirect_name=REDIRECT_FIELD_NAME, request=request,
+                       *args, **kwargs)
 

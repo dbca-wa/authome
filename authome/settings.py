@@ -5,7 +5,6 @@ import dj_database_url
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
 DEBUG = env('DEBUG', False)
 SECRET_KEY = env('SECRET_KEY', 'PlaceholderSecretKey')
 if not DEBUG:
@@ -32,7 +31,6 @@ INSTALLED_APPS = [
 
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
-    'social_core.backends.azuread.AzureADOAuth2',
     'authome.backends.AzureADB2COAuth2',
 )
 
@@ -47,7 +45,6 @@ SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_BASE_URL = env('AZUREAD_B2C_BASE_URL', 'baseurl')
 SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_KEY = env('AZUREAD_B2C_CLIENTID', 'clientid')
 SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_SECRET = env('AZUREAD_B2C_SECRETKEY', 'secret')
 SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_TENANT_ID = env('AZUREAD_B2C_TENANT_ID', 'tentid')
-SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_POLICY = env('AZUREAD_B2C_POLICY', 'policy')
 SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_USER_FIELDS = env('AZUREAD_B2C_USER_FIELDS', default=["username","email","usergroup","first_name","last_name","is_staff","is_superuser"])
 
 SOCIAL_AUTH_REDIRECT_IS_HTTPS = True
@@ -64,7 +61,7 @@ SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.user.create_user',
     'social_core.pipeline.social_auth.associate_user',
     'social_core.pipeline.social_auth.load_extra_data',
-    'social_core.pipeline.user.user_details',
+    'authome.pipelines.user_details'
 )
 # set the domain-global session cookie
 SESSION_COOKIE_DOMAIN = env('SESSION_COOKIE_DOMAIN', None)
@@ -176,6 +173,10 @@ IDP_CACHE_CHECK_INTERVAL=env('IDP_CACHE_CHECK_INTERVAL',default=0) #in seconds,t
 if IDP_CACHE_CHECK_INTERVAL < 0:
     IDP_CACHE_CHECK_INTERVAL = 0
 
+USERFLOW_CACHE_CHECK_HOURS=env('USERFLOW_CACHE_CHECK_HOURS',default=[0]) #the hours in the day when idp cach can be checked
+USERFLOW_CACHE_CHECK_INTERVAL=env('USERFLOW_CACHE_CHECK_INTERVAL',default=0) #in seconds,the interval to check idp cache, if it is not greater than 0, use IDP_CACHE_CHECK_HOURS
+if USERFLOW_CACHE_CHECK_INTERVAL < 0:
+    USERFLOW_CACHE_CHECK_INTERVAL = 0
 
 PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
 BACKEND_LOGOUT_URL=env('BACKEND_LOGOUT_URL')

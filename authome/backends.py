@@ -1,14 +1,23 @@
 import logging
+import urllib.parse
 
 from django.core.exceptions import PermissionDenied
 from django.conf import settings
+from django.core.exceptions import SuspiciousOperation
 
 from social_core.backends import azuread_b2c
 from social_core.exceptions import AuthException
 
-from .models import IdentityProvider
+from .models import IdentityProvider,CustomizableUserflow
+from .utils import get_userflow,get_clientapp_domain
 
 logger = logging.getLogger(__name__)
+
+class AuthenticateFailed(SuspiciousOperation): 
+    def __init__(self,http_code,message,ex):
+        super().__init__(message.format(str(ex)))
+        self.http_code = http_code
+        self.ex = ex
 
 class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
     AUTHORIZATION_URL = '{base_url}/oauth2/v2.0/authorize'
@@ -20,19 +29,42 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
     @property
     def policy(self):
         request = self.strategy.request
-        idp = request.COOKIES.get(settings.PREFERED_IDP_COOKIE_NAME,None)
-        policy = IdentityProvider.get_userflow(idp)
+        if hasattr(request,"policy"):
+            policy = request.policy
+        else:
+            domain = get_clientapp_domain(request)
+            userflow = CustomiazableUserflow.get_userflow(domain)
+            if userflow.fixed:
+                policy = userflow.fixed
+            else:
+                idp = request.COOKIES.get(settings.PREFERED_IDP_COOKIE_NAME,None)
+                idp = IdentityProvider.get_idp(idp)
+                if idp and idp.userflow:
+                    if idp == IdentityProvider.EMAIL_PROVIDER:
+                        policy = userflow.email
+                    else:
+                        policy = idp.userflow
+                else:
+                    policy = userflow.default
+
+            logger.debug("Prefered idp is '{}', Choosed userflow is '{}'".format(idp,policy))
 
         if not policy or not policy.lower().startswith('b2c_'):
             raise AuthException('SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_POLICY is '
                                 'required and should start with `b2c_`')
 
-        logger.debug("Prefered idp is '{}', Choosed userflow is '{}'".format(idp,policy))
         return policy
 
     @property
     def base_url(self):
         return self.setting('BASE_URL').format(self.policy)
+
+    def get_profile_edit_url(self,next_url,policy='B2C_1_email_profile'):
+        return "{base_url}/oauth2/v2.0/authorize?client_id={client_id}&redirect_uri={next_url}&scope=openid+email&response_type=code".format(
+            base_url=self.setting('BASE_URL').format(policy),
+            client_id=self.setting('KEY'),
+            next_url=urllib.parse.quote(next_url)
+        )
 
     @property
     def logout_url(self):
@@ -51,5 +83,8 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
         try:
             super().process_error(data)
         except Exception as ex:
-            raise PermissionDenied("{}:{}".format(ex.__class__.__name__,str(ex)))
+            if hasattr(self.strategy.request,"http_error_code"):
+                raise AuthenticateFailed(self.strategy.request.http_error_code,self.strategy.request.http_error_message,ex)
+            else:
+                raise AuthenticateFailed(400,"Failed to authenticate the user.{}",ex)
 

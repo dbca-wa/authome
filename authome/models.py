@@ -153,11 +153,12 @@ class IdentityProvider(DbObjectMixin,models.Model):
     _domains = None
     _changed = False
 
+    EMAIL_PROVIDER = 'email'
+
     name = models.CharField(max_length=64,unique=True,null=True)
     idp = models.CharField(max_length=256,unique=True,null=False,editable=False)
     userflow = models.CharField(max_length=64,blank=True,null=True)
     logout_url = models.CharField(max_length=512,blank=True,null=True)
-    domains = _ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_idp_domains)
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
@@ -167,14 +168,9 @@ class IdentityProvider(DbObjectMixin,models.Model):
         if not self.name:
             raise ValidationError("Name is empty")
 
-        requestdomains = self.requestdomains
-        if requestdomains:
-            self.domains = [d.config for d in requestdomains]
-        else:
-            self.domains = None
-
         if self.id is not None:
-            if self.name != self.db_obj.name or self.userflow != self.db_obj.userflow or self.logout_url != self.db_obj.logout_url or self.domains != self.db_obj.domains:
+            self._changed = False
+            if self.name != self.db_obj.name or self.userflow != self.db_obj.userflow or self.logout_url != self.db_obj.logout_url:
                 self._changed = True
 
     def save(self,*args,**kwargs):
@@ -186,30 +182,6 @@ class IdentityProvider(DbObjectMixin,models.Model):
             super().save(*args,**kwargs)
 
         self._changed = False
-
-    @property
-    def requestdomains(self):
-        if not self._domains:
-            if self.domains:
-                domains = []
-                for d in self.domains:
-                    try:
-                        domain = RequestDomain.get_instance(d)
-                        if not domain:
-                            continue
-                        domains.append(domain)
-                    except:
-                        continue
-                domains.sort(key=lambda o:o.sort_key,reverse=True)
-                match_all_domain = next((d for d in domains if d.match_all),None)
-                if match_all_domain:
-                    self._domains = [match_all_domain]
-                else:
-                    self._domains = domains
-            else:
-                self._domains = []
-
-        return self._domains
 
     @classmethod
     def refresh_idps(cls):
@@ -231,27 +203,6 @@ class IdentityProvider(DbObjectMixin,models.Model):
         return cache.idps.get(idpid) if idpid else None
   
     @classmethod
-    def get_idp_by_domain(cls,domain):
-        """
-        Return idp by domain if found; otherwise return None
-        """
-        for obj in cache.idps.values():
-            if not obj.domains:
-                continue
-            for requestdomain in obj.requestdomains:
-                if requestdomain.match(domain):
-                    return obj
-        return None
-  
-    @classmethod
-    def get_userflow(cls,idpid):
-        idp = cls.get_idp(idpid)
-        if idp and idp.userflow:
-            return idp.userflow
-        else:
-            return settings.SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_POLICY
-
-    @classmethod
     def get_logout_url(cls,idpid):
         idp = cls.get_idp(idpid)
         if idp:
@@ -264,6 +215,91 @@ class IdentityProvider(DbObjectMixin,models.Model):
 
     class Meta:
         verbose_name_plural = " Identity Providers"
+
+class CustomizableUserflow(DbObjectMixin,models.Model):
+    _changed = False
+    domain = models.CharField(max_length=128,unique=True,null=False,default="*",help_text="Global setting if domain is '*'; otherwise is individual domain settings")
+    fixed = models.CharField(max_length=64,null=True,help_text="The only user flow used by this domain if configured")
+    default = models.CharField(max_length=64,null=True,help_text="The default user flow used by this domain")
+    email_signup = models.CharField(max_length=64,null=True,help_text="The email signup user flow")
+    email = models.CharField(max_length=64,null=True,help_text="The email signup and signin user flow")
+    profile_edit = models.CharField(max_length=64,null=True,help_text="The user profile edit user flow")
+    password_reset = models.CharField(max_length=64,null=True,help_text="The user password reset user flow")
+    email_enabled = models.BooleanField(default=True,editable=False,help_text="Enable/Disable the email singin for this domain")
+
+    page_layout = models.TextField(null=True)
+
+    modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
+    created = models.DateTimeField(auto_now_add=timezone.now)
+
+    def clean(self):
+        super().clean()
+        self.name = self.name.strip()
+        if not self.name:
+            self.name = "*"
+
+        if self.name == "*":
+            #default userflow
+            invalid_columns = []
+            for name in ("default","email_signup","email","profile_edit","password_reset","page_layout") if self.email_enabled else  ("default","profile_edit","page_layout"):
+                if not getattr(self,name):
+                    invalid_columns.append(name)
+            if len(invalid_columns) == 1:
+                raise ValidationError("The property({}) can't be empty for global settings.".format(invalid_columns[0]))
+            elif len(invalid_columns) > 1:
+                raise ValidationError("The properties({}) can't be empty for global settings.".format(invalid_columns))
+
+        if self.id is not None:
+            self._changed = False
+            for name in ("default","email_signup","email","profile_edit","password_reset","page_layout","fixed"):
+                if getattr(self,name) != getattr(self.db_obj,name):
+                    self._changed = True
+                    break
+
+    def save(self,*args,**kwargs):
+        if self.id is not None and not self._changed:
+            #nothing was changed
+            return 
+        logger.debug("Try to save the changed {}({})".format(self.__class__.__name__,self))
+        with transaction.atomic():
+            super().save(*args,**kwargs)
+
+        self._changed = False
+
+    @classmethod
+    def get_userflow(cls,domain):
+        return cache.get_userflow(domain)
+
+    @classmethod
+    def refresh_userflows(cls):
+        logger.debug("Refresh Customizable Userflow cache")
+        userflows = {}
+        defaultuserflow = None
+        last_modified = None
+        size = 0
+        for o in cls.objects.all():
+            if o.domain == '*':
+                defaultuserflow = o
+                
+            userflows[o.domain] = o
+
+            if not last_modified:
+                last_modified = o.modified
+            elif last_modified < o.modified:
+                last_modified = o.modified
+
+            size += 1
+
+        if not defaultuserflow :
+            raise Exception("The default customizable userflow configuration is missing.")
+
+        for o in userflows.values():
+            for name in ("default","email_signup","email","profile_edit","password_reset","page_layout"):
+                if not getattr(o,name):
+                    setattr(o,name,getattr(defaultuserflow,name))
+
+        cache.userflows = (userflows,defaultuserflow,size,last_modified)
+        
 
 class UserEmail(object):
     match_all = False

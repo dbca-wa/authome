@@ -16,7 +16,11 @@ _max_age = 100 * 365 * 24 * 60 * 60
 def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     request = backend.strategy.request
 
-    idp = kwargs['response'].get("idp","email")
+    if hasattr(request,"policy") and request.policy in ["PROFILE_EDIT_POLICY","PASSWORD_RESET_POLICY"]:
+        #not a sign in request
+        return
+
+    idp = kwargs['response'].get("idp",IdentityProvider.EMAIL_PROVIDER)
     idp_obj,created = IdentityProvider.objects.get_or_create(idp=idp)
     logger.debug("authenticate the user({}) with identity provider({}={})".format(details.get("email"),idp_obj.idp,idp))
 
@@ -111,3 +115,30 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     return {"email":email}
 
 
+def user_details(strategy, details, user=None, *args, **kwargs):
+    """Update user details using data from provider."""
+    if not user:
+        return
+
+    changed = False  # flag to track changes
+    protected = ('username', 'id', 'pk', 'email') + \
+                tuple(strategy.setting('PROTECTED_USER_FIELDS', []))
+
+    # Update user model attributes with the new data sent by the current
+    # provider. Update on some attributes is disabled by default, for
+    # example username and id fields. It's also possible to disable update
+    # on fields defined in SOCIAL_AUTH_PROTECTED_USER_FIELDS.
+    for name, value in details.items():
+        if value is None or not hasattr(user, name) or name in protected:
+            continue
+
+        # Check https://github.com/omab/python-social-auth/issues/671
+        current_value = getattr(user, name, None)
+        if current_value and current_value == value:
+            continue
+
+        changed = True
+        setattr(user, name, value)
+
+    if changed:
+        strategy.storage.user.changed(user)
