@@ -280,6 +280,9 @@ def profile(request):
     auth_key = cache.get_auth_key(user.email,request.session.session_key)
     response = cache.get_auth(auth_key)
 
+    if not response:
+        response = _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
+
     content = {}
     for key,value in response.items():
         if key.startswith("X-"):
