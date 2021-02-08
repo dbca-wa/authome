@@ -22,15 +22,16 @@ class PreferedIDPMiddleware(MiddlewareMixin):
                         settings.PREFERED_IDP_COOKIE_NAME,
                         res_idp,
                         httponly=True,
+                        secure=True,
                         path="/sso/",
                         max_age=_max_age,
-                        samesite=None
+                        samesite='lax'
                     )
             else:
                 response.delete_cookie(
                     settings.PREFERED_IDP_COOKIE_NAME,
                     path="/sso/",
-                    samesite=None
+                    samesite='lax'
                 )
 
         return response

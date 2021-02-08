@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import never_cache
 from django.contrib.auth import REDIRECT_FIELD_NAME
+from django.template import engines
 
 import social_django.views
 from social_django.utils import psa
@@ -28,9 +29,10 @@ import urllib.parse
 from django.contrib.auth.models import User
 from .models import can_access,UserToken,UserGroup,IdentityProvider,User,CustomizableUserflow
 from .cache import cache
-from .utils import get_userflow
+from .utils import get_clientapp_domain,get_domain
 
 logger = logging.getLogger(__name__)
+django_engine = engines['django']
 
 def parse_basic(basic_auth):
     if not basic_auth:
@@ -253,8 +255,16 @@ def home(request):
         url = reverse('social:begin', args=['azuread-b2c-oauth2'])
         if next_url:
             url += '?{}'.format(urlencode({'next': next_url}))
+        else:
+            #clean the next url  from session
+            try:
+                del request.session[REDIRECT_FIELD_NAME]
+            except:
+                pass
         logger.debug("sso auth url = {}".format(url))
-        return HttpResponseRedirect(url)
+        res = HttpResponseRedirect(url)
+        return res
+
     if next_url:
         return HttpResponseRedirect('https://{}'.format(next_url))
     res = _auth(request)
@@ -367,11 +377,63 @@ def signout(request,**kwargs):
     else:
         return HttpResponseRedirect(kwargs["logout_url"])
 
-def adb2c_view(request,template,**kwargs):
-    return TemplateResponse(request,"authome/{}.html".format(template))
+login_js_template = """
+<script type="text/javascript">
+var createAccount = document.getElementById("createAccount")
+var forgotPassword = document.getElementById("forgotPassword")
+if (createAccount && forgotPassword){
+    createAccount.href = "{{email_signup_url}}"
+    forgotPassword.href = "{{password_reset_url}}"
+} 
+// Select the node that will be observed for mutations
+const targetNode = document.getElementById('api');
 
-def adb2c_js(request):
-    return TemplateResponse(request,"authome/adb2c.js",context={"email_signup_url":request.build_absolute_uri(reverse("email_signup")),'password_reset_url':request.build_absolute_uri(reverse("password_reset"))},content_type="text/javascript")
+// Options for the observer (which mutations to observe)
+const config = {  childList: true, subtree: true,attributes:true };
+
+// Callback function to execute when mutations are observed
+const callback = function(mutationsList, observer) {
+    createAccount = document.getElementById("createAccount")
+    forgotPassword = document.getElementById("forgotPassword")
+    if (createAccount && forgotPassword){
+        observer.disconnect();
+        createAccount.href = "{{email_signup_url}}"
+        forgotPassword.href = "{{password_reset_url}}"
+        observer.observe(targetNode, config);
+    }
+}
+// Create an observer instance linked to the callback function
+const observer = new MutationObserver(callback);
+// Start observing the target node for configured mutations
+observer.observe(targetNode, config);
+</script>
+"""
+
+login_js = None
+def adb2c_view(request,template,**kwargs):
+    domain = request.GET.get('domain', None)
+    userflow = CustomizableUserflow.get_userflow(domain)
+    if userflow.initialized:
+        page_layout = userflow.page_layout
+    else:
+        page_layout = userflow.page_layout or default_layout
+        page_layout = django_engine.from_string(page_layout).render(
+            context={"email_signup_url":request.build_absolute_uri(reverse("email_signup")),'password_reset_url':request.build_absolute_uri(reverse("password_reset"))},
+            request=request
+        )
+        userflow.page_layout = page_layout
+        userflow.initialized = True
+
+    if template == "login" and userflow.email_enabled:
+        global login_js
+        if not login_js:
+            login_js = django_engine.from_string(login_js_template).render(
+                context={"email_signup_url":request.build_absolute_uri(reverse("email_signup")),'password_reset_url':request.build_absolute_uri(reverse("password_reset"))},
+                request=request
+            )
+        page_layout = "{}{}".format(page_layout,login_js)
+
+    return TemplateResponse(request,"authome/{}.html".format(template),context={"body":page_layout})
 
 def forbidden(request):
     context = {}
@@ -401,7 +463,8 @@ def get_post_logout_url(request,idp=None,encode=True):
 @never_cache
 @psa("/sso/profile/edit/complete")
 def profile_edit(request,backend):
-    request.policy = get_userflow(request).profile_edit
+    domain = get_clientapp_domain(request)
+    request.policy = CustomizableUserflow.get_userflow(domain).profile_edit
     return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
 
 
@@ -412,7 +475,8 @@ def _do_login(*args,**kwargs):
 @csrf_exempt
 @psa("/sso/profile/edit/complete")
 def profile_edit_complete(request,backend,*args,**kwargs):
-    request.policy = get_userflow(request).profile_edit
+    domain = get_clientapp_domain(request)
+    request.policy = CustomizableUserflow.get_userflow(domain).profile_edit
     request.http_error_code = 417
     request.http_error_message = "Failed to edit user profile.{}"
 
@@ -428,14 +492,16 @@ def profile_edit_complete(request,backend,*args,**kwargs):
 @never_cache
 @psa("/sso/email/signup/complete")
 def email_signup(request,backend):
-    request.policy = get_userflow(request).email_signup
+    domain = get_clientapp_domain(request)
+    request.policy = CustomizableUserflow.get_userflow(domain).email_signup
     return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
 
 @never_cache
 @csrf_exempt
 @psa("/sso/email/signup/complete")
 def email_signup_complete(request,backend,*args,**kwargs):
-    request.policy = get_userflow(request).email_signup
+    domain = get_clientapp_domain(request)
+    request.policy = CustomizableUserflow.get_userflow(domain).email_signup
     request.http_error_code = 417
     request.http_error_message = "Failed to signup a local account..{}"
 
@@ -446,14 +512,16 @@ def email_signup_complete(request,backend,*args,**kwargs):
 @never_cache
 @psa("/sso/password/reset/complete")
 def password_reset(request,backend):
-    request.policy = get_userflow(request).password_reset
+    domain = get_clientapp_domain(request)
+    request.policy = CustomizableUserflow.get_userflow(domain).password_reset
     return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
 
 @never_cache
 @csrf_exempt
 @psa("/sso/password/reset/complete")
 def password_reset_complete(request,backend,*args,**kwargs):
-    request.policy = get_userflow(request).password_reset
+    domain = get_clientapp_domain(request)
+    request.policy = CustomizableUserflow.get_userflow(domain).password_reset
     request.http_error_code = 417
     request.http_error_message = "Failed to reset password..{}"
 

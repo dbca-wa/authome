@@ -9,7 +9,7 @@ from social_core.backends import azuread_b2c
 from social_core.exceptions import AuthException
 
 from .models import IdentityProvider,CustomizableUserflow
-from .utils import get_userflow,get_clientapp_domain
+from .utils import get_clientapp_domain
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
             policy = request.policy
         else:
             domain = get_clientapp_domain(request)
-            userflow = CustomiazableUserflow.get_userflow(domain)
+            userflow = CustomizableUserflow.get_userflow(domain)
             if userflow.fixed:
                 policy = userflow.fixed
             else:
@@ -47,7 +47,7 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
                 else:
                     policy = userflow.default
 
-            logger.debug("Prefered idp is '{}', Choosed userflow is '{}'".format(idp,policy))
+                logger.debug("Prefered idp is '{}', Choosed userflow is '{}'".format(idp,policy))
 
         if not policy or not policy.lower().startswith('b2c_'):
             raise AuthException('SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_POLICY is '

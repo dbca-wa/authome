@@ -7,7 +7,7 @@ from django.conf import settings
 from django.contrib import messages,auth
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils.html import mark_safe
-from django.contrib.staticfiles.templatetags.staticfiles import static
+from django.templatetags.static import static
 from django.db.models import Q
 
 from . import models
@@ -320,4 +320,12 @@ class IdentityProviderAdmin(DatetimeMixin,admin.ModelAdmin):
     form = forms.IdentityProviderForm
     fields = ('idp','name','userflow','logout_url','_modified','_created')
     ordering = ('name','idp',)
+
+@admin.register(models.CustomizableUserflow)
+class CustomizableUserflowAdmin(DatetimeMixin,admin.ModelAdmin):
+    list_display = ('domain','fixed','default','profile_edit','email_enabled','email_signup','email','password_reset','_modified','_created')
+    readonly_fields = ('_modified','_created')
+    form = forms.CustomizableUserflowForm
+    fields = ('domain','fixed','default','profile_edit','email_enabled','email_signup','email','password_reset','page_layout','_modified','_created')
+    ordering = ('domain',)
 

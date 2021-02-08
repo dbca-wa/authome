@@ -16,7 +16,6 @@ urlpatterns = [
     path('sso/signup/check', views.check_signup, name='check_signup'),
 
     path('sso/<slug:template>.html', views.adb2c_view, name='adb2c_view'),
-    path('sso/adb2c.js', views.adb2c_js, name='adb2c_js'),
 
     path('sso/profile/edit', views.profile_edit,{"backend":"azuread-b2c-oauth2"},name='profile_edit'),
     path('sso/profile/edit/complete', views.profile_edit_complete,{"backend":"azuread-b2c-oauth2"},name='profile_edit_complete'),

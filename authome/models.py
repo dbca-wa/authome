@@ -218,28 +218,67 @@ class IdentityProvider(DbObjectMixin,models.Model):
 
 class CustomizableUserflow(DbObjectMixin,models.Model):
     _changed = False
-    domain = models.CharField(max_length=128,unique=True,null=False,default="*",help_text="Global setting if domain is '*'; otherwise is individual domain settings")
-    fixed = models.CharField(max_length=64,null=True,help_text="The only user flow used by this domain if configured")
-    default = models.CharField(max_length=64,null=True,help_text="The default user flow used by this domain")
-    email_signup = models.CharField(max_length=64,null=True,help_text="The email signup user flow")
-    email = models.CharField(max_length=64,null=True,help_text="The email signup and signin user flow")
-    profile_edit = models.CharField(max_length=64,null=True,help_text="The user profile edit user flow")
-    password_reset = models.CharField(max_length=64,null=True,help_text="The user password reset user flow")
-    email_enabled = models.BooleanField(default=True,editable=False,help_text="Enable/Disable the email singin for this domain")
+    initialized = False
+    default_layout="""{% load i18n static %}
+<table id="header" style="background:#2D2F32;width:100%;"><tr><td style="width:34%">
+    <div id="logo" style="margin-left:50px;vertical-align:middle;text-align:left">
+        <img src="https://{{request.get_host}}{% static "images/logo.svg" %}" style="width:318.45px;height:92px"/>
+    </div>
+</td><td style="width:33%">
+    <div  style="vertical-align:middle;margin-left:30px;text-align:center">
+        <img src="https://{{request.get_host}}{% static "images/WW4WA_White_small.png" %}" style="vertical-align:middle"/>
+    </div>
+</td><td style="width:33%">
+</td></tr></table>
+<div class="container  unified_container " role="presentation"  style="height:720px;padding-top:20px;padding-bottom:20px;background-image:url('https://{{request.get_host}}{% static "images/login_bg.jpg" %}');background-repeat:no-repeat;background-size:cover">
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="panel panel-default">
+                <div class="panel-body">
+                    <div id="api">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<table id="header" style="background:white;width:100%;border:none;color:#999"><tr><td style="width:50%;text-align:left;vertical-align:top;padding-left:50px">
+   &copy; 2020 Department of Biodiversity, Conservation and Attractions
+</td><td style="width:50%;vertical-align:top;padding-right:20px;">
+<div style="float:right;white-space:pre">State Operation Headquarters
+17 Dick Perry Avenue Technology Park, Western Precinct
+KENSINGTON Western Australia 6151
+Phone: (08) 9219 9000
+Email: enquiries@dbca.wa.gov.au
+</div>
+</td></tr></table>
+    """
 
-    page_layout = models.TextField(null=True)
+    domain = models.CharField(max_length=128,unique=True,null=False,help_text="Global setting if domain is '*'; otherwise is individual domain settings")
+    fixed = models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
+    default = models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
+    email_signup = models.CharField(max_length=64,null=True,blank=True,help_text="The email signup user flow")
+    email = models.CharField(max_length=64,null=True,blank=True,help_text="The email signup and signin user flow")
+    profile_edit = models.CharField(max_length=64,null=True,blank=True,help_text="The user profile edit user flow")
+    password_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The user password reset user flow")
+    email_enabled = models.BooleanField(default=True,help_text="Enable/Disable the email singin for this domain")
+
+    page_layout = models.TextField(null=True,blank=True)
 
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
     def clean(self):
         super().clean()
-        self.name = self.name.strip()
-        if not self.name:
-            self.name = "*"
+        self.domain = self.domain.strip()
+        if not self.domain:
+            self.domain = "*"
 
-        if self.name == "*":
+        if self.domain == "*":
             #default userflow
+            if not self.page_layout:
+                self.page_layout = self.default_layout
+
             invalid_columns = []
             for name in ("default","email_signup","email","profile_edit","password_reset","page_layout") if self.email_enabled else  ("default","profile_edit","page_layout"):
                 if not getattr(self,name):

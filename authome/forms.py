@@ -3,7 +3,7 @@ from django import forms
 from django.contrib.postgres.forms import SimpleArrayField
 from django.utils.safestring import mark_safe
 
-from  .models import UserGroup,UserGroupAuthorization,UserAuthorization,ExactRequestDomain,User,IdentityProvider
+from  .models import UserGroup,UserGroupAuthorization,UserAuthorization,ExactRequestDomain,User,IdentityProvider,CustomizableUserflow
 from .widgets import (ReadonlyWidget,text_readonly_widget)
 
 def get_help_text(model_class,field):
@@ -75,4 +75,12 @@ class IdentityProviderForm(forms.ModelForm):
     class Meta:
         model = IdentityProvider
         fields = "__all__"
+        
+class CustomizableUserflowForm(forms.ModelForm):
+    class Meta:
+        model = CustomizableUserflow
+        fields = "__all__"
+        widgets = {
+            'page_layout': forms.Textarea(attrs={'style':'width:80%;height:500px'})
+        }
         
