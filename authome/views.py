@@ -95,10 +95,7 @@ def _populate_response(request,f_cache,cache_key,user,session_key=None):
 
 def _auth_prod(request):
     if not request.user.is_authenticated:
-        logger.debug("User is not authenticated")
         return None
-
-    logger.debug("The user({}) is authenticated".format(request.user.email))
 
     res = check_authorization(request,request.user.email)
     if res:
@@ -110,19 +107,57 @@ def _auth_prod(request):
     response = cache.get_auth(auth_key)
 
     if response:
-        logger.debug("The user({}) is authenticated and cached".format(request.user.email))
         return response
     else:
         return _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
 
 def _auth_debug(request):
-    now = timezone.now()
-    logger.debug("{}:start to authenticate the user".format(now))
-    try:
-        return _auth_prod(request)
-    finally:
-        diff = timezone.now() - now
-        logger.debug("spend {} milliseconds to authenticate the user".format(round((diff.seconds * 1000 + diff.microseconds)/1000)))
+    start = timezone.now()
+    
+    logger.debug("==============Start to authenticate the user================")
+    if not request.user.is_authenticated:
+        diff = timezone.now() - start
+        logger.debug("Spend {} milliseconds to find that user is not authenticated".format(round((diff.seconds * 1000 + diff.microseconds)/1000)))
+        return None
+
+    diff = timezone.now() - start
+    logger.debug("Spend {} milliseconds to find that user is authenticated".format(round((diff.seconds * 1000 + diff.microseconds)/1000)))
+    before = timezone.now()
+
+    res = check_authorization(request,request.user.email)
+    if res:
+        #user has no permission to access this url
+        diff = timezone.now() - before
+        logger.debug("Spend {} milliseconds to find that user is not authorized".format(round((diff.seconds * 1000 + diff.microseconds)/1000)))
+        return res
+
+    diff = timezone.now() - before
+    logger.debug("Spend {} milliseconds to find that user is authorized".format(round((diff.seconds * 1000 + diff.microseconds)/1000)))
+    before = timezone.now()
+
+    user = request.user
+    auth_key = cache.get_auth_key(user.email,request.session.session_key)
+    response = cache.get_auth(auth_key)
+
+    if response:
+        diff = timezone.now() - before
+        diff1 = timezone.now() - start
+        logger.debug("Spend {} milliseconds to get the cached response,total spend {} milliseconds to process the request".format(
+            round((diff.seconds * 1000 + diff.microseconds)/1000),
+            round((diff1.seconds * 1000 + diff1.microseconds)/1000)
+        ))
+        logger.debug("==============End to authenticate the user================")
+        return response
+    else:
+        diff = timezone.now() - before
+        diff1 = timezone.now() - start
+        logger.debug("Spend {} milliseconds to generate and cache the response, total spend {} milliseconds to process the request".format(
+            round((diff.seconds * 1000 + diff.microseconds)/1000),
+            round((diff1.seconds * 1000 + diff1.microseconds)/1000)
+        ))
+        logger.debug("==============End to authenticate the user================")
+        return _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
+
 
 AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
 AUTH_REQUIRED_RESPONSE.content = "Authentication required"
@@ -251,7 +286,8 @@ def logout_view(request):
 
 def home(request):
     next_url = request.GET.get('next', None)
-    if not request.user.is_authenticated:
+    res = _auth(request)
+    if not res:
         url = reverse('social:begin', args=['azuread-b2c-oauth2'])
         if next_url:
             url += '?{}'.format(urlencode({'next': next_url}))
@@ -264,14 +300,19 @@ def home(request):
         logger.debug("sso auth url = {}".format(url))
         res = HttpResponseRedirect(url)
         return res
-
-    if next_url:
+    elif next_url:
         return HttpResponseRedirect('https://{}'.format(next_url))
-    res = _auth(request)
-    if res.status_code >= 400:
-        return res
     else:
-        return profile(request)
+        if res.status_code >= 400:
+            return TemplateResponse(request,"authome/loginstatus.html",context={"message":"You are not authorized"})
+        else:
+            return profile(request)
+
+def loginstatus(request):
+    res = _auth(request)
+
+    return TemplateResponse(request,"authome/loginstatus.html",context={"message":"You {} logged in".format("are" if res else "aren't")})
+
 
 @login_required
 @csrf_exempt

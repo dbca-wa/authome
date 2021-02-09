@@ -1,6 +1,7 @@
 from django.urls import include, path
 from django.contrib import admin
 from django.template.response import TemplateResponse
+from django.conf import settings
 
 from authome import views
 from authome.cache import cache
@@ -13,6 +14,7 @@ urlpatterns = [
     path('sso/profile', views.profile, name='profile'),
     path('sso/signedout', views.signedout, name='signedout'),
     path('sso/forbidden', views.forbidden, name='forbidden'),
+    path('sso/loginstatus', views.loginstatus, name='loginstatus'),
     path('sso/signup/check', views.check_signup, name='check_signup'),
 
     path('sso/<slug:template>.html', views.adb2c_view, name='adb2c_view'),
@@ -31,6 +33,9 @@ urlpatterns = [
     path('', views.home, name='home'),
 ]
 
+if settings.DEBUG:
+    import debug_toolbar
+    urlpatterns.append(path('__debug__/', include(debug_toolbar.urls)))
 
 def handler400(request,exception,**kwargs):
     code = exception.http_code if hasattr(exception,"http_code") else 400

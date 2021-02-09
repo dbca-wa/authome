@@ -87,7 +87,6 @@ MIDDLEWARE = [
     'authome.middlewares.PreferedIDPMiddleware'
 ]
 
-
 # Internationalization
 LANGUAGE_CODE = 'en-gb'
 TIME_ZONE = 'Australia/Perth'
@@ -217,4 +216,14 @@ LOGGING = {
         },
     }
 }
+
+if DEBUG:
+    def show_toolbar(req):
+        return req.path.startswith("/admin/") or req.path.startswith("/__debug__/") or req.path.startswith("/sso/loginstatus")
+
+    INSTALLED_APPS.append('debug_toolbar')
+    MIDDLEWARE.insert(0,'debug_toolbar.middleware.DebugToolbarMiddleware')
+    DEBUG_TOOLBAR_CONFIG = {
+        'SHOW_TOOLBAR_CALLBACK':show_toolbar
+    }
 

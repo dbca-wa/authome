@@ -36,6 +36,8 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
             userflow = CustomizableUserflow.get_userflow(domain)
             if userflow.fixed:
                 policy = userflow.fixed
+            elif not domain:
+                policy = userflow.default
             else:
                 idp = request.COOKIES.get(settings.PREFERED_IDP_COOKIE_NAME,None)
                 idp = IdentityProvider.get_idp(idp)
