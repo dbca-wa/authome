@@ -18,6 +18,7 @@ django-dotenv = "1.4.2"
 django-extensions = "3.0.8"
 dj-static = "0.0.6"
 cryptography = "^3.2.1"
+django-debug-toolbar = "^3.2"
 
 [tool.poetry.dev-dependencies]
 ipython = "^7.18.1"
