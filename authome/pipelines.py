@@ -9,8 +9,11 @@ from django.http import HttpResponseForbidden,HttpResponseRedirect
 
 from .models import IdentityProvider,UserGroup
 from .views import signout, get_post_logout_url
+from .utils import get_usercache
 
 logger = logging.getLogger(__name__)
+
+usercache = get_usercache()
 
 _max_age = 100 * 365 * 24 * 60 * 60
 def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
@@ -142,3 +145,6 @@ def user_details(strategy, details, user=None, *args, **kwargs):
 
     if changed:
         strategy.storage.user.changed(user)
+        if usercache:
+            usercache.set(settings.GET_USER_KEY(user.id),user,settings.USER_CACHE_TIMEOUT)
+            logger.debug("Cache the user({}) data to usercache".format(user.email))

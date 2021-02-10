@@ -227,3 +227,45 @@ if DEBUG:
         'SHOW_TOOLBAR_CALLBACK':show_toolbar
     }
 
+def get_cache(server):
+    if server.lower().startswith('redis://'):
+        return {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": server,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            }
+        } 
+    else:
+        return {
+            'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
+            'LOCATION': server,
+        }
+   
+CACHE_SERVER = env("CACHE_SERVER")
+CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
+CACHE_USER_SERVER = env("CACHE_USER_SERVER")
+if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
+    CACHES = {}
+    if CACHE_SERVER:
+        CACHES['default'] = get_cache(CACHE_SERVER)
+   
+    if CACHE_SESSION_SERVER:
+        CACHES["session"] = get_cache(CACHE_SESSION_SERVER)
+        SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+        SESSION_CACHE_ALIAS = "session"
+    elif CACHE_SERVER:
+        SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+        SESSION_CACHE_ALIAS = "default"
+
+    if CACHE_USER_SERVER:
+        CACHES["user"] = get_cache(CACHE_USER_SERVER)
+        GET_USER_KEY = lambda userid:userid
+        USER_CACHE_ALIAS = "user"
+    elif CACHE_SERVER:
+        GET_USER_KEY = lambda userid:"user_{}".format(userid)
+        USER_CACHE_ALIAS = "default"
+    else:
+        USER_CACHE_ALIAS = None
+
+    USER_CACHE_TIMEOUT = env("USER_CACHE_TIMEOUT",86400)

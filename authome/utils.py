@@ -109,5 +109,22 @@ def get_clientapp_domain(request):
     next_url = request.session.get(REDIRECT_FIELD_NAME)
     return get_domain(next_url)
 
+def get_usercache():
+    from django.conf import settings
+    from django.core.cache import caches
+    try:
+        if settings.USER_CACHE_ALIAS:
+            return caches[settings.USER_CACHE_ALIAS]
+        else:
+            return None
+    except:
+        return None
 
 
+def get_defaultcache():
+    from django.conf import settings
+    from django.core.cache import caches
+    try:
+        return caches['default']
+    except:
+        return None

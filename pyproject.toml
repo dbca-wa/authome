@@ -19,6 +19,8 @@ django-extensions = "3.0.8"
 dj-static = "0.0.6"
 cryptography = "^3.2.1"
 django-debug-toolbar = "^3.2"
+python-memcached = "^1.59"
+django-redis = "^4.12.1"
 
 [tool.poetry.dev-dependencies]
 ipython = "^7.18.1"

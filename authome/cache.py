@@ -8,8 +8,13 @@ from django.core.cache import caches
 from django.conf import settings
 from django.utils import timezone
 from django.http import HttpResponse
+from django.db.models.signals import post_save,post_delete
+
+from .utils import get_defaultcache
 
 logger = logging.getLogger(__name__)
+
+defaultcache = get_defaultcache()
 
 class IntervalTaskRunTime(object):
     """
@@ -353,12 +358,8 @@ class MemoryCache(object):
             self._basic_auth_map.clear()
 
     def refresh_usergroups(self,force=False):
-        from .models import UserGroup
-        if (force or 
-            not self._usergrouptree or 
-            UserGroup.objects.filter(modified__gt=self._usergrouptree_ts).exists() or
-            UserGroup.objects.all().count() != self._usergrouptree_size
-        ):
+        from .models import UserGroupChange,UserGroup
+        if (force or self._usergrouptree is None or UserGroupChange.is_changed(self._usergrouptree_ts,self._usergrouptree_size)):
             logger.debug("UserGroup was changed, clean cache usergroupptree and user_requests_map")
             self._user_authorization_map.clear()
             #reload group trees
@@ -366,24 +367,16 @@ class MemoryCache(object):
 
 
     def refresh_userauthorization(self,force=False):
-        from .models import UserAuthorization
-        if (force or 
-            not self._userauthorization or 
-            UserAuthorization.objects.filter(modified__gt=self._userauthorization_ts).exists() or  
-            UserAuthorization.objects.all().count() != self._userauthorization_size
-        ):
+        from .models import UserAuthorizationChange,UserAuthorization
+        if (force or self._userauthorization is None or UserAuthorizationChange.is_changed(self._userauthorization_ts,self._userauthorization_size)):
             logger.debug("UserAuthorization was changed, clean cache userauthorization and user_requests_map")
             self._user_authorization_map.clear()
             #reload user requests
             UserAuthorization.refresh_authorization()
 
     def refresh_usergroupauthorization(self,force=False):
-        from .models import UserGroupAuthorization
-        if (force or 
-            not self._usergroupauthorization or 
-            UserGroupAuthorization.objects.filter(modified__gt=self._usergroupauthorization_ts).exists() or
-            UserGroupAuthorization.objects.all().count() != self._usergroupauthorization_size
-        ):
+        from .models import UserGroupAuthorizationChange,UserGroupAuthorization
+        if (force or self._usergroupauthorization is None or UserGroupAuthorizationChange.is_changed(self._usergroupauthorization_ts,self._usergroupauthorization_size)):
             logger.debug("UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map")
             self._user_authorization_map.clear()
             #reload user group requests
@@ -397,22 +390,16 @@ class MemoryCache(object):
 
     def refresh_idp_cache(self,force=False):
         if self._idp_cache_check_time.can_run() or force:
-            from .models import IdentityProvider
-            if ( not self._idps or 
-                IdentityProvider.objects.filter(modified__gt=self._idps_ts).exists() or  
-                IdentityProvider.objects.all().count() != self._idps_size
-            ):
+            from .models import IdentityProviderChange,IdentityProvider
+            if ( self._idps is None or IdentityProviderChange.is_changed(self._idps_ts,self._idps_size)):
                 IdentityProvider.refresh_idps()
 
 
     def refresh_userflow_cache(self,force=False):
         if self._userflow_cache_check_time.can_run() or force:
-            from .models import CustomizableUserflow
-            if ( not self._userflows or 
-                CustomizableUserflow.objects.filter(modified__gt=self._userflows_ts).exists() or  
-                CustomizableUserflow.objects.all().count() != self._userflows_size
-            ):
+            from .models import CustomizableUserflowChange,CustomizableUserflow
+            if ( self._userflows is None or CustomizableUserflowChange.is_changed(self._userflows_ts,self._userflows_size)):
                 CustomizableUserflow.refresh_userflows()
 
-
 cache = MemoryCache()
+

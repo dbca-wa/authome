@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.db import models,transaction
 from django.contrib.postgres.fields import ArrayField
-from django.db.models.signals import pre_delete,pre_save,post_save
+from django.db.models.signals import pre_delete,pre_save,post_save,post_delete
 from django.dispatch import receiver
 from django.contrib.auth.models import AbstractUser
 
@@ -17,8 +17,11 @@ from ipware.ip import get_client_ip
 import hashlib
 
 from .cache import cache
+from .utils import get_defaultcache
 
 logger = logging.getLogger(__name__)
+
+defaultcache = get_defaultcache()
 
 help_text_users = """
 List all possible user emails in this group separated by new line character.
@@ -196,7 +199,7 @@ class IdentityProvider(DbObjectMixin,models.Model):
                 modified = obj.modified
             elif modified < obj.modified:
                 modified = obj.modified
-        cache.idps = (idps,size,modified)
+        cache.idps = (idps,size,modified or timezone.now())
 
     @classmethod
     def get_idp(cls,idpid):
@@ -341,7 +344,7 @@ Email: enquiries@dbca.wa.gov.au
                 if not getattr(o,name):
                     setattr(o,name,getattr(defaultuserflow,name))
 
-        cache.userflows = (userflows,defaultuserflow,size,last_modified)
+        cache.userflows = (userflows,defaultuserflow,size,last_modified or timezone.now())
         
 
 class UserEmail(object):
@@ -674,7 +677,7 @@ class UserGroup(DbObjectMixin,models.Model):
             if group.parent_group_id:
                 group_trees[group.parent_group_id][1].append(val)
         group_trees = [v for v in group_trees.values() if not v[0].parent_group_id]
-        cache.usergrouptree = (group_trees,public_group,dbca_group,size,modified)
+        cache.usergrouptree = (group_trees,public_group,dbca_group,size,modified or timezone.now())
 
     @classmethod
     def get_grouptree(cls):
@@ -1099,7 +1102,7 @@ class UserAuthorization(AuthorizationMixin):
                 userauthorization[authorization.user] = [authorization]
                 previous_user = authorization.user
         
-        cache.userauthorization = (userauthorization,size,modified)
+        cache.userauthorization = (userauthorization,size,modified or timezone.now())
 
     @classmethod
     def get_authorization(cls,useremail):
@@ -1138,7 +1141,7 @@ class UserGroupAuthorization(AuthorizationMixin):
                 usergroupauthorization[authorization.usergroup] = [authorization]
                 previous_usergroup = authorization.usergroup
 
-        cache.usergroupauthorization = (usergroupauthorization,size,modified)
+        cache.usergroupauthorization = (usergroupauthorization,size,modified or timezone.now())
 
     @classmethod
     def get_authorization(cls,usergroup):
@@ -1297,4 +1300,135 @@ class UserGroupListener(object):
     def check_public_group(sender,instance,**kwargs):
         if instance.id is None and instance.public_group() and instance.users == ["*"] and instance.excluded_users is None:
             raise Exception("Public user group already exists")
+
+if defaultcache:
+    class ModelChange(object):
+        key = None
+        @classmethod
+        def change(cls):
+            defaultcache.set(cls.key,timezone.now())
+
+        @classmethod
+        def is_changed(cls,cachetime,size=0):
+            last_modified = defaultcache.get(cls.key)
+            if not last_modified:
+                return False
+            else:
+                return not cachetime or last_modified > cachetime
+
+    class IdentityProviderChange(ModelChange):
+        key = "idp_last_modified"
+        @staticmethod
+        @receiver(post_save, sender=IdentityProvider)
+        def post_save(sender,*args,**kwargs):
+            IdentityProviderChange.change()
+
+        @staticmethod
+        @receiver(post_delete, sender=IdentityProvider)
+        def post_delete(sender,*args,**kwargs):
+            IdentityProviderChange.change()
+
+    class CustomizableUserflowChange(ModelChange):
+        key = "customizableuserflow_last_modified"
+        @staticmethod
+        @receiver(post_save, sender=CustomizableUserflow)
+        def post_save(sender,*args,**kwargs):
+            CustomizableUserflowChange.change()
+
+        @staticmethod
+        @receiver(post_delete, sender=CustomizableUserflow)
+        def post_delete(sender,*args,**kwargs):
+            CustomizableUserflowChange.change()
+
+    class UserGroupChange(ModelChange):
+        key = "usergroup_last_modified"
+        @staticmethod
+        @receiver(post_save, sender=UserGroup)
+        def post_save(sender,*args,**kwargs):
+            UserGroupChange.change()
+
+        @staticmethod
+        @receiver(post_delete, sender=UserGroup)
+        def post_delete(sender,*args,**kwargs):
+            UserGroupChange.change()
+
+    class UserAuthorizationChange(ModelChange):
+        key = "userauthorization_last_modified"
+        @staticmethod
+        @receiver(post_save, sender=UserAuthorization)
+        def post_save(sender,*args,**kwargs):
+            UserAuthorizationChange.change()
+
+        @staticmethod
+        @receiver(post_delete, sender=UserAuthorization)
+        def post_delete(sender,*args,**kwargs):
+            UserAuthorizationChange.change()
+
+    class UserGroupAuthorizationChange(ModelChange):
+        key = "usergroupauthorization_last_modified"
+        @staticmethod
+        @receiver(post_save, sender=UserGroupAuthorization)
+        def post_save(sender,*args,**kwargs):
+            UserGroupAuthorizationChange.change()
+
+        @staticmethod
+        @receiver(post_delete, sender=UserGroupAuthorization)
+        def post_delete(sender,*args,**kwargs):
+            UserGroupAuthorizationChange.change()
+
+else:
+    class IdentityProviderChange(object):
+        @staticmethod
+        def is_changed(cachetime,size):
+            if ( 
+                IdentityProvider.objects.filter(modified__gt=cachetime).exists() or  
+                IdentityProvider.objects.all().count() != size
+            ):
+                return True
+            else:
+                return False
+
+    class CustomizagbleUserflowChange(object):
+        @staticmethod
+        def is_changed(cachetime,size):
+            if ( 
+                CustomizableUserflow.objects.filter(modified__gt=cachetime).exists() or  
+                CustomizableUserflow.objects.all().count() != size
+            ):
+                return True
+            else:
+                return False
+
+    class UserGroupChange(object):
+        @staticmethod
+        def is_changed(cachetime,size):
+            if ( 
+                UserGroup.objects.filter(modified__gt=cachetime).exists() or
+                UserGroup.objects.all().count() != size
+            ):
+                return True
+            else:
+                return False
+
+    class UserAuthorizationChange(object):
+        @staticmethod
+        def is_changed(cachetime,size):
+            if ( 
+                UserAuthorization.objects.filter(modified__gt=cachetime).exists() or  
+                UserAuthorization.objects.all().count() != size
+            ):
+                return True
+            else:
+                return False
+
+    class UserGroupAuthorizationChange(object):
+        @staticmethod
+        def is_changed(cachetime,size):
+            if ( 
+                UserGroupAuthorization.objects.filter(modified__gt=cachetime).exists() or
+                UserGroupAuthorization.objects.all().count() != size
+            ):
+                return True
+            else:
+                return False
 
