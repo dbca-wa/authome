@@ -75,6 +75,9 @@ class UserAdmin(DatetimeMixin,auth.admin.UserAdmin):
             return obj.email
     _email.short_description = "Email"
 
+    def has_add_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(models.UserGroup)
 class UserGroupAdmin(DatetimeMixin,admin.ModelAdmin):

@@ -221,13 +221,13 @@ class MemoryCache(object):
     def get_auth_key(self,email,session_key):
         return session_key
 
-    def get_auth(self,key):
+    def get_auth(self,key,last_modified=None):
         """
         Return the populated http reponse
         """
         data = self._auth_map.get(key)
         if data:
-            if timezone.now() <= data[1]:
+            if timezone.now() <= data[2] and (not last_modified or data[1] >= last_modified):
                 return data[0]
             else:
                 del self._auth_map[key]
@@ -239,7 +239,8 @@ class MemoryCache(object):
         """
         cache the auth response content and return the populated http response 
         """
-        self._auth_map[key] = [response,timezone.now() + settings.AUTH_CACHE_EXPIRETIME]
+        now = timezone.now()
+        self._auth_map[key] = [response,now,now + settings.AUTH_CACHE_EXPIRETIME]
 
         self._enforce_maxsize("auth map",self._auth_map,settings.AUTH_CACHE_SIZE)
         self.clean_auth_cache()

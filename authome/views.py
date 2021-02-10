@@ -104,7 +104,7 @@ def _auth_prod(request):
 
     user = request.user
     auth_key = cache.get_auth_key(user.email,request.session.session_key)
-    response = cache.get_auth(auth_key)
+    response = cache.get_auth(auth_key,user.modified)
 
     if response:
         return response
@@ -137,7 +137,7 @@ def _auth_debug(request):
 
     user = request.user
     auth_key = cache.get_auth_key(user.email,request.session.session_key)
-    response = cache.get_auth(auth_key)
+    response = cache.get_auth(auth_key,user.modified)
 
     if response:
         diff = timezone.now() - before
@@ -319,7 +319,7 @@ def loginstatus(request):
 def profile(request):
     user = request.user
     auth_key = cache.get_auth_key(user.email,request.session.session_key)
-    response = cache.get_auth(auth_key)
+    response = cache.get_auth(auth_key,user.modified)
 
     if not response:
         response = _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
@@ -523,10 +523,6 @@ def profile_edit_complete(request,backend,*args,**kwargs):
     request.policy = CustomizableUserflow.get_userflow(domain).profile_edit
     request.http_error_code = 417
     request.http_error_message = "Failed to edit user profile.{}"
-
-    user = request.user
-    auth_key = cache.get_auth_key(user.email,request.session.session_key)
-    response = cache.delete_auth(auth_key)
 
     return do_complete(request.backend, _do_login, user=request.user,
                        redirect_name=REDIRECT_FIELD_NAME, request=request,

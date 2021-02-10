@@ -1154,6 +1154,7 @@ class UserGroupAuthorization(AuthorizationMixin):
 class User(AbstractUser):
     usergroup = models.ForeignKey(UserGroup, on_delete=models.DO_NOTHING,editable=False,null=False)
     last_idp = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,editable=False,null=True)
+    modified = models.DateTimeField(auto_now=timezone.now)
 
     def clean(self):
         super().clean()
