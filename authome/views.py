@@ -454,30 +454,81 @@ observer.observe(targetNode, config);
 """
 
 login_js = None
-def adb2c_view(request,template,**kwargs):
-    domain = request.GET.get('domain', None)
-    userflow = CustomizableUserflow.get_userflow(domain)
+context = None
+def _init_userflow(request,userflow):
     if userflow.initialized:
-        page_layout = userflow.page_layout
+        #already initialized
+        return
+
+    #initialize the user userflow
+    global context
+    if not context:
+        context={"email_signup_url":request.build_absolute_uri(reverse("email_signup")),'password_reset_url':request.build_absolute_uri(reverse("password_reset"))}
+
+    #initialize the user userflow
+    if not userflow.page_layout:
+        #userflow has no customized page_layout, use the defaultuserflow's page_layout
+        #initialize defaultuserflow,
+        _init_userflow(request,userflow.defaultuserflow)
+        #set userflow's page layout to default userflow's page layout
+        userflow.page_layout = userflow.defaultuserflow.page_layout
+        if userflow.email_enabled:
+            userflow.loginpage_layout = userflow.defaultuserflow.page_layout_with_js
+        else:
+            userflow.loginpage_layout = userflow.defaultuserflow.page_layout
+        userflow.extracss = userflow.defaultuserflow.extracss
+        userflow.initialized = True
     else:
-        page_layout = userflow.page_layout or default_layout
+        page_layout = userflow.page_layout
+    
         page_layout = django_engine.from_string(page_layout).render(
-            context={"email_signup_url":request.build_absolute_uri(reverse("email_signup")),'password_reset_url':request.build_absolute_uri(reverse("password_reset"))},
+            context=context,
             request=request
         )
         userflow.page_layout = page_layout
+        #init login page layout
+        if userflow.is_default or userflow.email_enabled:
+            global login_js
+            if not login_js:
+                login_js = django_engine.from_string(login_js_template).render(
+                    context=context,
+                    request=request
+                )
+            page_layout_with_js = "{}{}".format(page_layout,login_js)
+
+            if userflow.is_default:
+                userflow.page_layout_with_js = page_layout_with_js
+            if userflow.email_enabled:
+                userflow.loginpage_layout = page_layout_with_js
+            else:
+                userflow.loginpage_layout = page_layout
+        else:
+            userflow.loginpage_layout = page_layout
+    
+        #init extracss
+        extracss = userflow.extracss or ""
+        extracss = django_engine.from_string(extracss).render(
+            context=context,
+            request=request
+        )
+        userflow.extracss = extracss
+    
         userflow.initialized = True
 
-    if template == "login" and userflow.email_enabled:
-        global login_js
-        if not login_js:
-            login_js = django_engine.from_string(login_js_template).render(
-                context={"email_signup_url":request.build_absolute_uri(reverse("email_signup")),'password_reset_url':request.build_absolute_uri(reverse("password_reset"))},
-                request=request
-            )
-        page_layout = "{}{}".format(page_layout,login_js)
+def adb2c_view(request,template,**kwargs):
+    domain = request.GET.get('domain', None)
+    userflow = CustomizableUserflow.get_userflow(domain)
 
-    return TemplateResponse(request,"authome/{}.html".format(template),context={"body":page_layout})
+    _init_userflow(request,userflow)
+
+    if template == "login":
+        page_layout = userflow.loginpage_layout
+    else:
+        page_layout = userflow.page_layout
+
+    extracss = userflow.extracss
+
+    return TemplateResponse(request,"authome/{}.html".format(template),context={"body":page_layout,"extracss":extracss})
 
 def forbidden(request):
     context = {}

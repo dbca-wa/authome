@@ -81,6 +81,7 @@ class CustomizableUserflowForm(forms.ModelForm):
         model = CustomizableUserflow
         fields = "__all__"
         widgets = {
+            'extracss': forms.Textarea(attrs={'style':'width:80%;height:100px'}),
             'page_layout': forms.Textarea(attrs={'style':'width:80%;height:500px'})
         }
         

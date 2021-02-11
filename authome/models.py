@@ -222,6 +222,7 @@ class IdentityProvider(DbObjectMixin,models.Model):
 class CustomizableUserflow(DbObjectMixin,models.Model):
     _changed = False
     initialized = False
+    defaultuserflow = None
     default_layout="""{% load i18n static %}
 <table id="header" style="background:#2D2F32;width:100%;"><tr><td style="width:34%">
     <div id="logo" style="margin-left:50px;vertical-align:middle;text-align:left">
@@ -266,14 +267,15 @@ Email: enquiries@dbca.wa.gov.au
     password_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The user password reset user flow")
     email_enabled = models.BooleanField(default=True,help_text="Enable/Disable the email singin for this domain")
 
+    extracss = models.TextField(null=True,blank=True)
     page_layout = models.TextField(null=True,blank=True)
 
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
     @property
-    def is_default_setting(self):
-        return self.name == '*'
+    def is_default(self):
+        return self.domain == '*'
 
     def clean(self):
         super().clean()
@@ -297,7 +299,7 @@ Email: enquiries@dbca.wa.gov.au
 
         if self.id is not None:
             self._changed = False
-            for name in ("default","email_signup","email","profile_edit","password_reset","page_layout","fixed"):
+            for name in ("default","email_signup","email","profile_edit","password_reset","page_layout","fixed","extracss","email_enabled"):
                 if getattr(self,name) != getattr(self.db_obj,name):
                     self._changed = True
                     break
@@ -324,7 +326,7 @@ Email: enquiries@dbca.wa.gov.au
         last_modified = None
         size = 0
         for o in cls.objects.all():
-            if o.domain == '*':
+            if o.is_default:
                 defaultuserflow = o
                 
             userflows[o.domain] = o
@@ -335,14 +337,18 @@ Email: enquiries@dbca.wa.gov.au
                 last_modified = o.modified
 
             size += 1
-
         if not defaultuserflow :
             raise Exception("The default customizable userflow configuration is missing.")
+        elif not defaultuserflow.page_layout:
+            defaultuserflow.page_layout = cls.default_layout
+
+        defaultuserflow.defaultuserflow = None
 
         for o in userflows.values():
-            for name in ("default","email_signup","email","profile_edit","password_reset","page_layout"):
+            for name in ("default","email_signup","email","profile_edit","password_reset"):
                 if not getattr(o,name):
                     setattr(o,name,getattr(defaultuserflow,name))
+            o.defaultuserflow = defaultuserflow
 
         cache.userflows = (userflows,defaultuserflow,size,last_modified or timezone.now())
         

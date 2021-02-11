@@ -47,5 +47,7 @@ try:
     cache.refresh_idp_cache(True)
     cache.refresh_userflow_cache(True)
 except:
+    import traceback
+    traceback.print_exc()
     pass
     
