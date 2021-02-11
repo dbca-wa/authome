@@ -384,9 +384,9 @@ class MemoryCache(object):
 
     def refresh_authorization_cache(self,force=False):
         if self._authorization_cache_check_time.can_run() or force:
-            self.refresh_usergroups()
-            self.refresh_userauthorization()
-            self.refresh_usergroupauthorization()
+            self.refresh_usergroups(force)
+            self.refresh_userauthorization(force)
+            self.refresh_usergroupauthorization(force)
 
     def refresh_idp_cache(self,force=False):
         if self._idp_cache_check_time.can_run() or force:
