@@ -15,6 +15,12 @@ logger = logging.getLogger(__name__)
 
 usercache = get_usercache()
 
+def email_lowercase(backend,details, user=None,*args, **kwargs):
+    email = details.get("email")
+    details['email'] = email.strip().lower() if email else None
+
+    return {"details":details}
+
 _max_age = 100 * 365 * 24 * 60 * 60
 def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     request = backend.strategy.request
@@ -37,7 +43,6 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
         return response
 
     email = details.get("email")
-    email = email.strip().lower() if email else None
 
     #check whether identity provider is the same as the configured identity provider
     if email:
@@ -115,8 +120,6 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     logger.debug("set backend logout url to {}".format(backend_logout_url))
     backend.strategy.session_set("backend_logout_url",backend_logout_url)
 
-    return {"email":email}
-
 
 def user_details(strategy, details, user=None, *args, **kwargs):
     """Update user details using data from provider."""
@@ -124,7 +127,7 @@ def user_details(strategy, details, user=None, *args, **kwargs):
         return
 
     changed = False  # flag to track changes
-    protected = ( 'id', 'pk', 'email') + \
+    protected = ('username', 'id', 'pk', 'email') + \
                 tuple(strategy.setting('PROTECTED_USER_FIELDS', []))
 
     # Update user model attributes with the new data sent by the current
@@ -137,10 +140,11 @@ def user_details(strategy, details, user=None, *args, **kwargs):
 
         # Check https://github.com/omab/python-social-auth/issues/671
         current_value = getattr(user, name, None)
-        if current_value and current_value == value:
+        if current_value == value:
             continue
 
         changed = True
+        logger.debug("The {1} of the User({0}) was changed from {2} to {3}".format(user.email,name,current_value,value))
         setattr(user, name, value)
 
     if changed:
