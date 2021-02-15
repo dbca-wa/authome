@@ -32,9 +32,11 @@ RUN find ./ -type f -iname '*.py' -exec sed -i 's/logger.debug/#logger.debug/g' 
 
 WORKDIR /app
 RUN echo "#!/bin/bash \n\
-if [[ \"\$DEBUG\" == \"True\" ]]; then \n\
+if [[ \"\$DEBUG\" == \"True\" || -n \"\${LOGLEVEL}\" ]]; then \n\
+    echo \"Running in dev mode\" \n\
     cd /app/dev && gunicorn authome.wsgi --config=gunicorn.py \n\
 else \n\
+    echo \"Running in release mode\" \n\
     cd /app/release && gunicorn authome.wsgi --config=gunicorn.py \n\
 fi \n\
 " > start_app

@@ -1067,14 +1067,14 @@ def _can_access_debug(email,domain,path):
             return False
     finally:
         diff = datetime.now() - start
-        if diff.seconds > 0 or diff.microseconds > 3000:
+        if diff.seconds > 0 or diff.microseconds > 10000:
             logger.warning("spend {0} milliseconds to check the authroization.user={1}, request=https://{2}{3}, requests={4})".format(round((diff.seconds * 1000 + diff.microseconds)/1000),email,domain,path,"{}({},domain={},paths={},excluded_paths={})".format(requests.__class__.__name__,requests,requests.domain,requests.paths,requests.excluded_paths) if requests else "None"))
             pass
         else:
             logger.debug("spend {0} milliseconds to check the authroization.user={1}, request=https://{2}{3}, requests={4})".format(round((diff.seconds * 1000 + diff.microseconds)/1000),email,domain,path,"{}({},domain={},paths={},excluded_paths={})".format(requests.__class__.__name__,requests,requests.domain,requests.paths,requests.excluded_paths) if requests else "None"))
             pass
 
-can_access = _can_access_debug if settings.DEBUG else _can_access
+can_access = _can_access if settings.RELEASE else _can_access_debug
 
 class UserAuthorization(AuthorizationMixin):
     user = models.EmailField(max_length=64)
@@ -1318,9 +1318,17 @@ if defaultcache:
         def is_changed(cls,cachetime,size=0):
             last_modified = defaultcache.get(cls.key)
             if not last_modified:
+                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
+            elif not cachetime:
+                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
+                return True
+            elif last_modified > cachetime:
+                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
+                return True
             else:
-                return not cachetime or last_modified > cachetime
+                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+                return False
 
     class IdentityProviderChange(ModelChange):
         key = "idp_last_modified"
@@ -1384,57 +1392,67 @@ if defaultcache:
 
 else:
     class IdentityProviderChange(object):
-        @staticmethod
-        def is_changed(cachetime,size):
+        @classmethod
+        def is_changed(cls,cachetime,size):
             if ( 
                 IdentityProvider.objects.filter(modified__gt=cachetime).exists() or  
                 IdentityProvider.objects.all().count() != size
             ):
+                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
                 return True
             else:
+                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
 
     class CustomizagbleUserflowChange(object):
-        @staticmethod
-        def is_changed(cachetime,size):
+        @classmethod
+        def is_changed(cls,cachetime,size):
             if ( 
                 CustomizableUserflow.objects.filter(modified__gt=cachetime).exists() or  
                 CustomizableUserflow.objects.all().count() != size
             ):
+                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
                 return True
             else:
+                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
 
     class UserGroupChange(object):
-        @staticmethod
-        def is_changed(cachetime,size):
+        @classmethod
+        def is_changed(cls,cachetime,size):
             if ( 
                 UserGroup.objects.filter(modified__gt=cachetime).exists() or
                 UserGroup.objects.all().count() != size
             ):
+                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
                 return True
             else:
+                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
 
     class UserAuthorizationChange(object):
-        @staticmethod
-        def is_changed(cachetime,size):
+        @classmethod
+        def is_changed(cls,cachetime,size):
             if ( 
                 UserAuthorization.objects.filter(modified__gt=cachetime).exists() or  
                 UserAuthorization.objects.all().count() != size
             ):
+                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
                 return True
             else:
+                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
 
     class UserGroupAuthorizationChange(object):
-        @staticmethod
-        def is_changed(cachetime,size):
+        @classmethod
+        def is_changed(cls,cachetime,size):
             if ( 
                 UserGroupAuthorization.objects.filter(modified__gt=cachetime).exists() or
                 UserGroupAuthorization.objects.all().count() != size
             ):
+                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
                 return True
             else:
+                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
 

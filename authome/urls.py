@@ -5,6 +5,7 @@ from django.conf import settings
 
 from authome import views
 from authome.cache import cache
+import authome.patch
 
 urlpatterns = [
     path('sso/auth_logout', views.logout_view, name='logout'),

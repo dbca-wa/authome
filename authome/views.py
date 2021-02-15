@@ -142,19 +142,13 @@ def _auth_debug(request):
     if response:
         diff = timezone.now() - before
         diff1 = timezone.now() - start
-        logger.debug("Spend {} milliseconds to get the cached response,total spend {} milliseconds to process the request".format(
-            round((diff.seconds * 1000 + diff.microseconds)/1000),
-            round((diff1.seconds * 1000 + diff1.microseconds)/1000)
-        ))
+        logger.debug("Spend {} milliseconds to get the cached response,total spend {} milliseconds to process the request".format(round((diff.seconds * 1000 + diff.microseconds)/1000), round((diff1.seconds * 1000 + diff1.microseconds)/1000)))
         logger.debug("==============End to authenticate the user================")
         return response
     else:
         diff = timezone.now() - before
         diff1 = timezone.now() - start
-        logger.debug("Spend {} milliseconds to generate and cache the response, total spend {} milliseconds to process the request".format(
-            round((diff.seconds * 1000 + diff.microseconds)/1000),
-            round((diff1.seconds * 1000 + diff1.microseconds)/1000)
-        ))
+        logger.debug("Spend {} milliseconds to generate and cache the response, total spend {} milliseconds to process the request".format(round((diff.seconds * 1000 + diff.microseconds)/1000),round((diff1.seconds * 1000 + diff1.microseconds)/1000)))
         logger.debug("==============End to authenticate the user================")
         return _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
 
@@ -162,7 +156,7 @@ def _auth_debug(request):
 AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
 AUTH_REQUIRED_RESPONSE.content = "Authentication required"
 
-_auth = _auth_debug if settings.DEBUG else _auth_prod
+_auth = _auth_prod if settings.RELEASE else _auth_debug
 
 AUTH_NOT_REQUIRED_RESPONSE = HttpResponse(content="Succeed",status=204)
 @csrf_exempt

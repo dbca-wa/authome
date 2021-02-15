@@ -9,11 +9,9 @@ from social_core.backends import azuread_b2c
 from social_core.exceptions import AuthException
 
 from .models import IdentityProvider,CustomizableUserflow,User
-from .utils import get_clientapp_domain,get_usercache
+from .utils import get_clientapp_domain
 
 logger = logging.getLogger(__name__)
-
-usercache = get_usercache()
 
 class AuthenticateFailed(SuspiciousOperation): 
     def __init__(self,http_code,message,ex):
@@ -91,22 +89,4 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
                 raise AuthenticateFailed(self.strategy.request.http_error_code,self.strategy.request.http_error_message,ex)
             else:
                 raise AuthenticateFailed(400,"Failed to authenticate the user.{}",ex)
-
-if usercache:
-    def _get_cached_user(self,userid):
-        userkey = settings.GET_USER_KEY(userid)
-        user = usercache.get(userkey)
-        if not user:
-            user = User.objects.get(pk=userid)
-            usercache.set(userkey,user,settings.USER_CACHE_TIMEOUT)
-            logger.debug("Cache the user({}) data to usercache".format(user.email))
-        else:
-            logger.debug("Get the user({}) data from usercache".format(user.email))
-            pass
-        return user
-
-    AzureADB2COAuth2.get_user = _get_cached_user
-
-        
-        
 

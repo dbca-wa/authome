@@ -6,6 +6,12 @@ import dj_database_url
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEBUG = env('DEBUG', False)
+LOGLEVEL = env('LOGLEVEL')
+if LOGLEVEL not in ["DEBUG",'INFO','WARNING','ERROR','CRITICAL']:
+    LOGLEVEL = 'DEBUG' if DEBUG else 'INFO'
+
+RELEASE = False if LOGLEVEL in ["DEBUG"] else True
+
 SECRET_KEY = env('SECRET_KEY', 'PlaceholderSecretKey')
 if not DEBUG:
     ALLOWED_HOSTS = env('ALLOWED_DOMAINS', '').split(',')
@@ -200,7 +206,7 @@ LOGGING = {
     },
     'handlers': {
         'console': {
-            'level': 'DEBUG' if DEBUG else 'INFO',
+            'level': LOGLEVEL,
             'class': 'logging.StreamHandler',
             'formatter': 'console'
         },
@@ -217,7 +223,7 @@ LOGGING = {
         },
         'authome': {
             'handlers': ['console'],
-            'level': 'DEBUG' if DEBUG else 'INFO'
+            'level': LOGLEVEL,
         },
     }
 }
@@ -250,6 +256,7 @@ def get_cache(server):
 CACHE_SERVER = env("CACHE_SERVER")
 CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
 CACHE_USER_SERVER = env("CACHE_USER_SERVER")
+USER_CACHE_ALIAS = None
 if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     CACHES = {}
     if CACHE_SERVER:
@@ -257,10 +264,10 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
    
     if CACHE_SESSION_SERVER:
         CACHES["session"] = get_cache(CACHE_SESSION_SERVER)
-        SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+        SESSION_ENGINE = "authome.session" if LOGLEVEL in ["DEBUG"] else  "django.contrib.sessions.backends.cache"
         SESSION_CACHE_ALIAS = "session"
     elif CACHE_SERVER:
-        SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+        SESSION_ENGINE = "authome.session" if LOGLEVEL in ["DEBUG"] else  "django.contrib.sessions.backends.cache"
         SESSION_CACHE_ALIAS = "default"
 
     if CACHE_USER_SERVER:
@@ -270,7 +277,5 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     elif CACHE_SERVER:
         GET_USER_KEY = lambda userid:"user_{}".format(userid)
         USER_CACHE_ALIAS = "default"
-    else:
-        USER_CACHE_ALIAS = None
 
     USER_CACHE_TIMEOUT = env("USER_CACHE_TIMEOUT",86400)
