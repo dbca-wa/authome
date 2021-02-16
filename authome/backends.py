@@ -9,7 +9,7 @@ from social_core.backends import azuread_b2c
 from social_core.exceptions import AuthException
 
 from .models import IdentityProvider,CustomizableUserflow,User
-from .utils import get_clientapp_domain
+from .utils import get_redirect_domain
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
         if hasattr(request,"policy"):
             policy = request.policy
         else:
-            domain = get_clientapp_domain(request)
+            domain = get_redirect_domain(request)
             userflow = CustomizableUserflow.get_userflow(domain)
             if userflow.fixed:
                 policy = userflow.fixed

@@ -29,7 +29,7 @@ import urllib.parse
 from django.contrib.auth.models import User
 from .models import can_access,UserToken,UserGroup,IdentityProvider,User,CustomizableUserflow
 from .cache import cache
-from .utils import get_clientapp_domain,get_domain
+from .utils import get_redirect_domain,get_domain,get_request_domain
 
 logger = logging.getLogger(__name__)
 django_engine = engines['django']
@@ -593,10 +593,15 @@ def get_post_logout_url(request,idp=None,encode=True):
 @never_cache
 @psa("/sso/profile/edit/complete")
 def profile_edit(request,backend):
-    domain = get_clientapp_domain(request)
+    if request.GET.get(REDIRECT_FIELD_NAME):
+        logger.debug("Found next url '{}'".format(request.GET.get(REDIRECT_FIELD_NAME)))
+        pass
+    else:
+        request.session[REDIRECT_FIELD_NAME] = "https://{}/sso/profile".format(get_request_domain(request))
+        logger.debug("No next url provided,set the next url to '{}'".format(request.session[REDIRECT_FIELD_NAME]))
+
+    domain = get_redirect_domain(request)
     request.policy = CustomizableUserflow.get_userflow(domain).profile_edit
-    if not request.GET.get(REDIRECT_FIELD_NAME):
-        request.session[REDIRECT_FIELD_NAME] = "https://{}/sso/profile".format(get_clientapp_domain(request))
     return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
 
 
@@ -607,7 +612,7 @@ def _do_login(*args,**kwargs):
 @csrf_exempt
 @psa("/sso/profile/edit/complete")
 def profile_edit_complete(request,backend,*args,**kwargs):
-    domain = get_clientapp_domain(request)
+    domain = get_redirect_domain(request)
     request.policy = CustomizableUserflow.get_userflow(domain).profile_edit
     request.http_error_code = 417
     request.http_error_message = "Failed to edit user profile.{}"
@@ -620,7 +625,7 @@ def profile_edit_complete(request,backend,*args,**kwargs):
 @never_cache
 @psa("/sso/email/signup/complete")
 def email_signup(request,backend):
-    domain = get_clientapp_domain(request)
+    domain = get_redirect_domain(request)
     request.policy = CustomizableUserflow.get_userflow(domain).email_signup
     return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
 
@@ -628,7 +633,7 @@ def email_signup(request,backend):
 @csrf_exempt
 @psa("/sso/email/signup/complete")
 def email_signup_complete(request,backend,*args,**kwargs):
-    domain = get_clientapp_domain(request)
+    domain = get_redirect_domain(request)
     request.policy = CustomizableUserflow.get_userflow(domain).email_signup
     request.http_error_code = 417
     request.http_error_message = "Failed to signup a local account..{}"
@@ -640,7 +645,7 @@ def email_signup_complete(request,backend,*args,**kwargs):
 @never_cache
 @psa("/sso/password/reset/complete")
 def password_reset(request,backend):
-    domain = get_clientapp_domain(request)
+    domain = get_redirect_domain(request)
     request.policy = CustomizableUserflow.get_userflow(domain).password_reset
     return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
 
@@ -648,7 +653,7 @@ def password_reset(request,backend):
 @csrf_exempt
 @psa("/sso/password/reset/complete")
 def password_reset_complete(request,backend,*args,**kwargs):
-    domain = get_clientapp_domain(request)
+    domain = get_redirect_domain(request)
     request.policy = CustomizableUserflow.get_userflow(domain).password_reset
     request.http_error_code = 417
     request.http_error_message = "Failed to reset password..{}"

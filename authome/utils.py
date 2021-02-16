@@ -105,9 +105,17 @@ def get_domain(url):
     else:
         return None
 
-def get_clientapp_domain(request):
+def get_redirect_domain(request):
     next_url = request.session.get(REDIRECT_FIELD_NAME)
     return get_domain(next_url)
+
+def get_request_domain(request):
+    next_url = request.GET.get(REDIRECT_FIELD_NAME)
+    if next_url:
+        return get_domain(next_url)
+    else:
+        return request.headers.get("x-upstream-server-name") or request.get_host()
+
 
 def get_usercache():
     from django.conf import settings
