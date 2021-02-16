@@ -554,6 +554,8 @@ def get_post_logout_url(request,idp=None,encode=True):
 def profile_edit(request,backend):
     domain = get_clientapp_domain(request)
     request.policy = CustomizableUserflow.get_userflow(domain).profile_edit
+    if not request.GET.get(REDIRECT_FIELD_NAME):
+        request.session[REDIRECT_FIELD_NAME] = "https://{}/sso/profile".format(get_clientapp_domain(request))
     return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
 
 
