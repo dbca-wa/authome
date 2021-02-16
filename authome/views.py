@@ -427,13 +427,13 @@ if (createAccount && forgotPassword){
 const targetNode = document.getElementById('api');
 
 // Options for the observer (which mutations to observe)
-const config = {  childList: true, subtree: true,attributes:true };
+const config = {  childList: true, subtree: true,attributes:true};
 
 // Callback function to execute when mutations are observed
 const callback = function(mutationsList, observer) {
     createAccount = document.getElementById("createAccount")
     forgotPassword = document.getElementById("forgotPassword")
-    if (createAccount && forgotPassword){
+    if (createAccount && forgotPassword && (createAccount !== "{{email_signup_url}}" || forgotPassword.href !== "{{password_reset_url}}")){
         observer.disconnect();
         createAccount.href = "{{email_signup_url}}"
         forgotPassword.href = "{{password_reset_url}}"
@@ -446,8 +446,37 @@ const observer = new MutationObserver(callback);
 observer.observe(targetNode, config);
 </script>
 """
-
 login_js = None
+
+email_js_template = """
+<script type="text/javascript">
+var forgotPassword = document.getElementById("forgotPassword")
+if (forgotPassword){
+    forgotPassword.href = "{{password_reset_url}}"
+} 
+// Select the node that will be observed for mutations
+const targetNode = document.getElementById('api');
+
+// Options for the observer (which mutations to observe)
+const config = {  childList: true, subtree: true,attributes:true };
+
+// Callback function to execute when mutations are observed
+const callback = function(mutationsList, observer) {
+    forgotPassword = document.getElementById("forgotPassword")
+    if (forgotPassword && forgotPassword.href !== "{{password_reset_url}}"){
+        observer.disconnect();
+        forgotPassword.href = "{{password_reset_url}}"
+        observer.observe(targetNode, config);
+    }
+}
+// Create an observer instance linked to the callback function
+const observer = new MutationObserver(callback);
+// Start observing the target node for configured mutations
+observer.observe(targetNode, config);
+</script>
+"""
+email_js = None
+
 context = None
 def _init_userflow(request,userflow):
     if userflow.initialized:
@@ -470,6 +499,7 @@ def _init_userflow(request,userflow):
             userflow.loginpage_layout = userflow.defaultuserflow.page_layout_with_js
         else:
             userflow.loginpage_layout = userflow.defaultuserflow.page_layout
+        userflow.emailpage_layout = userflow.defaultuserflow.emailpage_layout
         userflow.extracss = userflow.defaultuserflow.extracss
         userflow.initialized = True
     else:
@@ -498,6 +528,15 @@ def _init_userflow(request,userflow):
                 userflow.loginpage_layout = page_layout
         else:
             userflow.loginpage_layout = page_layout
+
+        global email_js
+        if not email_js:
+            email_js = django_engine.from_string(email_js_template).render(
+                context=context,
+                request=request
+            )
+        emailpage_layout = "{}{}".format(page_layout,email_js)
+        userflow.emailpage_layout = emailpage_layout
     
         #init extracss
         extracss = userflow.extracss or ""
@@ -517,6 +556,8 @@ def adb2c_view(request,template,**kwargs):
 
     if template == "login":
         page_layout = userflow.loginpage_layout
+    elif template == "email":
+        page_layout = userflow.emailpage_layout
     else:
         page_layout = userflow.page_layout
 
