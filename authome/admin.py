@@ -326,9 +326,9 @@ class IdentityProviderAdmin(DatetimeMixin,admin.ModelAdmin):
 
 @admin.register(models.CustomizableUserflow)
 class CustomizableUserflowAdmin(DatetimeMixin,admin.ModelAdmin):
-    list_display = ('domain','fixed','default','profile_edit','email_enabled','email_signup','email','password_reset','_modified','_created')
+    list_display = ('domain','fixed','default','profile_edit','email_enabled','mfa_set','email','password_reset','_modified','_created')
     readonly_fields = ('_modified','_created')
     form = forms.CustomizableUserflowForm
-    fields = ('domain','fixed','default','profile_edit','email_enabled','email_signup','email','password_reset','extracss','page_layout','_modified','_created')
+    fields = ('domain','fixed','default','profile_edit','email_enabled','mfa_set','email','password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body",'_modified','_created')
     ordering = ('domain',)
 

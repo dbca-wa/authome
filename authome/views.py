@@ -11,6 +11,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import never_cache
 from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.template import engines
+from django.utils.crypto import get_random_string
 
 import social_django.views
 from social_django.utils import psa
@@ -29,10 +30,14 @@ import urllib.parse
 from django.contrib.auth.models import User
 from .models import can_access,UserToken,UserGroup,IdentityProvider,User,CustomizableUserflow
 from .cache import cache
-from .utils import get_redirect_domain,get_domain,get_request_domain
+from .utils import get_redirect_domain,get_domain,get_request_domain,get_totpurl,encode_qrcode
+from .emails import send_email
 
 logger = logging.getLogger(__name__)
 django_engine = engines['django']
+
+SUCCEED_RESPONSE = HttpResponse(content='Succeed',status=200)
+FORBIDDEN_RESPONSE = HttpResponseForbidden()
 
 def parse_basic(basic_auth):
     if not basic_auth:
@@ -415,155 +420,73 @@ def signout(request,**kwargs):
     else:
         return HttpResponseRedirect(kwargs["logout_url"])
 
-login_js_template = """
-<script type="text/javascript">
-var createAccount = document.getElementById("createAccount")
-var forgotPassword = document.getElementById("forgotPassword")
-if (createAccount && forgotPassword){
-    createAccount.href = "{{email_signup_url}}"
-    forgotPassword.href = "{{password_reset_url}}"
-} 
-// Select the node that will be observed for mutations
-const targetNode = document.getElementById('api');
-
-// Options for the observer (which mutations to observe)
-const config = {  childList: true, subtree: true,attributes:true};
-
-// Callback function to execute when mutations are observed
-const callback = function(mutationsList, observer) {
-    createAccount = document.getElementById("createAccount")
-    forgotPassword = document.getElementById("forgotPassword")
-    if (createAccount && forgotPassword && (createAccount !== "{{email_signup_url}}" || forgotPassword.href !== "{{password_reset_url}}")){
-        observer.disconnect();
-        createAccount.href = "{{email_signup_url}}"
-        forgotPassword.href = "{{password_reset_url}}"
-        observer.observe(targetNode, config);
-    }
-}
-// Create an observer instance linked to the callback function
-const observer = new MutationObserver(callback);
-// Start observing the target node for configured mutations
-observer.observe(targetNode, config);
-</script>
-"""
-login_js = None
-
-email_js_template = """
-<script type="text/javascript">
-var forgotPassword = document.getElementById("forgotPassword")
-if (forgotPassword){
-    forgotPassword.href = "{{password_reset_url}}"
-} 
-// Select the node that will be observed for mutations
-const targetNode = document.getElementById('api');
-
-// Options for the observer (which mutations to observe)
-const config = {  childList: true, subtree: true,attributes:true };
-
-// Callback function to execute when mutations are observed
-const callback = function(mutationsList, observer) {
-    forgotPassword = document.getElementById("forgotPassword")
-    if (forgotPassword && forgotPassword.href !== "{{password_reset_url}}"){
-        observer.disconnect();
-        forgotPassword.href = "{{password_reset_url}}"
-        observer.observe(targetNode, config);
-    }
-}
-// Create an observer instance linked to the callback function
-const observer = new MutationObserver(callback);
-// Start observing the target node for configured mutations
-observer.observe(targetNode, config);
-</script>
-"""
-email_js = None
-
-context = None
-def _init_userflow(request,userflow):
-    if userflow.initialized:
+def _init_userflow_pagelayout(request,userflow,container_class):
+    if hasattr(userflow,container_class):
         #already initialized
         return
-
-    #initialize the user userflow
-    global context
-    if not context:
-        context={"email_signup_url":request.build_absolute_uri(reverse("email_signup")),'password_reset_url':request.build_absolute_uri(reverse("password_reset"))}
 
     #initialize the user userflow
     if not userflow.page_layout:
         #userflow has no customized page_layout, use the defaultuserflow's page_layout
         #initialize defaultuserflow,
-        _init_userflow(request,userflow.defaultuserflow)
+        _init_userflow(request,userflow.defaultuserflow,container_class)
         #set userflow's page layout to default userflow's page layout
-        userflow.page_layout = userflow.defaultuserflow.page_layout
-        if userflow.email_enabled:
-            userflow.loginpage_layout = userflow.defaultuserflow.page_layout_with_js
-        else:
-            userflow.loginpage_layout = userflow.defaultuserflow.page_layout
-        userflow.emailpage_layout = userflow.defaultuserflow.emailpage_layout
-        userflow.extracss = userflow.defaultuserflow.extracss
-        userflow.initialized = True
+        setattr(userflow,container_class,getattr(userflow.defaultuserflow,container_class))
+        userflow.inited_extracss = userflow.defaultuserflow.inited_extracss
     else:
+        context={"container_class":container_class}
         page_layout = userflow.page_layout
     
         page_layout = django_engine.from_string(page_layout).render(
             context=context,
             request=request
         )
-        userflow.page_layout = page_layout
-        #init login page layout
-        if userflow.is_default or userflow.email_enabled:
-            global login_js
-            if not login_js:
-                login_js = django_engine.from_string(login_js_template).render(
-                    context=context,
-                    request=request
-                )
-            page_layout_with_js = "{}{}".format(page_layout,login_js)
-
-            if userflow.is_default:
-                userflow.page_layout_with_js = page_layout_with_js
-            if userflow.email_enabled:
-                userflow.loginpage_layout = page_layout_with_js
-            else:
-                userflow.loginpage_layout = page_layout
-        else:
-            userflow.loginpage_layout = page_layout
-
-        global email_js
-        if not email_js:
-            email_js = django_engine.from_string(email_js_template).render(
+        setattr(userflow,container_class,page_layout)
+    
+        if not hasattr(userflow,"inited_extracss"):
+            #init extracss
+            extracss = userflow.extracss or ""
+            userflow.inited_extracss = django_engine.from_string(extracss).render(
                 context=context,
                 request=request
             )
-        emailpage_layout = "{}{}".format(page_layout,email_js)
-        userflow.emailpage_layout = emailpage_layout
+
+
+def _init_userflow_verifyemail(request,userflow):
+        if hasattr(userflow,"verifyemail_body_template"):
+            return
+
+        #init verify email
+        if userflow.verifyemail_body:
+            userflow.verifyemail_body_template = django_engine.from_string(userflow.verifyemail_body)
+        else:
+            _init_userflow(request,userflow.defaultuserflow)
+            userflow.verifyemail_body_template = userflow.defaultuserflow.verifyemail_body_template
     
-        #init extracss
-        extracss = userflow.extracss or ""
-        extracss = django_engine.from_string(extracss).render(
-            context=context,
-            request=request
-        )
-        userflow.extracss = extracss
-    
-        userflow.initialized = True
+        if not userflow.verifyemail_from:
+            _init_userflow(request,userflow.defaultuserflow)
+            userflow.verifyemail_from = userflow.defaultuserflow.verifyemail_from
+
+        if not userflow.verifyemail_subject:
+            _init_userflow(request,userflow.defaultuserflow)
+            userflow.verifyemail_subject = userflow.defaultuserflow.verifyemail_subject
+
+
 
 def adb2c_view(request,template,**kwargs):
     domain = request.GET.get('domain', None)
+    container_class = request.GET.get('class')
+    if not container_class:
+        container_class = "{}_container".format(template)
+    title = request.GET.get('title', "Signup or Signin")
     userflow = CustomizableUserflow.get_userflow(domain)
 
-    _init_userflow(request,userflow)
+    _init_userflow_pagelayout(request,userflow,container_class)
 
-    if template == "login":
-        page_layout = userflow.loginpage_layout
-    elif template == "email":
-        page_layout = userflow.emailpage_layout
-    else:
-        page_layout = userflow.page_layout
+    page_layout = getattr(userflow,container_class)
+    extracss = userflow.inited_extracss
 
-    extracss = userflow.extracss
-
-    return TemplateResponse(request,"authome/{}.html".format(template),context={"body":page_layout,"extracss":extracss})
+    return TemplateResponse(request,"authome/{}.html".format(template),context={"body":page_layout,"extracss":extracss,"title":title})
 
 def forbidden(request):
     context = {}
@@ -661,4 +584,87 @@ def password_reset_complete(request,backend,*args,**kwargs):
     return do_complete(request.backend, _do_login, user=request.user,
                        redirect_name=REDIRECT_FIELD_NAME, request=request,
                        *args, **kwargs)
+
+@never_cache
+@psa("/sso/mfa/set/complete")
+def mfa_set(request,backend):
+    domain = get_redirect_domain(request)
+    request.policy = CustomizableUserflow.get_userflow(domain).mfa_set
+    return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
+
+@never_cache
+@csrf_exempt
+@psa("/sso/mfa/set/complete")
+def mfa_set_complete(request,backend,*args,**kwargs):
+    domain = get_redirect_domain(request)
+    request.policy = CustomizableUserflow.get_userflow(domain).mfa_set
+    request.http_error_code = 417
+    request.http_error_message = "Failed to reset password..{}"
+
+    return do_complete(request.backend, _do_login, user=request.user,
+                       redirect_name=REDIRECT_FIELD_NAME, request=request,
+                       *args, **kwargs)
+
+
+def _auth_bearer(request):
+    bearer_auth = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else ''
+    m = bearer_token_re.search(bearer_auth)
+    token = None
+    if m:
+        token = m.group('token')
+    if token != settings.SECRET_KEY:
+        return False
+    return True
+
+
+bearer_token_re = re.compile("^Bearer\s+(?P<token>\S+)\s*$")
+@never_cache
+@csrf_exempt
+def verify_code_via_email(request):
+    if not _auth_bearer(request):
+        return FORBIDDEN_RESPONSE
+
+    domain = request.GET.get('domain', None)
+    userflow = CustomizableUserflow.get_userflow(domain)
+    _init_userflow_verifyemail(request,userflow)
+
+    data = json.loads(request.body.decode())
+
+    verifyemail_body = userflow.verifyemail_body_template.render(
+        context=data,
+        request=request
+    )
+    data["email"] = "rocky.chen75@gmail.com"
+    send_email(userflow.verifyemail_from,data["email"],userflow.verifyemail_subject,verifyemail_body)
+    logger.debug("Successfully send verification email to '{}',domain is '{}'".format(data["email"],domain))
+    return SUCCEED_RESPONSE
+
+totp_secret_key_chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'
+@never_cache
+@csrf_exempt
+def totp_generate(request):
+    if not _auth_bearer(request):
+        return FORBIDDEN_RESPONSE
+
+    userEmail = request.POST.get("email")
+    if not userEmail:
+        return HttpResponse(content="Email is missint",status=400)
+    idp = request.POST.get("idp")
+    if not idp:
+        return HttpResponse(content="Idp is missint",status=400)
+
+    secret = get_random_string(settings.TOTP_SECRET_KEY_LENGTH,totp_secret_key_chars)
+
+    totpurl = get_totpurl(secret,email,settings.TOTP_ISSUER,settings.TOTP_TIMESTEP,settings.TOTP_PREFIX)
+
+    qrcode = encode_qrcode(totpurl)
+
+    data = {
+        "qrCode" : qrcode
+    }
+    
+    return JsonResponse(data,status=200)
+
+
+
 

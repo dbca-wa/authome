@@ -1,7 +1,10 @@
 import ast
+import io
 import os
 import urllib.parse
 import re
+import base64
+import qrcode
 
 from django.contrib.auth import REDIRECT_FIELD_NAME
 
@@ -136,3 +139,30 @@ def get_defaultcache():
         return caches['default']
     except:
         return None
+
+def get_totpurl(secret, email, issuer, timestep, prefix=None):
+    prefix = prefix or issuer
+
+    prefix = urllib.parse.quote(prefix)
+    issuer = urllib.parse.quote(issuer)
+
+    if isinstance(secret,bytearray):
+        secret = base64.b32encode(secret)
+    else:
+        secret = base64.b32encode(bytearray(secret,'ascii'))
+
+    return "otpauth://totp/{0}:{1}?secret={2}&period={3}&issuer={0}".format(prefix , email, secret, timestep, issuer)
+
+def encode_qrcode(totpurl):
+    qr = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+    )
+    qr.add_data(totpurl)
+    qr.make()
+    img = qr.make_image()
+    buff = io.BytesIO()
+    img.save('data/dst/qrcode_test2_2.png')
+    img.save(buff, format="PNG")
+    return "data:image/png;base64,"+base64.b64encode(buff.getvalue()).decode("utf-8")
+
+

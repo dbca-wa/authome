@@ -40,6 +40,14 @@ AUTHENTICATION_BACKENDS = (
     'authome.backends.AzureADB2COAuth2',
 )
 
+EMAIL_HOST = env('EMAIL_HOST', required=True)
+EMAIL_PORT = env('EMAIL_PORT', 25)
+
+TOTP_SECRET_KEY_LENGTH = env("TOTP_SECRET_KEY_LENGTH",default=50)
+TOTP_ISSUER = env("TOTP_ISSUER",default="DBCA")
+TOTP_PREFIX = env("TOTP_PREFIX",default="auth2")
+TOTP_TIMESTEP = env("TOTP_TIMESTEP",default=30)
+
 # Azure AD settings
 AZUREAD_AUTHORITY = env('AZUREAD_AUTHORITY', 'https://login.microsoftonline.com')
 AZUREAD_RESOURCE = env('AZUREAD_RESOURCE', '00000002-0000-0000-c000-000000000000')

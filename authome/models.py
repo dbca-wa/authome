@@ -156,7 +156,7 @@ class IdentityProvider(DbObjectMixin,models.Model):
     _domains = None
     _changed = False
 
-    EMAIL_PROVIDER = 'email'
+    LOCAL_PROVIDER = 'local'
 
     name = models.CharField(max_length=64,unique=True,null=True)
     idp = models.CharField(max_length=256,unique=True,null=False,editable=False)
@@ -221,7 +221,6 @@ class IdentityProvider(DbObjectMixin,models.Model):
 
 class CustomizableUserflow(DbObjectMixin,models.Model):
     _changed = False
-    initialized = False
     defaultuserflow = None
     default_layout="""{% load i18n static %}
 <table id="header" style="background:#2D2F32;width:100%;"><tr><td style="width:34%">
@@ -258,10 +257,91 @@ Email: enquiries@dbca.wa.gov.au
 </td></tr></table>
     """
 
+    default_verify_email_body="""<html lang="en-gb" >
+<head>
+    <title>Email verification code</title>
+</head>
+<body>
+
+<table width="100%" cellspacing="0" cellpadding="0" border="0">
+<tbody><tr>
+    <td width="50%" valign="top"></td>
+    <td valign="top">
+        <table dir="ltr" style="border-left:1px solid #e3e3e3;border-right:1px solid #e3e3e3" width="640" lang="en" cellspacing="0" cellpadding="0" border="0">
+        <tbody>
+            <tr style="background-color:#333333">
+                <td style="background:#333333;border-top:1px solid #e3e3e3" width="1"></td>
+                <td style="border-top:1px solid #e3e3e3;border-bottom:1px solid #e3e3e3" width="24">&nbsp;</td>
+                <td style="border-top:1px solid #e3e3e3;border-bottom:1px solid #e3e3e3;padding:12px 0" width="310" valign="middle">
+                    <h1 style="line-height:20pt;font-family:Segoe UI Light;font-size:18pt;color:#ffffff;font-weight:normal">
+                        <span id="m_4438416264798791343HeaderPlaceholder_UserVerificationEmailHeader"><font color="White">Verify your email address</font></span>
+                    </h1>
+                </td>
+                <td style="border-top:1px solid #e3e3e3;border-bottom:1px solid #e3e3e3" width="24">&nbsp;</td>
+                </tr>
+        </tbody>
+        </table>
+
+        <table dir="ltr" width="640" lang="en" cellspacing="0" cellpadding="0" border="0">
+        <tbody><tr>
+            <td style="background:#e3e3e3" width="1"></td>
+            <td width="24">&nbsp;</td>
+            <td id="m_4438416264798791343PageBody" colspan="2" style="border-bottom:1px solid #e3e3e3;padding:10px 0 20px;border-bottom-style:hidden" width="640" valign="top">		
+                <table cellspacing="0" cellpadding="0" border="0">
+                <tbody><tr>
+                    <td style="font-size:10pt;line-height:13pt;color:#000" width="630">
+                        <table dir="ltr" width="100%" lang="en" cellspacing="0" cellpadding="0" border="0">
+                        <tbody><tr>
+                            <td>
+                                <div style="font-family:'Segoe UI',Tahoma,sans-serif;font-size:14px;color:#333">
+                                    <span id="m_4438416264798791343BodyPlaceholder_UserVerificationEmailBodySentence1">Thanks for verifying your <a href="mailto:ROCKY.CHEN75@gmail.com" target="_blank">{{email}}</a> account!</span>
+                                </div>
+                                <br>
+                                <div style="font-family:'Segoe UI',Tahoma,sans-serif;font-size:14px;color:#333;font-weight:bold">
+                                    <span id="m_4438416264798791343BodyPlaceholder_UserVerificationEmailBodySentence2">Your code is: {{otp}}</span>
+                                </div>
+                                <br>
+                                <br>
+                                <div style="font-family:'Segoe UI',Tahoma,sans-serif;font-size:14px;color:#333">
+                                    Sincerely,
+                                </div>
+                                <div style="font-family:'Segoe UI',Tahoma,sans-serif;font-size:14px;font-style:italic;color:#333">
+                                    dbcab2c
+                                </div>
+                            </td>
+                        </tr></tbody>
+                        </table>
+                    </td>
+                </tr></tbody>
+                </table>
+            </td>
+            <td width="1">&nbsp;</td>
+            <td width="1"></td>
+            <td width="1">&nbsp;</td>
+            <td width="1" valign="top"></td>			 
+            <td width="29">&nbsp;</td>
+            <td style="background:#e3e3e3" width="1"></td>
+        </tr>
+        <tr>
+            <td style="background:#e3e3e3;border-bottom:1px solid #e3e3e3" width="1"></td>
+            <td style="border-bottom:1px solid #e3e3e3" width="24">&nbsp;</td>
+            <td id="m_4438416264798791343PageFooterContainer" colspan="6" style="border-bottom:1px solid #e3e3e3;padding:0px" width="585" valign="top"></td>
+            <td style="border-bottom:1px solid #e3e3e3" width="29">&nbsp;</td>
+            <td style="background:#e3e3e3;border-bottom:1px solid #e3e3e3" width="1"></td>
+        </tr></tbody>
+        </table>
+    </td>
+    <td width="50%" valign="top"></td>
+</tr></tbody>
+</table>
+
+</body>
+</html>"""
+
     domain = models.CharField(max_length=128,unique=True,null=False,help_text="Global setting if domain is '*'; otherwise is individual domain settings")
     fixed = models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
     default = models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
-    email_signup = models.CharField(max_length=64,null=True,blank=True,help_text="The email signup user flow")
+    mfa_set = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa set user flow")
     email = models.CharField(max_length=64,null=True,blank=True,help_text="The email signup and signin user flow")
     profile_edit = models.CharField(max_length=64,null=True,blank=True,help_text="The user profile edit user flow")
     password_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The user password reset user flow")
@@ -269,6 +349,10 @@ Email: enquiries@dbca.wa.gov.au
 
     extracss = models.TextField(null=True,blank=True)
     page_layout = models.TextField(null=True,blank=True)
+
+    verifyemail_from = models.EmailField(null=True,blank=True)
+    verifyemail_subject = models.CharField(max_length=512,null=True,blank=True)
+    verifyemail_body = models.TextField(null=True,blank=True)
 
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
@@ -287,9 +371,11 @@ Email: enquiries@dbca.wa.gov.au
             #default userflow
             if not self.page_layout:
                 self.page_layout = self.default_layout
+            if not self.verifyemail_body:
+                self.verifyemail_body = default_verify_email_body
 
             invalid_columns = []
-            for name in ("default","email_signup","email","profile_edit","password_reset","page_layout") if self.email_enabled else  ("default","profile_edit","page_layout"):
+            for name in ("default","mfa_set","email","profile_edit","password_reset","page_layout","verifyemail_from","verifyemail_subject","verifyemail_body") if self.email_enabled else  ("default","profile_edit","page_layout","verifyemail_from","verifyemail_subject","verifyemail_body"):
                 if not getattr(self,name):
                     invalid_columns.append(name)
             if len(invalid_columns) == 1:
@@ -299,7 +385,7 @@ Email: enquiries@dbca.wa.gov.au
 
         if self.id is not None:
             self._changed = False
-            for name in ("default","email_signup","email","profile_edit","password_reset","page_layout","fixed","extracss","email_enabled"):
+            for name in ("default","mfa_set","email","profile_edit","password_reset","page_layout","fixed","extracss","email_enabled","verifyemail_from","verifyemail_subject","verifyemail_body"):
                 if getattr(self,name) != getattr(self.db_obj,name):
                     self._changed = True
                     break
@@ -345,7 +431,7 @@ Email: enquiries@dbca.wa.gov.au
         defaultuserflow.defaultuserflow = None
 
         for o in userflows.values():
-            for name in ("default","email_signup","email","profile_edit","password_reset"):
+            for name in ("default","mfa_set","email","profile_edit","password_reset"):
                 if not getattr(o,name):
                     setattr(o,name,getattr(defaultuserflow,name))
             o.defaultuserflow = defaultuserflow

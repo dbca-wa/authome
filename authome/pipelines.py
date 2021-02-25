@@ -25,11 +25,14 @@ _max_age = 100 * 365 * 24 * 60 * 60
 def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     request = backend.strategy.request
 
+    logger.debug("Data returned from B2C.\n{}".format( "\n".join( sorted(["{} = {}".format(k,v) for k,v in kwargs['response'].items()]) )))
+
+
     if hasattr(request,"policy") and request.policy in ["PROFILE_EDIT_POLICY","PASSWORD_RESET_POLICY"]:
         #not a sign in request
         return
 
-    idp = kwargs['response'].get("idp",IdentityProvider.EMAIL_PROVIDER)
+    idp = kwargs['response'].get("idp",IdentityProvider.LOCAL_PROVIDER)
     idp_obj,created = IdentityProvider.objects.get_or_create(idp=idp)
     logger.debug("authenticate the user({}) with identity provider({}={})".format(details.get("email"),idp_obj.idp,idp))
 
