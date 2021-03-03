@@ -22,6 +22,8 @@ django-debug-toolbar = "^3.2"
 python-memcached = "^1.59"
 django-redis = "^4.12.1"
 qrcode = "^6.1"
+pyotp = "^2.6.0"
+Pillow = "^8.1.0"
 
 [tool.poetry.dev-dependencies]
 ipython = "^7.18.1"

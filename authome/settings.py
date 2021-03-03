@@ -1,5 +1,6 @@
 import os
-from authome.utils import env
+
+from authome.utils import env,get_digest_function
 from datetime import timedelta
 import dj_database_url
 
@@ -47,6 +48,13 @@ TOTP_SECRET_KEY_LENGTH = env("TOTP_SECRET_KEY_LENGTH",default=50)
 TOTP_ISSUER = env("TOTP_ISSUER",default="DBCA")
 TOTP_PREFIX = env("TOTP_PREFIX",default="auth2")
 TOTP_TIMESTEP = env("TOTP_TIMESTEP",default=30)
+TOTP_VALIDWINDOW = env("TOTP_VALIDWINDOW",default=0)
+TOTP_CHECK_LAST_CODE = env("TOTP_CHECK_LAST_CODE",default=True)
+TOTP_DIGITS = env("TOTP_DIGITS",default=6)
+TOTP_ALGORITHM = env("TOTP_ALGORITHM",default="SHA1")
+TOTP_DIGEST = None
+
+TOTP_ALGORITHM,TOTP_DIGEST = get_digest_function(TOTP_ALGORITHM)
 
 # Azure AD settings
 AZUREAD_AUTHORITY = env('AZUREAD_AUTHORITY', 'https://login.microsoftonline.com')

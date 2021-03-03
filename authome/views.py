@@ -26,11 +26,12 @@ import traceback
 import logging
 from datetime import datetime
 import urllib.parse
+from pyotp.totp import TOTP
 
 from django.contrib.auth.models import User
-from .models import can_access,UserToken,UserGroup,IdentityProvider,User,CustomizableUserflow
+from .models import can_access,UserToken,UserGroup,IdentityProvider,User,CustomizableUserflow,UserTOTP
 from .cache import cache
-from .utils import get_redirect_domain,get_domain,get_request_domain,get_totpurl,encode_qrcode
+from .utils import get_redirect_domain,get_domain,get_request_domain,get_totpurl,encode_qrcode,get_digest_function
 from .emails import send_email
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ django_engine = engines['django']
 
 SUCCEED_RESPONSE = HttpResponse(content='Succeed',status=200)
 FORBIDDEN_RESPONSE = HttpResponseForbidden()
+CONFLICT_RESPONSE = HttpResponse(content="Failed",status=409)
 
 def parse_basic(basic_auth):
     if not basic_auth:
@@ -408,10 +410,23 @@ def check_signup(request):
 
 @csrf_exempt
 def signedout(request):
+    host = request.headers.get("x-upstream-server-name") or request.get_host()
     if request.user.is_authenticated:
-        host = request.headers.get("x-upstream-server-name") or request.get_host()
         return HttpResponseRedirect("https://{}/sso/auth_logout".format(host))
-    return TemplateResponse(request,"authome/signedout.html")
+
+    relogin_url = request.GET.get("relogin_url")
+    if not relogin_url:
+        relogin_url = "https://{}".format(host)
+
+    idpid = request.GET.get("idp")
+    idp = IdentityProvider.get_idp(idpid)
+    context = {
+        "relogin_url":relogin_url
+    }
+    if idp and idp.logout_url:
+        context["idp_name"] = idp.name
+        context["idp_logout_url"] = idp.logout_url
+    return TemplateResponse(request,"authome/signedout.html",context=context)
 
 def signout(request,**kwargs):
     if kwargs.get("message"):
@@ -504,10 +519,39 @@ def get_post_logout_url(request,idp=None,encode=True):
     """
     host = request.headers.get("x-upstream-server-name") or request.get_host()
     post_logout_url = "https://{}/sso/signedout".format(host)
-    idp_logout_url = idp.logout_url if idp else IdentityProvider.get_logout_url(request.session.get("idp"))
 
-    if idp_logout_url:
-        backend_post_logout_url = idp_logout_url.format(post_logout_url)
+    relogin_url = request.GET.get("relogin_url")
+    if not relogin_url:
+        relogin_url = request.session.get("next")
+        if not relogin_url:
+            relogin_url = host
+
+    if not relogin_url.startswith("https://"):
+        relogin_url = "https://{}".format(relogin_url)
+         
+
+    if idp:
+        idpid = idp.idp
+    else:
+        idpid = request.session.get("idp")
+
+    if idpid:
+        idpid = urllib.parse.quote(idpid)
+    if relogin_url:
+        relogin_url = urllib.parse.quote(relogin_url)
+
+    params = None
+    if relogin_url:
+        params = "relogin_url={}".format(relogin_url)
+        if idpid:
+            params = "{}&idp={}".format(params,idpid)
+
+    elif idpid:
+        params = "idp={}".format(idpid)
+
+
+    if params:
+        backend_post_logout_url = "{}?{}".format(post_logout_url,params)
     else:
         backend_post_logout_url = post_logout_url
 
@@ -579,7 +623,7 @@ def password_reset_complete(request,backend,*args,**kwargs):
     domain = get_redirect_domain(request)
     request.policy = CustomizableUserflow.get_userflow(domain).password_reset
     request.http_error_code = 417
-    request.http_error_message = "Failed to reset password..{}"
+    request.http_error_message = "Failed to reset password.{}"
 
     return do_complete(request.backend, _do_login, user=request.user,
                        redirect_name=REDIRECT_FIELD_NAME, request=request,
@@ -599,8 +643,7 @@ def mfa_set_complete(request,backend,*args,**kwargs):
     domain = get_redirect_domain(request)
     request.policy = CustomizableUserflow.get_userflow(domain).mfa_set
     request.http_error_code = 417
-    request.http_error_message = "Failed to reset password..{}"
-
+    request.http_error_message = "Failed to set mfa method.{}"
     return do_complete(request.backend, _do_login, user=request.user,
                        redirect_name=REDIRECT_FIELD_NAME, request=request,
                        *args, **kwargs)
@@ -639,24 +682,41 @@ def verify_code_via_email(request):
     logger.debug("Successfully send verification email to '{}',domain is '{}'".format(data["email"],domain))
     return SUCCEED_RESPONSE
 
-totp_secret_key_chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'
+user_totp_key_chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'
 @never_cache
 @csrf_exempt
 def totp_generate(request):
     if not _auth_bearer(request):
         return FORBIDDEN_RESPONSE
 
-    userEmail = request.POST.get("email")
-    if not userEmail:
+    data = json.loads(request.body.decode())
+    user_email = data.get("email")
+    if not user_email:
         return HttpResponse(content="Email is missint",status=400)
-    idp = request.POST.get("idp")
+
+    idp = data.get("idp")
     if not idp:
         return HttpResponse(content="Idp is missint",status=400)
 
-    secret = get_random_string(settings.TOTP_SECRET_KEY_LENGTH,totp_secret_key_chars)
+    regenerate = data.get("regenerate",False)
 
-    totpurl = get_totpurl(secret,email,settings.TOTP_ISSUER,settings.TOTP_TIMESTEP,settings.TOTP_PREFIX)
+    user_totp = UserTOTP.objects.filter(email=user_email,idp=idp).first()
+    if not user_totp or regenerate:
+        if not user_totp:
+            user_totp = UserTOTP(email=user_email,idp=idp)
+        user_totp.secret_key = base64.b32encode(bytearray(get_random_string(settings.TOTP_SECRET_KEY_LENGTH,user_totp_key_chars),'ascii')).decode()
+        user_totp.timestep = settings.TOTP_TIMESTEP
+        user_totp.issuer = settings.TOTP_ISSUER
+        user_totp.prefix = settings.TOTP_PREFIX or settings.TOTP_ISSUER
+        user_totp.digits = settings.TOTP_DIGITS
+        user_totp.algorithm = settings.TOTP_ALGORITHM
+        user_totp.created = timezone.now()
+        user_totp.verified = None
+        user_totp.last_verified_code = None
 
+        user_totp.save()
+     
+    totpurl = get_totpurl(user_totp.secret_key,user_totp.email,user_totp.issuer,user_totp.timestep,user_totp.prefix,algorithm=user_totp.algorithm,digits=user_totp.digits)
     qrcode = encode_qrcode(totpurl)
 
     data = {
@@ -664,6 +724,47 @@ def totp_generate(request):
     }
     
     return JsonResponse(data,status=200)
+
+
+@never_cache
+@csrf_exempt
+def totp_verify(request):
+    if not _auth_bearer(request):
+        return FORBIDDEN_RESPONSE
+
+    data = json.loads(request.body.decode())
+    logger.debug("verify totp code.{}".format(data))
+    user_email = data.get("email")
+    if not user_email:
+        return HttpResponse(content="Email is missint",status=400)
+
+    idp = data.get("idp")
+    if not idp:
+        return HttpResponse(content="Idp is missint",status=400)
+
+    totpcode = data.get("totpCode")
+    if not totpcode:
+        return HttpResponse(content="Totp code is missint",status=400)
+
+    user_totp = UserTOTP.objects.filter(email=user_email,idp=idp).first()
+    if not user_totp :
+        return HttpResponse(content="User({1}:{0})'s totp secret is missing".format(user_email,idp),status=400)
+
+    if settings.TOTP_CHECK_LAST_CODE and totpcode == user_totp.last_verified_code:
+        return CONFLICT_RESPONSE 
+        
+    totp = TOTP(user_totp.secret_key,digits=user_totp.digits,digest=get_digest_function(user_totp.algorithm)[1],name=user_email,issuer=user_totp.issuer,interval=user_totp.timestep)
+    if totp.verify(totpcode,valid_window=settings.TOTP_VALIDWINDOW):
+        user_totp.last_verified_code = totpcode
+        user_totp.last_verified = timezone.now()
+        user_totp.save(update_fields=["last_verified","last_verified_code"])
+        logger.debug("Succeed to verify totp code.{}".format(data))
+        return SUCCEED_RESPONSE
+    else:
+        logger.debug("Failed to verify totp code.{}".format(data))
+        return CONFLICT_RESPONSE 
+
+
 
 
 

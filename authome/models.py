@@ -1542,3 +1542,20 @@ else:
                 logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
 
+
+class UserTOTP(models.Model):
+    email = models.CharField(max_length=64,null=False,editable=False)
+    idp = models.CharField(max_length=256,null=False,editable=False)
+    secret_key = models.CharField(max_length=128,null=False,editable=False)
+    timestep = models.PositiveSmallIntegerField(null=False,editable=False)
+    prefix = models.CharField(max_length=64,null=False,editable=False)
+    issuer = models.CharField(max_length=64,null=False,editable=False)
+    algorithm = models.CharField(max_length=32,null=False,editable=False)
+    digits = models.PositiveSmallIntegerField(null=False,editable=False)
+    last_verified_code = models.CharField(max_length=16,null=True,editable=False)
+    last_verified = models.DateTimeField(null=True,editable=False)
+    created = models.DateTimeField(null=False,editable=False)
+
+    class Meta:
+        unique_together = [["email","idp"]]
+

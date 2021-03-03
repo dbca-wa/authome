@@ -1,0 +1,111 @@
+{% load i18n static %}
+<style id="common">
+    @font-face {
+        font-family: 'SegoeUI';
+        src: url(https://dbcab2c.b2clogin.com/static/tenant/templates/fonts/segoeui.WOFF);
+        font-weight: normal;
+    }
+    @font-face {
+        font-family: 'SegoeUI';
+        src: url(https://dbcab2c.b2clogin.com/static/tenant/templates/fonts/segoeui_bold.WOFF);
+        font-weight: bold;
+    }
+    #SignIn-WithEmail {
+      background-image: url(https://{{request.get_host}}{% static "images/email.png" %});
+    }
+    #SignIn-WithEmail:hover {
+      background-image: url(https://{{request.get_host}}{% static "images/email.png" %});
+    }
+    #DBCAMicrosoft365 {
+      background-image: url(https://{{request.get_host}}{% static "images/login_dbca.svg" %});
+    }
+    #DBCAMicrosoft365:hover {
+      background-image: url(https://{{request.get_host}}{% static "images/login_dbca_white.svg" %});
+    }
+    #AmazonExchange {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/colored/amazon.svg);
+    }
+    #AmazonExchange:hover {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/white/amazon.svg);
+    }
+    #FacebookExchange {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/colored/facebook.svg);
+    }
+    #FacebookExchange:hover {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/white/facebook.svg);
+    }
+    #GitHubExchange {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/colored/github.svg);
+    }
+    #GitHubExchange:hover {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/white/github.svg);
+    }
+    #AppleExchange {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/colored/apple.svg);
+    }
+    #AppleExchange:hover {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/white/apple.svg);
+    }
+    #GoogleExchange {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/colored/google.svg);
+    }
+    #GoogleExchange:hover {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/white/google.svg);
+    }
+    #LinkedInExchange {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/colored/linkedin.svg);
+    }
+    #LinkedInExchange:hover {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/white/linkedin.svg);
+    }
+    #MicrosoftAccountExchange {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/colored/microsoft.svg);
+    }
+    #MicrosoftAccountExchange:hover {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/white/microsoft.svg);
+    }
+    #QQExchange {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/colored/qq.svg);
+    }
+    #QQExchange:hover {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/white/qq.svg);
+    }
+    #TwitterExchange {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/colored/twitter.svg);
+    }
+    #TwitterExchange:hover {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/white/twitter.svg);
+    }
+    #WeChatExchange {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/colored/wechat.svg);
+    }
+    #WeChatExchange:hover {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/white/wechat.svg);
+    }
+    #WeiboExchange {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/colored/weibo.svg);
+    }
+    #WeiboExchange:hover {
+      background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/white/weibo.svg);
+    }
+    .buttons #cancel:before {
+        content: url(https://dbcab2c.b2clogin.com/static/tenant/templates/images/left-arrow.svg);
+    }
+</style>
+<style id="idpselector">
+    #SignInWithLogonNameExchange, #SignUpWithLogonEmailExchange, #SignUpWithLogonNameExchange {
+        background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/colored/local.svg);
+    }
+    #SignInWithLogonNameExchange:hover, #SignUpWithLogonEmailExchange:hover, #SignUpWithLogonNameExchange:hover {
+        background-image: url(https://dbcab2c.b2clogin.com/static/tenant/templates/idp_logos/white/local.svg);
+    }
+    #SignUpWithLogonEmailExchange.text-link {
+        background-image: none;
+        background-color: transparent !important;
+    }
+    #SignUpWithLogonEmailExchange.text-link:hover {
+        background-image: none;
+        background-color: transparent !important;
+    }
+</style>
+

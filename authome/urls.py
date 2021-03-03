@@ -37,6 +37,7 @@ urlpatterns = [
     path('sso/mfa/set/complete', views.mfa_set_complete,{"backend":"azuread-b2c-oauth2"},name='mfa_set_complete'),
 
     path('sso/totp/generate',views.totp_generate,name="totp_generate"),
+    path('sso/totp/verify',views.totp_verify,name="totp_verify"),
 
     path('sso/', include('social_django.urls', namespace='social')),
     path('admin/', admin.site.urls),

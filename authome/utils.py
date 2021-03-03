@@ -1,15 +1,18 @@
 import ast
+import hashlib
 import io
 import os
 import urllib.parse
 import re
 import base64
 import qrcode
+import logging
 
 from django.contrib.auth import REDIRECT_FIELD_NAME
 
 __version__ = '1.0.0'
 
+logger = logging.getLogger(__name__)
 
 def _convert(key,value, default=None, required=False, value_type=None,subvalue_type=None):
     if value_type is None:
@@ -140,29 +143,46 @@ def get_defaultcache():
     except:
         return None
 
-def get_totpurl(secret, email, issuer, timestep, prefix=None):
+def get_totpurl(secret, email, issuer, timestep, prefix=None,algorithm="SHA1",digits=6):
     prefix = prefix or issuer
 
     prefix = urllib.parse.quote(prefix)
     issuer = urllib.parse.quote(issuer)
 
-    if isinstance(secret,bytearray):
-        secret = base64.b32encode(secret)
-    else:
-        secret = base64.b32encode(bytearray(secret,'ascii'))
-
-    return "otpauth://totp/{0}:{1}?secret={2}&period={3}&issuer={0}".format(prefix , email, secret, timestep, issuer)
+    return "otpauth://totp/{0}:{1}?secret={2}&period={3}&algorithm={5}&issuer={4}&digits={6}".format(prefix , email, secret, timestep, issuer,algorithm,digits)
 
 def encode_qrcode(totpurl):
     qr = qrcode.QRCode(
         error_correction=qrcode.constants.ERROR_CORRECT_H,
     )
+    logger.debug("totpurl = {}".format(totpurl))
     qr.add_data(totpurl)
     qr.make()
     img = qr.make_image()
     buff = io.BytesIO()
-    img.save('data/dst/qrcode_test2_2.png')
     img.save(buff, format="PNG")
     return "data:image/png;base64,"+base64.b64encode(buff.getvalue()).decode("utf-8")
 
+digest_map = {}
+def get_digest_function(algorithm):
+    """
+    return (algorithm name, related digest function)
 
+    """
+    algorithm = algorithm.lower()
+    result = digest_map.get(algorithm)
+    if result:
+        return result
+
+    for k,v in hashlib.__dict__.items():
+        if not callable(v):
+            continue
+        try:
+            if v().name.lower() == algorithm:
+                result = (v().name,v)
+                digest_map[algorithm] = result
+                return result
+        except:
+            continue
+
+    raise Exception("Digest algorithm({}) Not Support".format(algorithm))

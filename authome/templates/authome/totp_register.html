@@ -31,6 +31,14 @@
 </head>
 <body>
     {{body | safe}}
+    <script>
+        $(document).ready(function () { 
+           qrcodeElement = $("#totpQRCodeBitmap")
+           qrcode = qrcodeElement.val()
+           $( "<img src='" + qrcode + "' style='width:300px;height:300px'/>" ).insertAfter( qrcodeElement);
+           qrcodeElement.remove()
+        });
+    </script>
 </body>
 </html>
 

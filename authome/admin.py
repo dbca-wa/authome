@@ -44,6 +44,13 @@ class DatetimeMixin(object):
             return timezone.localtime(obj.date_joined).strftime("%Y-%m-%d %H:%M:%S")
     _date_joined.short_description = "Date Joined"
 
+    def _last_verified(self,obj):
+        if not obj or not obj.last_verified :
+            return ""
+        else:
+            return timezone.localtime(obj.last_verified).strftime("%Y-%m-%d %H:%M:%S")
+    _date_joined.short_description = "Last Verified"
+
 admin.site.unregister(auth.models.Group)
 
 @admin.register(models.User)
@@ -331,4 +338,21 @@ class CustomizableUserflowAdmin(DatetimeMixin,admin.ModelAdmin):
     form = forms.CustomizableUserflowForm
     fields = ('domain','fixed','default','profile_edit','email_enabled','mfa_set','email','password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body",'_modified','_created')
     ordering = ('domain',)
+
+@admin.register(models.UserTOTP)
+class UserTOTPAdmin(DatetimeMixin,admin.ModelAdmin):
+    list_display = ('email','idp','issuer','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
+    readonly_fields = ('email','idp','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
+    fields = ('email','idp','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
+    ordering = ('email','idp')
+    search_fields=("email",)
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 

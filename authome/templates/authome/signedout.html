@@ -5,7 +5,15 @@
 
 {% block content%}
       <table style="width:100%;height:300px"><tr><td style="text-align:center;vertical-align:middle">
-          <h1>You have been signed out</h1>
+          <h1>You have been signed out from DBCA.
+          {% if idp_logout_url %} 
+          But you still login to the backend authentication provider '{{idp_name}}'.
+          <br><br>Please click <A href="{{idp_logout_url}}">here</A> to logout from {{idp_name}} for safety 
+          {% endif %}
+          {% if relogin_url %} 
+          <br><br>If you want to login again, Please click <A href="{{relogin_url}}">here</A> to login
+          {% endif %}
+          </h1>
       </td></tr></table>
 
 {% endblock content%}
