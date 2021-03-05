@@ -333,18 +333,18 @@ class IdentityProviderAdmin(DatetimeMixin,admin.ModelAdmin):
 
 @admin.register(models.CustomizableUserflow)
 class CustomizableUserflowAdmin(DatetimeMixin,admin.ModelAdmin):
-    list_display = ('domain','fixed','default','profile_edit','email_enabled','mfa_set','email','password_reset','_modified','_created')
+    list_display = ('domain','fixed','default','profile_edit','mfa_set','password_reset','_modified','_created')
     readonly_fields = ('_modified','_created')
     form = forms.CustomizableUserflowForm
-    fields = ('domain','fixed','default','profile_edit','email_enabled','mfa_set','email','password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body",'_modified','_created')
+    fields = ('domain','fixed','default','profile_edit','mfa_set','password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body",'_modified','_created')
     ordering = ('domain',)
 
 @admin.register(models.UserTOTP)
 class UserTOTPAdmin(DatetimeMixin,admin.ModelAdmin):
-    list_display = ('email','idp','issuer','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
-    readonly_fields = ('email','idp','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
-    fields = ('email','idp','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
-    ordering = ('email','idp')
+    list_display = ('name','email','idp','issuer','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
+    readonly_fields = ('name','email','idp','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
+    fields = ('name','email','idp','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
+    ordering = ('name',)
     search_fields=("email",)
 
     def has_change_permission(self, request, obj=None):

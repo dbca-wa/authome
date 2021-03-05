@@ -41,7 +41,7 @@ AUTHENTICATION_BACKENDS = (
     'authome.backends.AzureADB2COAuth2',
 )
 
-EMAIL_HOST = env('EMAIL_HOST', required=True)
+EMAIL_HOST = env('EMAIL_HOST', default="")
 EMAIL_PORT = env('EMAIL_PORT', 25)
 
 TOTP_SECRET_KEY_LENGTH = env("TOTP_SECRET_KEY_LENGTH",default=50)

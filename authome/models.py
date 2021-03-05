@@ -345,7 +345,6 @@ Email: enquiries@dbca.wa.gov.au
     email = models.CharField(max_length=64,null=True,blank=True,help_text="The email signup and signin user flow")
     profile_edit = models.CharField(max_length=64,null=True,blank=True,help_text="The user profile edit user flow")
     password_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The user password reset user flow")
-    email_enabled = models.BooleanField(default=True,help_text="Enable/Disable the email singin for this domain")
 
     extracss = models.TextField(null=True,blank=True)
     page_layout = models.TextField(null=True,blank=True)
@@ -372,10 +371,10 @@ Email: enquiries@dbca.wa.gov.au
             if not self.page_layout:
                 self.page_layout = self.default_layout
             if not self.verifyemail_body:
-                self.verifyemail_body = default_verify_email_body
+                self.verifyemail_body = self.default_verify_email_body
 
             invalid_columns = []
-            for name in ("default","mfa_set","email","profile_edit","password_reset","page_layout","verifyemail_from","verifyemail_subject","verifyemail_body") if self.email_enabled else  ("default","profile_edit","page_layout","verifyemail_from","verifyemail_subject","verifyemail_body"):
+            for name in ("default","mfa_set","email","profile_edit","password_reset","page_layout","verifyemail_from","verifyemail_subject","verifyemail_body"):
                 if not getattr(self,name):
                     invalid_columns.append(name)
             if len(invalid_columns) == 1:
@@ -385,7 +384,7 @@ Email: enquiries@dbca.wa.gov.au
 
         if self.id is not None:
             self._changed = False
-            for name in ("default","mfa_set","email","profile_edit","password_reset","page_layout","fixed","extracss","email_enabled","verifyemail_from","verifyemail_subject","verifyemail_body"):
+            for name in ("default","mfa_set","email","profile_edit","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body"):
                 if getattr(self,name) != getattr(self.db_obj,name):
                     self._changed = True
                     break
@@ -1550,6 +1549,7 @@ class UserTOTP(models.Model):
     timestep = models.PositiveSmallIntegerField(null=False,editable=False)
     prefix = models.CharField(max_length=64,null=False,editable=False)
     issuer = models.CharField(max_length=64,null=False,editable=False)
+    name = models.CharField(max_length=128,null=False,editable=False)
     algorithm = models.CharField(max_length=32,null=False,editable=False)
     digits = models.PositiveSmallIntegerField(null=False,editable=False)
     last_verified_code = models.CharField(max_length=16,null=True,editable=False)

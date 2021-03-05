@@ -143,13 +143,13 @@ def get_defaultcache():
     except:
         return None
 
-def get_totpurl(secret, email, issuer, timestep, prefix=None,algorithm="SHA1",digits=6):
+def get_totpurl(secret, name, issuer, timestep, prefix=None,algorithm="SHA1",digits=6):
     prefix = prefix or issuer
 
     prefix = urllib.parse.quote(prefix)
     issuer = urllib.parse.quote(issuer)
 
-    return "otpauth://totp/{0}:{1}?secret={2}&period={3}&algorithm={5}&issuer={4}&digits={6}".format(prefix , email, secret, timestep, issuer,algorithm,digits)
+    return "otpauth://totp/{0}:{1}?secret={2}&period={3}&algorithm={5}&issuer={4}&digits={6}".format(prefix , name, secret, timestep, issuer,algorithm,digits)
 
 def encode_qrcode(totpurl):
     qr = qrcode.QRCode(

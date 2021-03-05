@@ -501,7 +501,11 @@ def adb2c_view(request,template,**kwargs):
     page_layout = getattr(userflow,container_class)
     extracss = userflow.inited_extracss
 
-    return TemplateResponse(request,"authome/{}.html".format(template),context={"body":page_layout,"extracss":extracss,"title":title})
+    context = {"body":page_layout,"extracss":extracss,"title":title}
+    if domain:
+        context["domain"] = domain
+
+    return TemplateResponse(request,"authome/{}.html".format(template),context=context)
 
 def forbidden(request):
     context = {}
@@ -677,7 +681,6 @@ def verify_code_via_email(request):
         context=data,
         request=request
     )
-    data["email"] = "rocky.chen75@gmail.com"
     send_email(userflow.verifyemail_from,data["email"],userflow.verifyemail_subject,verifyemail_body)
     logger.debug("Successfully send verification email to '{}',domain is '{}'".format(data["email"],domain))
     return SUCCEED_RESPONSE
@@ -686,17 +689,31 @@ user_totp_key_chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'
 @never_cache
 @csrf_exempt
 def totp_generate(request):
+    
     if not _auth_bearer(request):
         return FORBIDDEN_RESPONSE
 
     data = json.loads(request.body.decode())
     user_email = data.get("email")
     if not user_email:
-        return HttpResponse(content="Email is missint",status=400)
+        logger.debug("Email is missing")
+        return HttpResponse(content="Email is missing",status=400)
 
     idp = data.get("idp")
     if not idp:
-        return HttpResponse(content="Idp is missint",status=400)
+        logger.debug("IDP is missing")
+        return HttpResponse(content="Idp is missing",status=400)
+    elif idp.startswith("local_"):
+        #all idps with prefx "local_" mean local account
+        idp = "local"
+
+    idp_obj = IdentityProvider.get_idp(idp)
+    if not idp_obj:
+        logger.debug("Idp{} Not Found".format(idp))
+        return HttpResponse(content="Idp{} Not Found".format(idp),status=400)
+    elif not idp_obj.name:
+        logger.debug("The name of the idp{} is missing".format(idp))
+        return HttpResponse(content="The name of the idp{} is missing".format(idp),status=400)
 
     regenerate = data.get("regenerate",False)
 
@@ -707,6 +724,7 @@ def totp_generate(request):
         user_totp.secret_key = base64.b32encode(bytearray(get_random_string(settings.TOTP_SECRET_KEY_LENGTH,user_totp_key_chars),'ascii')).decode()
         user_totp.timestep = settings.TOTP_TIMESTEP
         user_totp.issuer = settings.TOTP_ISSUER
+        user_totp.name = "{}({})".format(user_email,idp_obj.name)
         user_totp.prefix = settings.TOTP_PREFIX or settings.TOTP_ISSUER
         user_totp.digits = settings.TOTP_DIGITS
         user_totp.algorithm = settings.TOTP_ALGORITHM
@@ -716,7 +734,7 @@ def totp_generate(request):
 
         user_totp.save()
      
-    totpurl = get_totpurl(user_totp.secret_key,user_totp.email,user_totp.issuer,user_totp.timestep,user_totp.prefix,algorithm=user_totp.algorithm,digits=user_totp.digits)
+    totpurl = get_totpurl(user_totp.secret_key,user_totp.name,user_totp.issuer,user_totp.timestep,user_totp.prefix,algorithm=user_totp.algorithm,digits=user_totp.digits)
     qrcode = encode_qrcode(totpurl)
 
     data = {
@@ -753,7 +771,7 @@ def totp_verify(request):
     if settings.TOTP_CHECK_LAST_CODE and totpcode == user_totp.last_verified_code:
         return CONFLICT_RESPONSE 
         
-    totp = TOTP(user_totp.secret_key,digits=user_totp.digits,digest=get_digest_function(user_totp.algorithm)[1],name=user_email,issuer=user_totp.issuer,interval=user_totp.timestep)
+    totp = TOTP(user_totp.secret_key,digits=user_totp.digits,digest=get_digest_function(user_totp.algorithm)[1],name=user_totp.name,issuer=user_totp.issuer,interval=user_totp.timestep)
     if totp.verify(totpcode,valid_window=settings.TOTP_VALIDWINDOW):
         user_totp.last_verified_code = totpcode
         user_totp.last_verified = timezone.now()
