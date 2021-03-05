@@ -1,0 +1,69 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<TrustFrameworkPolicy 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06" 
+  PolicySchemaVersion="0.3.0.0" 
+  TenantId="dbcab2c.onmicrosoft.com" 
+  PolicyId="B2C_1A_TrustFrameworkUATExtensions" 
+  PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkUATExtensions">
+  
+  <BasePolicy>
+    <TenantId>dbcab2c.onmicrosoft.com</TenantId>
+    <PolicyId>B2C_1A_TrustFrameworkUATBaseExtensions</PolicyId>
+  </BasePolicy>
+  
+
+  <UserJourneys>
+
+    <UserJourney Id="SignUpOrSignIn">
+      <OrchestrationSteps>
+        <OrchestrationStep Order="1" Type="CombinedSignInAndSignUp" ContentDefinitionReferenceId="api.signuporsignin">
+          <ClaimsProviderSelections>
+            <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange" />
+            <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange" />
+            <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange" />
+            <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
+            <ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail" />
+            <ClaimsProviderSelection ValidationClaimsExchangeId="LocalAccountSigninEmailExchange" />
+          </ClaimsProviderSelections>
+          <ClaimsExchanges>
+            <ClaimsExchange Id="LocalAccountSigninEmailExchange" TechnicalProfileReferenceId="SelfAsserted-LocalAccountSignin-Email" />
+          </ClaimsExchanges>
+        </OrchestrationStep>
+      </OrchestrationSteps>
+    </UserJourney>
+  
+    <UserJourney Id="ProfileEdit">
+      <OrchestrationSteps>
+        <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
+          <ClaimsProviderSelections>
+            <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange" />
+            <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange" />
+            <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange" />
+            <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
+            <ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail" />
+            <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange" />
+          </ClaimsProviderSelections>
+        </OrchestrationStep>
+      </OrchestrationSteps>
+    </UserJourney>
+
+    <UserJourney Id="MFASet">
+      <OrchestrationSteps>
+        <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
+          <ClaimsProviderSelections>
+            <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange" />
+            <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange" />
+            <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange" />
+            <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
+            <ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail" />
+            <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange" />
+          </ClaimsProviderSelections>
+        </OrchestrationStep>
+      </OrchestrationSteps>
+    </UserJourney>
+
+  </UserJourneys>
+  
+</TrustFrameworkPolicy>
