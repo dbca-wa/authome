@@ -1629,30 +1629,6 @@
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-MFA"/>
                 </TechnicalProfile>
 
-                <TechnicalProfile Id="PhoneFactor-EditAndVerify">
-                    <DisplayName>PhoneFactor</DisplayName>
-                    <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.PhoneFactorProtocolProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
-                    <Metadata>
-                        <Item Key="ContentDefinitionReferenceId">api.phonefactor</Item>
-                        <Item Key="ManualPhoneNumberEntryAllowed">true</Item>
-                    </Metadata>
-                    <CryptographicKeys>
-                        <Key Id="issuer_secret" StorageReferenceId="B2C_1A_TokenSigningKeyContainer"/>
-                    </CryptographicKeys>
-                    <InputClaimsTransformations>
-                        <InputClaimsTransformation ReferenceId="CreateUserIdForMFA"/>
-                    </InputClaimsTransformations>
-                    <InputClaims>
-                        <InputClaim ClaimTypeReferenceId="userIdForMFA" PartnerClaimType="UserId"/>
-                        <!-- <InputClaim ClaimTypeReferenceId="strongAuthenticationPhoneNumber" /> -->
-                    </InputClaims>
-                    <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber" PartnerClaimType="Verified.OfficePhone"/>
-                        <OutputClaim ClaimTypeReferenceId="newPhoneNumberEntered" PartnerClaimType="newPhoneNumberEntered"/>
-                    </OutputClaims>
-                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/>
-                </TechnicalProfile>
-
             </TechnicalProfiles>
         </ClaimsProvider>
 
