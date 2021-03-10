@@ -18,7 +18,7 @@ urlpatterns = [
     path('sso/signedout', views.signedout, name='signedout'),
     path('sso/forbidden', views.forbidden, name='forbidden'),
     path('sso/loginstatus', views.loginstatus, name='loginstatus'),
-    path('sso/signup/check', views.check_signup, name='check_signup'),
+    #path('sso/signup/check', views.check_signup, name='check_signup'),
 
     path('sso/verifycode', views.verify_code_via_email, name='verify_code;'),
 
@@ -27,8 +27,8 @@ urlpatterns = [
     path('sso/profile/edit', views.profile_edit,{"backend":"azuread-b2c-oauth2"},name='profile_edit'),
     path('sso/profile/edit/complete', views.profile_edit_complete,{"backend":"azuread-b2c-oauth2"},name='profile_edit_complete'),
 
-    path('sso/email/signup', views.email_signup,{"backend":"azuread-b2c-oauth2"},name='email_signup'),
-    path('sso/email/signup/complete', views.email_signup_complete,{"backend":"azuread-b2c-oauth2"},name='email_signup_complete'),
+    #path('sso/email/signup', views.email_signup,{"backend":"azuread-b2c-oauth2"},name='email_signup'),
+    #path('sso/email/signup/complete', views.email_signup_complete,{"backend":"azuread-b2c-oauth2"},name='email_signup_complete'),
 
     path('sso/password/reset', views.password_reset,{"backend":"azuread-b2c-oauth2"},name='password_reset'),
     path('sso/password/reset/complete', views.password_reset_complete,{"backend":"azuread-b2c-oauth2"},name='password_reset_complete'),
@@ -49,6 +49,10 @@ if settings.DEBUG:
     urlpatterns.append(path('__debug__/', include(debug_toolbar.urls)))
 
 def handler400(request,exception,**kwargs):
+    """
+    Customizable handler to process 400 response.
+    This method provide a hook to let exception return its own response
+    """
     if isinstance(exception,HttpResponseException):
         return exception.get_response(request)
     else:

@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 usercache = get_usercache()
 
 def email_lowercase(backend,details, user=None,*args, **kwargs):
+    """
+    A pipeline to turn the email address to lowercase
+    """
     email = details.get("email")
     details['email'] = email.strip().lower() if email else None
 
@@ -28,17 +31,20 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     logger.debug("Data returned from B2C.\n{}".format( "\n".join( sorted(["{} = {}".format(k,v) for k,v in kwargs['response'].items()]) )))
 
 
-    if hasattr(request,"policy") and request.policy in ["PROFILE_EDIT_POLICY","PASSWORD_RESET_POLICY"]:
+    if hasattr(request,"policy"):
         #not a sign in request
         return
 
+    #get the identityprovider from b2c response
     idp = kwargs['response'].get("idp",IdentityProvider.LOCAL_PROVIDER)
     idp_obj,created = IdentityProvider.objects.get_or_create(idp=idp)
     logger.debug("authenticate the user({}) with identity provider({}={})".format(details.get("email"),idp_obj.idp,idp))
 
+    #get backend logout url
     backend_logout_url = backend.logout_url if hasattr(backend,"logout_url") else settings.BACKEND_LOGOUT_URL
 
     if user and not user.is_active:
+        #use is inactive, automatically logout 
         logout(request)
         logout_url = backend_logout_url.format(get_post_logout_url(request,idp_obj))
         logger.debug("Redirect to '{}' to logout from identity provider".format(logout_url))
@@ -51,12 +57,14 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     if email:
         configed_idp_obj = UserGroup.get_identity_provider(email)
         if configed_idp_obj and configed_idp_obj != idp_obj:
+            #The idp used for user authentication is not the idp configured in UserGroup, automatically logou
             logger.debug("The user({}) shoule authenticate with '{}' instead of '{}'".format(email,configed_idp_obj,idp_obj))
             logout(request)
             logout_url = backend_logout_url.format(get_post_logout_url(request,idp_obj))
             logger.debug("Redirect to '{}' to logout from identity provider".format(logout_url))
             response = signout(request,logout_url=logout_url,message="You can only sign in through identity provider '{}'".format(configed_idp_obj))
 
+            #set the prefer IdentityProvider
             response.set_cookie(
                 settings.PREFERED_IDP_COOKIE_NAME,
                 configed_idp_obj.idp,
@@ -69,44 +77,10 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
             request.session.flush()
             return response
 
-    """
-    #get the user category which is the child of the public group,
-    usergroup = None
-    for category in UserGroup.usercategories():
-        if category[0].contain(email):
-            usergroup = category[0]
-            break;
-
-    if not usergroup:
-        logout(request)
-        logout_url = backend_logout_url.format(get_post_logout_url(request,idp_obj))
-        logger.debug("Redirect to '{}' to logout from identity provider".format(logout_url))
-        message = "You are not belonging to any user category."
-        response = signout(request,logout_url=logout_url,message=message)
-
-        request.session.flush()
-        return response
-
-    dbca_group = UserGroup.dbca_group()
-    #the user group must match the signup user category if user already exists, otherwise, only dbca staff is allowed.
-    if (user and usergroup != user.usergroup) or (not user and usergroup != dbca_group):
-        logout(request)
-        logout_url = backend_logout_url.format(get_post_logout_url(request,idp_obj))
-        logger.debug("Redirect to '{}' to logout from identity provider".format(logout_url))
-        if not user:
-            message = "You are not registered, please register first."
-        elif usergroup:
-            message = "You have been moved from category '{1}' to category '{0}', please register to category '{0}' first.".format(usergroup or UserGroup.public_group(),user.usergroup)
-        else:
-            message = "You have been removed from category '{1}'.".format(usergroup or UserGroup.public_group(),user.usergroup)
-        response = signout(request,logout_url=logout_url,message=message)
-
-        request.session.flush()
-        return response
-    """
     #reset is_staff and is_superuser property based on user category.
+    dbcagroup == UserGroup.dbca_group():
     usergroup = UserGroup.find(email)
-    if usergroup == UserGroup.dbca_group():
+    if usergroup == dbcagroup:
         details["is_staff"] = True
         if not user:
             details["is_superuser"] = False

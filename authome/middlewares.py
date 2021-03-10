@@ -12,8 +12,12 @@ logger = logging.getLogger(__name__)
 
 _max_age = 100 * 365 * 24 * 60 * 60
 class PreferedIDPMiddleware(MiddlewareMixin):
+    """
+    The middleware to set/clean the prefered idp cookie
+    """
     def process_response(self, request, response):
         if request.path.startswith("/sso/complete/") and request.user.is_authenticated :
+            #authentication complete request, set/clean the prefered idp cookie
             res_idp = request.session.get("idp",None)
             if res_idp:
                 req_idp = request.COOKIES.get(settings.PREFERED_IDP_COOKIE_NAME,None)

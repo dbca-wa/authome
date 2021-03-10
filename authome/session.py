@@ -7,6 +7,9 @@ logger = logging.getLogger(__name__)
 
 KEY_PREFIX = "django.contrib.sessions.cache"
 class SessionStore(django.contrib.sessions.backends.cache.SessionStore):
+    """
+    Override the cache session store to provide the performance related log
+    """
     def load(self):
         logger.debug("Start to load session from cache")
         now = timezone.now()

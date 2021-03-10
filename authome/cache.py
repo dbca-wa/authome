@@ -16,10 +16,19 @@ logger = logging.getLogger(__name__)
 
 defaultcache = get_defaultcache()
 
-class IntervalTaskRunTime(object):
+class TaskRunable(object):
+    def can_run(self,dt=None):
+        """
+        Return True if the task can run;otherwise return False
+        """
+        return False
+
+
+class IntervalTaskRunable(TaskRunable):
     """
-    Interval is the number of seconds between the continuous run of a task
-    A day can divided by a valid interval.
+    A interval based task runable class.
+    Interval is the number of seconds between the task run
+    A day can be divided by a valid interval.
     """
     def __init__(self,name,interval):
         self._name = name
@@ -33,20 +42,28 @@ class IntervalTaskRunTime(object):
             dt = timezone.localtime()
 
         if not self._next_time:
+            #not run before, don't run before the next scheduled runtime.
             today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo) 
             self._next_time = today + timedelta(seconds = (int((dt - today).seconds / self._interval) + 1) * self._interval)
             logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         elif self._next_time > dt:
+            #Don't run before the next scheduled runtime  
             logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         else:
+            #Run now, and set the next scheudled runtime.
             today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo) 
             self._next_time = today + timedelta(seconds = (int((dt - today).seconds / self._interval) + 1) * self._interval)
             logger.debug("Run task({}) now, next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return True
 
-class TaskRunTime(object):
+class HourListTaskRunable(TaskRunable):
+    """
+    A hour list base task runable class
+    The hour list is the list of hour(0-23) when the task should run
+
+    """
     def __init__(self,name,hours):
         self._name = name
         self._next_time = None
@@ -57,13 +74,13 @@ class TaskRunTime(object):
         else:
             self._timediffs = []
 
-        i = 0
-        while i < len(self._hours):
-            if i == 0:
-                self._timediffs.append(timedelta(hours=24 + self._hours[i] - self._hours[-1]))
-            else:
-                self._timediffs.append(timedelta(hours=self._hours[i] - self._hours[i-1]))
-            i += 1
+            i = 0
+            while i < len(self._hours):
+                if i == 0:
+                    self._timediffs.append(timedelta(hours=24 + self._hours[i] - self._hours[-1]))
+                else:
+                    self._timediffs.append(timedelta(hours=self._hours[i] - self._hours[i-1]))
+                i += 1
 
     def can_run(self,dt=None):
         if dt:
@@ -72,6 +89,7 @@ class TaskRunTime(object):
             dt = timezone.localtime()
 
         if not self._next_time:
+            #not run before, don' run before the next scheduled time
             self._index = 0
             self._next_time = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo) + timedelta(hours=self._hours[0])
             while self._next_time <= dt:
@@ -83,9 +101,11 @@ class TaskRunTime(object):
             logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         elif self._next_time > dt:
+            #don't run before the next sheduled time
             logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         else:
+            #run and set the next scheduled time
             while self._next_time <= dt:
                 if self._index == len(self._hours) - 1:
                     self._index = 0
@@ -96,46 +116,61 @@ class TaskRunTime(object):
             return True
 
 class MemoryCache(object):
+    """
+    Local memory cache
+    """
     def __init__(self):
         super().__init__()
+        #model UserGroup cache
         self._usergrouptree = None
         self._dbca_group = None
         self._public_group = None
         self._usergrouptree_size = None
         self._usergrouptree_ts = None
     
+        #model UserAuthorization cache
         self._userauthorization = None
         self._userauthorization_size = None
         self._userauthorization_ts = None
     
+        #model UserGroupAuthorization cache
         self._usergroupauthorization = None
         self._usergroupauthorization_size = None
         self._usergroupauthorization_ts = None
     
+        #model CustomizableUserflow cache
         self._userflows = None
         self._defaultuserflow = None
         self._userflows_size = None
         self._userflows_ts = None
     
-        self._user_authorization_map = OrderedDict() 
-    
-        self._auth_map = OrderedDict() 
-        self._basic_auth_map = OrderedDict() 
-
+        #IdentityProvider cache
         self._idps = None
         self._idps_size = None
         self._idps_ts = None
 
-        #start the cache refresh timer
-        self._auth_cache_clean_time = TaskRunTime("authentication cache",settings.AUTH_CACHE_CLEAN_HOURS)
-        self._authorization_cache_check_time = IntervalTaskRunTime("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_INTERVAL) if settings.AUTHORIZATION_CACHE_CHECK_INTERVAL > 0 else TaskRunTime("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_HOURS) 
-        self._userflow_cache_check_time = IntervalTaskRunTime("customizable userflow cache",settings.USERFLOW_CACHE_CHECK_INTERVAL) if settings.USERFLOW_CACHE_CHECK_INTERVAL > 0 else TaskRunTime("customizable userflow cache",settings.USERFLOW_CACHE_CHECK_HOURS) 
+        #user authorization cache
+        self._user_authorization_map = OrderedDict() 
+    
+        #user authentication cache
+        self._auth_map = OrderedDict() 
+        #user basic authentication cache
+        self._basic_auth_map = OrderedDict() 
 
-        self._idp_cache_check_time = IntervalTaskRunTime("idp cache",settings.IDP_CACHE_CHECK_INTERVAL) if settings.IDP_CACHE_CHECK_INTERVAL > 0 else TaskRunTime("idp cache",settings.IDP_CACHE_CHECK_HOURS) 
+        #The runable task to clean authenticaton map and basic authenticaton map
+        self._auth_cache_clean_time = HourListTaskRunable("authentication cache",settings.AUTH_CACHE_CLEAN_HOURS)
+
+        #The runable task to check UserGroup, UserAuthorization and UserGroupAuthorication cache
+        self._authorization_cache_check_time = IntervalTaskRunable("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_INTERVAL) if settings.AUTHORIZATION_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_HOURS) 
+
+        #The runable task to check CustomizableUserflow cache
+        self._userflow_cache_check_time = IntervalTaskRunable("customizable userflow cache",settings.USERFLOW_CACHE_CHECK_INTERVAL) if settings.USERFLOW_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("customizable userflow cache",settings.USERFLOW_CACHE_CHECK_HOURS) 
+
+        #The runable task to check IdentityProvider cache
+        self._idp_cache_check_time = IntervalTaskRunable("idp cache",settings.IDP_CACHE_CHECK_INTERVAL) if settings.IDP_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("idp cache",settings.IDP_CACHE_CHECK_HOURS) 
 
     @property
     def usergrouptree(self):
-        self.refresh_authorization_cache()
         return self._usergrouptree
 
     @property
@@ -178,6 +213,10 @@ class MemoryCache(object):
             self._usergroupauthorization,self._usergroupauthorization_size,self._usergroupauthorization_ts = None,None,None
         
     def get_authorization(self,user,domain):
+        """
+        During authorization, this method is the first method to be invoked, and then the methods 'userauthrizations','usergrouptree' and 'usergroupauthorization' will be invoked if required.
+        So only call method 'refresh_authorization_cache' in this method and ignore in other methods 'userauthrizations','usergrouptree' and 'usergroupauthorization'.
+        """
         self.refresh_authorization_cache()
         return self._user_authorization_map.get((user,domain))
 

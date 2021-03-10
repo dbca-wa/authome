@@ -168,6 +168,7 @@ if AUTH_BASIC_CACHE_EXPIRETIME > 0:
 else:
     AUTH_BASIC_CACHE_EXPIRETIME = timedelta(seconds=3600)
 
+#check whether the user token is valid per request
 CHECK_AUTH_BASIC_PER_REQUEST=env("CHECK_AUTH_BASIC_PER_REQUEST",default=False)
 
 AUTH_CACHE_EXPIRETIME=env('AUTH_CACHE_EXPIRETIME',default=3600) #user access token life time in seconds

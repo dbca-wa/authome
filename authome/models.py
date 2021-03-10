@@ -60,10 +60,18 @@ The following lists all valid options in the checking order
 """
 
 class _ArrayField(ArrayField):
+    """
+    Customizable ArrayField to provide feature 'clean'
+    """
     def clean(self, value, model_instance):
         return super().clean([v for v in value if v],model_instance)
 
 class DbObjectMixin(object):
+    """
+    A mixin class to provide property "db_obj" which is the object with same id in database
+    Return None if the object is a new instance.
+    
+    """
     _db_obj = None
 
     @property
@@ -76,44 +84,72 @@ class DbObjectMixin(object):
         return self._db_obj
 
 class RequestDomain(object):
+    """
+    Request domain configuration
+    Support four kinds of configuration
+    1. All domains.
+    2. Suffix domain
+    3. Exact domain
+    4. Regex domain
+
+    """
     all_domain_re = re.compile("^(\*|\.)+$")
     sufix_re = re.compile("^(\**\.)+(?P<sufix>([a-zA-Z0-9_\-]+)(\.[a-zA-Z0-9_\-]+)+)$")
     exact_re = re.compile("^([a-zA-Z0-9_\-]+)(\.[a-zA-Z0-9_\-]+)+$")
+    #two digit values(10 - 99), high value has low priority
+    base_sort_key = 99
 
+    #match all domains if True.
     match_all = False
     def __init__(self,config):
+        #the configuration of this request domain
         self.config = config
+        #the sort key to sort all configured request domain, the front configuration has high priority than the later configuration
         self.sort_key = "{}:{}".format(self.base_sort_key,config)
 
     @classmethod
     def get_instance(cls,domain):
+        """
+        Return the appropriate ReqestionDomain instance according the domain configuration
+        """
         domain = domain.strip() if domain else None
         if not domain:
+            #configured domain is empty
             return None
 
+        #domain should be case insensitive, convert it to lowercase
         domain = domain.lower()
+        #if domain is startswith the prefix ("https://"or "http://"), remove the prefix
         for prefix in ("https://","http://"):
             if domain.startswith(prefix):
                 domain = domain[len(prefix):]
                 break
 
         if cls.all_domain_re.search(domain):
+            #all request domain,
             return AllRequestDomain()
 
         m = cls.sufix_re.search(domain)
         if m:
+            #suffex domain
             return SufixRequestDomain(".{}".format(m.group("sufix")))
 
         elif cls.exact_re.search(domain):
+            #exact domain
             return ExactRequestDomain(domain)
         else:
+            #regex domain
             return RegexRequestDomain(domain)
 
     def match(self,domain):
         return False
 
 class AllRequestDomain(RequestDomain):
-    base_sort_key = 80
+    """
+    Has the lowest priority
+    Match all domains
+    """
+    base_sort_key = 99
     match_all = True
 
     def __init__(self):
@@ -123,12 +159,18 @@ class AllRequestDomain(RequestDomain):
         return True
 
 class ExactRequestDomain(RequestDomain):
-    base_sort_key = 20
+    """
+    Has the highest priority, match the single domain
+    """
+    base_sort_key = 10
 
     def match(self,domain):
         return self.config == domain
 
 class SufixRequestDomain(RequestDomain):
+    """
+    match all domains which are endswith the configure domain
+    """
     base_sort_key = 60
 
     def match(self,domain):
@@ -137,6 +179,10 @@ class SufixRequestDomain(RequestDomain):
         return domain.endswith(self.config)
 
 class RegexRequestDomain(RequestDomain):
+    """
+    The configure domain uses '*' represents any number of any characters 
+    Match all domains which is identified by configured domain
+    """
     base_sort_key = 40
     def __init__(self,domain):
         super().__init__(domain)
@@ -153,14 +199,23 @@ class RegexRequestDomain(RequestDomain):
         return True if self._re.search(domain) else False
 
 class IdentityProvider(DbObjectMixin,models.Model):
+    """
+    The identity provider to authenticate user.
+    IdentityProvider 'local' means local account
+    IdentityProvider 'local_passwordless' means autenticating user without password
+    """
     _domains = None
     _changed = False
 
     LOCAL_PROVIDER = 'local'
 
+    #meaningful name mainained in auth2
     name = models.CharField(max_length=64,unique=True,null=True)
+    #unique name returned from b2c
     idp = models.CharField(max_length=256,unique=True,null=False,editable=False)
+    #the user flow id dedicated for this identity provider
     userflow = models.CharField(max_length=64,blank=True,null=True)
+    #the logout url to logout the user from identity provider
     logout_url = models.CharField(max_length=512,blank=True,null=True)
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
@@ -188,6 +243,9 @@ class IdentityProvider(DbObjectMixin,models.Model):
 
     @classmethod
     def refresh_idps(cls):
+        """
+        Popuate the data and save them to cache
+        """
         logger.debug("Refresh idp cache")
         modified = None
         size = 0
@@ -203,10 +261,16 @@ class IdentityProvider(DbObjectMixin,models.Model):
 
     @classmethod
     def get_idp(cls,idpid):
+        """
+        Return idp from cache
+        """
         return cache.idps.get(idpid) if idpid else None
   
     @classmethod
     def get_logout_url(cls,idpid):
+        """
+        Return idp logout url from cache
+        """
         idp = cls.get_idp(idpid)
         if idp:
             return idp.logout_url
@@ -220,6 +284,10 @@ class IdentityProvider(DbObjectMixin,models.Model):
         verbose_name_plural = " Identity Providers"
 
 class CustomizableUserflow(DbObjectMixin,models.Model):
+    """
+    Customize userflow for domain.
+    The domain '*' is the default settings.
+    """
     _changed = False
     defaultuserflow = None
     default_layout="""{% load i18n static %}
@@ -233,7 +301,7 @@ class CustomizableUserflow(DbObjectMixin,models.Model):
     </div>
 </td><td style="width:33%">
 </td></tr></table>
-<div class="container  unified_container " role="presentation"  style="height:720px;padding-top:20px;padding-bottom:20px;background-image:url('https://{{request.get_host}}{% static "images/login_bg.jpg" %}');background-repeat:no-repeat;background-size:cover">
+<div class="container {{container_class}}" role="presentation"  style="height:720px;padding-top:20px;padding-bottom:20px;background-image:url('https://{{request.get_host}}{% static "images/login_bg.jpg" %}');background-repeat:no-repeat;background-size:cover">
     <div class="row">
         <div class="col-lg-6">
             <div class="panel panel-default">
@@ -342,6 +410,7 @@ Email: enquiries@dbca.wa.gov.au
     fixed = models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
     default = models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
     mfa_set = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa set user flow")
+    #is not used in current logic
     email = models.CharField(max_length=64,null=True,blank=True,help_text="The email signup and signin user flow")
     profile_edit = models.CharField(max_length=64,null=True,blank=True,help_text="The user profile edit user flow")
     password_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The user password reset user flow")
@@ -358,9 +427,15 @@ Email: enquiries@dbca.wa.gov.au
 
     @property
     def is_default(self):
+        """
+        Return True if the current object is the default userflow
+        """
         return self.domain == '*'
 
     def clean(self):
+        """
+        Validate the changed data
+        """
         super().clean()
         self.domain = self.domain.strip()
         if not self.domain:
@@ -369,12 +444,15 @@ Email: enquiries@dbca.wa.gov.au
         if self.domain == "*":
             #default userflow
             if not self.page_layout:
+                #set the page layout to default page layout if it is empty
                 self.page_layout = self.default_layout
             if not self.verifyemail_body:
+                #set the verify email body to the default body if it is emtpy
                 self.verifyemail_body = self.default_verify_email_body
 
+            #check the required fields
             invalid_columns = []
-            for name in ("default","mfa_set","email","profile_edit","password_reset","page_layout","verifyemail_from","verifyemail_subject","verifyemail_body"):
+            for name in ("default","mfa_set","profile_edit","password_reset","page_layout","verifyemail_from","verifyemail_subject","verifyemail_body"):
                 if not getattr(self,name):
                     invalid_columns.append(name)
             if len(invalid_columns) == 1:
@@ -382,6 +460,7 @@ Email: enquiries@dbca.wa.gov.au
             elif len(invalid_columns) > 1:
                 raise ValidationError("The properties({}) can't be empty for global settings.".format(invalid_columns))
 
+        #check whether the object was modified or not.
         if self.id is not None:
             self._changed = False
             for name in ("default","mfa_set","email","profile_edit","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body"):
@@ -393,6 +472,7 @@ Email: enquiries@dbca.wa.gov.au
         if self.id is not None and not self._changed:
             #nothing was changed
             return 
+
         logger.debug("Try to save the changed {}({})".format(self.__class__.__name__,self))
         with transaction.atomic():
             super().save(*args,**kwargs)
@@ -401,10 +481,16 @@ Email: enquiries@dbca.wa.gov.au
 
     @classmethod
     def get_userflow(cls,domain):
+        """
+        Get userflow from the cache
+        """
         return cache.get_userflow(domain)
 
     @classmethod
     def refresh_userflows(cls):
+        """
+        Populate the cached data and save them to cache
+        """
         logger.debug("Refresh Customizable Userflow cache")
         userflows = {}
         defaultuserflow = None
@@ -439,6 +525,9 @@ Email: enquiries@dbca.wa.gov.au
         
 
 class UserEmail(object):
+    """
+    User email configuration.
+    """
     match_all = False
     def __init__(self,config):
         self.config = config
@@ -1259,11 +1348,12 @@ class User(AbstractUser):
         if not self.username:
             self.username = self.email
 
+        dbcagroup = UserGroup.dbca_group():
         if not self.id:
             self.is_active = True
             self.usergroup = UserGroup.find(self.email)
 
-        if UserGroup.dbca_group() and self.usergroup == UserGroup.dbca_group():
+        if dbcagroup and self.usergroup == dbcagroup:
             self.is_staff = True
 
     class Meta(AbstractUser.Meta):

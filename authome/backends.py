@@ -38,7 +38,7 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
                 idp = IdentityProvider.get_idp(idp)
                 if idp and idp.userflow:
                     if idp == IdentityProvider.LOCAL_PROVIDER:
-                        policy = userflow.email
+                        policy = userflow.email or idp.userflow
                     else:
                         policy = idp.userflow
                 else:

@@ -102,6 +102,9 @@ def env(key, default=None, required=False, value_type=None,subvalue_type=None):
 
 url_re = re.compile("^((h|H)(t|T)(t|T)(p|P)(s|S)?://)?(?P<domain>[a-zA-Z0-9_\-]+(\.[a-zA-Z0-9_\-]+)*)(:(?P<port>[0-9]+))?(\/|\?|$)")
 def get_domain(url):
+    """
+    Return domain from url
+    """
     if url:
         m = url_re.search(url)
         if m :
@@ -112,10 +115,16 @@ def get_domain(url):
         return None
 
 def get_redirect_domain(request):
+    """
+    Return domain from session property 'next'; if not found return None
+    """
     next_url = request.session.get(REDIRECT_FIELD_NAME)
     return get_domain(next_url)
 
 def get_request_domain(request):
+    """
+    Return domain from request url parameter 'next' and session property 'next'; if not found, return None
+    """
     next_url = request.GET.get(REDIRECT_FIELD_NAME)
     if next_url:
         return get_domain(next_url)
@@ -124,6 +133,9 @@ def get_request_domain(request):
 
 
 def get_usercache():
+    """
+    Return user cache; if not configured, return None
+    """
     from django.conf import settings
     from django.core.cache import caches
     try:
@@ -136,6 +148,9 @@ def get_usercache():
 
 
 def get_defaultcache():
+    """
+    Return default cache; if not configured, return None
+    """
     from django.conf import settings
     from django.core.cache import caches
     try:
@@ -144,6 +159,9 @@ def get_defaultcache():
         return None
 
 def get_totpurl(secret, name, issuer, timestep, prefix=None,algorithm="SHA1",digits=6):
+    """
+    Return totp url
+    """
     prefix = prefix or issuer
 
     prefix = urllib.parse.quote(prefix)
@@ -152,6 +170,9 @@ def get_totpurl(secret, name, issuer, timestep, prefix=None,algorithm="SHA1",dig
     return "otpauth://totp/{0}:{1}?secret={2}&period={3}&algorithm={5}&issuer={4}&digits={6}".format(prefix , name, secret, timestep, issuer,algorithm,digits)
 
 def encode_qrcode(totpurl):
+    """
+    Build a qrcode for totpurl and encoded it as base64 string
+    """
     qr = qrcode.QRCode(
         error_correction=qrcode.constants.ERROR_CORRECT_H,
     )
@@ -166,7 +187,9 @@ def encode_qrcode(totpurl):
 digest_map = {}
 def get_digest_function(algorithm):
     """
-    return (algorithm name, related digest function)
+    params:
+      algorithm: digest algorithm,case insensitive,
+    return (algorithm name(returned from digest function), related digest function) via digest algorithm 
 
     """
     algorithm = algorithm.lower()

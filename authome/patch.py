@@ -15,6 +15,11 @@ usercache = get_usercache()
 
 anonymoususer = auth.models.AnonymousUser()
 
+"""
+override django builtin method _get_user
+To improve the perforance and debug, provide different function in each scenario, (the combination of debug and usercache)
+
+"""
 if usercache:
     if settings.RELEASE:
         def _get_user(request):
@@ -65,7 +70,6 @@ if usercache:
             return user or anonymoususer
 
 else:
-
     if settings.RELEASE:
         def _get_user(request):
             """
