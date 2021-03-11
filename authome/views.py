@@ -618,16 +618,16 @@ def signedout(request):
     Return a consistent signedout page
     """
     #get the real domain from request header set by nginx;if not found, use request's domain
-    host = request.headers.get("x-upstream-server-name") or request.get_host()
+    domain = request.headers.get("x-upstream-server-name") or request.get_host()
     if request.user.is_authenticated:
         #still authenticated, redirect to path '/sso/auth_logout' to trigger an logout flow
-        return HttpResponseRedirect("https://{}/sso/auth_logout".format(host))
+        return HttpResponseRedirect("https://{}/sso/auth_logout".format(domain))
 
     #get the relogin_url from request url parameters
     relogin_url = request.GET.get("relogin_url")
     if not relogin_url:
         #can't the the relogin url, use the domain's home page as relogin url
-        relogin_url = "https://{}".format(host)
+        relogin_url = "https://{}".format(domain)
 
     #get idp to trigger a backend logout flow
     idpid = request.GET.get("idp")
@@ -639,6 +639,21 @@ def signedout(request):
     if idp and idp.logout_url:
         context["idp_name"] = idp.name
         context["idp_logout_url"] = idp.logout_url
+    content = django_engine.get_template("authome/inc/signedout_body.html").render(
+        context=context,
+        request=request
+    )
+    container_class = "signedout_container"
+    userflow = models.CustomizableUserflow.get_userflow(domain)
+    _init_userflow_pagelayout(request,userflow,container_class)
+
+    page_layout = getattr(userflow,container_class)
+    extracss = userflow.inited_extracss
+
+    context = {"body":page_layout,"extracss":extracss,"content":content}
+    if domain:
+        context["domain"] = domain
+
     return TemplateResponse(request,"authome/signedout.html",context=context)
 
 def signout(request,**kwargs):

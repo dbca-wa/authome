@@ -78,7 +78,7 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
             return response
 
     #reset is_staff and is_superuser property based on user category.
-    dbcagroup == UserGroup.dbca_group():
+    dbcagroup = UserGroup.dbca_group()
     usergroup = UserGroup.find(email)
     if usergroup == dbcagroup:
         details["is_staff"] = True

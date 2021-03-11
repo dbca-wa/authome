@@ -1348,7 +1348,7 @@ class User(AbstractUser):
         if not self.username:
             self.username = self.email
 
-        dbcagroup = UserGroup.dbca_group():
+        dbcagroup = UserGroup.dbca_group()
         if not self.id:
             self.is_active = True
             self.usergroup = UserGroup.find(self.email)
