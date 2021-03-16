@@ -248,6 +248,7 @@ class IdentityProvider(DbObjectMixin,models.Model):
         """
         logger.debug("Refresh idp cache")
         modified = None
+        refreshtime = timezone.now()
         size = 0
         idps = {}
         for obj in cls.objects.all():
@@ -257,7 +258,7 @@ class IdentityProvider(DbObjectMixin,models.Model):
                 modified = obj.modified
             elif modified < obj.modified:
                 modified = obj.modified
-        cache.idps = (idps,size,modified or timezone.now())
+        cache.idps = (idps,size,refreshtime)
 
     @classmethod
     def get_idp(cls,idpid):
@@ -502,6 +503,7 @@ Email: enquiries@dbca.wa.gov.au
         userflows = {}
         defaultuserflow = None
         last_modified = None
+        refreshtime = timezone.now()
         size = 0
         for o in cls.objects.all():
             if o.is_default:
@@ -541,7 +543,7 @@ Email: enquiries@dbca.wa.gov.au
                 if not getattr(o,name):
                     setattr(o,name,_getattr(o.parent,name))
 
-        cache.userflows = (userflows,defaultuserflow,size,last_modified or timezone.now())
+        cache.userflows = (userflows,defaultuserflow,size,refreshtime)
         
 
 class UserEmail(object):
@@ -854,6 +856,7 @@ class UserGroup(DbObjectMixin,models.Model):
         logger.debug("Refresh UserGroup cache")
         group_trees = {}
         modified = None
+        refreshtime = timezone.now()
         size = 0
         dbca_group = None
         public_group = None
@@ -877,7 +880,7 @@ class UserGroup(DbObjectMixin,models.Model):
             if group.parent_group_id:
                 group_trees[group.parent_group_id][1].append(val)
         group_trees = [v for v in group_trees.values() if not v[0].parent_group_id]
-        cache.usergrouptree = (group_trees,public_group,dbca_group,size,modified or timezone.now())
+        cache.usergrouptree = (group_trees,public_group,dbca_group,size,refreshtime)
 
     @classmethod
     def get_grouptree(cls):
@@ -1286,6 +1289,7 @@ class UserAuthorization(AuthorizationMixin):
         previous_user = None
         size = 0
         modified = None
+        refreshtime = timezone.now()
         for authorization in UserAuthorization.objects.all().order_by("user","sortkey"):
             size += 1
             if not modified:
@@ -1302,7 +1306,7 @@ class UserAuthorization(AuthorizationMixin):
                 userauthorization[authorization.user] = [authorization]
                 previous_user = authorization.user
         
-        cache.userauthorization = (userauthorization,size,modified or timezone.now())
+        cache.userauthorization = (userauthorization,size,refreshtime)
 
     @classmethod
     def get_authorization(cls,useremail):
@@ -1325,6 +1329,7 @@ class UserGroupAuthorization(AuthorizationMixin):
         previous_usergroup = None
         size = 0
         modified = None
+        refreshtime = timezone.now()
         for authorization in UserGroupAuthorization.objects.all().order_by("usergroup","sortkey"):
             size += 1
             if not modified:
@@ -1341,7 +1346,7 @@ class UserGroupAuthorization(AuthorizationMixin):
                 usergroupauthorization[authorization.usergroup] = [authorization]
                 previous_usergroup = authorization.usergroup
 
-        cache.usergroupauthorization = (usergroupauthorization,size,modified or timezone.now())
+        cache.usergroupauthorization = (usergroupauthorization,size,refreshtime)
 
     @classmethod
     def get_authorization(cls,usergroup):
