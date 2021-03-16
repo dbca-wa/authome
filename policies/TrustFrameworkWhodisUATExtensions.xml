@@ -6,7 +6,7 @@
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
  PolicyId="B2C_1A_TrustFrameworkWhodisUATExtensions"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkUATExtensions">
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkWhodisUATExtensions">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
