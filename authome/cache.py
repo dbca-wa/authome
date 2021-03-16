@@ -254,7 +254,7 @@ class MemoryCache(object):
 
 
 
-    @idps.setter
+    @userflows.setter
     def userflows(self,value):
         if value:
             self._userflows,self._defaultuserflow,self._userflows_size,self._userflows_ts = value

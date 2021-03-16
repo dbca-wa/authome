@@ -30,8 +30,10 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
             domain = get_redirect_domain(request)
             userflow = CustomizableUserflow.get_userflow(domain)
             if userflow.fixed:
+                logger.debug("Use the fixed userflow({1}) for domain({0})".format(domain,userflow.fixed))
                 policy = userflow.fixed
             elif not domain:
+                logger.debug("Use the default userflow({1}) for domain({0})".format(domain,userflow.default))
                 policy = userflow.default
             else:
                 idp = request.COOKIES.get(settings.PREFERED_IDP_COOKIE_NAME,None)
@@ -44,7 +46,7 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
                 else:
                     policy = userflow.default
 
-                logger.debug("Prefered idp is '{}', Choosed userflow is '{}'".format(idp,policy))
+                logger.debug("Prefered idp is '{}', Choosed userflow is '{}', request domain is '{}' ".format(idp,policy,domain))
 
         if not policy or not policy.lower().startswith('b2c_'):
             raise AuthException('SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_POLICY is '

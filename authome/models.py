@@ -289,7 +289,6 @@ class CustomizableUserflow(DbObjectMixin,models.Model):
     The domain '*' is the default settings.
     """
     _changed = False
-    defaultuserflow = None
     default_layout="""{% load i18n static %}
 <table id="header" style="background:#2D2F32;width:100%;"><tr><td style="width:34%">
     <div id="logo" style="margin-left:50px;vertical-align:middle;text-align:left">
@@ -407,6 +406,7 @@ Email: enquiries@dbca.wa.gov.au
 </html>"""
 
     domain = models.CharField(max_length=128,unique=True,null=False,help_text="Global setting if domain is '*'; otherwise is individual domain settings")
+    parent = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
     fixed = models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
     default = models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
     mfa_set = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa set user flow")
@@ -467,6 +467,10 @@ Email: enquiries@dbca.wa.gov.au
                 if getattr(self,name) != getattr(self.db_obj,name):
                     self._changed = True
                     break
+            if not self._changed:
+                if self.parent != self.db_obj.parent and ((self.parent and not self.parent.is_default) or (self.db_obj.parent and not self.db_obj.parent.is_default)):
+                    self._changed = True
+
 
     def save(self,*args,**kwargs):
         if self.id is not None and not self._changed:
@@ -478,6 +482,9 @@ Email: enquiries@dbca.wa.gov.au
             super().save(*args,**kwargs)
 
         self._changed = False
+
+    def __str__(self):
+        return self.domain
 
     @classmethod
     def get_userflow(cls,domain):
@@ -508,18 +515,31 @@ Email: enquiries@dbca.wa.gov.au
                 last_modified = o.modified
 
             size += 1
+
         if not defaultuserflow :
             raise Exception("The default customizable userflow configuration is missing.")
         elif not defaultuserflow.page_layout:
             defaultuserflow.page_layout = cls.default_layout
 
-        defaultuserflow.defaultuserflow = None
+        def _getattr(o,name):
+            val = getattr(o,name)
+            if val:
+                return val
+            elif o.parent:
+                return _getattr(o.parent,name)
+            else:
+                return _getattr(defaultuserflow,name)
 
         for o in userflows.values():
-            for name in ("default","mfa_set","email","profile_edit","password_reset"):
+            if o.is_default:
+                o.parent = None
+                continue
+            elif not o.parent :
+                o.parent = defaultuserflow
+
+            for name in ("fixed","default","mfa_set","email","profile_edit","password_reset"):
                 if not getattr(o,name):
-                    setattr(o,name,getattr(defaultuserflow,name))
-            o.defaultuserflow = defaultuserflow
+                    setattr(o,name,_getattr(o.parent,name))
 
         cache.userflows = (userflows,defaultuserflow,size,last_modified or timezone.now())
         
