@@ -678,12 +678,12 @@ def _init_userflow_pagelayout(request,userflow,container_class):
 
     #initialize the page layout for the user userflow and container class
     if not userflow.page_layout:
-        #page_layout is not configured, use the defaultuserflow's page_layout
-        #initialize defaultuserflow,
-        _init_userflow(request,userflow.defaultuserflow,container_class)
+        #page_layout is not configured, use parent's page_layout
+        #initialize parent,
+        _init_userflow_pagelayout(request,userflow.parent,container_class)
         #set userflow's page layout to default userflow's page layout
-        setattr(userflow,container_class,getattr(userflow.defaultuserflow,container_class))
-        userflow.inited_extracss = userflow.defaultuserflow.inited_extracss
+        setattr(userflow,container_class,getattr(userflow.parent,container_class))
+        userflow.inited_extracss = userflow.parent.inited_extracss
     else:
         #page_layout is configured, init page_layout using template engine
         context={"container_class":container_class}
@@ -715,21 +715,21 @@ def _init_userflow_verifyemail(request,userflow):
     #initialize verifyemail related properties
     if not userflow.verifyemail_from:
         #verifyemail_from is not configured, get it from default userflow
-        _init_userflow(request,userflow.defaultuserflow)
-        userflow.verifyemail_from = userflow.defaultuserflow.verifyemail_from
+        _init_userflow_verifyemail(request,userflow.parent)
+        userflow.verifyemail_from = userflow.parent.verifyemail_from
 
     if not userflow.verifyemail_subject:
         #verifyemail_subject is not configured, get it from default userflow
-        _init_userflow(request,userflow.defaultuserflow)
-        userflow.verifyemail_subject = userflow.defaultuserflow.verifyemail_subject
+        _init_userflow_verifyemail(request,userflow.parent)
+        userflow.verifyemail_subject = userflow.parent.verifyemail_subject
 
     if userflow.verifyemail_body:
         #verifyemail_body is configured, get it from template
         userflow.verifyemail_body_template = django_engine.from_string(userflow.verifyemail_body)
     else:
         #verifyemail_body is not configured, get it from default userflow
-        _init_userflow(request,userflow.defaultuserflow)
-        userflow.verifyemail_body_template = userflow.defaultuserflow.verifyemail_body_template
+        _init_userflow_verifyemail(request,userflow.parent)
+        userflow.verifyemail_body_template = userflow.parent.verifyemail_body_template
 
 def adb2c_view(request,template,**kwargs):
     """
