@@ -81,6 +81,10 @@ def check_authorization(request,useremail):
     #get the real request domain and request path from request header set in nginx if have;otherwise use the domain and path from http request
     domain = request.headers.get("x-upstream-server-name") or request.get_host()
     path = request.headers.get("x-upstream-request-uri") or request.path
+    if path.startswith("/sso/"):
+        #sso related request, should always be authorized.
+        return None
+
     try:
         path = path[:path.index("?")]
     except:
@@ -456,8 +460,7 @@ def home(request):
     """
     next_url = request.GET.get('next', None)
     #check whether rquest is authenticated and authorized
-    res = _auth(request)
-    if not res:
+    if not request.user.is_authenticated:
         #not authenticated
         #get authenticatation url
         url = reverse('social:begin', args=['azuread-b2c-oauth2'])
@@ -473,21 +476,6 @@ def home(request):
         logger.debug("sso auth url = {}".format(url))
         #redirect to authentiocaion url to start authentication user flow
         return HttpResponseRedirect(url)
-    elif res.status_code >= 400:
-        #authenticated but not authorized
-        if next_url:
-            #get domain from next url
-            domain = utils.get_domain(next_url)
-        else:
-            domain = None
-
-        if domain:
-            #redirect to path '/sso/forbidden' for that domain
-            return HttpResponseRedirect('https://{}/sso/forbidden'.format(domain))
-        else:
-            #redirect to path '/sso/forbidden' 
-            return HttpResponseRedirect('/sso/forbidden')
-
     else:
         #authenticated and authorized
         if next_url:
