@@ -32,6 +32,7 @@ from . import models
 from .cache import cache
 from . import utils
 from . import emails
+from .exceptions import HttpResponseException
 
 logger = logging.getLogger(__name__)
 django_engine = engines['django']
@@ -639,22 +640,22 @@ def signedout(request):
     if idp and idp.logout_url:
         context["idp_name"] = idp.name
         context["idp_logout_url"] = idp.logout_url
-    content = django_engine.get_template("authome/inc/signedout_body.html").render(
+    content = django_engine.get_template("authome/inc/signedout.html").render(
         context=context,
         request=request
     )
-    container_class = "signedout_container"
+    container_class = "content_container"
     userflow = models.CustomizableUserflow.get_userflow(domain)
     _init_userflow_pagelayout(request,userflow,container_class)
 
     page_layout = getattr(userflow,container_class)
     extracss = userflow.inited_extracss
 
-    context = {"body":page_layout,"extracss":extracss,"content":content}
+    context = {"body":page_layout,"extracss":extracss,"content":content,"title":"You are signed out."}
     if domain:
         context["domain"] = domain
 
-    return TemplateResponse(request,"authome/signedout.html",context=context)
+    return TemplateResponse(request,"authome/default.html",context=context)
 
 def signout(request,**kwargs):
     """
@@ -770,7 +771,24 @@ def forbidden(request):
     context["path"] = path
     context["url"] = "https://{}{}".format(domain,path)
     logger.debug("forbidden context = {}".format(context))
-    return TemplateResponse(request,"authome/forbidden.html",context=context)
+
+    content = django_engine.get_template("authome/inc/forbidden.html").render(
+        context=context,
+        request=request
+    )
+    container_class = "content_container"
+    userflow = models.CustomizableUserflow.get_userflow(domain)
+    _init_userflow_pagelayout(request,userflow,container_class)
+
+    page_layout = getattr(userflow,container_class)
+    extracss = userflow.inited_extracss
+
+    context = {"body":page_layout,"extracss":extracss,"content":content,"title":"Access denied"}
+    if domain:
+        context["domain"] = domain
+
+    return TemplateResponse(request,"authome/default.html",context=context)
+
 
 @never_cache
 @psa("/sso/profile/edit/complete")
@@ -1062,3 +1080,32 @@ def totp_verify(request):
         logger.debug("Failed to verify totp code.{}".format(data))
         return CONFLICT_RESPONSE 
 
+def handler400(request,exception,**kwargs):
+    """
+    Customizable handler to process 400 response.
+    This method provide a hook to let exception return its own response
+    """
+    if isinstance(exception,HttpResponseException):
+        res = exception.get_response(request)
+        if res:
+            return res
+
+    domain = request.headers.get("x-upstream-server-name") or utils.get_redirect_domain(request) or request.get_host()
+    content = django_engine.get_template("authome/inc/error.html").render(
+        context={"message":str(exception)},
+        request=request
+    )
+    container_class = "content_container"
+    userflow = models.CustomizableUserflow.get_userflow(domain)
+    _init_userflow_pagelayout(request,userflow,container_class)
+
+    page_layout = getattr(userflow,container_class)
+    extracss = userflow.inited_extracss
+
+    context = {"body":page_layout,"extracss":extracss,"content":content,"title":"Authentication failed."}
+    if domain:
+        context["domain"] = domain
+
+    code = exception.http_code or 400
+    return TemplateResponse(request,"authome/default.html",context=context,status=code)
+  

@@ -23,7 +23,5 @@ class AzureADB2CAuthenticateFailed(HttpResponseException):
             #forgot password
             return HttpResponseRedirect(reverse('password_reset'))
 
-
-        code = self.http_code or 400
-        return TemplateResponse(request,"authome/error.html",context={"message":str(self)},status=code)
+        return None
 

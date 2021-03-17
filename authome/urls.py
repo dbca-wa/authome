@@ -3,9 +3,8 @@ from django.contrib import admin
 from django.conf import settings
 from django.template.response import TemplateResponse
 
-from authome import views
-from authome.cache import cache
-from .exceptions import HttpResponseException
+from . import views
+from .cache import cache
 
 import authome.patch
 
@@ -48,16 +47,8 @@ if settings.DEBUG:
     import debug_toolbar
     urlpatterns.append(path('__debug__/', include(debug_toolbar.urls)))
 
-def handler400(request,exception,**kwargs):
-    """
-    Customizable handler to process 400 response.
-    This method provide a hook to let exception return its own response
-    """
-    if isinstance(exception,HttpResponseException):
-        return exception.get_response(request)
-    else:
-        return TemplateResponse(request,"authome/error.html",context={"message":str(exception)},status=400)
-  
+handler400 = views.handler400
+
 #load cache
 try:
     cache.refresh_authorization_cache(True)

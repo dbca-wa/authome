@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en-US"><head>
     
-    <title>You are signed out</title>
+    <title>{{title}}</title>
 
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -34,19 +34,19 @@
             padding: 0;
         }
 
-        .signedout_container .panel-default{
+        .content_container .panel-default{
             padding: 40px 30px;
             margin-top: auto;
             margin-bottom: auto;
             height: 100%;
             background-color: #fff;
         }
-        .signedout_container .row .panel-default .panel-body {
+        .content_container .row .panel-default .panel-body {
             width: auto;
             margin: 0 auto;
             padding: 0;
         }
-        .signedout_container .row .panel-default #api {
+        .content_container .row .panel-default #api {
             display: table;
             margin: 0;
             width: 100%;
@@ -57,12 +57,12 @@
 </head>
 <body>
     {{body | safe}}
-    <div style="display:none" id="content_container">
+    <div style="display:none" id="content_div">
     {{content|safe}}
     </div>
     
     <script>
-        $("#api").html($("#content_container").html())
+        $("#api").html($("#content_div").html())
     </script>
 </body>
 </html>
