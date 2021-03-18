@@ -786,14 +786,16 @@ def profile_edit(request,backend):
     Start a profile edit user flow
     called after user authentication
     """
-    if request.GET.get(REDIRECT_FIELD_NAME):
-        logger.debug("Found next url '{}'".format(request.GET.get(REDIRECT_FIELD_NAME)))
-        pass
+    next_url = request.GET.get(REDIRECT_FIELD_NAME)
+    if next_url:
+        logger.debug("Found next url '{}'".format(next_url))
+        domain = utils.get_domain(next_url)
     else:
-        request.session[REDIRECT_FIELD_NAME] = "https://{}/sso/profile".format(utils.get_request_domain(request))
-        logger.debug("No next url provided,set the next url to '{}'".format(request.session[REDIRECT_FIELD_NAME]))
+        domain = request.headers.get("x-upstream-server-name") or request.get_host()
+        next_url = "https://{}/sso/profile".format(domain)
+        request.session[REDIRECT_FIELD_NAME] = next_url
+        logger.debug("No next url provided,set the next url to '{}'".format(next_url))
 
-    domain = utils.get_redirect_domain(request)
     request.policy = models.CustomizableUserflow.get_userflow(domain).profile_edit
     return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
 
@@ -821,28 +823,6 @@ def profile_edit_complete(request,backend,*args,**kwargs):
                        redirect_name=REDIRECT_FIELD_NAME, request=request,
                        *args, **kwargs)
 
-"""
-@never_cache
-@psa("/sso/email/signup/complete")
-def email_signup(request,backend):
-    domain = utils.get_redirect_domain(request)
-    request.policy = models.CustomizableUserflow.get_userflow(domain).email_signup
-    return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
-
-@never_cache
-@csrf_exempt
-@psa("/sso/email/signup/complete")
-def email_signup_complete(request,backend,*args,**kwargs):
-    domain = utils.get_redirect_domain(request)
-    request.policy = models.CustomizableUserflow.get_userflow(domain).email_signup
-    request.http_error_code = 417
-    request.http_error_message = "Failed to signup a local account..{}"
-
-    return do_complete(request.backend, _do_login, user=request.user,
-                       redirect_name=REDIRECT_FIELD_NAME, request=request,
-                       *args, **kwargs)
-"""                       
-
 @never_cache
 @psa("/sso/password/reset/complete")
 def password_reset(request,backend):
@@ -851,7 +831,16 @@ def password_reset(request,backend):
     Start a password reset user flow
     Triggered by hyperlink 'Forgot your password' in idp selection page
     """
-    domain = utils.get_redirect_domain(request)
+    next_url = request.GET.get(REDIRECT_FIELD_NAME)
+    if next_url:
+        logger.debug("Found next url '{}'".format(next_url))
+        domain = utils.get_domain(next_url)
+    else:
+        domain = request.headers.get("x-upstream-server-name") or request.get_host()
+        next_url = "https://{}/sso/profile".format(domain)
+        request.session[REDIRECT_FIELD_NAME] = next_url
+        logger.debug("No next url provided,set the next url to '{}'".format(next_url))
+
     request.policy = models.CustomizableUserflow.get_userflow(domain).password_reset
     return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
 
@@ -880,7 +869,16 @@ def mfa_set(request,backend):
     Start a user mfa set user flow
     called after user authentication
     """
-    domain = utils.get_redirect_domain(request)
+    next_url = request.GET.get(REDIRECT_FIELD_NAME)
+    if next_url:
+        logger.debug("Found next url '{}'".format(next_url))
+        domain = utils.get_domain(next_url)
+    else:
+        domain = request.headers.get("x-upstream-server-name") or request.get_host()
+        next_url = "https://{}/sso/profile".format(domain)
+        request.session[REDIRECT_FIELD_NAME] = next_url
+        logger.debug("No next url provided,set the next url to '{}'".format(next_url))
+
     request.policy = models.CustomizableUserflow.get_userflow(domain).mfa_set
     return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
 

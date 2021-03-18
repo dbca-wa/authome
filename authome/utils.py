@@ -121,17 +121,6 @@ def get_redirect_domain(request):
     next_url = request.session.get(REDIRECT_FIELD_NAME)
     return get_domain(next_url)
 
-def get_request_domain(request):
-    """
-    Return domain from request url parameter 'next' and session property 'next'; if not found, return None
-    """
-    next_url = request.GET.get(REDIRECT_FIELD_NAME)
-    if next_url:
-        return get_domain(next_url)
-    else:
-        return request.headers.get("x-upstream-server-name") or request.get_host()
-
-
 def get_usercache():
     """
     Return user cache; if not configured, return None
