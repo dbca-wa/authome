@@ -100,7 +100,7 @@ def env(key, default=None, required=False, value_type=None,subvalue_type=None):
     return _convert(key,value,default=default,required=required,value_type=value_type,subvalue_type=subvalue_type)
 
 
-url_re = re.compile("^((h|H)(t|T)(t|T)(p|P)(s|S)?://)?(?P<domain>[a-zA-Z0-9_\-]+(\.[a-zA-Z0-9_\-]+)*)(:(?P<port>[0-9]+))?(\/|\?|$)")
+url_re = re.compile("^(http(s)?://)?(?P<domain>(localhost|([a-zA-Z0-9_\-]+(\.[a-zA-Z0-9_\-]+)+)))(:(?P<port>[0-9]+))?(\/|\?|$)",re.IGNORECASE)
 def get_domain(url):
     """
     Return domain from url
