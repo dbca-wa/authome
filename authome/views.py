@@ -752,11 +752,11 @@ def profile_edit(request,backend):
     else:
         domain = request.headers.get("x-upstream-server-name") or request.get_host()
         next_url = "https://{}/sso/profile".format(domain)
-        request.session[REDIRECT_FIELD_NAME] = next_url
         logger.debug("No next url provided,set the next url to '{}'".format(next_url))
 
+    request.session[REDIRECT_FIELD_NAME] = next_url
     request.policy = models.CustomizableUserflow.get_userflow(domain).profile_edit
-    return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
+    return do_auth(request.backend, redirect_name="__already_set")
 
 
 def _do_login(*args,**kwargs):
@@ -798,11 +798,11 @@ def password_reset(request,backend):
     else:
         domain = request.headers.get("x-upstream-server-name") or request.get_host()
         next_url = "https://{}/sso/profile".format(domain)
-        request.session[REDIRECT_FIELD_NAME] = next_url
         logger.debug("No next url provided,set the next url to '{}'".format(next_url))
 
+    request.session[REDIRECT_FIELD_NAME] = next_url
     request.policy = models.CustomizableUserflow.get_userflow(domain).password_reset
-    return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
+    return do_auth(request.backend, redirect_name="__already_set")
 
 @never_cache
 @csrf_exempt
@@ -837,11 +837,11 @@ def mfa_set(request,backend):
     else:
         domain = request.headers.get("x-upstream-server-name") or request.get_host()
         next_url = "https://{}/sso/profile".format(domain)
-        request.session[REDIRECT_FIELD_NAME] = next_url
         logger.debug("No next url provided,set the next url to '{}'".format(next_url))
 
+    request.session[REDIRECT_FIELD_NAME] = next_url
     request.policy = models.CustomizableUserflow.get_userflow(domain).mfa_set
-    return do_auth(request.backend, redirect_name=REDIRECT_FIELD_NAME)
+    return do_auth(request.backend, redirect_name="already_set")
 
 @never_cache
 @csrf_exempt
