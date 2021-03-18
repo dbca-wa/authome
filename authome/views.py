@@ -117,7 +117,7 @@ def get_post_logout_url(request,idp=None,encode=True):
     post_logout_url = "https://{}/sso/signedout".format(host)
 
     #try to get relogin url from request url parameters
-    relogin_url = request.GET.get("relogin_url")
+    relogin_url = request.GET.get("relogin")
     if not relogin_url:
         #not found in request url parameters, try to use the property 'next' from session as relogin url
         relogin_url = request.session.get("next")
@@ -149,7 +149,7 @@ def get_post_logout_url(request,idp=None,encode=True):
     #add relogin_url and idpid as url parameters to post_logout_url
     params = None
     if relogin_url:
-        params = "relogin_url={}".format(relogin_url)
+        params = "relogin={}".format(relogin_url)
         if idpid:
             params = "{}&idp={}".format(params,idpid)
 
@@ -547,59 +547,6 @@ def profile(request):
     content = json.dumps(content)
     return HttpResponse(content=content,content_type="application/json")
 
-"""
-API_VERSION = "0.0.1"
-@csrf_exempt
-def check_signup(request):
-    body = {"version": API_VERSION}
-    try:
-        request_body = json.loads(request.body.decode())
-        logger.debug("signup data is '{}'".format(request_body))
-        email = request_body.get("email",None)
-        body = {"version": API_VERSION}
-        status_code = 200
-        if not email :
-            body["action"] = "ValidationError"
-            body["userMessage"] = "User Email is empty"
-            status_code = 400
-        elif "@" not in email:
-            body["action"] = "ValidationError"
-            body["userMessage"] = "User Email is empty"
-            status_code = 400
-        elif models.UserGroup.dbca_group().contain(email):
-            status_code = 200
-            body["action"] = "Continue"
-        else:
-            users = models.User.objects.filter(email__iexact=email)
-            if len(users) == 1:
-                user = users[0]
-                update_fields = []
-                for col,prop in [("first_name","givenName"),("last_name","surname")]:
-                    val = request_body.get(prop,None)
-                    if val and val != getattr(user,col):
-                        setattr(user,col,val)
-                        update_fields.append(col)
-                if update_fields:
-                    user.save(update_fields=update_fields)
-                status_code = 200
-                body["action"] = "Continue"
-            elif len(users) > 1:
-                status_code = 200
-                body["action"] = "ShowBlockPage"
-                body["userMessage"] = "You are registered multiple times. Please ask dbca admin to register you properly before you can sign-up"
-            else:
-                status_code = 200
-                body["action"] = "ShowBlockPage"
-                body["userMessage"] = "Please ask dbca admin to register you first before you can sign-up"
-    except Exception as ex:
-        logger.error("Failed to check user sign-up.{}".format(traceback.format_exc()))
-        status_code = 200
-        body["action"] = "ShowBlockPage"
-        body["userMessage"] = "Failed to check user sign-up with error {}".format(str(ex))
-
-    return JsonResponse(body,status=status_code)
-"""
-
 @csrf_exempt
 def signedout(request):
     """
@@ -613,7 +560,7 @@ def signedout(request):
         return HttpResponseRedirect("https://{}/sso/auth_logout".format(domain))
 
     #get the relogin_url from request url parameters
-    relogin_url = request.GET.get("relogin_url")
+    relogin_url = request.GET.get("relogin")
     if not relogin_url:
         #can't the the relogin url, use the domain's home page as relogin url
         relogin_url = "https://{}".format(domain)
@@ -623,7 +570,7 @@ def signedout(request):
     idp = models.IdentityProvider.get_idp(idpid)
 
     context = {
-        "relogin_url":relogin_url
+        "relogin":relogin_url
     }
     if idp and idp.logout_url:
         context["idp_name"] = idp.name
