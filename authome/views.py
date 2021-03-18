@@ -81,10 +81,6 @@ def check_authorization(request,useremail):
     #get the real request domain and request path from request header set in nginx if have;otherwise use the domain and path from http request
     domain = request.headers.get("x-upstream-server-name") or request.get_host()
     path = request.headers.get("x-upstream-request-uri") or request.path
-    if path.startswith("/sso/"):
-        #sso related request, should always be authorized.
-        return None
-
     try:
         path = path[:path.index("?")]
     except:
@@ -95,7 +91,11 @@ def check_authorization(request,useremail):
         return None
     else:
         logger.debug("User({}) can't access https://{}{}".format(useremail,domain,path))
-        return NOT_AUTHORIZED_RESPONSE
+        if path.startswith("/sso/"):
+            #sso related request, should always be authorized.
+            return None
+        else:
+            return NOT_AUTHORIZED_RESPONSE
 
 
 def get_post_logout_url(request,idp=None,encode=True):
