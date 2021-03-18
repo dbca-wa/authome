@@ -97,6 +97,19 @@ def check_authorization(request,useremail):
         else:
             return NOT_AUTHORIZED_RESPONSE
 
+def get_absolute_url(url,domain):
+    """
+    Get a absolute http url
+    """
+    if url.startswith("http"):
+        return url
+
+    if url.startswith("/"):
+        #relative url in domain
+        return "https://{}{}".format(domain,url)
+    else:
+        #absoulte url without protocol
+        return "https://{}".format(url)
 
 def get_post_logout_url(request,idp=None,encode=True):
     """
@@ -125,10 +138,7 @@ def get_post_logout_url(request,idp=None,encode=True):
             #still can't get the relogin url, use the home page of the domain as relogin url
             relogin_url = host
 
-    if not relogin_url.startswith("https://"):
-        #if relogin_url is not started with 'https://', add prefix 'https://'
-        relogin_url = "https://{}".format(relogin_url)
-         
+    relogin_url = get_absolute_url(relogin_url,host)
 
     #get the idepid
     if idp:
@@ -725,6 +735,7 @@ def forbidden(request):
     return TemplateResponse(request,"authome/default.html",context=context)
 
 
+
 @never_cache
 @psa("/sso/profile/edit/complete")
 def profile_edit(request,backend):
@@ -735,8 +746,9 @@ def profile_edit(request,backend):
     """
     next_url = request.GET.get(REDIRECT_FIELD_NAME)
     if next_url:
+        domain = utils.get_domain(next_url) or request.headers.get("x-upstream-server-name") or request.get_host()
+        next_url = get_absolute_url(next_url,domain)
         logger.debug("Found next url '{}'".format(next_url))
-        domain = utils.get_domain(next_url)
     else:
         domain = request.headers.get("x-upstream-server-name") or request.get_host()
         next_url = "https://{}/sso/profile".format(domain)
@@ -780,8 +792,9 @@ def password_reset(request,backend):
     """
     next_url = request.GET.get(REDIRECT_FIELD_NAME)
     if next_url:
+        domain = utils.get_domain(next_url) or request.headers.get("x-upstream-server-name") or request.get_host()
+        next_url = get_absolute_url(next_url,domain)
         logger.debug("Found next url '{}'".format(next_url))
-        domain = utils.get_domain(next_url)
     else:
         domain = request.headers.get("x-upstream-server-name") or request.get_host()
         next_url = "https://{}/sso/profile".format(domain)
@@ -818,8 +831,9 @@ def mfa_set(request,backend):
     """
     next_url = request.GET.get(REDIRECT_FIELD_NAME)
     if next_url:
+        domain = utils.get_domain(next_url) or request.headers.get("x-upstream-server-name") or request.get_host()
+        next_url = get_absolute_url(next_url,domain)
         logger.debug("Found next url '{}'".format(next_url))
-        domain = utils.get_domain(next_url)
     else:
         domain = request.headers.get("x-upstream-server-name") or request.get_host()
         next_url = "https://{}/sso/profile".format(domain)
