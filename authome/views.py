@@ -860,6 +860,45 @@ def mfa_set_complete(request,backend,*args,**kwargs):
                        *args, **kwargs)
 
 
+@never_cache
+@psa("/sso/mfa/reset/complete")
+def mfa_reset(request,backend):
+    """
+    View method for path '/sso/mfa/set'
+    Start a user mfa set user flow
+    called after user authentication
+    """
+    next_url = request.GET.get(REDIRECT_FIELD_NAME)
+    if next_url:
+        domain = utils.get_domain(next_url) or request.headers.get("x-upstream-server-name") or request.get_host()
+        next_url = get_absolute_url(next_url,domain)
+        logger.debug("Found next url '{}'".format(next_url))
+    else:
+        domain = request.headers.get("x-upstream-server-name") or request.get_host()
+        next_url = "https://{}/sso/profile".format(domain)
+        logger.debug("No next url provided,set the next url to '{}'".format(next_url))
+
+    request.session[REDIRECT_FIELD_NAME] = next_url
+    request.policy = models.CustomizableUserflow.get_userflow(domain).mfa_reset
+    return do_auth(request.backend, redirect_name="already_set")
+
+@never_cache
+@csrf_exempt
+@psa("/sso/mfa/reset/complete")
+def mfa_reset_complete(request,backend,*args,**kwargs):
+    """
+    View method for path '/sso/mfa/set/complete'
+    Callback url from b2c to complete a user mfa set request
+    """
+    domain = utils.get_redirect_domain(request)
+    request.policy = models.CustomizableUserflow.get_userflow(domain).mfa_reset
+    request.http_error_code = 417
+    request.http_error_message = "Failed to set mfa method.{}"
+    return do_complete(request.backend, _do_login, user=request.user,
+                       redirect_name=REDIRECT_FIELD_NAME, request=request,
+                       *args, **kwargs)
+
+
 bearer_token_re = re.compile("^Bearer\s+(?P<token>\S+)\s*$")
 def _auth_bearer(request):
     """
@@ -966,6 +1005,7 @@ def totp_generate(request):
         user_totp.last_verified_code = None
 
         user_totp.save()
+        logger.debug("Generate secret key for user({}<{}>)".format(user_email,idp))
      
     #get the totp url
     totpurl = utils.get_totpurl(user_totp.secret_key,user_totp.name,user_totp.issuer,user_totp.timestep,user_totp.prefix,algorithm=user_totp.algorithm,digits=user_totp.digits)

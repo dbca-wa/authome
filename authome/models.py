@@ -411,6 +411,7 @@ Email: enquiries@dbca.wa.gov.au
     fixed = models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
     default = models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
     mfa_set = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa set user flow")
+    mfa_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa reset user flow")
     #is not used in current logic
     email = models.CharField(max_length=64,null=True,blank=True,help_text="The email signup and signin user flow")
     profile_edit = models.CharField(max_length=64,null=True,blank=True,help_text="The user profile edit user flow")
@@ -453,7 +454,7 @@ Email: enquiries@dbca.wa.gov.au
 
             #check the required fields
             invalid_columns = []
-            for name in ("default","mfa_set","profile_edit","password_reset","page_layout","verifyemail_from","verifyemail_subject","verifyemail_body"):
+            for name in ("default","mfa_set","mfa_reset","profile_edit","password_reset","page_layout","verifyemail_from","verifyemail_subject","verifyemail_body"):
                 if not getattr(self,name):
                     invalid_columns.append(name)
             if len(invalid_columns) == 1:
@@ -464,7 +465,7 @@ Email: enquiries@dbca.wa.gov.au
         #check whether the object was modified or not.
         if self.id is not None:
             self._changed = False
-            for name in ("default","mfa_set","email","profile_edit","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body"):
+            for name in ("default","mfa_set","mfa_reset","email","profile_edit","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body"):
                 if getattr(self,name) != getattr(self.db_obj,name):
                     self._changed = True
                     break
@@ -530,7 +531,7 @@ Email: enquiries@dbca.wa.gov.au
             elif o.parent:
                 return _getattr(o.parent,name)
             else:
-                return _getattr(defaultuserflow,name)
+                return getattr(defaultuserflow,name)
 
         for o in userflows.values():
             if o.is_default:
@@ -539,7 +540,7 @@ Email: enquiries@dbca.wa.gov.au
             elif not o.parent :
                 o.parent = defaultuserflow
 
-            for name in ("fixed","default","mfa_set","email","profile_edit","password_reset"):
+            for name in ("fixed","default","mfa_set","mfa_reset","email","profile_edit","password_reset"):
                 if not getattr(o,name):
                     setattr(o,name,_getattr(o.parent,name))
 

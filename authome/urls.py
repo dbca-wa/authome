@@ -31,6 +31,9 @@ urlpatterns = [
     path('sso/mfa/set', views.mfa_set,{"backend":"azuread-b2c-oauth2"},name='mfa_set'),
     path('sso/mfa/set/complete', views.mfa_set_complete,{"backend":"azuread-b2c-oauth2"},name='mfa_set_complete'),
 
+    path('sso/mfa/reset', views.mfa_reset,{"backend":"azuread-b2c-oauth2"},name='mfa_reset'),
+    path('sso/mfa/reset/complete', views.mfa_reset_complete,{"backend":"azuread-b2c-oauth2"},name='mfa_reset_complete'),
+
     path('sso/totp/generate',views.totp_generate,name="totp_generate"),
     path('sso/totp/verify',views.totp_verify,name="totp_verify"),
 
