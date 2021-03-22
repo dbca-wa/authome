@@ -64,6 +64,21 @@
             </OrchestrationSteps>
         </UserJourney>
 
+        <UserJourney Id="MFAReset">
+            <OrchestrationSteps>
+                <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
+                    <ClaimsProviderSelections>
+                        <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
+                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
+                        <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
+                        <ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/>
+                        <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange"/>
+                    </ClaimsProviderSelections>
+                </OrchestrationStep>
+            </OrchestrationSteps>
+        </UserJourney>
+
     </UserJourneys>
 
 </TrustFrameworkPolicy>

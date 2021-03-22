@@ -390,6 +390,11 @@
                 <DataType>long</DataType>
             </ClaimType>
 
+            <ClaimType Id="regenerate">
+                <DisplayName>Regenerate</DisplayName>
+                <DataType>boolean</DataType>
+            </ClaimType>
+
 
         </ClaimsSchema>
 
@@ -1686,6 +1691,13 @@
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/>
                 </TechnicalProfile>
 
+                <TechnicalProfile Id="AUTH2-RegenerateTOTPQRCode">
+                    <DisplayName>Regenerate TOTP QR Code</DisplayName>
+                    <InputClaims>
+                        <InputClaim ClaimTypeReferenceId="regenerate" DefaultValue="true" AlwaysUseDefaultValue="true"/>
+                    </InputClaims>
+                    <IncludeTechnicalProfile ReferenceId="AUTH2-GenerateTOTPQRCode"/>
+                </TechnicalProfile>
                 <!-- The following technical profile verifies a time-based one-time password (TOTP).
         We call this technical profile during registration process and sign-in process-->
                 <TechnicalProfile Id="AUTH2-VerifyTOTPCode">
@@ -1953,7 +1965,7 @@
             <OrchestrationSteps>
 
                 <OrchestrationStep Order="1" Type="CombinedSignInAndSignUp" ContentDefinitionReferenceId="api.signuporsignin">
-</OrchestrationStep>
+                </OrchestrationStep>
 
                 <!-- Check if the user has selected to sign in using one of the social providers -->
                 <OrchestrationStep Order="2" Type="ClaimsExchange">
@@ -2047,11 +2059,6 @@
                 <!-- verify via phone -->
                 <OrchestrationStep Order="8" Type="ClaimsExchange">
                     <Preconditions>
-                        <Precondition Type="ClaimsExist" ExecuteActionsIf="true">
-                            <Value>isActiveMFASession</Value>
-                            <Action>SkipThisOrchestrationStep</Action>
-                        </Precondition>
-                        <!--Sample: If the preferred MFA method is not 'phone' skip this orchestration step-->
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
@@ -2121,6 +2128,11 @@
                             <Value>newUser</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
+                            <Value>authenticationSource</Value>
+                            <Value>socialIdpAuthentication</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
                         <ClaimsExchange Id="SelfAsserted-EmailVerify-new-socialuser" TechnicalProfileReferenceId="SelfAsserted-EmailVerify"/>
@@ -2161,10 +2173,6 @@
                         </Precondition>
                         <Precondition Type="ClaimsExist" ExecuteActionsIf="false">
                             <Value>totpQRCodeBitmap</Value>
-                            <Action>SkipThisOrchestrationStep</Action>
-                        </Precondition>
-                        <Precondition Type="ClaimsExist" ExecuteActionsIf="true">
-                            <Value>isActiveMFASession</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
@@ -2238,6 +2246,209 @@
                 </OrchestrationStep>
 
                 <OrchestrationStep Order="17" Type="SendClaims" CpimIssuerTechnicalProfileReferenceId="JwtIssuer"/>
+
+            </OrchestrationSteps>
+            <ClientDefinition ReferenceId="DefaultWeb"/>
+        </UserJourney>
+
+        <UserJourney Id="MFAReset">
+            <OrchestrationSteps>
+
+                <OrchestrationStep Order="1" Type="CombinedSignInAndSignUp" ContentDefinitionReferenceId="api.signuporsignin">
+                </OrchestrationStep>
+
+                <!-- Check if the user has selected to sign in using one of the social providers -->
+                <OrchestrationStep Order="2" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimsExist" ExecuteActionsIf="true">
+                            <Value>objectId</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="DBCAM365Exchange" TechnicalProfileReferenceId="DBCAM365-OAUTH"/>
+                        <ClaimsExchange Id="FacebookExchange" TechnicalProfileReferenceId="Facebook-OAUTH"/>
+                        <ClaimsExchange Id="GoogleExchange" TechnicalProfileReferenceId="Google-OAUTH"/>
+                        <ClaimsExchange Id="GitHubExchange" TechnicalProfileReferenceId="Github-OAUTH"/>
+                        <ClaimsExchange Id="SignIn-WithEmail" TechnicalProfileReferenceId="LocalAccountDiscoveryUsingEmailAddress-SignIn"/>
+                        <ClaimsExchange Id="LocalAccountSigninEmailExchange" TechnicalProfileReferenceId="SelfAsserted-LocalAccountSignin-Email"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+
+                <!-- For social IDP authentication, attempt to find the user account in the directory. -->
+                <OrchestrationStep Order="3" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>authenticationSource</Value>
+                            <Value>localAccountAuthentication</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="AADUserReadUsingAlternativeSecurityId" TechnicalProfileReferenceId="AAD-UserReadUsingAlternativeSecurityId-NoError"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+
+                <!-- Show self-asserted page only if the directory does not have the user account already (i.e. we do not have an objectId). 
+          This can only happen when authentication happened using a social IDP. If local account was created or authentication done
+          using ESTS in step 2, then an user account must exist in the directory by this time. -->
+                <OrchestrationStep Order="4" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimsExist" ExecuteActionsIf="true">
+                            <Value>objectId</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="SelfAsserted-Social" TechnicalProfileReferenceId="SelfAsserted-Social"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+
+                <!-- This step reads any user attributes that we may not have received when authenticating using ESTS so they can be sent 
+          in the token. -->
+                <OrchestrationStep Order="5" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>authenticationSource</Value>
+                            <Value>socialIdpAuthentication</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="AADUserReadWithObjectId" TechnicalProfileReferenceId="AAD-UserReadUsingObjectId"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+                <!-- The previous step (SelfAsserted-Social) could have been skipped if there were no attributes to collect 
+             from the user. So, in that case, create the user in the directory if one does not already exist 
+             (verified using objectId which would be set from the last step if account was created in the directory. -->
+                <OrchestrationStep Order="6" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimsExist" ExecuteActionsIf="true">
+                            <Value>objectId</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="AADUserWrite" TechnicalProfileReferenceId="AAD-UserWriteUsingAlternativeSecurityId"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+
+                <!--verify via email for existing user-->
+                <OrchestrationStep Order="7" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>identityProvider</Value>
+                            <Value>local_passwordless</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="SelfAsserted-EmailVerify-existing-user" TechnicalProfileReferenceId="SelfAsserted-EmailVerify"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+
+                <!--select mfa method for new user-->
+                <OrchestrationStep Order="8" Type="ClaimsExchange">
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="SelfAsserted-Select-MFA-Method" TechnicalProfileReferenceId="SelfAsserted-Select-MFA-Method"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+
+                <!-- verify via phone -->
+                <OrchestrationStep Order="9" Type="ClaimsExchange">
+                    <Preconditions>
+                        <!--Sample: If the preferred MFA method is not 'phone' skip this orchestration step-->
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
+                            <Value>extension_mfaMethod</Value>
+                            <Value>phone</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="PhoneFactor-Verify" TechnicalProfileReferenceId="PhoneFactor-EditOrVerify"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+
+                <!--  save phone number and mfa method if mfa method is phone  -->
+                <OrchestrationStep Order="10" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
+                            <Value>extension_mfaMethod</Value>
+                            <Value>phone</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="AADUserWriteWithObjectId" TechnicalProfileReferenceId="AAD-UserWritePhoneNumberUsingObjectId"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+
+                <!-- generate totp qrcode if required-->
+                <OrchestrationStep Order="11" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
+                            <Value>extension_mfaMethod</Value>
+                            <Value>totp</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="AUTH2GenerateTOTPQRCode" TechnicalProfileReferenceId="AUTH2-RegenerateTOTPQRCode"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+
+                <!-- let the user scan the qrcode to regester and verify the token -->
+                <OrchestrationStep Order="12" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
+                            <Value>extension_mfaMethod</Value>
+                            <Value>totp</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="TOTPFactorRegister" TechnicalProfileReferenceId="TOTPFactor-Register"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+
+                <!-- save the totp registered flag and mfa method for newly registered user -->
+                <OrchestrationStep Order="13" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
+                            <Value>extension_mfaMethod</Value>
+                            <Value>totp</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                        <Precondition Type="ClaimsExist" ExecuteActionsIf="false">
+                            <Value>totpQRCodeBitmap</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="AADWriteUserTOTPByObjectId" TechnicalProfileReferenceId="AAD-WriteUserTOTPByObjectId"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+
+                <!--save mfa method if user is a new user and mfa method is not phone and totpc-->
+                <OrchestrationStep Order="14" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>extension_mfaMethod</Value>
+                            <Value>phone</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>extension_mfaMethod</Value>
+                            <Value>totp</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="AAD-UserWriteMFAMethodUsingObjectId" TechnicalProfileReferenceId="AAD-UserWriteMFAMethodUsingObjectId"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+
+                <OrchestrationStep Order="15" Type="SendClaims" CpimIssuerTechnicalProfileReferenceId="JwtIssuer"/>
 
             </OrchestrationSteps>
             <ClientDefinition ReferenceId="DefaultWeb"/>
@@ -2360,10 +2571,6 @@
                 <!-- verity via phone -->
                 <OrchestrationStep Order="6" Type="ClaimsExchange">
                     <Preconditions>
-                        <Precondition Type="ClaimsExist" ExecuteActionsIf="true">
-                            <Value>isActiveMFASession</Value>
-                            <Action>SkipThisOrchestrationStep</Action>
-                        </Precondition>
                         <!--Sample: If the preferred MFA method is not 'phone' skip this orchestration step-->
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
@@ -2433,10 +2640,6 @@
                         </Precondition>
                         <Precondition Type="ClaimsExist" ExecuteActionsIf="false">
                             <Value>totpQRCodeBitmap</Value>
-                            <Action>SkipThisOrchestrationStep</Action>
-                        </Precondition>
-                        <Precondition Type="ClaimsExist" ExecuteActionsIf="true">
-                            <Value>isActiveMFASession</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
