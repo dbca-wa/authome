@@ -538,7 +538,8 @@ Email: enquiries@dbca.wa.gov.au
             if o != defaultuserflow:
                 o.defaultuserflow = defaultuserflow
                 for name in ("fixed","default","mfa_set","mfa_reset","email","profile_edit","password_reset"):
-                    setattr(o,name,getattr(defaultuserflow,name))
+                    if not getattr(o,name):
+                        setattr(o,name,getattr(defaultuserflow,name))
 
             else:
                 o.defaultuserflow = None
