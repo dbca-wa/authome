@@ -536,12 +536,12 @@ Email: enquiries@dbca.wa.gov.au
 
         for o in userflows:
             if o != defaultuserflow:
-                o.default = defaultuserflow
-            else:
-                o.default = None
-            for name in ("fixed","default","mfa_set","mfa_reset","email","profile_edit","password_reset"):
-                if o != defaultuserflow and not getattr(o,name):
+                o.defaultuserflow = defaultuserflow
+                for name in ("fixed","default","mfa_set","mfa_reset","email","profile_edit","password_reset"):
                     setattr(o,name,getattr(defaultuserflow,name))
+
+            else:
+                o.defaultuserflow = None
 
         cache.userflows = (userflows,defaultuserflow,size,refreshtime)
         
