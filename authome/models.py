@@ -59,6 +59,8 @@ The following lists all valid options in the checking order
     4. Exact path  : Starts with '=', represents a single request path . For example =/register
 """
 
+sortkey_c = models.Func('sortkey',function='C',template='(%(expressions)s) COLLATE "%(function)s"')
+
 class _ArrayField(ArrayField):
     """
     Customizable ArrayField to provide feature 'clean'
@@ -93,8 +95,8 @@ class RequestDomain(object):
     4. Regex domain
 
     """
-    all_domain_re = re.compile("^(\*|\.)+$")
-    sufix_re = re.compile("^(\**\.)+(?P<sufix>([a-zA-Z0-9_\-]+)(\.[a-zA-Z0-9_\-]+)+)$")
+    all_domain_re = re.compile("^\*+$")
+    sufix_re = re.compile("^\**\.(?P<sufix>([a-zA-Z0-9_\-]+)(\.[a-zA-Z0-9_\-]+)*)$")
     exact_re = re.compile("^([a-zA-Z0-9_\-]+)(\.[a-zA-Z0-9_\-]+)+$")
     #two digit values(10 - 99), high value has low priority
     base_sort_key = 99
@@ -155,7 +157,7 @@ class AllRequestDomain(RequestDomain):
     def __init__(self):
         super().__init__("*")
 
-    def match(self,email):
+    def match(self,domain):
         return True
 
 class ExactRequestDomain(RequestDomain):
@@ -186,7 +188,7 @@ class RegexRequestDomain(RequestDomain):
     base_sort_key = 40
     def __init__(self,domain):
         super().__init__(domain)
-        self.sort_key = "{}:{:0>3}-{}".format(self.base_sort_key,len(domain),domain)
+        self.sort_key = "{}:{}".format(self.base_sort_key,domain.replace("*","~"))
         try:
             self._re = re.compile("^{}$".format(domain.replace(".","\.").replace("*","[a-zA-Z0-9\._\-]*")))
         except Exception as ex:
@@ -290,6 +292,7 @@ class CustomizableUserflow(DbObjectMixin,models.Model):
     The domain '*' is the default settings.
     """
     _changed = False
+    _request_domain = None
     default_layout="""{% load i18n static %}
 <table id="header" style="background:#2D2F32;width:100%;"><tr><td style="width:34%">
     <div id="logo" style="margin-left:50px;vertical-align:middle;text-align:left">
@@ -406,8 +409,7 @@ Email: enquiries@dbca.wa.gov.au
 </body>
 </html>"""
 
-    domain = models.CharField(max_length=128,unique=True,null=False,help_text="Global setting if domain is '*'; otherwise is individual domain settings")
-    parent = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
+    domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
     fixed = models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
     default = models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
     mfa_set = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa set user flow")
@@ -424,6 +426,8 @@ Email: enquiries@dbca.wa.gov.au
     verifyemail_subject = models.CharField(max_length=512,null=True,blank=True)
     verifyemail_body = models.TextField(null=True,blank=True)
 
+    sortkey = models.CharField(max_length=128,editable=False)
+
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
@@ -434,14 +438,24 @@ Email: enquiries@dbca.wa.gov.au
         """
         return self.domain == '*'
 
+    @property
+    def request_domain(self):
+        if self._request_domain is None:
+            self._request_domain = RequestDomain.get_instance(self.domain)
+
+        return self._request_domain
+        
     def clean(self):
         """
         Validate the changed data
         """
         super().clean()
-        self.domain = self.domain.strip()
-        if not self.domain:
-            self.domain = "*"
+
+        request_domain = RequestDomain.get_instance(self.domain)
+        if not request_domain:
+            raise ValidationError("Please configure domain.")
+        self.domain = request_domain.config
+        self.sortkey = request_domain.sort_key
 
         if self.domain == "*":
             #default userflow
@@ -465,14 +479,10 @@ Email: enquiries@dbca.wa.gov.au
         #check whether the object was modified or not.
         if self.id is not None:
             self._changed = False
-            for name in ("default","mfa_set","mfa_reset","email","profile_edit","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body"):
+            for name in ("default","mfa_set","mfa_reset","email","profile_edit","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body","sortkey"):
                 if getattr(self,name) != getattr(self.db_obj,name):
                     self._changed = True
                     break
-            if not self._changed:
-                if self.parent != self.db_obj.parent and ((self.parent and not self.parent.is_default) or (self.db_obj.parent and not self.db_obj.parent.is_default)):
-                    self._changed = True
-
 
     def save(self,*args,**kwargs):
         if self.id is not None and not self._changed:
@@ -501,16 +511,16 @@ Email: enquiries@dbca.wa.gov.au
         Populate the cached data and save them to cache
         """
         logger.debug("Refresh Customizable Userflow cache")
-        userflows = {}
+        userflows = []
         defaultuserflow = None
         last_modified = None
         refreshtime = timezone.now()
         size = 0
-        for o in cls.objects.all():
+        for o in cls.objects.all().order_by(sortkey_c.asc()):
             if o.is_default:
                 defaultuserflow = o
                 
-            userflows[o.domain] = o
+            userflows.append(o)
 
             if not last_modified:
                 last_modified = o.modified
@@ -524,25 +534,10 @@ Email: enquiries@dbca.wa.gov.au
         elif not defaultuserflow.page_layout:
             defaultuserflow.page_layout = cls.default_layout
 
-        def _getattr(o,name):
-            val = getattr(o,name)
-            if val:
-                return val
-            elif o.parent:
-                return _getattr(o.parent,name)
-            else:
-                return getattr(defaultuserflow,name)
-
-        for o in userflows.values():
-            if o.is_default:
-                o.parent = None
-                continue
-            elif not o.parent :
-                o.parent = defaultuserflow
-
+        for o in userflows:
             for name in ("fixed","default","mfa_set","mfa_reset","email","profile_edit","password_reset"):
-                if not getattr(o,name):
-                    setattr(o,name,_getattr(o.parent,name))
+                if o != defaultuserflow and not getattr(o,name):
+                    setattr(o,name,getattr(defaultuserflow,name))
 
         cache.userflows = (userflows,defaultuserflow,size,refreshtime)
         
@@ -1063,10 +1058,10 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
     _allow_all = None
     _deny_all = None
 
-    domain = models.CharField(max_length=64,null=False,help_text=help_text_domain)
+    domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
     paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
     excluded_paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
-    sortkey = models.CharField(max_length=96,editable=False)
+    sortkey = models.CharField(max_length=128,editable=False)
     modified = models.DateTimeField(editable=False,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
@@ -1291,7 +1286,7 @@ class UserAuthorization(AuthorizationMixin):
         size = 0
         modified = None
         refreshtime = timezone.now()
-        for authorization in UserAuthorization.objects.all().order_by("user","sortkey"):
+        for authorization in UserAuthorization.objects.all().order_by("user",sortkey_c.asc()):
             size += 1
             if not modified:
                 modified = authorization.modified

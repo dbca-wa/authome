@@ -140,6 +140,7 @@ class MemoryCache(object):
     
         #model CustomizableUserflow cache
         self._userflows = None
+        self._userflows_map = {}
         self._defaultuserflow = None
         self._userflows_size = None
         self._userflows_ts = None
@@ -248,7 +249,15 @@ class MemoryCache(object):
         """
         self.refresh_userflow_cache()
         if domain:
-            return self._userflows.get(domain,self._defaultuserflow)
+            userflow = self._userflows_map.get(domain)
+            if not userflow:
+                for o in self._userflows:
+                    if o.request_domain.match(domain):
+                        userflow = o
+                        break
+                userflow = userflow or self._defaultuserflow
+                self._userflows_map[domain] = userflow
+            return userflow
         else:
             return self._defaultuserflow
 
@@ -260,6 +269,8 @@ class MemoryCache(object):
             self._userflows,self._defaultuserflow,self._userflows_size,self._userflows_ts = value
         else:
             self._userflows,self._defaultuserflow,self._userflows_size,self._userflows_ts = None,None,None,None
+
+        self._userflows_map.clear()
 
 
     def get_auth_key(self,email,session_key):

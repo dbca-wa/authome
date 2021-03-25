@@ -99,7 +99,7 @@ class UserGroupAuthorizationAdmin(DatetimeMixin,admin.ModelAdmin):
     list_display = ('usergroup','domain','paths','excluded_paths','_modified','_created')
     readonly_fields = ('_modified',)
     fields = ('usergroup','domain','paths','excluded_paths','_modified')
-    ordering = ('usergroup','sortkey',)
+    ordering = ('usergroup',models.sortkey_c.asc())
     form = forms.UserGroupAuthorizationForm
 
 @admin.register(models.UserAuthorization)
@@ -107,7 +107,7 @@ class UserAuthorizationAdmin(DatetimeMixin,admin.ModelAdmin):
     list_display = ('user','domain','paths','excluded_paths','_modified','_created')
     readonly_fields = ('_modified',)
     fields = ('user','domain','paths','excluded_paths','_modified')
-    ordering = ('user','sortkey',)
+    ordering = ('user',models.sortkey_c.asc())
     form = forms.UserAuthorizationForm
 
 class UserAccessToken(models.User):
@@ -333,11 +333,11 @@ class IdentityProviderAdmin(DatetimeMixin,admin.ModelAdmin):
 
 @admin.register(models.CustomizableUserflow)
 class CustomizableUserflowAdmin(DatetimeMixin,admin.ModelAdmin):
-    list_display = ('domain','parent','fixed','default','profile_edit','mfa_set',"mfa_reset",'password_reset','_modified','_created')
+    list_display = ('domain','fixed','default','profile_edit','mfa_set',"mfa_reset",'password_reset','_modified','_created')
     readonly_fields = ('_modified','_created')
     form = forms.CustomizableUserflowForm
-    fields = ('domain','parent','fixed','default','profile_edit','mfa_set',"mfa_reset",'password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body",'_modified','_created')
-    ordering = ('domain',)
+    fields = ('domain','fixed','default','profile_edit','mfa_set',"mfa_reset",'password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body",'_modified','_created')
+    ordering = (models.sortkey_c.asc(),)
 
 @admin.register(models.UserTOTP)
 class UserTOTPAdmin(DatetimeMixin,admin.ModelAdmin):

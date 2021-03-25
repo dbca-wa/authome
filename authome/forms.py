@@ -77,6 +77,7 @@ class IdentityProviderForm(forms.ModelForm):
         fields = "__all__"
         
 class CustomizableUserflowForm(forms.ModelForm):
+    domain = forms.CharField(required=True,widget=forms.TextInput(),help_text=get_help_text(CustomizableUserflow,"domain"))
     class Meta:
         model = CustomizableUserflow
         fields = "__all__"
