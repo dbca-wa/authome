@@ -352,6 +352,12 @@
                 </Restriction>
             </ClaimType>
 
+            <ClaimType Id="enableMFA">
+                <DisplayName>enable mfa or not</DisplayName>
+                <DataType>boolean</DataType>
+            </ClaimType>
+
+
             <ClaimType Id="userIdForMFA">
                 <DisplayName>UserId for MFA</DisplayName>
                 <DataType>string</DataType>
@@ -862,6 +868,7 @@
                         <!-- The following other mails claim is needed for the case when a user is created, we get otherMails from directory. Self-asserted provider also has an
                  OutputClaims, and if this is absent, Self-Asserted provider will prompt the user for otherMails. -->
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
+                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
                     </OutputClaims>
 
                     <OutputClaimsTransformations>
@@ -1281,6 +1288,7 @@
                         <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
 
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
 
                         <!-- Optional claims, to be collected from the user 
             <OutputClaim ClaimTypeReferenceId="displayName" />-->
@@ -1315,6 +1323,7 @@
                         <OutputClaim ClaimTypeReferenceId="authenticationSource"/>
 
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
 
                     </OutputClaims>
                     <ValidationTechnicalProfiles>
@@ -1375,6 +1384,7 @@
                         <OutputClaim ClaimTypeReferenceId="newPassword" Required="true"/>
                         <OutputClaim ClaimTypeReferenceId="reenterPassword" Required="true"/>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local"/>
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="signInNames.emailAddress" DefaultValue=""/>
                     </OutputClaims>
                     <OutputClaimsTransformations>
@@ -1393,6 +1403,7 @@
                     <DisplayName>Sign-In with Email</DisplayName>
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local_passwordless" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
                     <IncludeTechnicalProfile ReferenceId="LocalAccountDiscoveryUsingEmailAddress"/>
                 </TechnicalProfile>
@@ -1804,6 +1815,7 @@
                         <OutputClaim ClaimTypeReferenceId="displayName" PartnerClaimType="name"/>
                         <OutputClaim ClaimTypeReferenceId="email" PartnerClaimType="email"/>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="google.com" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="socialIdpAuthentication" AlwaysUseDefaultValue="true"/>
 
                     </OutputClaims>
@@ -1855,6 +1867,7 @@
                     </Metadata>
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="https://sts.windows.net/7b934664-cdcf-4e28-a3ee-1a5bcca0a1b6/" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="false" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="socialIdpAuthentication"/>
                         <OutputClaim ClaimTypeReferenceId="displayName" PartnerClaimType="name"/>
                         <OutputClaim ClaimTypeReferenceId="givenName" PartnerClaimType="given_name"/>
@@ -1897,6 +1910,7 @@
                         <OutputClaim ClaimTypeReferenceId="surname" DefaultValue="chen" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="email" DefaultValue="test@github.com" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="github.com" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="socialIdpAuthentication" AlwaysUseDefaultValue="true"/>
 
                     </OutputClaims>
@@ -1944,6 +1958,7 @@
                         <OutputClaim ClaimTypeReferenceId="displayName" PartnerClaimType="name"/>
                         <OutputClaim ClaimTypeReferenceId="email" PartnerClaimType="email"/>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="facebook.com" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="socialIdpAuthentication" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
                     <OutputClaimsTransformations>
@@ -2046,6 +2061,11 @@
                 <!--select mfa method for new user-->
                 <OrchestrationStep Order="7" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimsExist" ExecuteActionsIf="false">
                             <Value>newUser</Value>
                             <Action>SkipThisOrchestrationStep</Action>
@@ -2059,6 +2079,11 @@
                 <!-- verify via phone -->
                 <OrchestrationStep Order="8" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
@@ -2078,6 +2103,11 @@
                 <!--  save phone number and mfa method if mfa method is phone  -->
                 <OrchestrationStep Order="9" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
@@ -2096,6 +2126,11 @@
                 <!--verify via email for existing user-->
                 <OrchestrationStep Order="10" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>email</Value>
@@ -2119,6 +2154,11 @@
                 <!--verify via email for new social user-->
                 <OrchestrationStep Order="11" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>email</Value>
@@ -2142,6 +2182,11 @@
                 <!-- generate totp qrcode if required-->
                 <OrchestrationStep Order="12" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
@@ -2166,6 +2211,11 @@
                 <!-- let the user scan the qrcode to regester and verify the token -->
                 <OrchestrationStep Order="13" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
@@ -2184,6 +2234,11 @@
                 <!-- Verify the token for registered user -->
                 <OrchestrationStep Order="14" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
@@ -2207,6 +2262,11 @@
                 <!-- save the totp registered flag and mfa method for newly registered user -->
                 <OrchestrationStep Order="15" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
@@ -2225,6 +2285,11 @@
                 <!--save mfa method if user is a new user and mfa method is not phone and totpc-->
                 <OrchestrationStep Order="16" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
@@ -2349,6 +2414,13 @@
 
                 <!--select mfa method for new user-->
                 <OrchestrationStep Order="8" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
                     <ClaimsExchanges>
                         <ClaimsExchange Id="SelfAsserted-Select-MFA-Method" TechnicalProfileReferenceId="SelfAsserted-Select-MFA-Method"/>
                     </ClaimsExchanges>
@@ -2357,6 +2429,11 @@
                 <!-- verify via phone -->
                 <OrchestrationStep Order="9" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <!--Sample: If the preferred MFA method is not 'phone' skip this orchestration step-->
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
@@ -2372,6 +2449,11 @@
                 <!--  save phone number and mfa method if mfa method is phone  -->
                 <OrchestrationStep Order="10" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
@@ -2386,6 +2468,11 @@
                 <!-- generate totp qrcode if required-->
                 <OrchestrationStep Order="11" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
@@ -2400,6 +2487,11 @@
                 <!-- let the user scan the qrcode to regester and verify the token -->
                 <OrchestrationStep Order="12" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
@@ -2414,6 +2506,11 @@
                 <!-- save the totp registered flag and mfa method for newly registered user -->
                 <OrchestrationStep Order="13" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
@@ -2432,6 +2529,11 @@
                 <!--save mfa method if user is a new user and mfa method is not phone and totpc-->
                 <OrchestrationStep Order="14" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
@@ -2563,6 +2665,13 @@
 
                 <!--select mfa method-->
                 <OrchestrationStep Order="5" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
                     <ClaimsExchanges>
                         <ClaimsExchange Id="SelfAsserted-Select-MFA-Method" TechnicalProfileReferenceId="SelfAsserted-Select-MFA-Method"/>
                     </ClaimsExchanges>
@@ -2572,6 +2681,11 @@
                 <OrchestrationStep Order="6" Type="ClaimsExchange">
                     <Preconditions>
                         <!--Sample: If the preferred MFA method is not 'phone' skip this orchestration step-->
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
@@ -2586,6 +2700,11 @@
                 <!--  save phone number and mfa method if mfa method is phone  -->
                 <OrchestrationStep Order="7" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
@@ -2600,6 +2719,11 @@
                 <!--verify via email-->
                 <OrchestrationStep Order="8" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>email</Value>
@@ -2614,6 +2738,11 @@
                 <!-- generate totp qrcode if required-->
                 <OrchestrationStep Order="9" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
@@ -2633,6 +2762,11 @@
                 <!-- let the user scan the qrcode to regester and verify the token -->
                 <OrchestrationStep Order="10" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
@@ -2651,6 +2785,11 @@
                 <!-- Verify the token for registered user -->
                 <OrchestrationStep Order="11" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
@@ -2669,6 +2808,11 @@
                 <!-- save the totp registered flag and mfa method for newly registered user -->
                 <OrchestrationStep Order="12" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
@@ -2687,6 +2831,11 @@
                 <!-- save the selected mfa method only if the method is not phone and totp method -->
                 <OrchestrationStep Order="13" Type="ClaimsExchange">
                     <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>

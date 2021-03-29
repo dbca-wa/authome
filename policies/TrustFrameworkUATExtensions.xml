@@ -53,7 +53,7 @@
             <OrchestrationSteps>
                 <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
                     <ClaimsProviderSelections>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
@@ -68,7 +68,7 @@
             <OrchestrationSteps>
                 <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
                     <ClaimsProviderSelections>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
