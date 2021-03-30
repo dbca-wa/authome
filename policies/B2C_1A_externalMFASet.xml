@@ -5,8 +5,8 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_externalMFASet"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_externalMFASet">
+ PolicyId="B2C_1A_ExternalMFASet"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_ExternalMFASet">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>

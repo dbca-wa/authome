@@ -5,15 +5,15 @@
  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
- PolicyId="B2C_1A_default"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_default">
+ PolicyId="B2C_1A_Default"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_Default">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
         <PolicyId>B2C_1A_TrustFrameworkProdExtensions</PolicyId>
     </BasePolicy>
     <BuildingBlocks>
-</BuildingBlocks>
+    </BuildingBlocks>
 
     <RelyingParty>
         <DefaultUserJourney ReferenceId="SignUpOrSignIn"/>
