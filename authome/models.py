@@ -17,11 +17,12 @@ from ipware.ip import get_client_ip
 import hashlib
 
 from .cache import cache
-from .utils import get_defaultcache
+from .utils import get_defaultcache,get_usercache
 
 logger = logging.getLogger(__name__)
 
 defaultcache = get_defaultcache()
+usercache = get_usercache()
 
 help_text_users = """
 List all possible user emails in this group separated by new line character.
@@ -802,6 +803,19 @@ class UserGroup(DbObjectMixin,models.Model):
     def is_public_group(self):
         return self == cache.public_group
 
+    def is_group(self,usergroup):
+        """
+        Return True if group is usergroup or a descendant of usergroup ;otherwise return False
+        """
+        group = self
+        while group:
+            if group == usergroup:
+                return True
+            else:
+                group = group.parent_group
+
+        return False
+
     def save(self,*args,**kwargs):
         if self.id is not None and not self._changed:
             #nothing was changed
@@ -1460,6 +1474,17 @@ class UserListener(object):
             instance.email = instance.email.strip().lower() if instance.email else None
             if not instance.email:
                 instance.email = None
+
+    @staticmethod
+    @receiver(post_save, sender=User)
+    def post_save_user(sender,instance,created,**kwargs):
+        if not created:
+            usercache.set(settings.GET_USER_KEY(instance.id),instance,settings.USER_CACHE_TIMEOUT)
+
+    @staticmethod
+    @receiver(post_delete, sender=User)
+    def post_delete_user(sender,instance,**kwargs):
+        usercache.delete(settings.GET_USER_KEY(instance.id))
 
 class UserGroupListener(object):
     @staticmethod
