@@ -1,22 +1,20 @@
 ﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <TrustFrameworkPolicy
- TenantId="dbcab2c.onmicrosoft.com"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
- PolicyId="B2C_1A_InternalDefault"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_InternalDefault">
+ TenantId="dbcab2c.onmicrosoft.com"
+ PolicyId="B2C_1A_InternalMFASet"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_InternalMFASet">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
         <PolicyId>B2C_1A_TrustFrameworkInternalProdExtensions</PolicyId>
     </BasePolicy>
-    <BuildingBlocks>
-</BuildingBlocks>
 
     <RelyingParty>
-        <DefaultUserJourney ReferenceId="SignUpOrSignIn"/>
+        <DefaultUserJourney ReferenceId="MFASet"/>
         <UserJourneyBehaviors>
             <ScriptExecution>Allow</ScriptExecution>
         </UserJourneyBehaviors>
@@ -31,13 +29,12 @@
                 <OutputClaim ClaimTypeReferenceId="identityProvider"/>
                 <OutputClaim ClaimTypeReferenceId="userEmailAccount" PartnerClaimType="upn"/>
                 <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false"/>
-                <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" PartnerClaimType="mfaMethod" DefaultValue="none"/>
+                <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" PartnerClaimType="mfaMethod" DefaultValue=""/>
 
             </OutputClaims>
             <SubjectNamingInfo ClaimType="sub"/>
         </TechnicalProfile>
     </RelyingParty>
 </TrustFrameworkPolicy>
-
 
 
