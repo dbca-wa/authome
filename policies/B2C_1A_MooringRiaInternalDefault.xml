@@ -1,0 +1,43 @@
+﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<TrustFrameworkPolicy
+ TenantId="dbcab2c.onmicrosoft.com"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+ xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
+ PolicySchemaVersion="0.3.0.0"
+ PolicyId="B2C_1A_MooringRiaInternalDefault"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_MooringRiaInternalDefault">
+
+    <BasePolicy>
+        <TenantId>dbcab2c.onmicrosoft.com</TenantId>
+        <PolicyId>B2C_1A_TrustFrameworkMooringRiaInternalExtensions</PolicyId>
+    </BasePolicy>
+    <BuildingBlocks>
+</BuildingBlocks>
+
+    <RelyingParty>
+        <DefaultUserJourney ReferenceId="SignUpOrSignIn"/>
+        <UserJourneyBehaviors>
+            <ScriptExecution>Allow</ScriptExecution>
+        </UserJourneyBehaviors>
+        <TechnicalProfile Id="PolicyProfile">
+            <DisplayName>PolicyProfile</DisplayName>
+            <Protocol Name="OpenIdConnect"/>
+            <OutputClaims>
+                <OutputClaim ClaimTypeReferenceId="displayName"/>
+                <OutputClaim ClaimTypeReferenceId="givenName"/>
+                <OutputClaim ClaimTypeReferenceId="surname"/>
+                <OutputClaim ClaimTypeReferenceId="objectId" PartnerClaimType="sub"/>
+                <OutputClaim ClaimTypeReferenceId="identityProvider"/>
+                <OutputClaim ClaimTypeReferenceId="userEmailAccount" PartnerClaimType="upn"/>
+                <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false"/>
+                <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" PartnerClaimType="mfaMethod" DefaultValue="none"/>
+
+            </OutputClaims>
+            <SubjectNamingInfo ClaimType="sub"/>
+        </TechnicalProfile>
+    </RelyingParty>
+</TrustFrameworkPolicy>
+
+
+
