@@ -1,0 +1,89 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TrustFrameworkPolicy
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+ xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
+ PolicySchemaVersion="0.3.0.0"
+ TenantId="dbcab2c.onmicrosoft.com"
+ PolicyId="B2C_1A_TrustFrameworkMooringRiaInternalExtensions"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkMooringRiaInternalExtensions">
+
+    <BasePolicy>
+        <TenantId>dbcab2c.onmicrosoft.com</TenantId>
+        <PolicyId>B2C_1A_TrustFrameworkInternalProdExtensions</PolicyId>
+    </BasePolicy>
+
+    <BuildingBlocks>
+        <ContentDefinitions>
+
+            <!-- This content definition is to render an error page that displays unhandled errors. -->
+            <ContentDefinition Id="api.error">
+                <LoadUri>https://auth2.dbca.wa.gov.au/sso/unified.html?domain=mooring-ria-internal.dbca.wa.gov.au%26title=Error</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.idpselections">
+                <LoadUri>https://auth2.dbca.wa.gov.au/sso/unified.html?domain=mooring-ria-internal.dbca.wa.gov.au%26title=Select%2520Identity%2520Provider</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.idpselections.signup">
+                <LoadUri>https://auth2.dbca.wa.gov.au/sso/unified.html?domain=mooring-ria-internal.dbca.wa.gov.au%26title=Select%2520Identity%2520Provider</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.signuporsignin">
+                <LoadUri>https://auth2.dbca.wa.gov.au/sso/unified.html?domain=mooring-ria-internal.dbca.wa.gov.au%26title=Select%2520Identity%2520Provider</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted">
+                <LoadUri>https://auth2.dbca.wa.gov.au/sso/self_asserted.html?domain=mooring-ria-internal.dbca.wa.gov.au%26title=Please%2520fill%2520your%2520details</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.selectMfaMethod">
+                <LoadUri>https://auth2.dbca.wa.gov.au/sso/self_asserted.html?domain=mooring-ria-internal.dbca.wa.gov.au%26title=Select%2520multi-factor%2520authentication%2520method</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.profileupdate">
+                <LoadUri>https://auth2.dbca.wa.gov.au/sso/self_asserted.html?domain=mooring-ria-internal.dbca.wa.gov.au%26title=Update%2520your%2520profile</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.localaccountsignup">
+                <LoadUri>https://auth2.dbca.wa.gov.au/sso/self_asserted.html?domain=mooring-ria-internal.dbca.wa.gov.au%26title=Local%2520ccount%2520signup</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.localaccountpasswordreset.verifyemail">
+                <LoadUri>https://auth2.dbca.wa.gov.au/sso/self_asserted.html?domain=mooring-ria-internal.dbca.wa.gov.au%26title=Verify%2520your%2520email</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.localaccountpasswordreset">
+                <LoadUri>https://auth2.dbca.wa.gov.au/sso/self_asserted.html?domain=mooring-ria-internal.dbca.wa.gov.au%26title=Input%2520new%2520password</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.phonefactor">
+                <LoadUri>https://auth2.dbca.wa.gov.au/sso/self_asserted.html?domain=mooring-ria-internal.dbca.wa.gov.au%26title=Multi-factor%2520authentication%2520via%2520phone</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.totpfactor.registration">
+                <LoadUri>https://auth2.dbca.wa.gov.au/sso/totp_register.html</LoadUri>
+            </ContentDefinition>
+
+        </ContentDefinitions>
+    </BuildingBlocks>
+
+    <ClaimsProviders>
+        <ClaimsProvider>
+            <DisplayName>Verify Email Sending Provider</DisplayName>
+            <TechnicalProfiles>
+                <TechnicalProfile Id="AUTH2-SendOtpViaEmail">
+                    <Metadata>
+                        <Item Key="ServiceUrl">https://auth2.dbca.wa.gov.au/sso/verifycode?domain=mooring-ria-internal.dbca.wa.gov.au</Item>
+                    </Metadata>
+                    <CryptographicKeys>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
+                    </CryptographicKeys>
+                </TechnicalProfile>
+
+            </TechnicalProfiles>
+        </ClaimsProvider>
+
+    </ClaimsProviders>
+
+</TrustFrameworkPolicy>

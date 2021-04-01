@@ -5,12 +5,12 @@
  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
- PolicyId="B2C_1A_mooringRiaDefault"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_mooringRiaDefault">
+ PolicyId="B2C_1A_InternalDefault"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_InternalDefault">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkMooringRiaExtensions</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkInternalProdExtensions</PolicyId>
     </BasePolicy>
     <BuildingBlocks>
 </BuildingBlocks>

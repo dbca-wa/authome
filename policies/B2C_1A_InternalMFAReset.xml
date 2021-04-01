@@ -5,24 +5,32 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_PasswordReset"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_PasswordReset">
+ PolicyId="B2C_1A_InternalMFAReset"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_InternalMFAReset">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkExtensions</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkInternalProdExtensions</PolicyId>
     </BasePolicy>
 
     <RelyingParty>
-        <DefaultUserJourney ReferenceId="PasswordReset"/>
+        <DefaultUserJourney ReferenceId="MFAReset"/>
+        <UserJourneyBehaviors>
+            <ScriptExecution>Allow</ScriptExecution>
+        </UserJourneyBehaviors>
         <TechnicalProfile Id="PolicyProfile">
             <DisplayName>PolicyProfile</DisplayName>
             <Protocol Name="OpenIdConnect"/>
             <OutputClaims>
+                <OutputClaim ClaimTypeReferenceId="displayName"/>
+                <OutputClaim ClaimTypeReferenceId="givenName"/>
+                <OutputClaim ClaimTypeReferenceId="surname"/>
                 <OutputClaim ClaimTypeReferenceId="objectId" PartnerClaimType="sub"/>
                 <OutputClaim ClaimTypeReferenceId="identityProvider"/>
-                <OutputClaim ClaimTypeReferenceId="signInNames.emailAddress" PartnerClaimType="upn"/>
-                <OutputClaim ClaimTypeReferenceId="email" PartnerClaimType="emails"/>
+                <OutputClaim ClaimTypeReferenceId="userEmailAccount" PartnerClaimType="upn"/>
+                <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false"/>
+                <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" PartnerClaimType="mfaMethod" DefaultValue=""/>
+
             </OutputClaims>
             <SubjectNamingInfo ClaimType="sub"/>
         </TechnicalProfile>
