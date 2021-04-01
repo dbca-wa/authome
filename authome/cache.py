@@ -257,6 +257,7 @@ class MemoryCache(object):
                         break
                 userflow = userflow or self._defaultuserflow
                 self._userflows_map[domain] = userflow
+            logger.debug("Find the userflow({1}) for domain '{0}'".format(domain,userflow.domain))
             return userflow
         else:
             return self._defaultuserflow
