@@ -72,6 +72,7 @@ class UserAuthorizationForm(AuthorizationForm):
         
 
 class IdentityProviderForm(forms.ModelForm):
+    logout_url = forms.CharField(required=True,widget=forms.TextInput(attrs={"style":"width:80%"}))
     class Meta:
         model = IdentityProvider
         fields = "__all__"

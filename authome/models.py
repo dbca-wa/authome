@@ -210,6 +210,17 @@ class IdentityProvider(DbObjectMixin,models.Model):
     _domains = None
     _changed = False
 
+    MANUALLY_LOGOUT = 1 
+    AUTO_LOGOUT = 2
+    AUTO_LOGOUT_WITH_POPUP_WINDOW = 3
+
+    LOGOUT_METHODS = (
+        (MANUALLY_LOGOUT,"Manually Logout"),
+        (AUTO_LOGOUT,"Auto Logout"),
+        (AUTO_LOGOUT_WITH_POPUP_WINDOW,"Auto Logout With Popup Window")
+    )
+
+
     LOCAL_PROVIDER = 'local'
 
     #meaningful name mainained in auth2
@@ -220,6 +231,7 @@ class IdentityProvider(DbObjectMixin,models.Model):
     userflow = models.CharField(max_length=64,blank=True,null=True)
     #the logout url to logout the user from identity provider
     logout_url = models.CharField(max_length=512,blank=True,null=True)
+    logout_method = models.PositiveSmallIntegerField(choices=LOGOUT_METHODS,blank=True,null=True)
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
@@ -231,7 +243,7 @@ class IdentityProvider(DbObjectMixin,models.Model):
 
         if self.id is not None:
             self._changed = False
-            if self.name != self.db_obj.name or self.userflow != self.db_obj.userflow or self.logout_url != self.db_obj.logout_url:
+            if self.name != self.db_obj.name or self.userflow != self.db_obj.userflow or self.logout_url != self.db_obj.logout_url or self.logout_method != self.db_obj.logout_method:
                 self._changed = True
 
     def save(self,*args,**kwargs):
@@ -1280,10 +1292,10 @@ def _can_access_debug(email,domain,path):
     finally:
         diff = datetime.now() - start
         if diff.seconds > 0 or diff.microseconds > 10000:
-            logger.warning("spend {0} milliseconds to check the authroization.user={1}, request=https://{2}{3}, requests={4})".format(round((diff.seconds * 1000 + diff.microseconds)/1000),email,domain,path,"{}({},domain={},paths={},excluded_paths={})".format(requests.__class__.__name__,requests,requests.domain,requests.paths,requests.excluded_paths) if requests else "None"))
+            logger.warning("spend {0} milliseconds to check the authroization.user={1}, http request=https://{2}{3}, authorization object={4})".format(round((diff.seconds * 1000 + diff.microseconds)/1000),email,domain,path,"{}({},domain={},paths={},excluded_paths={})".format(requests.__class__.__name__,requests,requests.domain,requests.paths,requests.excluded_paths) if requests else "None"))
             pass
         else:
-            logger.debug("spend {0} milliseconds to check the authroization.user={1}, request=https://{2}{3}, requests={4})".format(round((diff.seconds * 1000 + diff.microseconds)/1000),email,domain,path,"{}({},domain={},paths={},excluded_paths={})".format(requests.__class__.__name__,requests,requests.domain,requests.paths,requests.excluded_paths) if requests else "None"))
+            logger.debug("spend {0} milliseconds to check the authroization.user={1}, http request=https://{2}{3}, authorization object={4})".format(round((diff.seconds * 1000 + diff.microseconds)/1000),email,domain,path,"{}({},domain={},paths={},excluded_paths={})".format(requests.__class__.__name__,requests,requests.domain,requests.paths,requests.excluded_paths) if requests else "None"))
             pass
 
 can_access = _can_access if settings.RELEASE else _can_access_debug

@@ -57,12 +57,14 @@
 </head>
 <body>
     {{body | safe}}
-    <div style="display:none" id="content_div">
+    <div style="display:none">
+    <div id="real_content_div">
     {{content|safe}}
+    </div>
     </div>
     
     <script>
-        $("#api").html($("#content_div").html())
+        $("#real_content_div").detach().appendTo('#api')
     </script>
 </body>
 </html>

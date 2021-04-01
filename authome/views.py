@@ -123,11 +123,16 @@ def get_post_logout_url(request,idp=None,encode=True):
         encode: encode the url if True;
     Return 	quoted post logout url
     """
+    #get the idp and idepid
+    if idp:
+        idpid = idp.idp
+    else:
+        idpid = request.session.get("idp")
+        if idpid:
+            idp = models.IdentityProvider.get_idp(idpid)
 
     #get the real domain from request header set by nginx; if not found, use the request's domain
     host = request.headers.get("x-upstream-server-name") or request.get_host()
-    #get the absolute signedout url
-    post_logout_url = "https://{}/sso/signedout".format(host)
 
     #try to get relogin url from request url parameters
     relogin_url = request.GET.get("relogin")
@@ -138,15 +143,10 @@ def get_post_logout_url(request,idp=None,encode=True):
             #still can't get the relogin url, use the home page of the domain as relogin url
             relogin_url = host
 
-    relogin_url = get_absolute_url(relogin_url,host)
+    #get the absolute signedout url
+    post_logout_url = "https://{}/sso/signedout".format(host)
 
-    #get the idepid
-    if idp:
-        #parameter 'idp' is not None, the idpid directly.
-        idpid = idp.idp
-    else:
-        #idp is not passed in, try to get the idp from session
-        idpid = request.session.get("idp")
+    relogin_url = get_absolute_url(relogin_url,host)
 
     if idpid:
         #if idpid is not None, encode it.
@@ -172,8 +172,13 @@ def get_post_logout_url(request,idp=None,encode=True):
     else:
         backend_post_logout_url = post_logout_url
 
-    #return econded or non-encoded post_logout_url based on parameter 'encode'
-    return urllib.parse.quote(backend_post_logout_url) if encode else backend_post_logout_url
+    if idp and idp.logout_url and idp.logout_method == models.IdentityProvider.AUTO_LOGOUT:
+        idp_logout_url = idp.logout_url.format(urllib.parse.quote(backend_post_logout_url))
+
+        return urllib.parse.quote(idp_logout_url) if encode else idp_logout_url
+    else:
+        #return econded or non-encoded post_logout_url based on parameter 'encode'
+        return urllib.parse.quote(backend_post_logout_url) if encode else backend_post_logout_url
 
 def _populate_response(request,f_cache,cache_key,user,session_key=None):
     """
@@ -580,11 +585,13 @@ def signedout(request):
     idp = models.IdentityProvider.get_idp(idpid)
 
     context = {
-        "relogin":relogin_url
+        "relogin":relogin_url,
+        "auto_logout": False
     }
     if idp and idp.logout_url:
         context["idp_name"] = idp.name
         context["idp_logout_url"] = idp.logout_url
+        context["auto_logout"] = True if idp.logout_method == models.IdentityProvider.AUTO_LOGOUT_WITH_POPUP_WINDOW else False
     content = django_engine.get_template("authome/inc/signedout.html").render(
         context=context,
         request=request
