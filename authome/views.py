@@ -43,7 +43,7 @@ SUCCEED_RESPONSE = HttpResponse(content='Succeed',status=200)
 #pre created forbidden response, status = 403
 FORBIDDEN_RESPONSE = HttpResponseForbidden()
 
-#pre created conflict response, status=400
+#pre created conflict response, status=409
 CONFLICT_RESPONSE = HttpResponse(content="Failed",status=409)
 
 #pre creaed authentication required response, status=401
@@ -58,13 +58,17 @@ BASIC_AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
 BASIC_AUTH_REQUIRED_RESPONSE["WWW-Authenticate"] = 'Basic realm="Please login with your email address and access token"'
 BASIC_AUTH_REQUIRED_RESPONSE.content = "Basic auth required"
 
-def parse_basic(basic_auth):
+#pre created not authorised response,status = 403
+NOT_AUTHORIZED_RESPONSE = HttpResponseForbidden()
+
+basic_auth_re = re.compile('^Basic\s+([a-zA-Z0-9+/=]+)$')
+def _parse_basic(basic_auth):
     """
     Parse the basic header to a tuple(username,password)
     """
     if not basic_auth:
-        raise Exception('Missing credentials')
-    match = re.match('^Basic\\s+([a-zA-Z0-9+/=]+)$', basic_auth)
+        raise Exception('Missing user credential')
+    match = basic_auth_re.match(basic_auth)
     if not match:
         raise Exception('Malformed Authorization header')
     basic_auth_raw = base64.b64decode(match.group(1)).decode('utf-8')
@@ -72,7 +76,6 @@ def parse_basic(basic_auth):
         raise Exception('Missing password')
     return basic_auth_raw.split(":", 1)
 
-NOT_AUTHORIZED_RESPONSE = HttpResponseForbidden()
 def check_authorization(request,useremail):
     """
     Check whether the user(identified by email) has the permission to access the resource
@@ -92,7 +95,7 @@ def check_authorization(request,useremail):
     else:
         logger.debug("User({}) can't access https://{}{}".format(useremail,domain,path))
         if path.startswith("/sso/"):
-            #sso related request, should always be authorized.
+            #sso related request, should always be authorized for all domains.
             return None
         else:
             return NOT_AUTHORIZED_RESPONSE
@@ -111,10 +114,15 @@ def get_absolute_url(url,domain):
         #absoulte url without protocol
         return "https://{}".format(url)
 
-def get_post_logout_url(request,idp=None,encode=True):
+def get_post_b2c_logout_url(request,idp=None,encode=True):
     """
-    Get post logout url, 
-    The logout url is /sso/singedout, can have url parametgers
+    Get post b2c logout url which will be redirect to by dbcab2c after log out from dbca b2c. 
+    The logout url is based on idp's logout method. 
+        1. idp without logout url: logout url is /sso/signedout
+        2. idp with automatically logout method: logout url is the idp's logout url
+        3. idp with automatically logout method via popup window: logout url is /sso/signedout, but returned page will open a browser window to logout from idp and then close the window automatically
+        4. idp with logout url: logout url is /ssp/signedout, but the returned page will show a hyperlink to let user logout from  idp
+    if the logout url is /sso/singedout,it can have url parameters.
         relogin_url: the url to relogin
         idp: the idpid of the IdentiryProvider which is used for login
     params:
@@ -144,7 +152,7 @@ def get_post_logout_url(request,idp=None,encode=True):
             relogin_url = host
 
     #get the absolute signedout url
-    post_logout_url = "https://{}/sso/signedout".format(host)
+    post_b2c_logout_url = "https://{}/sso/signedout".format(host)
 
     relogin_url = get_absolute_url(relogin_url,host)
 
@@ -156,7 +164,7 @@ def get_post_logout_url(request,idp=None,encode=True):
         #if relogin_url is not None, encode it
         relogin_url = urllib.parse.quote(relogin_url)
 
-    #add relogin_url and idpid as url parameters to post_logout_url
+    #add relogin_url and idpid as url parameters to post_b2c_logout_url
     params = None
     if relogin_url:
         params = "relogin={}".format(relogin_url)
@@ -168,17 +176,16 @@ def get_post_logout_url(request,idp=None,encode=True):
 
 
     if params:
-        backend_post_logout_url = "{}?{}".format(post_logout_url,params)
-    else:
-        backend_post_logout_url = post_logout_url
+        post_b2c_logout_url = "{}?{}".format(post_b2c_logout_url,params)
 
     if idp and idp.logout_url and idp.logout_method == models.IdentityProvider.AUTO_LOGOUT:
-        idp_logout_url = idp.logout_url.format(urllib.parse.quote(backend_post_logout_url))
+        #idp with automatically logout method
+        idp_logout_url = idp.logout_url.format(urllib.parse.quote(post_b2c_logout_url))
 
         return urllib.parse.quote(idp_logout_url) if encode else idp_logout_url
     else:
-        #return econded or non-encoded post_logout_url based on parameter 'encode'
-        return urllib.parse.quote(backend_post_logout_url) if encode else backend_post_logout_url
+        #return econded or non-encoded post_b2c_logout_url based on parameter 'encode'
+        return urllib.parse.quote(post_b2c_logout_url) if encode else post_b2c_logout_url
 
 def _populate_response(request,f_cache,cache_key,user,session_key=None):
     """
@@ -314,12 +321,12 @@ def auth(request):
         403 reponse: authenticated,but not authorized
     """
     res = _auth(request)
-    if not res:
-        #not authenticated
-        return AUTH_REQUIRED_RESPONSE
-    else:
+    if res:
         #authenticated, but can be authorized or not authorized
         return res
+    else:
+        #not authenticated
+        return AUTH_REQUIRED_RESPONSE
 
 @csrf_exempt
 def auth_optional(request):
@@ -331,12 +338,12 @@ def auth_optional(request):
         403 reponse: authenticated,but not authorized
     """
     res = _auth(request)
-    if not res:
-        #not authenticated
-        return AUTH_NOT_REQUIRED_RESPONSE
-    else:
+    if res:
         #authenticated, but can be authorized or not authorized
         return res
+    else:
+        #not authenticated
+        return AUTH_NOT_REQUIRED_RESPONSE
 
 @csrf_exempt
 def auth_basic(request):
@@ -347,7 +354,7 @@ def auth_basic(request):
     #get the basic auth header
     auth_basic = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else ''
     if not auth_basic:
-        #not provide basic auth data
+        #no basic auth data
         #check whether session is already authenticated or not.
         res = _auth(request)
         if res:
@@ -358,7 +365,7 @@ def auth_basic(request):
             return BASIC_AUTH_REQUIRED_RESPONSE
 
     #get the user name and user toke by parsing the basic auth data
-    username, token = parse_basic(auth_basic)
+    username, token = _parse_basic(auth_basic)
 
     #try to get the reponse from cache with username and token
     auth_basic_key = cache.get_basic_auth_key(username,token) 
@@ -406,13 +413,14 @@ def auth_basic(request):
                 #username is not an email address, get the user via username
                 #but current, username is equal with email address. so this logic will not be hit.
                 user = models.User.objects.filter(username__iexact=username).first()
-                if not user:
-                    logger.debug("User({}) doesn't exist".format(username))
-                    return BASIC_AUTH_REQUIRED_RESPONSE
+
+            if not user:
+                logger.debug("User({}) doesn't exist".format(username))
+                return BASIC_AUTH_REQUIRED_RESPONSE
 
             if request.user.is_authenticated and user.email == request.user.email:
                 #the user of the token auth is the same user as the authenticated session user;use the session authentication data directly
-                return _auth(request)
+                return  _auth(request)
 
             #user session is not authenticated or the user of the user token is not the same user as the authenticated sesion user.
             #check whther user token is valid
@@ -455,7 +463,7 @@ def logout_view(request):
     #get backend logout url
     backend_logout_url = request.session.get("backend_logout_url")
     #get post logout url
-    post_logout_url = get_post_logout_url(request,encode=False)
+    post_logout_url = get_post_b2c_logout_url(request,encode=False)
     #logout the django user session
     logout(request)
     #redirect to backend to logout backend
@@ -592,6 +600,7 @@ def signedout(request):
         context["idp_name"] = idp.name
         context["idp_logout_url"] = idp.logout_url
         context["auto_logout"] = True if idp.logout_method == models.IdentityProvider.AUTO_LOGOUT_WITH_POPUP_WINDOW else False
+
     content = django_engine.get_template("authome/inc/signedout.html").render(
         context=context,
         request=request
@@ -752,6 +761,9 @@ def profile_edit(request,backend):
     called after user authentication
     """
     next_url = request.GET.get(REDIRECT_FIELD_NAME)
+    if not next_url:
+        next_url = request.session.get(REDIRECT_FIELD_NAME)
+
     if next_url:
         domain = utils.get_domain(next_url) or request.headers.get("x-upstream-server-name") or request.get_host()
         next_url = get_absolute_url(next_url,domain)
@@ -800,6 +812,7 @@ def password_reset(request,backend):
     next_url = request.GET.get(REDIRECT_FIELD_NAME)
     if not next_url:
         next_url = request.session.get(REDIRECT_FIELD_NAME)
+
     if next_url:
         domain = utils.get_domain(next_url) or request.headers.get("x-upstream-server-name") or request.get_host()
         next_url = get_absolute_url(next_url,domain)
@@ -839,6 +852,9 @@ def mfa_set(request,backend):
     called after user authentication
     """
     next_url = request.GET.get(REDIRECT_FIELD_NAME)
+    if not next_url:
+        next_url = request.session.get(REDIRECT_FIELD_NAME)
+
     if next_url:
         domain = utils.get_domain(next_url) or request.headers.get("x-upstream-server-name") or request.get_host()
         next_url = get_absolute_url(next_url,domain)
@@ -878,6 +894,9 @@ def mfa_reset(request,backend):
     called after user authentication
     """
     next_url = request.GET.get(REDIRECT_FIELD_NAME)
+    if not next_url:
+        next_url = request.session.get(REDIRECT_FIELD_NAME)
+
     if next_url:
         domain = utils.get_domain(next_url) or request.headers.get("x-upstream-server-name") or request.get_host()
         next_url = get_absolute_url(next_url,domain)

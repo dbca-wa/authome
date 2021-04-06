@@ -42,15 +42,6 @@ The following lists all valid options in the checking order
     4. All Domain    : '*'
 """
 
-help_idp_domains = """
-THe domains which use this identity provider as its prefer identity provider
-The following lists all valid options in the checking order
-    1. All Domain    : '*'
-    2. Suffix Domain : Starts with '.' followed by a domain. For example .dbca.wa.gov.au
-    3. Regex Domain  : '*" represents any strings. For example  pbs*dbca.wa.gov.au
-    4. Single Domain : Represent a single domain. For example oim.dbca.wa.gov.au. Only single domain can config path and excluded path
-"""
-
 help_text_paths = """
 List all possible paths separated by new line character.
 The following lists all valid options in the checking order
@@ -77,6 +68,8 @@ class DbObjectMixin(object):
     """
     _db_obj = None
 
+    _editable_columns = []
+
     @property
     def db_obj(self):
         if not self.id:
@@ -85,6 +78,25 @@ class DbObjectMixin(object):
         if not self._db_obj:
             self._db_obj = self.__class__.objects.get(id=self.id)
         return self._db_obj
+
+    def save(self,*args,**kwargs):
+        if not self.is_changed():
+            return
+
+        logger.debug("Try to save the changed {}({})".format(self.__class__.__name__,self))
+        with transaction.atomic():
+            super().save(*args,**kwargs)
+
+    def is_changed(self):
+        if self.id is None:
+            return True
+
+        for name in self._editable_columns:
+            if getattr(self,name) != getattr(self.db_obj,name):
+                return True
+
+        return False
+
 
 class RequestDomain(object):
     """
@@ -108,7 +120,10 @@ class RequestDomain(object):
         #the configuration of this request domain
         self.config = config
         #the sort key to sort all configured request domain, the front configuration has high priority than the later configuration
-        self.sort_key = "{}:{}".format(self.base_sort_key,config)
+        self.sort_key = self.get_sort_key(config)
+
+    def get_sort_key(self,config):
+        return "{}:{}".format(self.base_sort_key,config)
 
     @classmethod
     def get_instance(cls,domain):
@@ -189,11 +204,13 @@ class RegexRequestDomain(RequestDomain):
     base_sort_key = 40
     def __init__(self,domain):
         super().__init__(domain)
-        self.sort_key = "{}:{}".format(self.base_sort_key,domain.replace("*","~"))
         try:
             self._re = re.compile("^{}$".format(domain.replace(".","\.").replace("*","[a-zA-Z0-9\._\-]*")))
         except Exception as ex:
             raise ValidationError("The regex domain config({}) is invalid.{}".format(domain,str(ex)))
+
+    def get_sort_key(self,config):
+        return "{}:{}".format(self.base_sort_key,config.replace("*","~"))
 
     def match(self,domain):
         if not domain:
@@ -207,9 +224,6 @@ class IdentityProvider(DbObjectMixin,models.Model):
     IdentityProvider 'local' means local account
     IdentityProvider 'local_passwordless' means autenticating user without password
     """
-    _domains = None
-    _changed = False
-
     MANUALLY_LOGOUT = 1 
     AUTO_LOGOUT = 2
     AUTO_LOGOUT_WITH_POPUP_WINDOW = 3
@@ -223,7 +237,9 @@ class IdentityProvider(DbObjectMixin,models.Model):
 
     LOCAL_PROVIDER = 'local'
 
-    #meaningful name mainained in auth2
+    _editable_columns = ("name","userflow","logout_url","logout_method")
+
+    #meaningful name set in auth2, this name will be used in some other place, so change it only if necessary
     name = models.CharField(max_length=64,unique=True,null=True)
     #unique name returned from b2c
     idp = models.CharField(max_length=256,unique=True,null=False,editable=False)
@@ -231,6 +247,7 @@ class IdentityProvider(DbObjectMixin,models.Model):
     userflow = models.CharField(max_length=64,blank=True,null=True)
     #the logout url to logout the user from identity provider
     logout_url = models.CharField(max_length=512,blank=True,null=True)
+    #the way to logout from idp
     logout_method = models.PositiveSmallIntegerField(choices=LOGOUT_METHODS,blank=True,null=True)
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
@@ -240,21 +257,6 @@ class IdentityProvider(DbObjectMixin,models.Model):
         self.name = self.name.strip()
         if not self.name:
             raise ValidationError("Name is empty")
-
-        if self.id is not None:
-            self._changed = False
-            if self.name != self.db_obj.name or self.userflow != self.db_obj.userflow or self.logout_url != self.db_obj.logout_url or self.logout_method != self.db_obj.logout_method:
-                self._changed = True
-
-    def save(self,*args,**kwargs):
-        if self.id is not None and not self._changed:
-            #nothing was changed
-            return 
-        logger.debug("Try to save the changed {}({})".format(self.__class__.__name__,self))
-        with transaction.atomic():
-            super().save(*args,**kwargs)
-
-        self._changed = False
 
     @classmethod
     def refresh_idps(cls):
@@ -304,7 +306,6 @@ class CustomizableUserflow(DbObjectMixin,models.Model):
     Customize userflow for domain.
     The domain '*' is the default settings.
     """
-    _changed = False
     _request_domain = None
     default_layout="""{% load i18n static %}
 <table id="header" style="background:#2D2F32;width:100%;"><tr><td style="width:34%">
@@ -422,6 +423,8 @@ Email: enquiries@dbca.wa.gov.au
 </body>
 </html>"""
 
+    _editable_columns = ("default","mfa_set","mfa_reset","email","profile_edit","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body","sortkey")
+
     domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
     fixed = models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
     default = models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
@@ -488,25 +491,6 @@ Email: enquiries@dbca.wa.gov.au
                 raise ValidationError("The property({}) can't be empty for global settings.".format(invalid_columns[0]))
             elif len(invalid_columns) > 1:
                 raise ValidationError("The properties({}) can't be empty for global settings.".format(invalid_columns))
-
-        #check whether the object was modified or not.
-        if self.id is not None:
-            self._changed = False
-            for name in ("default","mfa_set","mfa_reset","email","profile_edit","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body","sortkey"):
-                if getattr(self,name) != getattr(self.db_obj,name):
-                    self._changed = True
-                    break
-
-    def save(self,*args,**kwargs):
-        if self.id is not None and not self._changed:
-            #nothing was changed
-            return 
-
-        logger.debug("Try to save the changed {}({})".format(self.__class__.__name__,self))
-        with transaction.atomic():
-            super().save(*args,**kwargs)
-
-        self._changed = False
 
     def __str__(self):
         return self.domain
@@ -705,8 +689,7 @@ class UserGroup(DbObjectMixin,models.Model):
     _useremails = None
     _excluded_useremails = None
 
-    _usergroup_trees = None
-    _changed = False
+    _editable_columns = ("users","parent_group","excluded_users","identity_provider")
 
     name = models.CharField(max_length=32,unique=True)
     parent_group = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
@@ -715,6 +698,14 @@ class UserGroup(DbObjectMixin,models.Model):
     identity_provider = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,null=True,blank=True)
     modified = models.DateTimeField(editable=False,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
+
+    def is_changed(self):
+        changed = super().is_changed()
+        if changed:
+            self.modified = timezone.now()
+            return True
+        else:
+            return self.name != self.db_obj.name
 
     def clean(self):
         super().clean()
@@ -733,15 +724,6 @@ class UserGroup(DbObjectMixin,models.Model):
             self.excluded_users = [u.config for u in user_emails]
         else:
             self.excluded_users = None
-
-        if self.id is None:
-            self.modified = timezone.now()
-        else:
-            if self.users != self.db_obj.users or self.parent_group != self.db_obj.parent_group or self.excluded_users != self.db_obj.excluded_users or self.identity_provider != self.db_obj.identity_provider:
-                self.modified = timezone.now()
-                self._changed = True
-            elif self.name != self.db_obj.name:
-                self._changed = True
 
         if not self.parent_group and not self.is_public_group:
             self.parent_group = self.public_group()
@@ -781,7 +763,7 @@ class UserGroup(DbObjectMixin,models.Model):
                         contained = True
                         break
                 if not contained:
-                    raise ValidationError("The excluded email pattern({}) in the parent group({}) is not contained by the current group({})".format(parent_excluded_useremail.config,self.parent_group,self))
+                    raise ValidationError("The excluded email pattern({}) in the parent group({}) is contained by the current group({})".format(parent_excluded_useremail.config,self.parent_group,self))
 
         if self.id:
             for child_group in UserGroup.objects.filter(parent_group=self):
@@ -809,7 +791,7 @@ class UserGroup(DbObjectMixin,models.Model):
                             contained = True
                             break
                     if not contained:
-                        raise ValidationError("The excluded email pattern({}) in the current group({}) is not contained by the child group({})".format(excluded_useremail.config,self,child_group))
+                        raise ValidationError("The excluded email pattern({}) in the current group({}) is contained by the child group({})".format(excluded_useremail.config,self,child_group))
 
     @property
     def is_public_group(self):
@@ -827,16 +809,6 @@ class UserGroup(DbObjectMixin,models.Model):
                 group = group.parent_group
 
         return False
-
-    def save(self,*args,**kwargs):
-        if self.id is not None and not self._changed:
-            #nothing was changed
-            return 
-        logger.debug("Try to save the changed {}({})".format(self.__class__.__name__,self))
-        with transaction.atomic():
-            super().save(*args,**kwargs)
-
-        self._changed = False
 
     def delete(self,*args,**kwargs):
         logger.debug("Try to delete the usergroup {}({})".format(self.__class__.__name__,self))
@@ -1079,8 +1051,6 @@ class RegexRequestPath(RequestPath):
 
 
 class AuthorizationMixin(DbObjectMixin,models.Model):
-    _changed = False
-    _config_changed = False
 
     _request_domain = None
     _excluded_request_paths = None
@@ -1089,17 +1059,19 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
     _allow_all = None
     _deny_all = None
 
+    _editable_columns = ("domain","paths","excluded_paths")
+
     domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
     paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
     excluded_paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
     sortkey = models.CharField(max_length=128,editable=False)
-    modified = models.DateTimeField(editable=False,db_index=True)
+    modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
     @property
     def allow_all(self):
         if self._allow_all is None:
-            if (not self.request_paths or all(p.match_all for p in self.request_paths)) and not self.excluded_request_paths:
+            if (not self.request_paths or any(p.match_all for p in self.request_paths)) and not self.excluded_request_paths:
                 self._allow_all = True
             else:
                 self._allow_all = False
@@ -1109,11 +1081,9 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
     @property
     def deny_all(self):
         if self._deny_all is None:
-            if self.allow_all:
-                self._deny_all = False
-            elif self.excluded_request_paths and all(p.match_all for p in self.excluded_request_paths):
+            if self.excluded_request_paths and any(p.match_all for p in self.excluded_request_paths):
                self._deny_all = True
-            else:
+           else:
                self._deny_all = False
 
         return self._deny_all
@@ -1129,7 +1099,7 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
         request_paths = self.get_request_paths(self.paths)
         if not request_paths:
             self.paths = None
-        elif isinstance(request_domain,ExactRequestDomain) or all(p.match_all for p in request_paths):
+        elif isinstance(request_domain,ExactRequestDomain) or any(p.match_all for p in request_paths):
             self.paths = [p.config for p in request_paths]
         else:
             raise ValidationError("A domain pattern only supports empty path or all path")
@@ -1137,19 +1107,10 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
         excluded_request_paths = self.get_request_paths(self.excluded_paths)
         if not excluded_request_paths:
             self.excluded_paths = None
-        elif isinstance(request_domain,ExactRequestDomain) or all(p.match_all for p in excluded_request_paths):
+        elif isinstance(request_domain,ExactRequestDomain) or any(p.match_all for p in excluded_request_paths):
             self.excluded_paths = [p.config for p in excluded_request_paths]
         else:
             raise ValidationError("A domain pattern only supports empty excluded path or all excluded path")
-
-        if self.id is None:
-            self.modified = timezone.now()
-        else:
-            if self.db_obj.domain != self.domain or self.db_obj.excluded_paths != self.excluded_paths or self.db_obj.paths != self.paths:
-                self.modified = timezone.now()
-                self._changed = True
-                self._config_changed = True
-
 
     @property
     def request_domain(self):
@@ -1174,6 +1135,7 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
         request_paths.sort(key=lambda o:o.sort_key)
         match_all_path = next((p for p in request_paths if p.match_all),None)
         if match_all_path:
+            #contain one match all path, ignore other paths
             return [match_all_path]
         else:
             return request_paths
@@ -1192,14 +1154,6 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
             self._excluded_request_paths = self.get_request_paths(self.excluded_paths)
 
         return self._excluded_request_paths
-
-    def save(self,*args,**kwargs):
-        if self.id is not None and not self._changed:
-            #nothing was changed
-            return 
-        logger.debug("Save the changed {}({})".format(self.__class__.__name__,self))
-        with transaction.atomic():
-            super().save(*args,**kwargs)
 
     def allow(self,path):
         if self.allow_all:
