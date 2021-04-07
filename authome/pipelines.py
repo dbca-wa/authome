@@ -8,7 +8,7 @@ from django.contrib.auth import login, logout
 from django.http import HttpResponseForbidden,HttpResponseRedirect
 
 from .models import IdentityProvider,UserGroup
-from .views import signout, get_post_logout_url
+from .views import signout, get_post_b2c_logout_url
 from .utils import get_usercache
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     if user and not user.is_active:
         #use is inactive, automatically logout 
         logout(request)
-        logout_url = backend_logout_url.format(get_post_logout_url(request,idp_obj))
+        logout_url = backend_logout_url.format(get_post_b2c_logout_url(request,idp_obj))
         logger.debug("Redirect to '{}' to logout from identity provider".format(logout_url))
         response = signout(request,logout_url=logout_url,message="Your account was disabled.")
         return response
@@ -60,7 +60,7 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
             #The idp used for user authentication is not the idp configured in UserGroup, automatically logou
             logger.debug("The user({}) shoule authenticate with '{}' instead of '{}'".format(email,configed_idp_obj,idp_obj))
             logout(request)
-            logout_url = backend_logout_url.format(get_post_logout_url(request,idp_obj))
+            logout_url = backend_logout_url.format(get_post_b2c_logout_url(request,idp_obj))
             logger.debug("Redirect to '{}' to logout from identity provider".format(logout_url))
             response = signout(request,logout_url=logout_url,message="You can only sign in through identity provider '{}'".format(configed_idp_obj))
 

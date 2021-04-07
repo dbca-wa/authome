@@ -1083,7 +1083,7 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
         if self._deny_all is None:
             if self.excluded_request_paths and any(p.match_all for p in self.excluded_request_paths):
                self._deny_all = True
-           else:
+            else:
                self._deny_all = False
 
         return self._deny_all
