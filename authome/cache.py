@@ -120,6 +120,11 @@ class HourListTaskRunable(TaskRunable):
             logger.debug("Run task({}) now, next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return True
 
+    @property
+    def next_runtime(self):
+        self.can_run()
+        return self._next_time
+
 class MemoryCache(object):
     """
     Local memory cache
