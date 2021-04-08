@@ -218,7 +218,30 @@ class RegexRequestDomain(RequestDomain):
 
         return True if self._re.search(domain) else False
 
-class IdentityProvider(DbObjectMixin,models.Model):
+class CacheableMixin(object):
+
+    @classmethod
+    def get_model_change_cls(cls):
+        return None
+
+    @classmethod
+    def is_outdated(cls):
+        return cls.get_model_change_cls().is_changed()
+ 
+    @classmethod
+    def get_cachetime(cls):
+        return cls.get_model_change_cls().get_cachetime()
+
+    @classmethod
+    def get_next_refreshtime(cls):
+        return cls.get_model_change_cls().get_next_refreshtime()
+
+    @classmethod
+    def refresh_cache(cls):
+        pass
+
+
+class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     """
     The identity provider to authenticate user.
     IdentityProvider 'local' means local account
@@ -252,6 +275,10 @@ class IdentityProvider(DbObjectMixin,models.Model):
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
+    @classmethod
+    def get_model_change_cls(self):
+        return IdentityProviderChange
+
     def clean(self):
         super().clean()
         self.name = self.name.strip()
@@ -259,7 +286,7 @@ class IdentityProvider(DbObjectMixin,models.Model):
             raise ValidationError("Name is empty")
 
     @classmethod
-    def refresh_idps(cls):
+    def refresh_cache(cls):
         """
         Popuate the data and save them to cache
         """
@@ -301,7 +328,7 @@ class IdentityProvider(DbObjectMixin,models.Model):
     class Meta:
         verbose_name_plural = " Identity Providers"
 
-class CustomizableUserflow(DbObjectMixin,models.Model):
+class CustomizableUserflow(CacheableMixin,DbObjectMixin,models.Model):
     """
     Customize userflow for domain.
     The domain '*' is the default settings.
@@ -447,6 +474,10 @@ Email: enquiries@dbca.wa.gov.au
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
+    @classmethod
+    def get_model_change_cls(self):
+        return CustomizableUserflowChange
+
     @property
     def is_default(self):
         """
@@ -503,7 +534,7 @@ Email: enquiries@dbca.wa.gov.au
         return cache.get_userflow(domain)
 
     @classmethod
-    def refresh_userflows(cls):
+    def refresh_cache(cls):
         """
         Populate the cached data and save them to cache
         """
@@ -685,7 +716,7 @@ class RegexUserEmail(UserEmail):
                 
             return p_index >= len(self.config)
 
-class UserGroup(DbObjectMixin,models.Model):
+class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     _useremails = None
     _excluded_useremails = None
 
@@ -698,6 +729,10 @@ class UserGroup(DbObjectMixin,models.Model):
     identity_provider = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,null=True,blank=True)
     modified = models.DateTimeField(editable=False,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
+
+    @classmethod
+    def get_model_change_cls(self):
+        return UserGroupChange
 
     def is_changed(self):
         changed = super().is_changed()
@@ -851,7 +886,7 @@ class UserGroup(DbObjectMixin,models.Model):
         return self.name
 
     @classmethod
-    def refresh_usergroups(cls,refresh=False):
+    def refresh_cache(cls):
         logger.debug("Refresh UserGroup cache")
         group_trees = {}
         modified = None
@@ -1254,8 +1289,12 @@ def _can_access_debug(email,domain,path):
 
 can_access = _can_access if settings.RELEASE else _can_access_debug
 
-class UserAuthorization(AuthorizationMixin):
+class UserAuthorization(CacheableMixin,AuthorizationMixin):
     user = models.EmailField(max_length=64)
+
+    @classmethod
+    def get_model_change_cls(self):
+        return UserAuthorizationChange
 
     def clean(self):
         super().clean()
@@ -1264,7 +1303,7 @@ class UserAuthorization(AuthorizationMixin):
             raise ValidationError("Useremail is empty")
 
     @classmethod
-    def refresh_authorization(cls):
+    def refresh_cache(cls):
         logger.debug("Refresh UserAuthorization cache")
         userauthorization = {}
         previous_user = None
@@ -1300,11 +1339,15 @@ class UserAuthorization(AuthorizationMixin):
         unique_together = [["user","domain"]]
         verbose_name_plural = "    User Authorizations"
 
-class UserGroupAuthorization(AuthorizationMixin):
+class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
     usergroup = models.ForeignKey(UserGroup, on_delete=models.CASCADE)
 
     @classmethod
-    def refresh_authorization(cls):
+    def get_model_change_cls(self):
+        return UserGroupAuthorizationChange
+
+    @classmethod
+    def refresh_cache(cls):
         logger.debug("Refresh UserGroupAuthorization cache")
         usergroupauthorization = {}
         previous_usergroup = None
@@ -1432,6 +1475,23 @@ class UserToken(models.Model):
     class Meta:
         verbose_name_plural = "  User Access Tokens"
 
+class UserTOTP(models.Model):
+    email = models.CharField(max_length=64,null=False,editable=False)
+    idp = models.CharField(max_length=256,null=False,editable=False)
+    secret_key = models.CharField(max_length=128,null=False,editable=False)
+    timestep = models.PositiveSmallIntegerField(null=False,editable=False)
+    prefix = models.CharField(max_length=64,null=False,editable=False)
+    issuer = models.CharField(max_length=64,null=False,editable=False)
+    name = models.CharField(max_length=128,null=False,editable=False)
+    algorithm = models.CharField(max_length=32,null=False,editable=False)
+    digits = models.PositiveSmallIntegerField(null=False,editable=False)
+    last_verified_code = models.CharField(max_length=16,null=True,editable=False)
+    last_verified = models.DateTimeField(null=True,editable=False)
+    created = models.DateTimeField(null=False,editable=False)
+
+    class Meta:
+        unique_together = [["email","idp"]]
+
 class UserListener(object):
     @staticmethod
     @receiver(pre_save, sender=User)
@@ -1507,23 +1567,49 @@ if defaultcache:
             defaultcache.set(cls.key,timezone.now())
 
         @classmethod
-        def is_changed(cls,cachetime,size=0):
+        def get_cachetime(cls):
+            return None
+
+        @classmethod
+        def get_cachesize(cls):
+            return None
+
+        @classmethod
+        def get_next_refreshtime(cls):
+            return None
+
+        @classmethod
+        def is_changed(cls):
             last_modified = defaultcache.get(cls.key)
             if not last_modified:
                 logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
-            elif not cachetime:
+            elif not cls.get_cachetime():
                 logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
                 return True
-            elif last_modified > cachetime:
+            elif last_modified > cls.get_cachetime():
                 logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
                 return True
             else:
                 logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
 
+
     class IdentityProviderChange(ModelChange):
         key = "idp_last_modified"
+
+        @classmethod
+        def get_cachetime(cls):
+            return cache._idps_ts
+
+        @classmethod
+        def get_cachesize(cls):
+            return cache._idps_size
+        
+        @classmethod
+        def get_next_refreshtime(cls):
+            return cache._idp_cache_check_time.next_runtime
+
         @staticmethod
         @receiver(post_save, sender=IdentityProvider)
         def post_save(sender,*args,**kwargs):
@@ -1536,6 +1622,19 @@ if defaultcache:
 
     class CustomizableUserflowChange(ModelChange):
         key = "customizableuserflow_last_modified"
+
+        @classmethod
+        def get_cachetime(cls):
+            return cache._userflows_ts
+
+        @classmethod
+        def get_cachesize(cls):
+            return cache._userflows_size
+        
+        @classmethod
+        def get_next_refreshtime(cls):
+            return cache._userflow_cache_check_time.next_runtime
+
         @staticmethod
         @receiver(post_save, sender=CustomizableUserflow)
         def post_save(sender,*args,**kwargs):
@@ -1548,6 +1647,19 @@ if defaultcache:
 
     class UserGroupChange(ModelChange):
         key = "usergroup_last_modified"
+
+        @classmethod
+        def get_cachetime(cls):
+            return cache._usergrouptree_ts
+
+        @classmethod
+        def get_cachesize(cls):
+            return cache._usergrouptree_size
+
+        @classmethod
+        def get_next_refreshtime(cls):
+            return cache._authorization_cache_check_time.next_runtime
+
         @staticmethod
         @receiver(post_save, sender=UserGroup)
         def post_save(sender,*args,**kwargs):
@@ -1560,6 +1672,19 @@ if defaultcache:
 
     class UserAuthorizationChange(ModelChange):
         key = "userauthorization_last_modified"
+
+        @classmethod
+        def get_cachetime(cls):
+            return cache._userauthorization_ts
+
+        @classmethod
+        def get_cachesize(cls):
+            return cache._userauthorization_size
+        
+        @classmethod
+        def get_next_refreshtime(cls):
+            return cache._authorization_cache_check_time.next_runtime
+
         @staticmethod
         @receiver(post_save, sender=UserAuthorization)
         def post_save(sender,*args,**kwargs):
@@ -1572,6 +1697,19 @@ if defaultcache:
 
     class UserGroupAuthorizationChange(ModelChange):
         key = "usergroupauthorization_last_modified"
+
+        @classmethod
+        def get_cachetime(cls):
+            return cache._usergroupauthorization_ts
+
+        @classmethod
+        def get_cachesize(cls):
+            return cache._usergroupauthorization_size
+        
+        @classmethod
+        def get_next_refreshtime(cls):
+            return cache._authorization_cache_check_time.next_runtime
+
         @staticmethod
         @receiver(post_save, sender=UserGroupAuthorization)
         def post_save(sender,*args,**kwargs):
@@ -1583,12 +1721,22 @@ if defaultcache:
             UserGroupAuthorizationChange.change()
 
 else:
-    class IdentityProviderChange(object):
+    class ModelChange(object):
+        model = None
+
         @classmethod
-        def is_changed(cls,cachetime,size):
+        def get_cachetime(cls):
+            return None
+
+        @classmethod
+        def get_cachesize(cls):
+            return None
+
+        @classmethod
+        def is_changed(cls):
             if ( 
-                IdentityProvider.objects.filter(modified__gt=cachetime).exists() or  
-                IdentityProvider.objects.all().count() != size
+                cls.model.objects.filter(modified__gt=cls.get_cachetime()).exists() or  
+                cls.model.objects.all().count() != cls.get_cachesize()
             ):
                 logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
                 return True
@@ -1596,73 +1744,79 @@ else:
                 logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
 
-    class CustomizagbleUserflowChange(object):
+    class IdentityProviderChange(ModelChange):
+        model = IdentityProvider
+
         @classmethod
-        def is_changed(cls,cachetime,size):
-            if ( 
-                CustomizableUserflow.objects.filter(modified__gt=cachetime).exists() or  
-                CustomizableUserflow.objects.all().count() != size
-            ):
-                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
-                return True
-            else:
-                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
-                return False
+        def get_cachetime(cls):
+            return cache._idps_ts
 
-    class UserGroupChange(object):
         @classmethod
-        def is_changed(cls,cachetime,size):
-            if ( 
-                UserGroup.objects.filter(modified__gt=cachetime).exists() or
-                UserGroup.objects.all().count() != size
-            ):
-                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
-                return True
-            else:
-                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
-                return False
-
-    class UserAuthorizationChange(object):
+        def get_cachesize(cls):
+            return cache._idps_size
+        
         @classmethod
-        def is_changed(cls,cachetime,size):
-            if ( 
-                UserAuthorization.objects.filter(modified__gt=cachetime).exists() or  
-                UserAuthorization.objects.all().count() != size
-            ):
-                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
-                return True
-            else:
-                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
-                return False
+        def get_next_refreshtime(cls):
+            return cache._idp_cache_check_time.next_runtime
 
-    class UserGroupAuthorizationChange(object):
+        
+    class CustomizagbleUserflowChange(ModelChange):
+        model = CustomizableUserflow
+
         @classmethod
-        def is_changed(cls,cachetime,size):
-            if ( 
-                UserGroupAuthorization.objects.filter(modified__gt=cachetime).exists() or
-                UserGroupAuthorization.objects.all().count() != size
-            ):
-                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
-                return True
-            else:
-                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
-                return False
+        def get_cachetime(cls):
+            return cache._userflows_ts
 
+        @classmethod
+        def get_cachesize(cls):
+            return cache._userflows_size
+        
+        @classmethod
+        def get_next_refreshtime(cls):
+            return cache._userflow_cache_check_time.next_runtime
 
-class UserTOTP(models.Model):
-    email = models.CharField(max_length=64,null=False,editable=False)
-    idp = models.CharField(max_length=256,null=False,editable=False)
-    secret_key = models.CharField(max_length=128,null=False,editable=False)
-    timestep = models.PositiveSmallIntegerField(null=False,editable=False)
-    prefix = models.CharField(max_length=64,null=False,editable=False)
-    issuer = models.CharField(max_length=64,null=False,editable=False)
-    name = models.CharField(max_length=128,null=False,editable=False)
-    algorithm = models.CharField(max_length=32,null=False,editable=False)
-    digits = models.PositiveSmallIntegerField(null=False,editable=False)
-    last_verified_code = models.CharField(max_length=16,null=True,editable=False)
-    last_verified = models.DateTimeField(null=True,editable=False)
-    created = models.DateTimeField(null=False,editable=False)
+    class UserGroupChange(ModelChange):
+        model = UserGroup
 
-    class Meta:
-        unique_together = [["email","idp"]]
+        @classmethod
+        def get_cachetime(cls):
+            return cache._usergrouptree_ts
+
+        @classmethod
+        def get_cachesize(cls):
+            return cache._usergrouptree_size
+
+        @classmethod
+        def get_next_refreshtime(cls):
+            return cache._authorization_cache_check_time.next_runtime
+
+    class UserAuthorizationChange(ModelChange):
+        model = UserAuthorization
+
+        @classmethod
+        def get_cachetime(cls):
+            return cache._userauthorization_ts
+
+        @classmethod
+        def get_cachesize(cls):
+            return cache._userauthorization_size
+        
+        @classmethod
+        def get_next_refreshtime(cls):
+            return cache._authorization_cache_check_time.next_runtime
+
+    class UserGroupAuthorizationChange(ModelChange):
+        model = UserGroupAuthorization
+
+        @classmethod
+        def get_cachetime(cls):
+            return cache._usergroupauthorization_ts
+
+        @classmethod
+        def get_cachesize(cls):
+            return cache._usergroupauthorization_size
+        
+        @classmethod
+        def get_next_refreshtime(cls):
+            return cache._authorization_cache_check_time.next_runtime
 

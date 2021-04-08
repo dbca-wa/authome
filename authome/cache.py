@@ -58,6 +58,11 @@ class IntervalTaskRunable(TaskRunable):
             logger.debug("Run task({}) now, next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return True
 
+    @property
+    def next_runtime(self):
+        self.can_run()
+        return self._next_time
+
 class HourListTaskRunable(TaskRunable):
     """
     A hour list base task runable class
@@ -410,28 +415,28 @@ class MemoryCache(object):
 
     def refresh_usergroups(self,force=False):
         from .models import UserGroupChange,UserGroup
-        if (force or self._usergrouptree is None or UserGroupChange.is_changed(self._usergrouptree_ts,self._usergrouptree_size)):
+        if (force or self._usergrouptree is None or UserGroupChange.is_changed()):
             logger.debug("UserGroup was changed, clean cache usergroupptree and user_requests_map")
             self._user_authorization_map.clear()
             #reload group trees
-            UserGroup.refresh_usergroups()
+            UserGroup.refresh_cache()
 
 
     def refresh_userauthorization(self,force=False):
         from .models import UserAuthorizationChange,UserAuthorization
-        if (force or self._userauthorization is None or UserAuthorizationChange.is_changed(self._userauthorization_ts,self._userauthorization_size)):
+        if (force or self._userauthorization is None or UserAuthorizationChange.is_changed()):
             logger.debug("UserAuthorization was changed, clean cache userauthorization and user_requests_map")
             self._user_authorization_map.clear()
             #reload user requests
-            UserAuthorization.refresh_authorization()
+            UserAuthorization.refresh_cache()
 
     def refresh_usergroupauthorization(self,force=False):
         from .models import UserGroupAuthorizationChange,UserGroupAuthorization
-        if (force or self._usergroupauthorization is None or UserGroupAuthorizationChange.is_changed(self._usergroupauthorization_ts,self._usergroupauthorization_size)):
+        if (force or self._usergroupauthorization is None or UserGroupAuthorizationChange.is_changed()):
             logger.debug("UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map")
             self._user_authorization_map.clear()
             #reload user group requests
-            UserGroupAuthorization.refresh_authorization()
+            UserGroupAuthorization.refresh_cache()
 
     def refresh_authorization_cache(self,force=False):
         if self._authorization_cache_check_time.can_run() or force:
@@ -442,15 +447,15 @@ class MemoryCache(object):
     def refresh_idp_cache(self,force=False):
         if self._idp_cache_check_time.can_run() or force:
             from .models import IdentityProviderChange,IdentityProvider
-            if ( self._idps is None or IdentityProviderChange.is_changed(self._idps_ts,self._idps_size)):
-                IdentityProvider.refresh_idps()
+            if ( self._idps is None or IdentityProviderChange.is_changed()):
+                IdentityProvider.refresh_cache()
 
 
     def refresh_userflow_cache(self,force=False):
         if self._userflow_cache_check_time.can_run() or force:
             from .models import CustomizableUserflowChange,CustomizableUserflow
-            if ( self._userflows is None or CustomizableUserflowChange.is_changed(self._userflows_ts,self._userflows_size)):
-                CustomizableUserflow.refresh_userflows()
+            if ( self._userflows is None or CustomizableUserflowChange.is_changed()):
+                CustomizableUserflow.refresh_cache()
 
 cache = MemoryCache()
 

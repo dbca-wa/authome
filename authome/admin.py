@@ -9,11 +9,37 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.utils.html import mark_safe
 from django.templatetags.static import static
 from django.db.models import Q
+from django.contrib.admin.views.main import ChangeList
 
 from . import models
 from . import forms
 
 logger = logging.getLogger(__name__)
+
+
+class CacheableChangeList(ChangeList):
+    def __init__(self, *args,**kwargs):
+        super().__init__(*args,**kwargs)
+        if self.model.is_outdated():
+            self.title = "{}(Cache is outdated, latest refresh time is {}, next refresh trigger time is {})".format(
+                self.title,
+                timezone.localtime(self.model.get_cachetime()).strftime("%Y-%m-%d %H:%M:%S") if self.model.get_cachetime() else "None",
+                timezone.localtime(self.model.get_next_refreshtime()).strftime("%Y-%m-%d %H:%M:%S") if self.model.get_next_refreshtime() else "None"
+            )
+        else:
+            self.title = "{}(Cache is up-to-date, latest refresh time is {}, next refresh trigger time is {})".format(
+                self.title,
+                timezone.localtime(self.model.get_cachetime()).strftime("%Y-%m-%d %H:%M:%S") if self.model.get_cachetime() else "None",
+                timezone.localtime(self.model.get_next_refreshtime()).strftime("%Y-%m-%d %H:%M:%S") if self.model.get_next_refreshtime() else "None"
+            )
+
+
+class CacheableListTitleMixin(object):
+    def get_changelist(self, request, **kwargs):
+        """
+        Return the ChangeList class for use on the changelist page.
+        """
+        return CacheableChangeList
 
 class DatetimeMixin(object):
     def _modified(self,obj):
@@ -87,7 +113,7 @@ class UserAdmin(DatetimeMixin,auth.admin.UserAdmin):
 
 
 @admin.register(models.UserGroup)
-class UserGroupAdmin(DatetimeMixin,admin.ModelAdmin):
+class UserGroupAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
     list_display = ('name','parent_group','users','excluded_users','identity_provider','_modified','_created')
     readonly_fields = ('_modified',)
     fields = ('name','parent_group','users','excluded_users','identity_provider','_modified')
@@ -95,7 +121,7 @@ class UserGroupAdmin(DatetimeMixin,admin.ModelAdmin):
     form = forms.UserGroupForm
 
 @admin.register(models.UserGroupAuthorization)
-class UserGroupAuthorizationAdmin(DatetimeMixin,admin.ModelAdmin):
+class UserGroupAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
     list_display = ('usergroup','domain','paths','excluded_paths','_modified','_created')
     readonly_fields = ('_modified',)
     fields = ('usergroup','domain','paths','excluded_paths','_modified')
@@ -103,7 +129,7 @@ class UserGroupAuthorizationAdmin(DatetimeMixin,admin.ModelAdmin):
     form = forms.UserGroupAuthorizationForm
 
 @admin.register(models.UserAuthorization)
-class UserAuthorizationAdmin(DatetimeMixin,admin.ModelAdmin):
+class UserAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
     list_display = ('user','domain','paths','excluded_paths','_modified','_created')
     readonly_fields = ('_modified',)
     fields = ('user','domain','paths','excluded_paths','_modified')
@@ -324,7 +350,7 @@ class UserTokenAdmin(admin.ModelAdmin):
         return False
 
 @admin.register(models.IdentityProvider)
-class IdentityProviderAdmin(DatetimeMixin,admin.ModelAdmin):
+class IdentityProviderAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
     list_display = ('idp','name','userflow','logout_method','logout_url','_modified','_created')
     readonly_fields = ('idp','_modified','_created')
     form = forms.IdentityProviderForm
@@ -332,7 +358,7 @@ class IdentityProviderAdmin(DatetimeMixin,admin.ModelAdmin):
     ordering = ('name','idp',)
 
 @admin.register(models.CustomizableUserflow)
-class CustomizableUserflowAdmin(DatetimeMixin,admin.ModelAdmin):
+class CustomizableUserflowAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
     list_display = ('domain','fixed','default','profile_edit','mfa_set',"mfa_reset",'password_reset','_modified','_created')
     readonly_fields = ('_modified','_created')
     form = forms.CustomizableUserflowForm
