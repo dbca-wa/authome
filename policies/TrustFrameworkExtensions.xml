@@ -23,7 +23,7 @@
             <TechnicalProfiles>
                 <TechnicalProfile Id="Google-OAUTH">
                     <Metadata>
-                        <Item Key="client_id">264475298778-1n1mbqociv229oq3cjqjoa42q44p6rh8.apps.googleusercontent.com</Item>
+                        <Item Key="client_id">416060997265-lcqfpji88jcbqsmi5apiar3lgh76p07h.apps.googleusercontent.com</Item>
                     </Metadata>
                     <CryptographicKeys>
                         <Key Id="client_secret" StorageReferenceId="B2C_1A_GoogleSecret"/>
@@ -37,7 +37,7 @@
             <TechnicalProfiles>
                 <TechnicalProfile Id="Facebook-OAUTH">
                     <Metadata>
-                        <Item Key="client_id">1359759981051557</Item>
+                        <Item Key="client_id">741607599848512</Item>
                     </Metadata>
                     <CryptographicKeys>
                         <Key Id="client_secret" StorageReferenceId="B2C_1A_FacebookSecret"/>
