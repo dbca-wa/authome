@@ -60,7 +60,8 @@ class IntervalTaskRunable(TaskRunable):
 
     @property
     def next_runtime(self):
-        self.can_run()
+        if not self._next_time:
+            self.can_run()
         return self._next_time
 
 class HourListTaskRunable(TaskRunable):
@@ -122,7 +123,8 @@ class HourListTaskRunable(TaskRunable):
 
     @property
     def next_runtime(self):
-        self.can_run()
+        if not self._next_time:
+            self.can_run()
         return self._next_time
 
 class MemoryCache(object):

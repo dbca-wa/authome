@@ -637,7 +637,7 @@ def _init_userflow_pagelayout(request,userflow,container_class):
     if hasattr(userflow,container_class):
         #already initialized
         return
-
+    logger.debug("Initialize user flow page layout; userflow={}, container_class={}".format(userflow,container_class))
     #initialize the page layout for the user userflow and container class
     if not userflow.page_layout:
         #page_layout is not configured, use default userflow's page_layout
@@ -706,6 +706,7 @@ def adb2c_view(request,template,**kwargs):
     container_class = request.GET.get('class')
     if not container_class:
         container_class = "{}_container".format(template)
+    logger.debug("Request the customized authentication interface for domain({}) and container_class({})".format(domain,container_class))
     title = request.GET.get('title', "Signup or Signin")
     userflow = models.CustomizableUserflow.get_userflow(domain)
 

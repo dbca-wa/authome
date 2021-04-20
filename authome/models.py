@@ -240,6 +240,10 @@ class CacheableMixin(object):
     def refresh_cache(cls):
         pass
 
+    @classmethod
+    def refresh_cache_if_required(cls):
+        cls.get_model_change_cls().refresh_cache_if_required()
+
 
 class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     """
@@ -663,7 +667,7 @@ class RegexUserEmail(UserEmail):
     def __init__(self,email):
         super().__init__(email)
         try:
-            self._qs_re = r"^{}$".format(email.replace(".","\.").replace('*','[a-zA-Z0-9\._\-]*'))
+            self._qs_re = r"^{}$".format(email.replace(".","\.").replace('*','[a-zA-Z0-9\._\-\+]*'))
             self._re = re.compile(self._qs_re)
         except Exception as ex:
             raise ValidationError("The regex email config({}) is invalid.{}".format(email,str(ex)))
@@ -1610,6 +1614,10 @@ if defaultcache:
         def get_next_refreshtime(cls):
             return cache._idp_cache_check_time.next_runtime
 
+        @classmethod
+        def refresh_cache_if_required(cls):
+            cache.refresh_idp_cache()
+
         @staticmethod
         @receiver(post_save, sender=IdentityProvider)
         def post_save(sender,*args,**kwargs):
@@ -1634,6 +1642,10 @@ if defaultcache:
         @classmethod
         def get_next_refreshtime(cls):
             return cache._userflow_cache_check_time.next_runtime
+
+        @classmethod
+        def refresh_cache_if_required(cls):
+            cache.refresh_userflow_cache()
 
         @staticmethod
         @receiver(post_save, sender=CustomizableUserflow)
@@ -1660,6 +1672,10 @@ if defaultcache:
         def get_next_refreshtime(cls):
             return cache._authorization_cache_check_time.next_runtime
 
+        @classmethod
+        def refresh_cache_if_required(cls):
+            cache.refresh_usergroups()
+
         @staticmethod
         @receiver(post_save, sender=UserGroup)
         def post_save(sender,*args,**kwargs):
@@ -1685,6 +1701,10 @@ if defaultcache:
         def get_next_refreshtime(cls):
             return cache._authorization_cache_check_time.next_runtime
 
+        @classmethod
+        def refresh_cache_if_required(cls):
+            cache.refresh_userauthorization()
+
         @staticmethod
         @receiver(post_save, sender=UserAuthorization)
         def post_save(sender,*args,**kwargs):
@@ -1709,6 +1729,10 @@ if defaultcache:
         @classmethod
         def get_next_refreshtime(cls):
             return cache._authorization_cache_check_time.next_runtime
+
+        @classmethod
+        def refresh_cache_if_required(cls):
+            cache.refresh_usergroupauthorization()
 
         @staticmethod
         @receiver(post_save, sender=UserGroupAuthorization)
@@ -1759,6 +1783,10 @@ else:
         def get_next_refreshtime(cls):
             return cache._idp_cache_check_time.next_runtime
 
+        @classmethod
+        def refresh_cache_if_required(cls):
+            cache.refresh_idp_cache()
+
         
     class CustomizagbleUserflowChange(ModelChange):
         model = CustomizableUserflow
@@ -1775,6 +1803,10 @@ else:
         def get_next_refreshtime(cls):
             return cache._userflow_cache_check_time.next_runtime
 
+        @classmethod
+        def refresh_cache_if_required(cls):
+            cache.refresh_userflow_cache()
+
     class UserGroupChange(ModelChange):
         model = UserGroup
 
@@ -1789,6 +1821,10 @@ else:
         @classmethod
         def get_next_refreshtime(cls):
             return cache._authorization_cache_check_time.next_runtime
+
+        @classmethod
+        def refresh_cache_if_required(cls):
+            cache.refresh_usergroups()
 
     class UserAuthorizationChange(ModelChange):
         model = UserAuthorization
@@ -1805,6 +1841,10 @@ else:
         def get_next_refreshtime(cls):
             return cache._authorization_cache_check_time.next_runtime
 
+        @classmethod
+        def refresh_cache_if_required(cls):
+            cache.refresh_userauthorization()
+
     class UserGroupAuthorizationChange(ModelChange):
         model = UserGroupAuthorization
 
@@ -1819,4 +1859,8 @@ else:
         @classmethod
         def get_next_refreshtime(cls):
             return cache._authorization_cache_check_time.next_runtime
+
+        @classmethod
+        def refresh_cache_if_required(cls):
+            cache.refresh_usergroupauthorization()
 

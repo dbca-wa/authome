@@ -16,18 +16,20 @@ from . import forms
 
 logger = logging.getLogger(__name__)
 
-
 class CacheableChangeList(ChangeList):
     def __init__(self, *args,**kwargs):
         super().__init__(*args,**kwargs)
+        logger.debug("Refresh the model({}) data if required".format(self.model))
+        self.model.refresh_cache_if_required()
+
         if self.model.is_outdated():
-            self.title = "{}(Cache is outdated, latest refresh time is {}, next refresh trigger time is {})".format(
+            self.title = "{}(Cache is outdated, latest refresh time is {}, next refresh time is {})".format(
                 self.title,
                 timezone.localtime(self.model.get_cachetime()).strftime("%Y-%m-%d %H:%M:%S") if self.model.get_cachetime() else "None",
                 timezone.localtime(self.model.get_next_refreshtime()).strftime("%Y-%m-%d %H:%M:%S") if self.model.get_next_refreshtime() else "None"
             )
         else:
-            self.title = "{}(Cache is up-to-date, latest refresh time is {}, next refresh trigger time is {})".format(
+            self.title = "{}(Cache is up-to-date, latest refresh time is {}, next refresh time is {})".format(
                 self.title,
                 timezone.localtime(self.model.get_cachetime()).strftime("%Y-%m-%d %H:%M:%S") if self.model.get_cachetime() else "None",
                 timezone.localtime(self.model.get_next_refreshtime()).strftime("%Y-%m-%d %H:%M:%S") if self.model.get_next_refreshtime() else "None"
