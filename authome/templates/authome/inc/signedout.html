@@ -7,24 +7,24 @@
         if (logout_window) {
             logout_window.blur()
             window.focus()
-            document.getElementById("signedout_content").innerHTML="<h3>Please waithing to signout from backend authentication provider '{{idp_name}}'... </h3>"
+            document.getElementById("signedout_content").innerHTML="<h3>Please wait to sign out from identity provider '{{idp_name}}'... </h3>"
             setTimeout(function(){
                 logout_window.close();
                 document.getElementById("signedout_content").innerHTML=`
-<h3>You have been signed out from DBCA.
+<h3>You have signed out from Department of Biodiversity, Conservation and Attractions.
 {% if relogin %} 
-<br><br>If you want to login again, Please click <A href="{{relogin}}">here</A> to login
+<br><br>If you want to log in again, please click <a href="{{relogin}}">here</a>.
 {% endif %}
 </h3>
 `
             },3000)
         } else {
                 document.getElementById("signedout_content").innerHTML=`
-<h3>You have been signed out from DBCA.
-<br><br>Failed to logout from the backend authentication provider '{{idp_name}}' because popup window was blocked..
-<br><br>Please click <A href="{{idp_logout_url}}">here</A> to logout from {{idp_name}} for safety 
+<h3>You have signed out from Department of Biodiversity, Conservation and Attractions.
+<br><br>Failed to logout from the authentication provider '{{idp_name}}' because popup window was blocked.
+<br><br>Please click <a href="{{idp_logout_url}}">here</a> to log out from {{idp_name}} if required.
 {% if relogin %} 
-<br><br>If you want to login again, Please click <A href="{{relogin}}">here</A> to login
+<br><br>If you want to log in again, please click <a href="{{relogin}}">here</a>.
 {% endif %}
 </h3>
 `
@@ -32,13 +32,13 @@
 
     </script>
 {% else %}
-    <h3>You have been signed out from DBCA.
+    <h3>You have signed out from Department of Biodiversity, Conservation and Attractions.
     {% if idp_logout_url %} 
-        <br><br>But you still login to the backend authentication provider '{{idp_name}}'.
-        <br><br>Please click <A href="{{idp_logout_url}}">here</A> to logout from {{idp_name}} for safety 
+        <br><br>You are still logged into the authentication provider '{{idp_name}}'.
+        <br><br>Please click <a href="{{idp_logout_url}}">here</A> to log out from {{idp_name}} if required.
     {% endif %}
     {% if relogin %} 
-    <br><br>If you want to login again, Please click <A href="{{relogin}}">here</A> to login
+    <br><br>If you want to log in again, please click <a href="{{relogin}}">here</A>.
     {% endif %}
    </h3>
 {% endif %}
