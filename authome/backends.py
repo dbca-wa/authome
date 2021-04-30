@@ -94,7 +94,7 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
                 if m:
                     error_code = m.group('code')
             if hasattr(self.strategy.request,"http_error_code"):
-                raise AzureADB2CAuthenticateFailed(self.strategy.request.http_error_code,error_code,self.strategy.request.http_error_message,ex)
+                raise AzureADB2CAuthenticateFailed(self.strategy.request,self.strategy.request.http_error_code,error_code,self.strategy.request.http_error_message,ex)
             else:
-                raise AzureADB2CAuthenticateFailed(400,error_code,"Failed to authenticate the user.{}",ex)
+                raise AzureADB2CAuthenticateFailed(self.strategy.request,400,error_code,"Failed to authenticate the user.{}",ex)
 
