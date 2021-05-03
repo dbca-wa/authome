@@ -766,7 +766,6 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
         if not self.parent_group and not self.is_public_group:
             self.parent_group = self.public_group()
-
         #check users and excluded_users between parent_group and child_group
         for excluded_useremail in self.excluded_useremails:
             contained = False
@@ -776,7 +775,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                     break
             if not contained:
                 raise ValidationError("The excluded email pattern({}) is not contained by email patterns configured in current group({})".format(excluded_useremail.config,self))
-
+        #check between current group and parent group
         if self.parent_group:
             for useremail in self.useremails:
                 contained = False
@@ -804,6 +803,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                 if not contained:
                     raise ValidationError("The excluded email pattern({}) in the parent group({}) is contained by the current group({})".format(parent_excluded_useremail.config,self.parent_group,self))
 
+        #check between current group and children group
         if self.id:
             for child_group in UserGroup.objects.filter(parent_group=self):
                 for child_useremail in child_group.useremails:
@@ -831,6 +831,58 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                             break
                     if not contained:
                         raise ValidationError("The excluded email pattern({}) in the current group({}) is contained by the child group({})".format(excluded_useremail.config,self,child_group))
+
+        #check between current group and its brother group
+        if self.parent_group:
+            brother_groups = UserGroup.objects.filter(parent_group=self.parent_group)
+            if self.id:
+                brother_groups = brother_groups.exclude(id=self.id)
+            for brother_group in brother_groups:
+                for brother_useremail in brother_group.useremails:
+                    contained_type = None
+                    checked_useremail = None
+                    for useremail in self.useremails:
+                        if useremail.contain(brother_useremail) :
+                            contained_type = "contain_brother"
+                            for excluded_useremail in self.excluded_useremails:
+                                if excluded_useremail.contain(brother_useremail):
+                                    contained_type = None
+                                    break
+                            if contained_type:
+                                checked_useremail = useremail
+                                break
+                        elif brother_useremail.contain(useremail):
+                            contained_type = "contained_by_brother"
+                            for excluded_useremail in brother_group.excluded_useremails:
+                                if excluded_useremail.contain(useremail):
+                                    contained_type = None
+                                    break
+                            if contained_type:
+                                checked_useremail = useremail
+                                break
+                    if contained_type == "contain_brother":
+                        raise ValidationError("The email pattern({1}) in the group({0}) containes the email pattern({3}) in the brother group({2})".format(self,checked_useremail.config,brother_group,brother_useremail.config))
+                    elif contained_type == "contained_by_brother":
+                        raise ValidationError("The email pattern({3}) in the brother group({2}) containes the email pattern({1}) in the group({0})".format(self,checked_useremail.config,brother_group,brother_useremail.config))
+    
+                for excluded_useremail in self.excluded_useremails:
+                    contained = False
+                    for child_useremail in child_group.useremails:
+                        if child_useremail.contain(excluded_useremail):
+                            contained = True
+                            break
+                    if not contained:
+                        continue
+
+                    contained = False
+                    for child_excluded_useremail in child_group.excluded_useremails:
+                        if child_excluded_useremail.contain(excluded_useremail):
+                            contained = True
+                            break
+                    if not contained:
+                        raise ValidationError("The excluded email pattern({}) in the current group({}) is contained by the child group({})".format(excluded_useremail.config,self,child_group))
+
+
 
     @property
     def is_public_group(self):
