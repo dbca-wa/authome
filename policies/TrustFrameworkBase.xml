@@ -1815,7 +1815,7 @@
                         <OutputClaim ClaimTypeReferenceId="displayName" PartnerClaimType="name"/>
                         <OutputClaim ClaimTypeReferenceId="email" PartnerClaimType="email"/>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="google.com" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="false" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="socialIdpAuthentication" AlwaysUseDefaultValue="true"/>
 
                     </OutputClaims>
@@ -1910,7 +1910,7 @@
                         <OutputClaim ClaimTypeReferenceId="surname" DefaultValue="chen" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="email" DefaultValue="test@github.com" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="github.com" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="false" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="socialIdpAuthentication" AlwaysUseDefaultValue="true"/>
 
                     </OutputClaims>
@@ -1958,7 +1958,7 @@
                         <OutputClaim ClaimTypeReferenceId="displayName" PartnerClaimType="name"/>
                         <OutputClaim ClaimTypeReferenceId="email" PartnerClaimType="email"/>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="facebook.com" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="false" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="socialIdpAuthentication" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
                     <OutputClaimsTransformations>
