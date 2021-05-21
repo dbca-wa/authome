@@ -1442,6 +1442,7 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
 class User(AbstractUser):
     usergroup = models.ForeignKey(UserGroup, on_delete=models.DO_NOTHING,editable=False,null=False)
     last_idp = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,editable=False,null=True)
+    systemuser = models.BooleanField(default=False,editable=False)
     modified = models.DateTimeField(auto_now=timezone.now)
 
     def clean(self):
@@ -1464,7 +1465,7 @@ class User(AbstractUser):
     class Meta(AbstractUser.Meta):
         swappable = 'AUTH_USER_MODEL'
         db_table = "auth_user"
-        verbose_name_plural = "      User"
+        verbose_name_plural = "        User"
         unique_together = [["email"]]
 
 class UserToken(models.Model):
@@ -1517,19 +1518,21 @@ class UserToken(models.Model):
         else:
             return True
 
-    def generate_token(self):
+    def generate_token(self,token_lifetime=None):
         """
         generate an access token
+        token_life_time: days
+        permanent: create permanent token if True
         """
         self.created = timezone.localtime()
-        if settings.USER_ACCESS_TOKEN_LIFETIME:
-            self.expired = self.created.date() + settings.USER_ACCESS_TOKEN_LIFETIME
-        else:
+        if not token_lifetime or token_lifetime <= 0:
             self.expired = None
-        self.token = hashlib.sha256('{}|{}|{}|{}|{}|{}|{}'.format(self.user.email,self.user.is_superuser,self.user.is_staff,self.user.is_active,self.created.timestamp(),self.expired.isoformat() if self.expired else "9999-12-31",settings.SECRET_KEY).lower().encode('utf-8')).hexdigest()
+        else:
+            self.expired = self.created.date() + timedelta(days=token_lifetime)
+        self.token = hashlib.sha256('{}|{}|{}|{}|{}|{}|{}'.format(self.user.email,self.user.is_superuser,self.user.is_staff,self.user.is_active,self.created.timestamp(),self.expired.isoformat() if self.expired else "2099-12-31",settings.SECRET_KEY).lower().encode('utf-8')).hexdigest()
 
     class Meta:
-        verbose_name_plural = "  User Access Tokens"
+        verbose_name_plural = "       User Access Tokens"
 
 class UserTOTP(models.Model):
     email = models.CharField(max_length=64,null=False,editable=False)

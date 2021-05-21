@@ -85,15 +85,7 @@ admin.site.unregister(auth.models.Group)
 class UserAdmin(DatetimeMixin,auth.admin.UserAdmin):
     list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff','usergroup','last_idp','_last_login')
     list_filter = ( 'is_superuser', 'usergroup')
-    add_form_template = 'admin/change_form.html'
-    add_form = forms.UserCreateForm
     readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","_email")
-    add_fieldsets = (
-        (None, {
-            'classes': ('wide',),
-            'fields': ("email",)
-        }),
-    )
     fieldsets = (
         (None, {'fields': ('_email', )}),
         ('Personal info', {'fields': ('username','first_name', 'last_name')}),
@@ -102,6 +94,13 @@ class UserAdmin(DatetimeMixin,auth.admin.UserAdmin):
         }),
         ('Important dates', {'fields': ('_last_login', '_date_joined')}),
     )
+
+    change_form_template = 'admin/change_form.html'
+    form = forms.UserCreateForm
+
+    def get_queryset(self,request):
+        qs = super().get_queryset(request)
+        return qs.filter(systemuser=False)
 
     def _email(self,obj):
         if not obj :
@@ -112,6 +111,50 @@ class UserAdmin(DatetimeMixin,auth.admin.UserAdmin):
 
     def has_add_permission(self, request, obj=None):
         return False
+
+class SystemUser(models.User):
+    class Meta:
+        proxy = True
+        verbose_name="System User"
+        verbose_name_plural="       System Users"
+
+@admin.register(SystemUser)
+class SystemUserAdmin(DatetimeMixin,auth.admin.UserAdmin):
+    list_display = ('username', 'email', 'first_name', 'last_name', 'usergroup','last_idp','_last_login')
+    list_filter = ("is_active",)
+    add_form_template = 'admin/change_form.html'
+    change_form_template = 'admin/change_form.html'
+    add_form = forms.SystemUserCreateForm
+    form = forms.UserCreateForm
+    readonly_fields = ("_last_login","_date_joined","username","_email")
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ("email",)
+        }),
+    )
+    fieldsets = (
+        (None, {'fields': ('_email', )}),
+        ('Personal info', {'fields': ('username',)}),
+        ('Permissions', {
+            'fields': ('is_active', ),
+        }),
+        ('Important dates', {'fields': ('_last_login', '_date_joined')}),
+    )
+
+    def get_queryset(self,request):
+        qs = super().get_queryset(request)
+        return qs.filter(systemuser=True)
+
+    def _email(self,obj):
+        if not obj :
+            return ""
+        else:
+            return obj.email
+    _email.short_description = "Email"
+
+    def has_add_permission(self, request, obj=None):
+        return True
 
 
 @admin.register(models.UserGroup)
@@ -141,7 +184,7 @@ class UserAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAd
 class UserAccessToken(models.User):
     class Meta:
         proxy = True
-        verbose_name_plural = "  User Access Tokens"
+        verbose_name_plural = "      Access Tokens"
 
 class TokenStatusFilter(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
@@ -187,14 +230,26 @@ class TokenStatusFilter(admin.SimpleListFilter):
         else:
             return queryset
 
+
+
 @admin.register(UserAccessToken)
-class UserTokenAdmin(admin.ModelAdmin):
-    list_display = ('email','last_name','first_name','is_staff','is_superuser','is_active','_token_enabled','_token_short','_token_created','_token_expired')
-    readonly_fields = ('email','last_name','first_name','is_staff','is_superuser','is_active','_token_enabled','_token','_token_created','_token_expired')
+class UserTokenAdmin(DatetimeMixin,auth.admin.UserAdmin):
+    list_display = ('email','last_name','first_name','_token_enabled','_token_short','_token_created','_token_expired')
+    readonly_fields = ('email','last_name','first_name','_token_enabled','_token','_token_created','_token_expired')
     ordering = ('email',)
-    actions = ('enable_token','disable_token','generate_token','revoke_token')
+    change_form_template = 'admin/change_form.html'
+    actions = ['enable_token','disable_token'] + ['create_{}days_token'.format(o) if o > 0 else 'create_permenent_token' for o in settings.USER_ACCESS_TOKEN_LIFETIME] + ['revoke_token']
     search_fields=("email","last_name","first_name")
     list_filter = (TokenStatusFilter,)
+
+    fieldsets = (
+        (None, {'fields': ('email','_token_enabled','_token','_token_created' ,'_token_expired')}),
+        ('Personal info', {'fields': ('username','first_name', 'last_name')}),
+        ('Permissions', {
+            'fields': ('is_active', 'is_staff', 'is_superuser', ),
+        }),
+        ('Important dates', {'fields': ('_last_login', '_date_joined')}),
+    )
 
     def _enable_token(self,request, queryset,enable):
         for user in queryset:
@@ -233,7 +288,7 @@ class UserTokenAdmin(admin.ModelAdmin):
         self._enable_token(request,queryset,False)
     disable_token.short_description = 'Disable Access Token'
 
-    def generate_token(self,request, queryset):
+    def _create_token(self,request, queryset,token_lifetime=None):
         token = None
         enable_token = 0
         for user in queryset:
@@ -249,7 +304,7 @@ class UserTokenAdmin(admin.ModelAdmin):
                     token = models.UserToken(user=user,enabled=True)
                     enable_token = 2
 
-                token.generate_token()
+                token.generate_token(token_lifetime=token_lifetime)
                 if enable_token == 2:
                     token.save()
                     self.message_user(request, "{}: Succeed to enable and generate the access token".format(user.email))
@@ -263,7 +318,7 @@ class UserTokenAdmin(admin.ModelAdmin):
             except Exception as ex:
                 logger.error("{}:Failed to generate access token..{}".format(user.email,traceback.format_exc()))
                 self.message_user(request, "{}:Failed to generate access token..{}".format(user.email,str(ex)),level=messages.ERROR)
-    generate_token.short_description = 'Generate Access Token'
+
 
     def revoke_token(self,request, queryset):
         token = None
@@ -350,6 +405,17 @@ class UserTokenAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+for token_lifetime in settings.USER_ACCESS_TOKEN_LIFETIME:
+    method_name = 'create_{}days_token'.format(token_lifetime) if token_lifetime > 0 else 'create_permenent_token'
+    method_body = """
+def {}(self,request,queryset):
+    self._create_token(request,queryset,{})
+""".format(method_name,token_lifetime)
+    exec(method_body)
+    setattr(UserTokenAdmin,method_name,eval(method_name))
+    setattr(getattr(UserTokenAdmin,method_name),"short_description",'Create {}days Token'.format(token_lifetime) if token_lifetime > 0 else 'Create Permanent Token')
+
 
 @admin.register(models.IdentityProvider)
 class IdentityProviderAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):

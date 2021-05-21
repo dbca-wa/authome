@@ -177,11 +177,8 @@ if AUTH_CACHE_EXPIRETIME > 0:
 else:
     AUTH_CACHE_EXPIRETIME = timedelta(seconds=3600)
 
-USER_ACCESS_TOKEN_LIFETIME=env('USER_ACCESS_TOKEN_LIFETIME',default=28) #user access token life time in days
-if USER_ACCESS_TOKEN_LIFETIME > 0:
-    USER_ACCESS_TOKEN_LIFETIME = timedelta(days=USER_ACCESS_TOKEN_LIFETIME)
-else:
-    USER_ACCESS_TOKEN_LIFETIME = None
+USER_ACCESS_TOKEN_LIFETIME=env('USER_ACCESS_TOKEN_LIFETIME',default=[0]) #user access token life time in days
+USER_ACCESS_TOKEN_LIFETIME = [l if l > 0 else 0 for l in USER_ACCESS_TOKEN_LIFETIME]
 
 USER_ACCESS_TOKEN_WARNING=env('USER_ACCESS_TOKEN_WARNING',default=7) #warning the user when the remaining lifetime is less than the configured days
 if USER_ACCESS_TOKEN_WARNING > 0:

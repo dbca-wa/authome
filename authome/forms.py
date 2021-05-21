@@ -14,6 +14,15 @@ class UserCreateForm(forms.ModelForm):
         model = User
         fields = ("username","email","first_name","last_name","is_active","is_staff","is_superuser")
 
+class SystemUserCreateForm(forms.ModelForm):
+
+    def _post_clean(self):
+        super()._post_clean()
+        self.instance.systemuser = True
+    class Meta:
+        model = User
+        fields = ("username","email")
+
 class UserGroupForm(forms.ModelForm):
     users = SimpleArrayField(forms.CharField(required=False),delimiter="\n",widget=forms.Textarea(attrs={"style":"width:80%","rows":10}),help_text=get_help_text(UserGroup,"users"))
     excluded_users = SimpleArrayField(forms.CharField(required=False),delimiter="\n",required=False,widget=forms.Textarea(attrs={"style":"width:80%","rows":10}),help_text=get_help_text(UserGroup,"excluded_users"))
