@@ -43,16 +43,19 @@ if (value == "" || value[0] == "." || value.indexOf('*') >= 0) {
     """
     path_widget = forms.Textarea(attrs={"style":"width:80%","rows":10})
     disabled_path_widget = forms.Textarea(attrs={"style":"width:80%","rows":10,"disabled":True})
-    domain = forms.CharField(required=True,widget=forms.TextInput(attrs={"style":"width:80%","onchange":check_domain_js}),help_text=get_help_text(UserGroupAuthorization,"domain"))
+    #domain = forms.CharField(required=True,widget=forms.TextInput(attrs={"style":"width:80%","onchange":check_domain_js}),help_text=get_help_text(UserGroupAuthorization,"domain"))
+    domain = forms.CharField(required=True,widget=forms.TextInput(attrs={"style":"width:80%"}),help_text=get_help_text(UserGroupAuthorization,"domain"))
     paths = SimpleArrayField(forms.CharField(required=False),delimiter="\n",required=False,widget=path_widget,help_text=get_help_text(UserGroupAuthorization,"paths"))
     excluded_paths = SimpleArrayField(forms.CharField(required=False),delimiter="\n",required=False,widget=path_widget,help_text=get_help_text(UserGroupAuthorization,"excluded_paths"))
 
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
+        """
         if self.instance :
             if not isinstance(self.instance.request_domain,ExactRequestDomain):
                 self.fields["paths"].widget = self.disabled_path_widget
                 self.fields["excluded_paths"].widget = self.disabled_path_widget
+        """
 
 
 class UserGroupAuthorizationForm(AuthorizationForm):

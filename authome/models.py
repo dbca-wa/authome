@@ -36,7 +36,7 @@ The following lists all valid options in the checking order
 help_text_domain = """
 A domain or domain pattern 
 The following lists all valid options in the checking order
-    1. Single Domain : Represent a single domain. For example oim.dbca.wa.gov.au. Only single domain can config path and excluded path
+    1. Single Domain : Represent a single domain. For example oim.dbca.wa.gov.au. 
     2. Regex Domain  : '*" represents any strings. For example  pbs*dbca.wa.gov.au
     3. Suffix Domain : Starts with '.' followed by a domain. For example .dbca.wa.gov.au
     4. All Domain    : '*'
@@ -1190,18 +1190,26 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
         request_paths = self.get_request_paths(self.paths)
         if not request_paths:
             self.paths = None
+        else:
+            self.paths = [p.config for p in request_paths]
+        """
         elif isinstance(request_domain,ExactRequestDomain) or any(p.match_all for p in request_paths):
             self.paths = [p.config for p in request_paths]
         else:
             raise ValidationError("A domain pattern only supports empty path or all path")
+        """
 
         excluded_request_paths = self.get_request_paths(self.excluded_paths)
         if not excluded_request_paths:
             self.excluded_paths = None
+        else:
+            self.excluded_paths = [p.config for p in excluded_request_paths]
+        """
         elif isinstance(request_domain,ExactRequestDomain) or any(p.match_all for p in excluded_request_paths):
             self.excluded_paths = [p.config for p in excluded_request_paths]
         else:
             raise ValidationError("A domain pattern only supports empty excluded path or all excluded path")
+        """
 
     @property
     def request_domain(self):
