@@ -424,7 +424,7 @@ def auth_basic(request):
 
             #user session is not authenticated or the user of the user token is not the same user as the authenticated sesion user.
             #check whther user token is valid
-            if user.token and user.token.is_valid(token):
+            if user.is_active and user.token and user.token.is_valid(token):
                 #user token is valid, authenticated
                 logger.debug("Succeed to authenticate the user({}) with token".format(username))
                 request.user = user
