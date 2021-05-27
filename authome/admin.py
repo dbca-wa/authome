@@ -83,7 +83,7 @@ admin.site.unregister(auth.models.Group)
 
 @admin.register(models.User)
 class UserAdmin(DatetimeMixin,auth.admin.UserAdmin):
-    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff','usergroup','last_idp','_last_login')
+    list_display = ('username', 'email', 'first_name', 'last_name','is_active', 'is_staff','usergroup','last_idp','_last_login')
     list_filter = ( 'is_superuser', 'usergroup')
     readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","_email")
     fieldsets = (
@@ -120,7 +120,7 @@ class SystemUser(models.User):
 
 @admin.register(SystemUser)
 class SystemUserAdmin(DatetimeMixin,auth.admin.UserAdmin):
-    list_display = ('username', 'email', 'first_name', 'last_name', 'usergroup','last_idp','_last_login')
+    list_display = ('username', 'email', 'is_active', 'usergroup','last_idp','_last_login')
     list_filter = ("is_active",)
     add_form_template = 'admin/change_form.html'
     change_form_template = 'admin/change_form.html'
