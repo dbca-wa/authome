@@ -1,5 +1,6 @@
 import re
 import logging
+import random
 from datetime import datetime,timedelta
 
 from django.conf import settings
@@ -1483,12 +1484,19 @@ class UserToken(models.Model):
     GOOD = 1
     WARNING = 2
 
+    RANDOM_CHARS="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYA0123456789~!@#$%^&*()-_+=`{}[];':\",./<>?"
+    RANDOM_CHARS_MAX_INDEX = len(RANDOM_CHARS) - 1
+
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,primary_key=True,related_name="token",editable=False)
     enabled = models.BooleanField(default=False,editable=False)
     token = models.CharField(max_length=128,null=True,editable=False)
     created = models.DateTimeField(null=True,editable=False)
     expired = models.DateField(null=True,editable=False)
     modified = models.DateTimeField(editable=False,db_index=True,auto_now=True)
+
+    @classmethod
+    def generate_user_secret(cls):
+        return "".join(cls.RANDOM_CHARS[random.randint(0,cls.RANDOM_CHARS_MAX_INDEX)] for i in range(0,32))
 
     @property
     def is_expired(self):
@@ -1537,7 +1545,7 @@ class UserToken(models.Model):
             self.expired = None
         else:
             self.expired = self.created.date() + timedelta(days=token_lifetime)
-        self.token = hashlib.sha256('{}|{}|{}|{}|{}|{}|{}'.format(self.user.email,self.user.is_superuser,self.user.is_staff,self.user.is_active,self.created.timestamp(),self.expired.isoformat() if self.expired else "2099-12-31",settings.SECRET_KEY).lower().encode('utf-8')).hexdigest()
+        self.token = hashlib.sha256('{}|{}|{}|{}|{}|{}|{}|{}'.format(self.user.email.lower(),self.user.is_superuser,self.user.is_staff,self.user.is_active,self.created.timestamp(),self.expired.isoformat() if self.expired else "2099-12-31",settings.SECRET_KEY,self.generate_user_secret()).encode('utf-8')).hexdigest()
 
     class Meta:
         verbose_name_plural = "       User Access Tokens"
