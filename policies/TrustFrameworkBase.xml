@@ -1535,7 +1535,7 @@
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.OneTimePasswordProtocolProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
                         <Item Key="Operation">GenerateCode</Item>
-                        <Item Key="CodeExpirationInSeconds">300</Item>
+                        <Item Key="CodeExpirationInSeconds">600</Item>
                         <Item Key="CodeLength">8</Item>
                         <Item Key="CharacterSet">0-9</Item>
                         <Item Key="ReuseSameCode">true</Item>
@@ -1554,7 +1554,7 @@
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.OneTimePasswordProtocolProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
                         <Item Key="Operation">GenerateCode</Item>
-                        <Item Key="CodeExpirationInSeconds">300</Item>
+                        <Item Key="CodeExpirationInSeconds">600</Item>
                         <Item Key="CodeLength">8</Item>
                         <Item Key="CharacterSet">0-9</Item>
                         <Item Key="ReuseSameCode">true</Item>
