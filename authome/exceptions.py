@@ -27,7 +27,7 @@ class AzureADB2CAuthenticateFailed(HttpResponseException):
         elif self.error_code == "AADB2C90091":
             next_url = self.request.session.get(REDIRECT_FIELD_NAME)
             if not next_url:
-                next_url = "/profile"
+                next_url = "/sso/profile"
             elif not next_url.startswith("http"):
                 next_url = 'https://{}'.format(next_url)
             return HttpResponseRedirect(next_url)
