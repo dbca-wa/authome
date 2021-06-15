@@ -159,9 +159,9 @@ class SystemUserAdmin(DatetimeMixin,auth.admin.UserAdmin):
 
 @admin.register(models.UserGroup)
 class UserGroupAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
-    list_display = ('name','parent_group','users','excluded_users','identity_provider','_modified','_created')
-    readonly_fields = ('_modified',)
-    fields = ('name','parent_group','users','excluded_users','identity_provider','_modified')
+    list_display = ('name','groupid','parent_group','users','excluded_users','identity_provider','_modified','_created')
+    readonly_fields = ('grouppath','_modified',)
+    fields = ('name','groupid','parent_group','users','excluded_users','identity_provider','grouppath','_modified')
     ordering = ('parent_group','name',)
     form = forms.UserGroupForm
 

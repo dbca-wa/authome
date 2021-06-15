@@ -80,19 +80,21 @@ class DbObjectMixin(object):
             self._db_obj = self.__class__.objects.get(id=self.id)
         return self._db_obj
 
-    def save(self,*args,**kwargs):
-        if not self.is_changed():
+    def save(self,update_fields=None,*args,**kwargs):
+        if not self.is_changed(update_fields):
             return
 
         logger.debug("Try to save the changed {}({})".format(self.__class__.__name__,self))
         with transaction.atomic():
-            super().save(*args,**kwargs)
+            super().save(update_fields=update_fields,*args,**kwargs)
 
-    def is_changed(self):
+    def is_changed(self,update_fields=None):
         if self.id is None:
             return True
 
         for name in self._editable_columns:
+            if update_fields and name not in update_fields:
+                continue
             if getattr(self,name) != getattr(self.db_obj,name):
                 return True
 
@@ -725,9 +727,11 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     _useremails = None
     _excluded_useremails = None
 
-    _editable_columns = ("users","parent_group","excluded_users","identity_provider")
+    _editable_columns = ("users","parent_group","excluded_users","identity_provider","groupid","grouppath")
 
     name = models.CharField(max_length=32,unique=True)
+    groupid = models.SlugField(max_length=8,null=True)
+    grouppath = models.CharField(max_length=512,null=True,editable=False)
     parent_group = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
     users = _ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
     excluded_users = _ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
@@ -739,8 +743,8 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     def get_model_change_cls(self):
         return UserGroupChange
 
-    def is_changed(self):
-        changed = super().is_changed()
+    def is_changed(self,update_fields=None):
+        changed = super().is_changed(update_fields)
         if changed:
             self.modified = timezone.now()
             return True
@@ -833,7 +837,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                     if not contained:
                         raise ValidationError("The excluded email pattern({}) in the current group({}) is contained by the child group({})".format(excluded_useremail.config,self,child_group))
 
-        #check between current group and its brother group
+        #check between current group and its brother groups
         if self.parent_group:
             brother_groups = UserGroup.objects.filter(parent_group=self.parent_group)
             if self.id:
@@ -866,24 +870,6 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                     elif contained_type == "contained_by_brother":
                         raise ValidationError("The email pattern({3}) in the brother group({2}) containes the email pattern({1}) in the group({0})".format(self,checked_useremail.config,brother_group,brother_useremail.config))
     
-                for excluded_useremail in self.excluded_useremails:
-                    contained = False
-                    for child_useremail in child_group.useremails:
-                        if child_useremail.contain(excluded_useremail):
-                            contained = True
-                            break
-                    if not contained:
-                        continue
-
-                    contained = False
-                    for child_excluded_useremail in child_group.excluded_useremails:
-                        if child_excluded_useremail.contain(excluded_useremail):
-                            contained = True
-                            break
-                    if not contained:
-                        raise ValidationError("The excluded email pattern({}) in the current group({}) is contained by the child group({})".format(excluded_useremail.config,self,child_group))
-
-
 
     @property
     def is_public_group(self):
@@ -951,10 +937,12 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
         size = 0
         dbca_group = None
         public_group = None
+        groups = {}
         for group in cls.objects.all():
             size += 1
             group_trees[group.id] = (group,[])
-            if group.name.lower() == settings.DBCA_STAFF_GROUP_NAME:
+            groups[group.id] = group
+            if group.groupid == settings.DBCA_STAFF_GROUP_ID:
                 dbca_group = group
             if group.users == ["*"] and group.excluded_users is None:
                 public_group = group
@@ -971,7 +959,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
             if group.parent_group_id:
                 group_trees[group.parent_group_id][1].append(val)
         group_trees = [v for v in group_trees.values() if not v[0].parent_group_id]
-        cache.usergrouptree = (group_trees,public_group,dbca_group,size,refreshtime)
+        cache.usergrouptree = (group_trees,groups,public_group,dbca_group,size,refreshtime)
 
     @classmethod
     def get_grouptree(cls):
@@ -992,6 +980,9 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     def public_groupid(cls):
         return cache.public_group.id
 
+    @classmethod
+    def get_group(cls,groupid):
+        return cache.usergroups[groupid]
 
     def contain(self,email):
         """
@@ -1580,7 +1571,9 @@ class UserListener(object):
     @receiver(post_save, sender=User)
     def post_save_user(sender,instance,created,**kwargs):
         if not created:
-            usercache.set(settings.GET_USER_KEY(instance.id),instance,settings.USER_CACHE_TIMEOUT)
+            if usercache.get(settings.GET_USER_KEY(instance.id)):
+                usercache.set(settings.GET_USER_KEY(instance.id),instance,settings.USER_CACHE_TIMEOUT)
+                logger.debug("Cache the latest data of the user({1}<{0}>) to usercache".format(instance.id,instance.email))
 
     @staticmethod
     @receiver(post_delete, sender=User)
@@ -1594,7 +1587,9 @@ class UserGroupListener(object):
         if instance.is_public_group:
             raise Exception("Can't delete the public user group")
         #update user's group to group's parent group
-        User.objects.filter(usergroup=instance).update(usergroup=instance.parent_group)
+        for user in User.objects.filter(usergroup=instance):
+            user.usergroup = instance.parent_group
+            user.save(update_fields = ["usergroup"])
 
     @staticmethod
     def get_filter_conditions(useremails):
@@ -1613,7 +1608,9 @@ class UserGroupListener(object):
     def post_save_group(sender,instance,created,**kwargs):
         if not created:
             #set usergroup of the users whose usergroup is the updated group to its parent group
-            User.objects.filter(usergroup=instance).update(usergroup=instance.parent_group)
+            for user in User.objects.filter(usergroup=instance):
+                user.usergroup=instance.parent_group
+                user.save(update_fields = ["usergroup"])
 
         #set usergroup of the users whose usergroup is the group's parent group and also belonging to the updated/created group to the updated/created group
         qs = User.objects.filter(usergroup=instance.parent_group)
@@ -1625,14 +1622,74 @@ class UserGroupListener(object):
         if conds:
             qs = qs.exclude(conds)
 
-        qs.update(usergroup=instance)
-
+        for user in qs:
+            user.usergroup = instance
+            user.save(update_fields = ["usergroup"])
 
     @staticmethod
     @receiver(pre_save, sender=UserGroup)
     def check_public_group(sender,instance,**kwargs):
         if instance.id is None and instance.public_group() and instance.users == ["*"] and instance.excluded_users is None:
             raise Exception("Public user group already exists")
+
+
+    @staticmethod
+    def _set_grouppath(instance):
+        if instance.groupid:
+            if instance.is_public_group:
+                if instance.grouppath is None:
+                    return False
+                else:
+                    instance.grouppath = None
+                    return True
+            elif instance.parent_group.is_public_group:
+                grouppath = instance.groupid
+            else:
+                grouppath = "{}.{}".format(instance.parent_group.grouppath,instance.groupid)
+
+            if instance.grouppath == grouppath:
+                return False
+            else:
+                instance.grouppath = grouppath
+                return True
+        elif instance.grouppath is None:
+            return False
+        else:
+            instance.grouppath = None
+            return True
+
+
+    @staticmethod
+    @receiver(pre_save, sender=UserGroup)
+    def set_grouppath(sender,instance,raw=None,using=None,update_fields=None,**kwargs):
+        if instance.id:
+            if update_fields and "grouppath" in update_fields:
+                pass
+            elif instance.db_obj.groupid == instance.groupid:
+                #code is  not changed
+                return
+
+            if not UserGroupListener._set_grouppath(instance):
+                #groupid not changed
+                return
+            if update_fields and "grouppath" not in update_fields:
+                update_fields.append("grouppath")
+
+            instance.set_child_grouppath = True
+
+        else:
+            #new group
+            UserGroupListener._set_grouppath(instance)
+
+    @staticmethod
+    @receiver(post_save, sender=UserGroup)
+    def set_child_grouppath(sender,instance,raw=None,using=None,update_fields=None,**kwargs):
+        if hasattr(instance,"set_child_grouppath"):
+            if instance.set_child_grouppath:
+                for child in UserGroup.objects.filter(parent_group=instance):
+                    if UserGroupListener._set_grouppath(child):
+                        child.save(update_fields=["grouppath"])
+            delattr(instance,"set_child_grouppath")
 
 if defaultcache:
     class ModelChange(object):
@@ -1745,7 +1802,8 @@ if defaultcache:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            cache.refresh_usergroups()
+            if cache._authorization_cache_check_time.can_run():
+                cache.refresh_usergroups()
 
         @staticmethod
         @receiver(post_save, sender=UserGroup)
@@ -1774,7 +1832,8 @@ if defaultcache:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            cache.refresh_userauthorization()
+            if cache._authorization_cache_check_time.can_run():
+                cache.refresh_userauthorization()
 
         @staticmethod
         @receiver(post_save, sender=UserAuthorization)
@@ -1803,7 +1862,8 @@ if defaultcache:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            cache.refresh_usergroupauthorization()
+            if cache._authorization_cache_check_time.can_run():
+                cache.refresh_usergroupauthorization()
 
         @staticmethod
         @receiver(post_save, sender=UserGroupAuthorization)

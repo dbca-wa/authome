@@ -135,6 +135,7 @@ class MemoryCache(object):
         super().__init__()
         #model UserGroup cache
         self._usergrouptree = None
+        self._usergroups = None
         self._dbca_group = None
         self._public_group = None
         self._usergrouptree_size = None
@@ -187,6 +188,10 @@ class MemoryCache(object):
         return self._usergrouptree
 
     @property
+    def usergroups(self):
+        return self._usergroups
+
+    @property
     def dbca_group(self):
         self.refresh_authorization_cache()
         return self._dbca_group
@@ -199,9 +204,9 @@ class MemoryCache(object):
     @usergrouptree.setter
     def usergrouptree(self,value):
         if value:
-            self._usergrouptree,self._public_group,self._dbca_group,self._usergrouptree_size,self._usergrouptree_ts = value
+            self._usergrouptree,self._usergroups,self._public_group,self._dbca_group,self._usergrouptree_size,self._usergrouptree_ts = value
         else:
-            self._usergrouptree,self._public_group,self._dbca_group,self._usergrouptree_size,self._usergrouptree_ts = None,None,None,None,None
+            self._usergrouptree,self._usergroups,self._public_group,self._dbca_group,self._usergrouptree_size,self._usergrouptree_ts = None,None,None,None,None,None
         
     @property
     def userauthorization(self):

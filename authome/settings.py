@@ -206,10 +206,9 @@ if USERFLOW_CACHE_CHECK_INTERVAL < 0:
 PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
 BACKEND_LOGOUT_URL=env('BACKEND_LOGOUT_URL')
 
-DBCA_STAFF_GROUP_NAME=env('DBCA_STAFF_GROUP_NAME',default="dbca staff").lower() # The emails belongs to group 'dbca staff' are allowed to self sign up (no pre-registration required).
+DBCA_STAFF_GROUP_ID=env('DBCA_STAFF_GROUP_ID',default="DBCA").lower() # The emails belongs to group 'dbca staff' are allowed to self sign up (no pre-registration required).
 
 AUTO_SIGNOUT_DELAY_SECONDS=env('AUTO_SIGNOUT_DELAY_SECONDS',default=10)
-
 
 # Logging settings - log to stdout/stderr
 LOGGING = {
