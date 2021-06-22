@@ -26,7 +26,7 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
             ((["test2@test1.com","",None,"test1@test1.com","*1@*.com","@test3.com"],None),(["@test3.com","*1@*.com","test1@test1.com","test2@test1.com"],None)),
         ]:
             index += 1
-            obj = UserGroup(name="test_{}".format(index),users=test_data[0],excluded_users=test_data[1])
+            obj = UserGroup(name="test_{}".format(index),groupid="test_{}".format(index),users=test_data[0],excluded_users=test_data[1])
             obj.clean()
             obj.save()
             users,excluded_users = expected_data
@@ -47,7 +47,7 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
             ((["@test1.com"],["@test1.com"]),[("test1@test1.com",False),("test2@test2.com",False)]),
         ]:
             index += 1
-            obj = UserGroup(name="test_{}".format(index),users=test_data[0],excluded_users=test_data[1])
+            obj = UserGroup(name="test_{}".format(index),groupid="test_{}".format(index),users=test_data[0],excluded_users=test_data[1])
             obj.clean()
             obj.save()
             for email,result in testcases:
@@ -59,33 +59,48 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
             ("testcompany",["@test1.com"],None,[
                 ("developers",["dev_*@test1.com"],None,[
                     ("app_developers",["dev_app_*@test1.com"],["dev_app_test*@test1.com"],[
-                        ("app_dev_leaders",["dev_app_leader1@test1.com","dev_app_leader2@test1.com"],None,[
-                            ("app_dev_manager",["dev_app_leader1@test1.com"],None,None)
+                        ("app_dev_leaders",["dev_app_leader*@test1.com"],None,[
+                            ("app_dev_manager",["dev_app_leader_manager*@test1.com"],None,None)
                         ])
                     ])
                 ]),
                 ("supporters",["support_*@test1.com"],None,[])
-            ])
+            ]),
+            ("reportgroup",["report1@test1.com","dev_report1@test1.com","dev_app_report1@test1.com","dev_app_leader_report1@test1.com","dev_app_leader_manager_report1@test1.com","support_report1@test1.com"],None,None)
         ]
         testcases = [
-            ("test@test2.com",UserGroup.public_group().name),
-            ("sales@test1.com","testcompany"),
-            ("support_1@test1.com","supporters"),
-            ("dev_1@test1.com","developers"),
-            ("dev_app_1@test1.com","app_developers"),
-            ("dev_app_leader2@test1.com","app_dev_leaders"),
-            ("dev_app_leader1@test1.com","app_dev_manager")
+            ("test@test2.com",[UserGroup.public_group().name],[UserGroup.public_group().groupid]),
+            ("sales@test1.com",["testcompany"],[UserGroup.public_group().groupid,"testcompany"]),
+            ("support_1@test1.com",["supporters"],[UserGroup.public_group().groupid,"testcompany","supporters"]),
+            ("dev_1@test1.com",["developers"],[UserGroup.public_group().groupid,"testcompany","developers"]),
+            ("dev_app_1@test1.com",["app_developers"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers"]),
+            ("dev_app_leader1@test1.com",["app_dev_leaders"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders"]),
+            ("dev_app_leader_manager1@test1.com",["app_dev_manager"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders","app_dev_manager"]),
+
+            ("report1@test1.com",["testcompany","reportgroup"],[UserGroup.public_group().groupid,"testcompany","reportgroup"]),
+            ("support_report1@test1.com",["supporters","reportgroup"],[UserGroup.public_group().groupid,"testcompany","supporters","reportgroup"]),
+            ("dev_report1@test1.com",["developers","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","reportgroup"]),
+            ("dev_app_report1@test1.com",["app_developers","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","reportgroup"]),
+            ("dev_app_leader_report1@test1.com",["app_dev_leaders","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders","reportgroup"]),
+            ("dev_app_leader_manager_report1@test1.com",["app_dev_manager","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders","app_dev_manager","reportgroup"])
         ]
         #popuate UserGroup objects
         self.populate_testdata()
 
         cache.refresh_authorization_cache(True)
   
-        for email,group_name in testcases:
-            group = UserGroup.find(email)
-            self.assertEqual(group.name,group_name,msg="{}: matched group({}) is not the expected group({})".format(email,group.name,group_name))
+        for email,expected_groups,expected_groupnames in testcases:
+            groups,groupnames = UserGroup.find_groups(email)
+            groups = [g.name for g in groups]
+            groups.sort()
+            groupnames = groupnames.split(",")
+            groupnames.sort()
+            expected_groups.sort()
+            expected_groupnames.sort()
+            self.assertEqual(groups,expected_groups,msg="{}: matched group({}) is not the expected group({})".format(email,groups,expected_groups))
+            self.assertEqual(groupnames,expected_groupnames,msg="{}: matched group names({}) is not the expected group names({})".format(email,groupnames,expected_groupnames))
             
-class UserAuthorizationTestCase(BaseAuthCacheTestCase):
+class UserAuthorizationTestCase(object):#BaseAuthCacheTestCase):
 
     def get_role(self,index):
         return "test{:0>3}".format(index)
@@ -166,7 +181,7 @@ class UserAuthorizationTestCase(BaseAuthCacheTestCase):
 class UserGroupAuthorizationTestCase(UserAuthorizationTestCase):
 
     def get_role(self,index):
-        group = UserGroup(name="test{:0>3}".format(index),users=["@test.com"])
+        group = UserGroup(name="test{:0>3}".format(index),groupid="test{:0>3}".format(index).format(index),users=["@test.com"])
         group.clean()
         group.save()
         return group
@@ -180,21 +195,23 @@ class AuthorizationTestCase(BaseAuthCacheTestCase):
     def test_authorize(self):
         self.test_usergroups = [
             ("all_user",["*@*.*"],None,[
-                ("gunfire",["@gunfire.com"],None,[
-                    ("dev",["dev_*@gunfire.com"],None,[
-                        ("dev_map",["dev_map_*@gunfire.com"],["dev_map_external_*@gunfire.com"],[
-                            ("dev_map_leader",["dev_map_leader1@gunfire.com","dev_map_leader2@gunfire.com","dev_map_leader3@gunfire.com","dev_map_leader4@gunfire.com"],None,[
-                                ("dev_map_manager",["dev_map_leader1@gunfire.com","dev_map_leader2@gunfire.com"],None,None)
+                ("gunfire",["@gunfire.com","audit*@gunfire.com"],None,[
+                    ("dev",["dev_*@gunfire.com","audit_dev*@gunfire.com"],None,[
+                        ("dev_map",["dev_map_*@gunfire.com","audit_dev_map*@gunfire.com"],["dev_map_external_*@gunfire.com"],[
+                            ("dev_map_leader",["dev_map_leader*@gunfire.com","audit_dev_map_leader*@gunfire.com"],None,[
+                                ("dev_map_manager",["dev_map_leader_manager*@gunfire.com","audit_dev_map_leader_manager*@gunfire.com"],None,None)
                             ])
                         ]),
-                        ("dev_role",["dev_role_*@gunfire.com"],["dev_role_external_*@gunfire.com"],[
-                            ("dev_role_leader",["dev_role_leader1@gunfire.com","dev_role_leader2@gunfire.com","dev_role_leader3@gunfire.com","dev_role_leader4@gunfire.com"],None,[
-                                ("dev_role_manager",["dev_role_leader1@gunfire.com","dev_role_leader2@gunfire.com"],None,None)
+                        ("dev_role",["dev_role_*@gunfire.com","audit_dev_role*@gunfire.com"],["dev_role_external_*@gunfire.com"],[
+                            ("dev_role_leader",["dev_role_leader*@gunfire.com","audit_dev_role_leader*@gunfire.com"],None,[
+                                ("dev_role_manager",["dev_role_leader_manager*@gunfire.com","audit_dev_role_leader_manager*@gunfire.com"],None,None)
                             ])
                         ]),
                     ]),
-                    ("support",["support_*@gunfire.com"],None,[])
-                ])
+                    ("support",["support_*@gunfire.com","audit_support*@gunfire.com"],None,None),
+                ]),
+                ("audit",["audit*@gunfire.com"],None,[]),
+
             ])
         ]
         self.test_usergroupauthorization = [
@@ -202,36 +219,32 @@ class AuthorizationTestCase(BaseAuthCacheTestCase):
             ("all_user","game.gunfire.com",None,None),
             ("all_user","gunfire.com",None,["/register"]),
 
-            ("gunfire",".gunfire.com",None,None),
-            ("gunfire","gunfire.com",None,["/register","/unregister"]),
+            ("gunfire",".gunfire.com",None,["/audit"]),
+            ("gunfire","gunfire.com",None,["/register","/unregister","/audit"]),
             ("gunfire","*dev.gunfire.com",None,["*"]),
             ("gunfire","*support.gunfire.com",None,["*"]),
 
-            ("support","gunfire.com",None,["/unregister"]),
+            ("support","gunfire.com",None,["/unregister","/audit"]),
 
-            ("dev","dev.gunfire.com",None,None),
+            ("audit","gunfire.com",["/audit"],None),
+            ("audit",".gunfire.com",["/audit"],None),
 
-            ("dev_map","map.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/approve$","^.*/deploy$","^.*/remove$"]),
+            ("dev","dev.gunfire.com",None,["/audit"]),
 
-            ("dev_map_leader","map.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/remove$"]),
+            ("dev_map","map.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/approve$","^.*/deploy$","^.*/remove$","/audit"]),
 
-            ("dev_map_manager","map.dev.gunfire.com",None,["=/start","=/shutdown"]),
+            ("dev_map_leader","map.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/remove$","/audit"]),
 
-            ("dev_role","map.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/approve$","^.*/deploy$","^.*/remove$"]),
+            ("dev_map_manager","map.dev.gunfire.com",None,["=/start","=/shutdown","/audit"]),
 
-            ("dev_role_leader","map.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/remove$"]),
+            ("dev_role","map.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/approve$","^.*/deploy$","^.*/remove$","/audit"]),
 
-            ("dev_role_manager","map.dev.gunfire.com",None,["=/start","=/shutdown"])
+            ("dev_role_leader","map.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/remove$","/audit"]),
+
+            ("dev_role_manager","map.dev.gunfire.com",None,["=/start","=/shutdown","/audit"])
         ]
 
         self.test_userauthorization = [
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com",None,None),
-
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com",None,["=/shutdown"]),
-
-            ("hacker1@hacker.com",".gunfire.com",None,None),
-            ("hacker1@hacker.com","map.dev.gunfire.com",None,["=/start"]),
-            ("hacker1@hacker.com","role.dev.gunfire.com",None,["^.*/remove$"])
         ]
         testcases = [
             ("test@gmail.com","test.com","/play",False),
@@ -243,17 +256,6 @@ class AuthorizationTestCase(BaseAuthCacheTestCase):
             ("test@gmail.com","gunfire.com","/register",False),
             ("test@gmail.com","game.gunfire.com","/play",True),
 
-            ("hacker1@hacker.com","test.com","/play",False),
-            ("hacker1@hacker.com","gunfire.com","/register",False),
-            ("hacker1@hacker.com","map.dev.gunfire.com","/start",False),
-            ("hacker1@hacker.com","map.dev.gunfire.com","/shutdown",True),
-            ("hacker1@hacker.com","map.dev.gunfire.com","/tasks",True),
-            ("hacker1@hacker.com","map.dev.gunfire.com","/tasks/self",True),
-            ("hacker1@hacker.com","map.dev.gunfire.com","/test/deploy",True),
-            ("hacker1@hacker.com","role.dev.gunfire.com","/start",True),
-            ("hacker1@hacker.com","role.dev.gunfire.com","/test/remove",False),
-            ("hacker1@hacker.com","role.dev.gunfire.com","/remove",False),
-
             ("staff1@gunfire.com","test.com","/test/remove",False),
             ("staff1@gunfire.com","gunfire.com","/about",True),
             ("staff1@gunfire.com","gunfire.com","/register",False),
@@ -264,6 +266,8 @@ class AuthorizationTestCase(BaseAuthCacheTestCase):
             ("staff1@gunfire.com","support.gunfire.com","/",False),
             ("staff1@gunfire.com","shop.gunfire.com","/",True),
             ("staff1@gunfire.com","shop.gunfire.com","/register",True),
+            ("staff1@gunfire.com","support.gunfire.com","/audit/",False),
+            ("staff1@gunfire.com","gunfire.com","/audit/",False),
 
             ("support_1@gunfire.com","test.com","/test/remove",False),
             ("support_1@gunfire.com","gunfire.com","/about",True),
@@ -275,6 +279,8 @@ class AuthorizationTestCase(BaseAuthCacheTestCase):
             ("support_1@gunfire.com","support.gunfire.com","/",False),
             ("support_1@gunfire.com","shop.gunfire.com","/",True),
             ("support_1@gunfire.com","shop.gunfire.com","/register",True),
+            ("support_1@gunfire.com","support.gunfire.com","/audit/",False),
+            ("support_1@gunfire.com","gunfire.com","/audit/",False),
 
             ("dev_1@gunfire.com","test.com","/test/remove",False),
             ("dev_1@gunfire.com","gunfire.com","/about",True),
@@ -286,6 +292,8 @@ class AuthorizationTestCase(BaseAuthCacheTestCase):
             ("dev_1@gunfire.com","support.gunfire.com","/",False),
             ("dev_1@gunfire.com","shop.gunfire.com","/",True),
             ("dev_1@gunfire.com","shop.gunfire.com","/register",True),
+            ("dev_1@gunfire.com","support.gunfire.com","/audit/",False),
+            ("dev_1@gunfire.com","gunfire.com","/audit/",False),
             
             ("dev_map_1@gunfire.com","test.com","/test/remove",False),
             ("dev_map_1@gunfire.com","gunfire.com","/about",True),
@@ -312,58 +320,8 @@ class AuthorizationTestCase(BaseAuthCacheTestCase):
             ("dev_map_1@gunfire.com","map.dev.gunfire.com","/remove",False),
             ("dev_map_1@gunfire.com","map.dev.gunfire.com","/task1/remove",False),
             ("dev_map_1@gunfire.com","map.dev.gunfire.com","/task1/remove/now",True),
-
-            ("dev_map_leader3@gunfire.com","test.com","/test/remove",False),
-            ("dev_map_leader3@gunfire.com","gunfire.com","/about",True),
-            ("dev_map_leader3@gunfire.com","gunfire.com","/register",False),
-            ("dev_map_leader3@gunfire.com","gunfire.com","/unregister",False),
-            ("dev_map_leader3@gunfire.com","gunfire.com","/",True),
-            ("dev_map_leader3@gunfire.com","dev.gunfire.com","/",True),
-            ("dev_map_leader3@gunfire.com","support.gunfire.com","/",False),
-            ("dev_map_leader3@gunfire.com","shop.gunfire.com","/",True),
-            ("dev_map_leader3@gunfire.com","shop.gunfire.com","/register",True),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/",True),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/start",False),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/start/map1",True),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/shutdown",False),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/shutdown/map1",True),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/tasks",False),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/tasks/today",False),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/approve",True),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/task1/approve",True),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/task1/approve/now",True),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/deploy",True),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/task1/deploy",True),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/task1/deploy/now",True),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/remove",False),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/task1/remove",False),
-            ("dev_map_leader3@gunfire.com","map.dev.gunfire.com","/task1/remove/now",True),
-
-            ("dev_map_leader4@gunfire.com","test.com","/test/remove",False),
-            ("dev_map_leader4@gunfire.com","gunfire.com","/about",True),
-            ("dev_map_leader4@gunfire.com","gunfire.com","/register",False),
-            ("dev_map_leader4@gunfire.com","gunfire.com","/unregister",False),
-            ("dev_map_leader4@gunfire.com","gunfire.com","/",True),
-            ("dev_map_leader4@gunfire.com","dev.gunfire.com","/",True),
-            ("dev_map_leader4@gunfire.com","support.gunfire.com","/",False),
-            ("dev_map_leader4@gunfire.com","shop.gunfire.com","/",True),
-            ("dev_map_leader4@gunfire.com","shop.gunfire.com","/register",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/start",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/start/map1",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/shutdown",False),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/shutdown/map1",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/tasks",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/tasks/today",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/approve",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/task1/approve",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/task1/approve/now",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/deploy",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/task1/deploy",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/task1/deploy/now",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/remove",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/task1/remove",True),
-            ("dev_map_leader4@gunfire.com","map.dev.gunfire.com","/task1/remove/now",True),
+            ("dev_map_1@gunfire.com","support.gunfire.com","/audit/",False),
+            ("dev_map_1@gunfire.com","gunfire.com","/audit/",False),
 
             ("dev_map_leader1@gunfire.com","test.com","/test/remove",False),
             ("dev_map_leader1@gunfire.com","gunfire.com","/about",True),
@@ -379,49 +337,135 @@ class AuthorizationTestCase(BaseAuthCacheTestCase):
             ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/start/map1",True),
             ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/shutdown",False),
             ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/shutdown/map1",True),
-            ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/tasks",True),
-            ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/tasks/today",True),
+            ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/tasks",False),
+            ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/tasks/today",False),
             ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/approve",True),
             ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/task1/approve",True),
             ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/task1/approve/now",True),
             ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/deploy",True),
             ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/task1/deploy",True),
             ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/task1/deploy/now",True),
-            ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/remove",True),
-            ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/task1/remove",True),
+            ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/remove",False),
+            ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/task1/remove",False),
             ("dev_map_leader1@gunfire.com","map.dev.gunfire.com","/task1/remove/now",True),
+            ("dev_map_leader1@gunfire.com","support.gunfire.com","/audit/",False),
+            ("dev_map_leader1@gunfire.com","gunfire.com","/audit/",False),
 
-            ("dev_map_leader2@gunfire.com","test.com","/test/remove",False),
-            ("dev_map_leader2@gunfire.com","gunfire.com","/about",True),
-            ("dev_map_leader2@gunfire.com","gunfire.com","/register",False),
-            ("dev_map_leader2@gunfire.com","gunfire.com","/unregister",False),
-            ("dev_map_leader2@gunfire.com","gunfire.com","/",True),
-            ("dev_map_leader2@gunfire.com","dev.gunfire.com","/",True),
-            ("dev_map_leader2@gunfire.com","support.gunfire.com","/",False),
-            ("dev_map_leader2@gunfire.com","shop.gunfire.com","/",True),
-            ("dev_map_leader2@gunfire.com","shop.gunfire.com","/register",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/start",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/start/map1",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/shutdown",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/shutdown/map1",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/tasks",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/tasks/today",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/approve",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/task1/approve",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/task1/approve/now",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/deploy",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/task1/deploy",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/task1/deploy/now",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/remove",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/task1/remove",True),
-            ("dev_map_leader2@gunfire.com","map.dev.gunfire.com","/task1/remove/now",True)
+            ("dev_map_leader_manager1@gunfire.com","test.com","/test/remove",False),
+            ("dev_map_leader_manager1@gunfire.com","gunfire.com","/about",True),
+            ("dev_map_leader_manager1@gunfire.com","gunfire.com","/register",False),
+            ("dev_map_leader_manager1@gunfire.com","gunfire.com","/unregister",False),
+            ("dev_map_leader_manager1@gunfire.com","gunfire.com","/",True),
+            ("dev_map_leader_manager1@gunfire.com","dev.gunfire.com","/",True),
+            ("dev_map_leader_manager1@gunfire.com","support.gunfire.com","/",False),
+            ("dev_map_leader_manager1@gunfire.com","shop.gunfire.com","/",True),
+            ("dev_map_leader_manager1@gunfire.com","shop.gunfire.com","/register",True),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/",True),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/start",False),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/start/map1",True),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/shutdown",False),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/shutdown/map1",True),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/tasks",True),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/tasks/today",True),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/approve",True),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/task1/approve",True),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/task1/approve/now",True),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/deploy",True),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/task1/deploy",True),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/task1/deploy/now",True),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/remove",True),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/task1/remove",True),
+            ("dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/task1/remove/now",True),
+            ("dev_map_leader_manager1@gunfire.com","support.gunfire.com","/audit/",False),
+            ("dev_map_leader-manager1@gunfire.com","gunfire.com","/audit/",False),
+
+            ("audit_staff1@gunfire.com","test.com","/test/remove",False),
+            ("audit_staff1@gunfire.com","gunfire.com","/about",True),
+            ("audit_staff1@gunfire.com","gunfire.com","/register",False),
+            ("audit_staff1@gunfire.com","gunfire.com","/unregister",False),
+            ("audit_staff1@gunfire.com","gunfire.com","/",True),
+            ("audit_staff1@gunfire.com","dev.gunfire.com","/",False),
+            ("audit_staff1@gunfire.com","map.dev.gunfire.com","/",False),
+            ("audit_staff1@gunfire.com","support.gunfire.com","/",False),
+            ("audit_staff1@gunfire.com","shop.gunfire.com","/",True),
+            ("audit_staff1@gunfire.com","shop.gunfire.com","/register",True),
+            ("audit_staff1@gunfire.com","support.gunfire.com","/audit/",True),
+            ("audit_staff1@gunfire.com","gunfire.com","/audit/",True),
+
+            ("audit_dev_1@gunfire.com","test.com","/test/remove",False),
+            ("audit_dev_1@gunfire.com","gunfire.com","/about",True),
+            ("audit_dev_1@gunfire.com","gunfire.com","/register",False),
+            ("audit_dev_1@gunfire.com","gunfire.com","/unregister",False),
+            ("audit_dev_1@gunfire.com","gunfire.com","/",True),
+            ("audit_dev_1@gunfire.com","dev.gunfire.com","/",True),
+            ("audit_dev_1@gunfire.com","map.dev.gunfire.com","/",False),
+            ("audit_dev_1@gunfire.com","support.gunfire.com","/",False),
+            ("audit_dev_1@gunfire.com","shop.gunfire.com","/",True),
+            ("audit_dev_1@gunfire.com","shop.gunfire.com","/register",True),
+            ("audit_dev_1@gunfire.com","support.gunfire.com","/audit/",True),
+            ("audit_dev_1@gunfire.com","gunfire.com","/audit/",True),
+
+            ("audit_dev_map_leader1@gunfire.com","test.com","/test/remove",False),
+            ("audit_dev_map_leader1@gunfire.com","gunfire.com","/about",True),
+            ("audit_dev_map_leader1@gunfire.com","gunfire.com","/register",False),
+            ("audit_dev_map_leader1@gunfire.com","gunfire.com","/unregister",False),
+            ("audit_dev_map_leader1@gunfire.com","gunfire.com","/",True),
+            ("audit_dev_map_leader1@gunfire.com","dev.gunfire.com","/",True),
+            ("audit_dev_map_leader1@gunfire.com","support.gunfire.com","/",False),
+            ("audit_dev_map_leader1@gunfire.com","shop.gunfire.com","/",True),
+            ("audit_dev_map_leader1@gunfire.com","shop.gunfire.com","/register",True),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/",True),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/start",False),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/start/map1",True),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/shutdown",False),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/shutdown/map1",True),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/tasks",False),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/tasks/today",False),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/approve",True),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/task1/approve",True),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/task1/approve/now",True),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/deploy",True),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/task1/deploy",True),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/task1/deploy/now",True),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/remove",False),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/task1/remove",False),
+            ("audit_dev_map_leader1@gunfire.com","map.dev.gunfire.com","/task1/remove/now",True),
+            ("audit_dev_map_leader1@gunfire.com","support.gunfire.com","/audit/",True),
+            ("audit_dev_map_leader1@gunfire.com","gunfire.com","/audit/",True),
+
+            ("audit_dev_map_leader_manager1@gunfire.com","test.com","/test/remove",False),
+            ("audit_dev_map_leader_manager1@gunfire.com","gunfire.com","/about",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","gunfire.com","/register",False),
+            ("audit_dev_map_leader_manager1@gunfire.com","gunfire.com","/unregister",False),
+            ("audit_dev_map_leader_manager1@gunfire.com","gunfire.com","/",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","dev.gunfire.com","/",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","support.gunfire.com","/",False),
+            ("audit_dev_map_leader_manager1@gunfire.com","shop.gunfire.com","/",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","shop.gunfire.com","/register",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/start",False),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/start/map1",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/shutdown",False),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/shutdown/map1",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/tasks",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/tasks/today",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/approve",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/task1/approve",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/task1/approve/now",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/deploy",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/task1/deploy",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/task1/deploy/now",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/remove",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/task1/remove",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/task1/remove/now",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","support.gunfire.com","/audit/",True),
+            ("audit_dev_map_leader_manager1@gunfire.com","gunfire.com","/audit/",True),
 
         ]
 
         self.populate_testdata()
         for email,domain,path,result in testcases:
-            if domain == "gunfire.com" and email=="test@gmail.com" and path=="/about":
+            if domain == "dev.gunfire.com" and email=="audit_dev_1@gunfire.com" and path=="/":
                 #import ipdb;ipdb.set_trace()
                 pass
             self.assertEqual(can_access(email,domain,path),result,msg="{} should {} the permission to access https://{}{}".format(email,"have" if result else "not have",domain,path))

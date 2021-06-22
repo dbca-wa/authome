@@ -110,102 +110,6 @@ class AuthorizationCacheTestCase(BaseAuthCacheTestCase):
             #3
             (
                 [
-                    ("userauthorization","add",["dev_1@gunfire.com","gunfire.com",None,None]),
-                    ("userauthorization","add",["hacker1@hacker.com","gunfire.com",None,None])
-                ],
-                [
-                    ("hacker1@hacker.com","gunfire.com","/register",True),
-                    ("hacker1@hacker.com","map.gunfire.com","/register",False),
-        
-                    ("staff_1@gunfire.com.au","gunfire.com","/about",True),
-                    ("staff_1@gunfire.com.au","gunfire.com","/register",False),
-                    ("staff_1@gunfire.com.au","gunfire.com","/unregister",True),
-        
-                    ("staff_1@gunfire.com","gunfire.com","/about",True),
-                    ("staff_1@gunfire.com","gunfire.com","/register",False),
-                    ("staff_1@gunfire.com","gunfire.com","/unregister",False),
-        
-                    ("dev_1@gunfire.com","gunfire.com","/about",True),
-                    ("dev_1@gunfire.com","gunfire.com","/register",True),
-                    ("dev_1@gunfire.com","gunfire.com","/unregister",True),
-                    ("dev_1@gunfire.com","gunfire.com","/start",True),
-                    ("dev_1@gunfire.com","gunfire.com","/shutdown",True),
-        
-                    ("dev_2@gunfire.com","gunfire.com","/about",True),
-                    ("dev_2@gunfire.com","gunfire.com","/register",True),
-                    ("dev_2@gunfire.com","gunfire.com","/unregister",False),
-                    ("dev_2@gunfire.com","gunfire.com","/start",True),
-                    ("dev_2@gunfire.com","gunfire.com","/shutdown",False)
-                ]
-            ),
-            #4
-            (
-                [
-                    ("usergroup","update",["gunfire","all_user",["@gunfire.com","@gunfire.com.au"],None]),
-                    ("userauthorization","update",["dev_1@gunfire.com","gunfire.com",None,["/shutdown"]]),
-                    ("userauthorization","update",["hacker1@hacker.com","gunfire.com",None,["/register"]]),
-                    ("usergroupauthorization","update",["dev","gunfire.com",None,["/unregister"]])
-                ],
-                [
-                    ("hacker1@hacker.com","gunfire.com","/register",False),
-                    ("hacker1@hacker.com","map.gunfire.com","/register",False),
-        
-                    ("staff_1@gunfire.com.au","gunfire.com","/about",True),
-                    ("staff_1@gunfire.com.au","gunfire.com","/register",False),
-                    ("staff_1@gunfire.com.au","gunfire.com","/unregister",False),
-        
-                    ("staff_1@gunfire.com","gunfire.com","/about",True),
-                    ("staff_1@gunfire.com","gunfire.com","/register",False),
-                    ("staff_1@gunfire.com","gunfire.com","/unregister",False),
-        
-                    ("dev_1@gunfire.com","gunfire.com","/about",True),
-                    ("dev_1@gunfire.com","gunfire.com","/register",True),
-                    ("dev_1@gunfire.com","gunfire.com","/unregister",True),
-                    ("dev_1@gunfire.com","gunfire.com","/start",True),
-                    ("dev_1@gunfire.com","gunfire.com","/shutdown",False),
-        
-                    ("dev_2@gunfire.com","gunfire.com","/about",True),
-                    ("dev_2@gunfire.com","gunfire.com","/register",True),
-                    ("dev_2@gunfire.com","gunfire.com","/unregister",False),
-                    ("dev_2@gunfire.com","gunfire.com","/start",True),
-                    ("dev_2@gunfire.com","gunfire.com","/shutdown",True)
-                ]
-            ),
-            #5
-            (
-                [
-                    ("usergroup","update",["gunfire","all_user",["@gunfire.com"],None]),
-                    ("userauthorization","delete",["dev_1@gunfire.com","gunfire.com",None,None]),
-                    ("userauthorization","delete",["hacker1@hacker.com","gunfire.com",None,None])
-                ],
-                [
-                    ("hacker1@hacker.com","gunfire.com","/register",False),
-                    ("hacker1@hacker.com","map.gunfire.com","/register",False),
-        
-                    ("staff_1@gunfire.com.au","gunfire.com","/about",True),
-                    ("staff_1@gunfire.com.au","gunfire.com","/register",False),
-                    ("staff_1@gunfire.com.au","gunfire.com","/unregister",True),
-        
-                    ("staff_1@gunfire.com","gunfire.com","/about",True),
-                    ("staff_1@gunfire.com","gunfire.com","/register",False),
-                    ("staff_1@gunfire.com","gunfire.com","/unregister",False),
-        
-                    ("dev_1@gunfire.com","gunfire.com","/about",True),
-                    ("dev_1@gunfire.com","gunfire.com","/register",True),
-                    ("dev_1@gunfire.com","gunfire.com","/unregister",False),
-                    ("dev_1@gunfire.com","gunfire.com","/start",True),
-                    ("dev_1@gunfire.com","gunfire.com","/shutdown",True),
-        
-                    ("dev_2@gunfire.com","gunfire.com","/about",True),
-                    ("dev_2@gunfire.com","gunfire.com","/register",True),
-                    ("dev_2@gunfire.com","gunfire.com","/unregister",False),
-                    ("dev_2@gunfire.com","gunfire.com","/start",True),
-                    ("dev_2@gunfire.com","gunfire.com","/shutdown",True)
-                ]
-            ),
-            #6
-            (
-                [
                     ("usergroup","delete",["dev"]),
                     ("usergroup","delete",["gunfire"]),
                 ],
@@ -243,6 +147,7 @@ class AuthorizationCacheTestCase(BaseAuthCacheTestCase):
                     if action == "add":
                         obj = UserGroup(
                             name=configdata[0],
+                            groupid=configdata[0],
                             parent_group=UserGroup.objects.get(name=configdata[1]) if configdata[1] else None,
                             users=configdata[2],
                             excluded_users=configdata[3]

@@ -10,6 +10,7 @@ from django.utils.html import mark_safe
 from django.templatetags.static import static
 from django.db.models import Q
 from django.contrib.admin.views.main import ChangeList
+from django.urls import reverse,resolve
 
 from . import models
 from . import forms
@@ -81,14 +82,40 @@ class DatetimeMixin(object):
 
 admin.site.unregister(auth.models.Group)
 
+class UserGroupsMixin(object):
+    group_change_url_name = 'admin:{}_{}_change'.format(models.UserGroup._meta.app_label,models.UserGroup._meta.model_name)
+    def _usergroups(self,obj):
+        if not obj :
+            return ""
+        else:
+            usergroups,usergroupnames = models.UserGroup.find_groups(obj.email,cacheable=False)
+            result = None
+            for group in usergroups:
+                url = reverse(self.group_change_url_name, args=(group.id,))
+                if result:
+                    result = "{0} , <A style='margin-left:5px' href='{2}'>{1}</A>".format(result,group.name,url)
+                else:
+                    result = "<A href='{1}'>{0}</A>".format(group.name,url)
+                
+            return mark_safe("{} ({})".format(result,usergroupnames))
+    _usergroups.short_description = "User Groups"
+
+    def _usergroupnames(self,obj):
+        if not obj :
+            return ""
+        else:
+            return models.UserGroup.find_groups(obj.email,cacheable=False)[1]
+    _usergroupnames.short_description = "User Group Names"
+
+
 @admin.register(models.User)
-class UserAdmin(DatetimeMixin,auth.admin.UserAdmin):
-    list_display = ('username', 'email', 'first_name', 'last_name','is_active', 'is_staff','usergroup','last_idp','_last_login')
-    list_filter = ( 'is_superuser', 'usergroup')
-    readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","_email")
+class UserAdmin(UserGroupsMixin,DatetimeMixin,auth.admin.UserAdmin):
+    list_display = ('username', 'email', 'first_name', 'last_name','is_active', 'is_staff','last_idp','_last_login')
+    list_filter = ( 'is_superuser',)
+    readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","_email","_usergroups")
     fieldsets = (
         (None, {'fields': ('_email', )}),
-        ('Personal info', {'fields': ('username','first_name', 'last_name')}),
+        ('Personal info', {'fields': ('username','first_name', 'last_name',"_usergroups")}),
         ('Permissions', {
             'fields': ('is_active', 'is_staff', 'is_superuser', ),
         }),
@@ -119,14 +146,14 @@ class SystemUser(models.User):
         verbose_name_plural="       System Users"
 
 @admin.register(SystemUser)
-class SystemUserAdmin(DatetimeMixin,auth.admin.UserAdmin):
-    list_display = ('username', 'email', 'is_active', 'usergroup','last_idp','_last_login')
+class SystemUserAdmin(UserGroupsMixin,DatetimeMixin,auth.admin.UserAdmin):
+    list_display = ('username', 'email', 'is_active', '_usergroups','last_idp','_last_login')
     list_filter = ("is_active",)
     add_form_template = 'admin/change_form.html'
     change_form_template = 'admin/change_form.html'
     add_form = forms.SystemUserCreateForm
     form = forms.UserCreateForm
-    readonly_fields = ("_last_login","_date_joined","username","_email")
+    readonly_fields = ("_last_login","_date_joined","username","_email","_usergroups")
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
@@ -134,7 +161,7 @@ class SystemUserAdmin(DatetimeMixin,auth.admin.UserAdmin):
         }),
     )
     fieldsets = (
-        (None, {'fields': ('_email', )}),
+        (None, {'fields': ('_email', "_usergroups")}),
         ('Personal info', {'fields': ('username',)}),
         ('Permissions', {
             'fields': ('is_active', ),
@@ -160,8 +187,8 @@ class SystemUserAdmin(DatetimeMixin,auth.admin.UserAdmin):
 @admin.register(models.UserGroup)
 class UserGroupAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
     list_display = ('name','groupid','parent_group','users','excluded_users','identity_provider','_modified','_created')
-    readonly_fields = ('grouppath','_modified',)
-    fields = ('name','groupid','parent_group','users','excluded_users','identity_provider','grouppath','_modified')
+    readonly_fields = ('_modified',)
+    fields = ('name','groupid','parent_group','users','excluded_users','identity_provider','_modified')
     ordering = ('parent_group','name',)
     form = forms.UserGroupForm
 
@@ -173,7 +200,7 @@ class UserGroupAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,admin.Mo
     ordering = ('usergroup',models.sortkey_c.asc())
     form = forms.UserGroupAuthorizationForm
 
-@admin.register(models.UserAuthorization)
+#@admin.register(models.UserAuthorization)
 class UserAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
     list_display = ('user','domain','paths','excluded_paths','_modified','_created')
     readonly_fields = ('_modified',)

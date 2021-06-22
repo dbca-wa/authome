@@ -153,6 +153,14 @@ AUTH_CACHE_SIZE=env("AUTH_CACHE_SIZE",default=2000)
 if AUTH_CACHE_SIZE <= 0:
     AUTH_CACHE_SIZE = 2000
 
+EMAIL_GROUPS_CACHE_SIZE=env("EMAIL_GROUPS_CACHE_SIZE",default=2000)
+if EMAIL_GROUPS_CACHE_SIZE <= 0:
+    EMAIL_GROUPS_CACHE_SIZE = 2000
+
+PUBLIC_EMAIL_GROUPS_CACHE_SIZE=env("PUBLIC_EMAIL_GROUPS_CACHE_SIZE",default=500)
+if PUBLIC_EMAIL_GROUPS_CACHE_SIZE <= 0:
+    PUBLIC_EMAIL_GROUPS_CACHE_SIZE = 500
+
 AUTH_BASIC_CACHE_SIZE=env("AUTH_BASIC_CACHE_SIZE",default=1000)
 if AUTH_BASIC_CACHE_SIZE <= 0:
     AUTH_BASIC_CACHE_SIZE = 1000
@@ -206,7 +214,7 @@ if USERFLOW_CACHE_CHECK_INTERVAL < 0:
 PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
 BACKEND_LOGOUT_URL=env('BACKEND_LOGOUT_URL')
 
-DBCA_STAFF_GROUP_ID=env('DBCA_STAFF_GROUP_ID',default="DBCA").lower() # The emails belongs to group 'dbca staff' are allowed to self sign up (no pre-registration required).
+DBCA_STAFF_GROUPID=env('DBCA_STAFF_GROUPID',default="DBCA") # The emails belongs to group 'dbca staff' are allowed to self sign up (no pre-registration required).
 
 AUTO_SIGNOUT_DELAY_SECONDS=env('AUTO_SIGNOUT_DELAY_SECONDS',default=10)
 

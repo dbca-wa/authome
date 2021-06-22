@@ -10,7 +10,7 @@ import base64
 
 from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access,UserToken,User
 from .cache import cache
-
+groupid = 0
 class BaseAuthTestCase(TestCase):
     client = Client()
     home_url = reverse('home')
@@ -43,7 +43,7 @@ class BaseAuthTestCase(TestCase):
 
         cache.refresh_authorization_cache(True)
         if not UserGroup.objects.filter(users=["*"], excluded_users__isnull=True).exists():
-            public_group = UserGroup(name="Public User",users=["*"])
+            public_group = UserGroup(name="Public User",groupid="PUBLIC",users=["*"])
             public_group.clean()
             public_group.save()
 
@@ -61,7 +61,7 @@ class BaseAuthTestCase(TestCase):
             while uncreated_usergroups:
                 parent_obj,subgroup_datas = uncreated_usergroups.pop()
                 for name,users,excluded_users,subgroups in subgroup_datas:
-                    obj = UserGroup(name=name,users=users,excluded_users=excluded_users,parent_group=parent_obj)
+                    obj = UserGroup(name=name,groupid=name,users=users,excluded_users=excluded_users,parent_group=parent_obj)
                     obj.clean()
                     print("save usergroup={}".format(obj))
                     obj.save()

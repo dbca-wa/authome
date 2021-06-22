@@ -727,11 +727,10 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     _useremails = None
     _excluded_useremails = None
 
-    _editable_columns = ("users","parent_group","excluded_users","identity_provider","groupid","grouppath")
+    _editable_columns = ("users","parent_group","excluded_users","identity_provider","groupid")
 
-    name = models.CharField(max_length=32,unique=True)
-    groupid = models.SlugField(max_length=8,null=True)
-    grouppath = models.CharField(max_length=512,null=True,editable=False)
+    name = models.CharField(max_length=32,unique=True,null=False)
+    groupid = models.SlugField(max_length=32,null=False)
     parent_group = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
     users = _ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
     excluded_users = _ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
@@ -743,6 +742,24 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     def get_model_change_cls(self):
         return UserGroupChange
 
+    @classmethod
+    def get_groupnames(cls,usergroups):
+        """
+        return groupname string seprated by "," based on usergroups
+        """
+        groupnames = []
+        index = 0
+        for usergroup in usergroups:
+            group = usergroup
+            index = len(groupnames)
+            while group:
+                if group.groupid in groupnames:
+                    break
+                if group.groupid:
+                    groupnames.insert(index,group.groupid)
+                group = group.parent_group
+        return ",".join(groupnames)
+        
     def is_changed(self,update_fields=None):
         changed = super().is_changed(update_fields)
         if changed:
@@ -771,7 +788,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
         if not self.parent_group and not self.is_public_group:
             self.parent_group = self.public_group()
-        #check users and excluded_users between parent_group and child_group
+        #check whether excluded_users is contained by users
         for excluded_useremail in self.excluded_useremails:
             contained = False
             for useremail in self.useremails:
@@ -782,6 +799,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                 raise ValidationError("The excluded email pattern({}) is not contained by email patterns configured in current group({})".format(excluded_useremail.config,self))
         #check between current group and parent group
         if self.parent_group:
+            #check whether user eamil in this group is contained by parent group
             for useremail in self.useremails:
                 contained = False
                 for parent_useremail in self.parent_group.useremails:
@@ -790,7 +808,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                         break
                 if not contained:
                     raise ValidationError("The email pattern({}) in the current group({}) is not contained by the parent group({})".format(useremail.config,self,self.parent_group))
-
+            #check whether excluded user email in parent group is not contained by this group
             for parent_excluded_useremail in self.parent_group.excluded_useremails:
                 contained = False
                 for useremail in self.useremails:
@@ -811,6 +829,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
         #check between current group and children group
         if self.id:
             for child_group in UserGroup.objects.filter(parent_group=self):
+                #check whether user email in child group is contained by this group
                 for child_useremail in child_group.useremails:
                     contained = False
                     for useremail in self.useremails:
@@ -820,6 +839,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                     if not contained:
                         raise ValidationError("The email pattern({}) in the child group({}) is not contained by the current group({})".format(child_useremail.config,child_group,self))
     
+                #check whether excluded user eamil in this group is not contained by child group
                 for excluded_useremail in self.excluded_useremails:
                     contained = False
                     for child_useremail in child_group.useremails:
@@ -837,6 +857,8 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                     if not contained:
                         raise ValidationError("The excluded email pattern({}) in the current group({}) is contained by the child group({})".format(excluded_useremail.config,self,child_group))
 
+        #allow user in multible brother groups
+        """
         #check between current group and its brother groups
         if self.parent_group:
             brother_groups = UserGroup.objects.filter(parent_group=self.parent_group)
@@ -869,6 +891,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                         raise ValidationError("The email pattern({1}) in the group({0}) containes the email pattern({3}) in the brother group({2})".format(self,checked_useremail.config,brother_group,brother_useremail.config))
                     elif contained_type == "contained_by_brother":
                         raise ValidationError("The email pattern({3}) in the brother group({2}) containes the email pattern({1}) in the group({0})".format(self,checked_useremail.config,brother_group,brother_useremail.config))
+        """
     
 
     @property
@@ -942,7 +965,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
             size += 1
             group_trees[group.id] = (group,[])
             groups[group.id] = group
-            if group.groupid == settings.DBCA_STAFF_GROUP_ID:
+            if group.groupid == settings.DBCA_STAFF_GROUPID:
                 dbca_group = group
             if group.users == ["*"] and group.excluded_users is None:
                 public_group = group
@@ -981,8 +1004,11 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
         return cache.public_group.id
 
     @classmethod
-    def get_group(cls,groupid):
-        return cache.usergroups[groupid]
+    def get_group(cls,pk):
+        """
+        Return cached group if found; otherwise return None
+        """
+        return cache.usergroups[pk]
 
     def contain(self,email):
         """
@@ -1006,39 +1032,65 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
 
     @classmethod
-    def find(cls,email):
+    def find_groups(cls,email,cacheable=True):
         """
         email should be in lower case
-        Return the matched user group; if not found, return None
+        Return a tuple(the matched user groups,group names); if not found, return ([],"")
         """
-        trees = cls.get_grouptree()
-        matched_group = None
-        matched = False
-        while trees:
-            matched = False
-            #try to find a matched group from the trees
-            for group,subgroups in trees:
+        def _add_group(groups,group):
+            index = len(groups) - 1
+            added = False
+            while index >= 0:
+                if groups[index].is_group(group):
+                    #already added 
+                    added = True
+                    break
+                elif group.parent_group.is_group(groups[index]):
+                    groups[index] = group
+                    added =  True
+                    break
+                index -= 1
+            if not added:
+                groups.append(group)
+
+        usergroups = cache.get_email_groups(email)
+        if not usergroups:
+            trees = list(cls.get_grouptree())
+            usergroups = []
+            while trees:
+                matched = False
+                #try to find a matched group from the trees
+                group,subgroups = trees.pop(0)
                 matched = group.contain(email)
                 if matched:
-                    #user is included in this group, try to find the matched subgroup
-                    matched_group = group
-                    trees = subgroups
-                    break
+                    if subgroups:
+                        for subgroup in subgroups:
+                            trees.append(subgroup)
+                    else:
+                        _add_group(usergroups,group)
+    
+                elif group.parent_group :
+                    _add_group(usergroups,group.parent_group)
+            if usergroups:
+                usergroups = (usergroups,cls.get_groupnames(usergroups))
+                if cacheable:
+                    cache.set_email_groups(email,usergroups)
+            else:
+                usergroups = (usergroups,"")
 
-            if not matched:
-                trees = None
 
-        return matched_group
+        return usergroups
 
     @classmethod
     def get_identity_provider(cls,email):
         email = email.lower()
-        group = cls.find(email)
-        while group:
-            if group.identity_provider:
-                return group.identity_provider
-            else:
-                group = group.parent_group
+        groups = cls.find_groups(email)[0]
+        for group in groups:
+            while group:
+                if group.identity_provider:
+                    return group.identity_provider
+                else:
+                    group = group.parent_group
 
         return None
 
@@ -1271,31 +1323,51 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
         return True
 
     @staticmethod
-    def find(email,domain):
+    def find_authorizations(email,domain):
         """
         email should be in lower case
         domain should be in lower case
-        return matched UserAuthorization or UserGroupAuthorization;return None if can't found
+        return  a list of matched UserAuthorization or UserGroupAuthorization;return [] if can't found
+        """
+
         """
         #try to find the matched userauthorization
-        userauthorization = UserAuthorization.get_authorization(email)
-        if userauthorization:
-            for requests in userauthorization:
-                if requests.request_domain.match(domain):
-                    return requests
+        userauthorizations = UserAuthorization.get_authorizations(email)
+        if userauthorizations:
+            for authorization in userauthorizations:
+                if authorization.request_domain.match(domain):
+                    return [authorization]
+        """
         
         #try to find the matched usergroupauthorization 
-        usergroup = UserGroup.find(email)
-        while usergroup:
-            grouprequests = UserGroupAuthorization.get_authorization(usergroup)
-            if grouprequests:
-                for requests in grouprequests:
-                    if requests.request_domain.match(domain):
-                        return requests
-            usergroup = usergroup.parent_group
+        matched_authorizations = []
+        usergroups = UserGroup.find_groups(email)[0]
+
+        matched = False
+        for usergroup in usergroups:
+            checkgroup = usergroup
+            while checkgroup:
+                authorizations = UserGroupAuthorization.get_authorizations(checkgroup)
+                matched = False
+                if authorizations:
+                    for authorization in authorizations:
+                        if authorization.request_domain.match(domain):
+                            if authorization.deny_all:
+                                matched = True
+                                break
+                            elif authorization.allow_all:
+                                return [authorization]
+                            else:
+                                matched_authorizations.append(authorization)
+                                matched = True
+                                break
+                if matched:
+                    break
+                else:
+                    checkgroup = checkgroup.parent_group
 
         #can't find the matched object
-        return None
+        return matched_authorizations
 
     class Meta:
         abstract = True
@@ -1306,13 +1378,21 @@ def _can_access(email,domain,path):
     """
     email = email.lower()
     domain = domain.lower()
-    requests = cache.get_authorization(email,domain)
-    if not requests:
-        requests = AuthorizationMixin.find(email,domain)
-        if requests:
-            cache.set_authorization(email,domain,requests)
-    if requests:
-        return requests.allow(path)
+    groupskey = cache.get_email_groupskey(email)
+    if not groupskey:
+        usergroups = UserGroup.find_groups(email)[0]
+        if not usergroups:
+            #Not in any user group. can't access
+            return False
+
+        groupskey = cache.get_email_groupskey(email)
+
+    authorizations = cache.get_authorizations(groupskey,domain)
+    if authorizations is None:
+        authorizations = AuthorizationMixin.find_authorizations(email,domain)
+        cache.set_authorization(groupskey,domain,authorizations)
+    if authorizations:
+        return any(obj.allow(path) for obj in authorizations)
     else:
         return False
 
@@ -1323,24 +1403,32 @@ def _can_access_debug(email,domain,path):
     email = email.lower()
     domain = domain.lower()
     start = datetime.now()
-    requests = None
+    authorizations = None
     try:
-        requests = cache.get_authorization(email,domain)
-        if not requests:
-            requests = AuthorizationMixin.find(email,domain)
-            if requests:
-                cache.set_authorization(email,domain,requests)
-        if requests:
-            return requests.allow(path)
+        groupskey = cache.get_email_groupskey(email)
+        if not groupskey:
+            usergroups = UserGroup.find_groups(email)[0]
+            if not usergroups:
+                #Not in any user group. can't access
+                return False
+    
+            groupskey = cache.get_email_groupskey(email)
+    
+        authorizations = cache.get_authorizations(groupskey,domain)
+        if authorizations is None:
+            authorizations = AuthorizationMixin.find_authorizations(email,domain)
+            cache.set_authorizations(groupskey,domain,authorizations)
+        if authorizations:
+            return any(obj.allow(path) for obj in authorizations)
         else:
             return False
     finally:
         diff = datetime.now() - start
         if diff.seconds > 0 or diff.microseconds > 10000:
-            logger.warning("spend {0} milliseconds to check the authroization.user={1}, http request=https://{2}{3}, authorization object={4})".format(round((diff.seconds * 1000 + diff.microseconds)/1000),email,domain,path,"{}({},domain={},paths={},excluded_paths={})".format(requests.__class__.__name__,requests,requests.domain,requests.paths,requests.excluded_paths) if requests else "None"))
+            logger.warning("spend {0} milliseconds to check the authroization.user={1}, http request=https://{2}{3}".format(round((diff.seconds * 1000 + diff.microseconds)/1000),email,domain,path))
             pass
         else:
-            logger.debug("spend {0} milliseconds to check the authroization.user={1}, http request=https://{2}{3}, authorization object={4})".format(round((diff.seconds * 1000 + diff.microseconds)/1000),email,domain,path,"{}({},domain={},paths={},excluded_paths={})".format(requests.__class__.__name__,requests,requests.domain,requests.paths,requests.excluded_paths) if requests else "None"))
+            logger.debug("spend {0} milliseconds to check the authroization.user={1}, http request=https://{2}{3}, authorization object=\r\n\t{4})".format(round((diff.seconds * 1000 + diff.microseconds)/1000),email,domain,path,"\r\n\t".join("{}({},domain={},paths={},excluded_paths={})".format(authorization.__class__.__name__,authorization,authorization.domain,authorization.paths,authorization.excluded_paths) for authorization in authorizations) if authorizations else "None"))
             pass
 
 can_access = _can_access if settings.RELEASE else _can_access_debug
@@ -1385,7 +1473,7 @@ class UserAuthorization(CacheableMixin,AuthorizationMixin):
         cache.userauthorization = (userauthorization,size,refreshtime)
 
     @classmethod
-    def get_authorization(cls,useremail):
+    def get_authorizations(cls,useremail):
         return cache.userauthorization.get(useremail)
 
     def __str__(self):
@@ -1429,7 +1517,7 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
         cache.usergroupauthorization = (usergroupauthorization,size,refreshtime)
 
     @classmethod
-    def get_authorization(cls,usergroup):
+    def get_authorizations(cls,usergroup):
         return cache.usergroupauthorization.get(usergroup)
 
     def __str__(self):
@@ -1440,7 +1528,6 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
         verbose_name_plural = "   User Group Authorizations"
 
 class User(AbstractUser):
-    usergroup = models.ForeignKey(UserGroup, on_delete=models.DO_NOTHING,editable=False,null=False)
     last_idp = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,editable=False,null=True)
     systemuser = models.BooleanField(default=False,editable=False)
     modified = models.DateTimeField(auto_now=timezone.now)
@@ -1454,12 +1541,13 @@ class User(AbstractUser):
         if not self.username:
             self.username = self.email
 
-        dbcagroup = UserGroup.dbca_group()
         if not self.id:
             self.is_active = True
-            self.usergroup = UserGroup.find(self.email)
 
-        if dbcagroup and self.usergroup == dbcagroup:
+        usergroups = UserGroup.find_groups(self.email)[0]
+
+        dbcagroup = UserGroup.dbca_group()
+        if dbcagroup and any(usergroup.is_group(dbcagroup) for usergroup in usergroups):
             self.is_staff = True
 
     class Meta(AbstractUser.Meta):
@@ -1581,115 +1669,16 @@ class UserListener(object):
         usercache.delete(settings.GET_USER_KEY(instance.id))
 
 class UserGroupListener(object):
-    @staticmethod
     @receiver(pre_delete, sender=UserGroup)
     def pre_delete_group(sender,instance,**kwargs):
         if instance.is_public_group:
             raise Exception("Can't delete the public user group")
-        #update user's group to group's parent group
-        for user in User.objects.filter(usergroup=instance):
-            user.usergroup = instance.parent_group
-            user.save(update_fields = ["usergroup"])
-
-    @staticmethod
-    def get_filter_conditions(useremails):
-        conds = None
-        for useremail in useremails:
-            if not useremail.qs_filter:
-                continue
-            if conds:
-                conds = conds | useremail.qs_filter
-            else:
-                conds = useremail.qs_filter
-        return conds
-
-    @staticmethod
-    @receiver(post_save, sender=UserGroup)
-    def post_save_group(sender,instance,created,**kwargs):
-        if not created:
-            #set usergroup of the users whose usergroup is the updated group to its parent group
-            for user in User.objects.filter(usergroup=instance):
-                user.usergroup=instance.parent_group
-                user.save(update_fields = ["usergroup"])
-
-        #set usergroup of the users whose usergroup is the group's parent group and also belonging to the updated/created group to the updated/created group
-        qs = User.objects.filter(usergroup=instance.parent_group)
-        conds = UserGroupListener.get_filter_conditions(instance.useremails)
-        if conds:
-            qs = qs.filter(conds)
-
-        conds = UserGroupListener.get_filter_conditions(instance.excluded_useremails)
-        if conds:
-            qs = qs.exclude(conds)
-
-        for user in qs:
-            user.usergroup = instance
-            user.save(update_fields = ["usergroup"])
 
     @staticmethod
     @receiver(pre_save, sender=UserGroup)
     def check_public_group(sender,instance,**kwargs):
         if instance.id is None and instance.public_group() and instance.users == ["*"] and instance.excluded_users is None:
             raise Exception("Public user group already exists")
-
-
-    @staticmethod
-    def _set_grouppath(instance):
-        if instance.groupid:
-            if instance.is_public_group:
-                if instance.grouppath is None:
-                    return False
-                else:
-                    instance.grouppath = None
-                    return True
-            elif instance.parent_group.is_public_group:
-                grouppath = instance.groupid
-            else:
-                grouppath = "{}.{}".format(instance.parent_group.grouppath,instance.groupid)
-
-            if instance.grouppath == grouppath:
-                return False
-            else:
-                instance.grouppath = grouppath
-                return True
-        elif instance.grouppath is None:
-            return False
-        else:
-            instance.grouppath = None
-            return True
-
-
-    @staticmethod
-    @receiver(pre_save, sender=UserGroup)
-    def set_grouppath(sender,instance,raw=None,using=None,update_fields=None,**kwargs):
-        if instance.id:
-            if update_fields and "grouppath" in update_fields:
-                pass
-            elif instance.db_obj.groupid == instance.groupid:
-                #code is  not changed
-                return
-
-            if not UserGroupListener._set_grouppath(instance):
-                #groupid not changed
-                return
-            if update_fields and "grouppath" not in update_fields:
-                update_fields.append("grouppath")
-
-            instance.set_child_grouppath = True
-
-        else:
-            #new group
-            UserGroupListener._set_grouppath(instance)
-
-    @staticmethod
-    @receiver(post_save, sender=UserGroup)
-    def set_child_grouppath(sender,instance,raw=None,using=None,update_fields=None,**kwargs):
-        if hasattr(instance,"set_child_grouppath"):
-            if instance.set_child_grouppath:
-                for child in UserGroup.objects.filter(parent_group=instance):
-                    if UserGroupListener._set_grouppath(child):
-                        child.save(update_fields=["grouppath"])
-            delattr(instance,"set_child_grouppath")
 
 if defaultcache:
     class ModelChange(object):

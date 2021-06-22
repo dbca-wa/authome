@@ -141,10 +141,12 @@ class MemoryCache(object):
         self._usergrouptree_size = None
         self._usergrouptree_ts = None
     
+        """
         #model UserAuthorization cache
         self._userauthorization = None
         self._userauthorization_size = None
         self._userauthorization_ts = None
+        """
     
         #model UserGroupAuthorization cache
         self._usergroupauthorization = None
@@ -170,6 +172,12 @@ class MemoryCache(object):
         self._auth_map = OrderedDict() 
         #user basic authentication cache
         self._basic_auth_map = OrderedDict() 
+
+        #the map between email and groups 
+        self._groupskey_map = {}
+        self._email_groups_map = OrderedDict()
+        self._public_email_groups_map = OrderedDict()
+        self._groups_map = {}
 
         #The runable task to clean authenticaton map and basic authenticaton map
         self._auth_cache_clean_time = HourListTaskRunable("authentication cache",settings.AUTH_CACHE_CLEAN_HOURS)
@@ -207,7 +215,8 @@ class MemoryCache(object):
             self._usergrouptree,self._usergroups,self._public_group,self._dbca_group,self._usergrouptree_size,self._usergrouptree_ts = value
         else:
             self._usergrouptree,self._usergroups,self._public_group,self._dbca_group,self._usergrouptree_size,self._usergrouptree_ts = None,None,None,None,None,None
-        
+    
+    """
     @property
     def userauthorization(self):
         return self._userauthorization
@@ -218,6 +227,7 @@ class MemoryCache(object):
             self._userauthorization,self._userauthorization_size,self._userauthorization_ts = value
         else:
             self._userauthorization,self._userauthorization_size,self._userauthorization_ts = None,None,None
+    """
 
     @property
     def usergroupauthorization(self):
@@ -230,17 +240,17 @@ class MemoryCache(object):
         else:
             self._usergroupauthorization,self._usergroupauthorization_size,self._usergroupauthorization_ts = None,None,None
         
-    def get_authorization(self,user,domain):
+    def get_authorizations(self,groupskey,domain):
         """
         During authorization, this method is the first method to be invoked, and then the methods 'userauthrizations','usergrouptree' and 'usergroupauthorization' will be invoked if required.
         So only call method 'refresh_authorization_cache' in this method and ignore in other methods 'userauthrizations','usergrouptree' and 'usergroupauthorization'.
         """
         self.refresh_authorization_cache()
-        return self._user_authorization_map.get((user,domain))
+        return self._user_authorization_map.get((groupskey,domain))
 
-    def set_authorization(self,user,domain,requests):
-        self._user_authorization_map[(user,domain)] = requests
-        self._enforce_maxsize("user authorization map",self._user_authorization_map,settings.AUTHORIZATION_CACHE_SIZE)
+    def set_authorizations(self,groupskey,domain,authorizations):
+        self._user_authorization_map[(groupskey,domain)] = authorizations
+        self._enforce_maxsize("groups authorization map",self._user_authorization_map,settings.AUTHORIZATION_CACHE_SIZE)
 
     @property
     def idps(self):
@@ -289,6 +299,53 @@ class MemoryCache(object):
             self._userflows,self._defaultuserflow,self._userflows_size,self._userflows_ts = None,None,None,None
 
         self._userflows_map.clear()
+
+    def get_groups_key(self,groups):
+        """
+        Use the same key instance for the same groups
+        Return the group  key for the groups
+        """
+        key = list(g.id for g in groups)
+        key.sort()
+        key = tuple(key)
+        groupskey = self._groupskey_map.get(key)
+        if not groupskey:
+            self._groupskey_map[key] = key
+            return key
+        else:
+            return groupskey
+
+    def get_email_groupskey(self,email):
+        return self._email_groups_map.get(email) or self._public_email_groups_map.get(email)
+        
+    def set_email_groups(self,email,groups):
+        """
+        cache the email and groups mapping
+        """
+        #get the key of the groups
+        groupskey = self.get_groups_key(groups[0])
+        
+        #set the map between email and groupskey
+        if len(groups[0]) > 1 or groups[0][0] != self._public_group:
+            self._email_groups_map[email] = groupskey
+            self._enforce_maxsize("email groups map",self._email_groups_map,settings.EMAIL_GROUPS_CACHE_SIZE)
+        else:
+            self._public_email_groups_map[email] = groupskey
+            self._enforce_maxsize("public email groups map",self._public_email_groups_map,settings.PUBLIC_EMAIL_GROUPS_CACHE_SIZE)
+
+        #set the map between groupskey and groups
+        if groupskey not in self._groups_map:
+            self._groups_map[groupskey] = groups
+
+
+    def get_email_groups(self,email):
+        #try to get the groupskey from email_groups and then from public email groups
+        groupskey = self._email_groups_map.get(email) or self._public_email_groups_map.get(email)
+
+        if not groupskey:
+            return None
+
+        return self._groups_map.get(groupskey)
 
 
     def get_auth_key(self,email,session_key):
@@ -430,10 +487,17 @@ class MemoryCache(object):
         if (force or self._usergrouptree is None or UserGroupChange.is_changed()):
             logger.debug("UserGroup was changed, clean cache usergroupptree and user_requests_map")
             self._user_authorization_map.clear()
+            self._email_groups_map.clear()
+            self._public_email_groups_map.clear()
+            self._groups_map.clear()
+            if len(self._groupskey_map) >= 2000:
+                #groupskey map is too big, clear it.
+                self._groupskey_map.clear()
             #reload group trees
             UserGroup.refresh_cache()
 
 
+    """
     def refresh_userauthorization(self,force=False):
         from .models import UserAuthorizationChange,UserAuthorization
         if (force or self._userauthorization is None or UserAuthorizationChange.is_changed()):
@@ -441,6 +505,7 @@ class MemoryCache(object):
             self._user_authorization_map.clear()
             #reload user requests
             UserAuthorization.refresh_cache()
+    """
 
     def refresh_usergroupauthorization(self,force=False):
         from .models import UserGroupAuthorizationChange,UserGroupAuthorization
@@ -453,7 +518,7 @@ class MemoryCache(object):
     def refresh_authorization_cache(self,force=False):
         if self._authorization_cache_check_time.can_run() or force:
             self.refresh_usergroups(force)
-            self.refresh_userauthorization(force)
+            #self.refresh_userauthorization(force)
             self.refresh_usergroupauthorization(force)
 
     def refresh_idp_cache(self,force=False):

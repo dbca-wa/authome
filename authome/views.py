@@ -199,7 +199,7 @@ def _populate_response(request,f_cache,cache_key,user,session_key=None):
         'first_name': user.first_name,
         'last_name': user.last_name,
         'full_name' : "{}, {}".format(user.first_name,user.last_name),
-        'groups': user.usergroup.grouppath if user.usergroup else "",
+        'groups': models.UserGroup.find_groups(user.email)[1],
         'logout_url' : "/sso/auth_logout"
     }
     if session_key:
@@ -249,7 +249,7 @@ def _auth_prod(request):
     auth_key = cache.get_auth_key(user.email,request.session.session_key)
     response = cache.get_auth(auth_key,user.modified)
 
-    if response and models.UserGroup.get_group(user.usergroup_id).grouppath == response["X-groups"]:
+    if response and models.UserGroup.find_groups(user.email)[1] == response["X-groups"]:
         #response cached
         return response
     else:
@@ -293,7 +293,7 @@ def _auth_debug(request):
     auth_key = cache.get_auth_key(user.email,request.session.session_key)
     response = cache.get_auth(auth_key,user.modified)
 
-    if response and models.UserGroup.get_group(user.usergroup_id).grouppath == response["X-groups"]:
+    if response and models.UserGroup.find_groups(user.email)[1] == response["X-groups"]:
         #response cached
         diff = timezone.now() - before
         diff1 = timezone.now() - start
