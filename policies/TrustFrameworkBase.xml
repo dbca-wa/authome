@@ -287,6 +287,9 @@
                 </DefaultPartnerClaimTypes>
                 <UserHelpText>Your given name (also known as first name).</UserHelpText>
                 <UserInputType>TextBox</UserInputType>
+                <Restriction>
+                    <Pattern RegularExpression="^.+$" HelpText="Given name can't be empty" />
+                </Restriction>
             </ClaimType>
 
             <ClaimType Id="surname">
@@ -299,6 +302,9 @@
                 </DefaultPartnerClaimTypes>
                 <UserHelpText>Your surname (also known as family name or last name).</UserHelpText>
                 <UserInputType>TextBox</UserInputType>
+                <Restriction>
+                    <Pattern RegularExpression="^.+$" HelpText="Surname can't be empty" />
+                </Restriction>
             </ClaimType>
 
             <ClaimType Id="Otp">
