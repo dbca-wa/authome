@@ -1,4 +1,5 @@
 import logging
+import urllib.parse
 
 from django.core.exceptions import PermissionDenied
 from django.utils.http import urlencode
@@ -6,6 +7,7 @@ from django.utils import timezone
 from django.conf import settings
 from django.contrib.auth import login, logout
 from django.http import HttpResponseForbidden,HttpResponseRedirect
+from django.contrib.auth import REDIRECT_FIELD_NAME
 
 from .models import IdentityProvider,UserGroup
 from .views import signout, get_post_b2c_logout_url
@@ -122,6 +124,14 @@ def user_details(strategy, details, user=None, *args, **kwargs):
         changed = True
         logger.debug("The {1} of the User({0}) was changed from {2} to {3}".format(user.email,name,current_value,value))
         setattr(user, name, value)
+
+    if not user.first_name or not user.last_name:
+        nexturl = strategy.request.session[REDIRECT_FIELD_NAME]
+        if nexturl:
+            nexturl = "/sso/profile/edit?{}={}".format(REDIRECT_FIELD_NAME,urllib.parse.quote(nexturl))
+        else:
+            nexturl = "/sso/profile/edit"
+        strategy.request.session[REDIRECT_FIELD_NAME] = nexturl
 
     if changed:
         strategy.storage.user.changed(user)
