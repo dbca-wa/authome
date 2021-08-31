@@ -87,7 +87,20 @@
                     <CryptographicKeys>
                         <Key Id="client_secret" StorageReferenceId="B2C_1A_DBCAMicrosoft365"/>
                     </CryptographicKeys>
+                </TechnicalProfile>
+            </TechnicalProfiles>
+        </ClaimsProvider>
 
+        <ClaimsProvider>
+            <DisplayName>Microsoft Account</DisplayName>
+            <TechnicalProfiles>
+                <TechnicalProfile Id="MSA-MicrosoftAccount-OpenIdConnect">
+                    <Metadata>
+                        <Item Key="client_id">49d0e184-1d92-4367-91e7-ea630f4d5b47</Item>
+                    </Metadata>
+                    <CryptographicKeys>
+                        <Key Id="client_secret" StorageReferenceId="B2C_1A_MicrosoftAccountSecret" />
+                    </CryptographicKeys>
                 </TechnicalProfile>
             </TechnicalProfiles>
         </ClaimsProvider>
