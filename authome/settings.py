@@ -67,7 +67,7 @@ SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_BASE_URL = env('AZUREAD_B2C_BASE_URL', 'baseurl')
 SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_KEY = env('AZUREAD_B2C_CLIENTID', 'clientid')
 SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_SECRET = env('AZUREAD_B2C_SECRETKEY', 'secret')
 SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_TENANT_ID = env('AZUREAD_B2C_TENANT_ID', 'tentid')
-SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_USER_FIELDS = env('AZUREAD_B2C_USER_FIELDS', default=["username","email","usergroup","first_name","last_name","is_staff","is_superuser"])
+SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_USER_FIELDS = env('AZUREAD_B2C_USER_FIELDS', default=["username","email","first_name","last_name","is_staff","is_superuser"])
 
 SOCIAL_AUTH_USERNAME_IS_FULL_EMAIL = env('USERNAME_IS_FULL_EMAIL', default=True)
 SOCIAL_AUTH_SLUGIFY_USERNAMES = env('SLUGIFY_USERNAMES', default=False)
