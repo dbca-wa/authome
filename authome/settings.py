@@ -218,6 +218,9 @@ DBCA_STAFF_GROUPID=env('DBCA_STAFF_GROUPID',default="DBCA") # The emails belongs
 
 AUTO_SIGNOUT_DELAY_SECONDS=env('AUTO_SIGNOUT_DELAY_SECONDS',default=10)
 
+
+AUTH_CHECKING_THRESHOLD_TIME_=env('AUTH_CHECKING_THRESHOLD_TIME',default=50) * 1000 #in milliseconds, should be less than 1000
+
 # Logging settings - log to stdout/stderr
 LOGGING = {
     'version': 1,
