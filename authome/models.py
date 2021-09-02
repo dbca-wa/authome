@@ -1390,7 +1390,7 @@ def _can_access(email,domain,path):
     authorizations = cache.get_authorizations(groupskey,domain)
     if authorizations is None:
         authorizations = AuthorizationMixin.find_authorizations(email,domain)
-        cache.set_authorization(groupskey,domain,authorizations)
+        cache.set_authorizations(groupskey,domain,authorizations)
     if authorizations:
         return any(obj.allow(path) for obj in authorizations)
     else:

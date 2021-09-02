@@ -26,6 +26,10 @@ class BaseAuthTestCase(TestCase):
         return Client()
 
     def setUp(self):
+        if settings.RELEASE:
+            print("Running in release mode")
+        else:
+            print("Running in dev mode")
         settings.AUTH_CACHE_SIZE=2000
         settings.AUTH_BASIC_CACHE_SIZE=1000
         settings.AUTH_BASIC_CACHE_EXPIRETIME=timedelta(seconds=3600)

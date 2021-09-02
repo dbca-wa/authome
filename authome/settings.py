@@ -7,7 +7,7 @@ import dj_database_url
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEBUG = env('DEBUG', False)
-LOGLEVEL = env('LOGLEVEL')
+LOGLEVEL = env('LOGLEVEL',default='WARNING')
 if LOGLEVEL not in ["DEBUG",'INFO','WARNING','ERROR','CRITICAL']:
     LOGLEVEL = 'DEBUG' if DEBUG else 'INFO'
 
@@ -219,7 +219,7 @@ DBCA_STAFF_GROUPID=env('DBCA_STAFF_GROUPID',default="DBCA") # The emails belongs
 AUTO_SIGNOUT_DELAY_SECONDS=env('AUTO_SIGNOUT_DELAY_SECONDS',default=10)
 
 
-AUTH_CHECKING_THRESHOLD_TIME_=env('AUTH_CHECKING_THRESHOLD_TIME',default=50) * 1000 #in milliseconds, should be less than 1000
+AUTH_CHECKING_THRESHOLD_TIME=env('AUTH_CHECKING_THRESHOLD_TIME',default=50) * 1000 #in milliseconds, should be less than 1000
 
 # Logging settings - log to stdout/stderr
 LOGGING = {
