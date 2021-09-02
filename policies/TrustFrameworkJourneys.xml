@@ -17,18 +17,6 @@
             <OrchestrationSteps>
 
                 <OrchestrationStep Order="1" Type="CombinedSignInAndSignUp" ContentDefinitionReferenceId="api.signuporsignin">
-                    <ClaimsProviderSelections>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
-                        <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="MicrosoftAccountExchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/>
-                        <ClaimsProviderSelection ValidationClaimsExchangeId="LocalAccountSigninEmailExchange"/>
-                    </ClaimsProviderSelections>
-                    <ClaimsExchanges>
-                        <ClaimsExchange Id="LocalAccountSigninEmailExchange" TechnicalProfileReferenceId="SelfAsserted-LocalAccountSignin-Email"/>
-                    </ClaimsExchanges>
                 </OrchestrationStep>
 
                 <!-- Check if the user has selected to sign in using one of the social providers -->
@@ -393,7 +381,7 @@
             <OrchestrationSteps>
 
                 <OrchestrationStep Order="1" Type="CombinedSignInAndSignUp" ContentDefinitionReferenceId="api.signuporsignin">
-</OrchestrationStep>
+                </OrchestrationStep>
 
                 <!-- Check if the user has selected to sign in using one of the social providers -->
                 <OrchestrationStep Order="2" Type="ClaimsExchange">
@@ -634,7 +622,7 @@
             <OrchestrationSteps>
 
                 <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
-</OrchestrationStep>
+                </OrchestrationStep>
                 <OrchestrationStep Order="2" Type="ClaimsExchange">
                     <ClaimsExchanges>
                         <ClaimsExchange Id="DBCAM365Exchange" TechnicalProfileReferenceId="DBCAM365-OAUTH"/>
@@ -703,7 +691,7 @@
             <OrchestrationSteps>
 
                 <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
-</OrchestrationStep>
+                </OrchestrationStep>
                 <OrchestrationStep Order="2" Type="ClaimsExchange">
                     <ClaimsExchanges>
                         <ClaimsExchange Id="DBCAM365Exchange" TechnicalProfileReferenceId="DBCAM365-OAUTH"/>
