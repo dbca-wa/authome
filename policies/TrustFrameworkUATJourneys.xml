@@ -28,7 +28,7 @@
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="MicrosoftAccountExchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/>
+                        <ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/>
                         <ClaimsProviderSelection ValidationClaimsExchangeId="LocalAccountSigninEmailExchange"/>
                     </ClaimsProviderSelections>
                     <ClaimsExchanges>
@@ -50,7 +50,7 @@
                         <ClaimsExchange Id="GoogleExchange" TechnicalProfileReferenceId="Google-OAUTH"/>
                         <ClaimsExchange Id="GitHubExchange" TechnicalProfileReferenceId="Github-OAUTH"/>
                         <ClaimsExchange Id="MicrosoftAccountExchange" TechnicalProfileReferenceId="MSA-MicrosoftAccount-OpenIdConnect"/>
-                        <ClaimsExchange Id="SignIn-WithEmail" TechnicalProfileReferenceId="LocalAccountDiscoveryUsingEmailAddress-SignIn"/>
+                        <ClaimsExchange Id="PasswordlessSignIn" TechnicalProfileReferenceId="LocalAccountDiscoveryUsingEmailAddress-SignIn"/>
                         <ClaimsExchange Id="SignUpWithLogonEmailExchange" TechnicalProfileReferenceId="LocalAccountSignUpStep1-EmailVerify"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
