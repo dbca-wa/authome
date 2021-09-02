@@ -23,7 +23,7 @@
                         <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/>
+                        <ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/>
                         <ClaimsProviderSelection ValidationClaimsExchangeId="LocalAccountSigninEmailExchange"/>
                     </ClaimsProviderSelections>
                     <ClaimsExchanges>
@@ -41,7 +41,7 @@
                         <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/>
+                        <ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/>
                         <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange"/>
                     </ClaimsProviderSelections>
                 </OrchestrationStep>
@@ -56,7 +56,7 @@
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <!--ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/-->
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange"/>
                     </ClaimsProviderSelections>
                 </OrchestrationStep>
@@ -71,7 +71,7 @@
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <!--ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/-->
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange"/>
                     </ClaimsProviderSelections>
                 </OrchestrationStep>

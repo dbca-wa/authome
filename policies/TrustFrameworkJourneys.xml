@@ -33,7 +33,7 @@
                         <ClaimsExchange Id="GoogleExchange" TechnicalProfileReferenceId="Google-OAUTH"/>
                         <ClaimsExchange Id="GitHubExchange" TechnicalProfileReferenceId="Github-OAUTH"/>
                         <ClaimsExchange Id="MicrosoftAccountExchange" TechnicalProfileReferenceId="MSA-MicrosoftAccount-OpenIdConnect"/>
-                        <ClaimsExchange Id="SignIn-WithEmail" TechnicalProfileReferenceId="LocalAccountDiscoveryUsingEmailAddress-SignIn"/>
+                        <ClaimsExchange Id="PasswordlessSignIn" TechnicalProfileReferenceId="LocalAccountDiscoveryUsingEmailAddress-SignIn"/>
                         <ClaimsExchange Id="SignUpWithLogonEmailExchange" TechnicalProfileReferenceId="LocalAccountSignUpStep1-EmailVerify"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
@@ -397,7 +397,7 @@
                         <ClaimsExchange Id="GoogleExchange" TechnicalProfileReferenceId="Google-OAUTH"/>
                         <ClaimsExchange Id="GitHubExchange" TechnicalProfileReferenceId="Github-OAUTH"/>
                         <ClaimsExchange Id="MicrosoftAccountExchange" TechnicalProfileReferenceId="MSA-MicrosoftAccount-OpenIdConnect"/>
-                        <ClaimsExchange Id="SignIn-WithEmail" TechnicalProfileReferenceId="LocalAccountDiscoveryUsingEmailAddress-SignIn"/>
+                        <ClaimsExchange Id="PasswordlessSignIn" TechnicalProfileReferenceId="LocalAccountDiscoveryUsingEmailAddress-SignIn"/>
                         <ClaimsExchange Id="LocalAccountSigninEmailExchange" TechnicalProfileReferenceId="SelfAsserted-LocalAccountSignin-Email"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
@@ -629,7 +629,7 @@
                         <ClaimsExchange Id="FacebookExchange" TechnicalProfileReferenceId="Facebook-OAUTH"/>
                         <ClaimsExchange Id="GoogleExchange" TechnicalProfileReferenceId="Google-OAUTH"/>
                         <ClaimsExchange Id="MicrosoftAccountExchange" TechnicalProfileReferenceId="MSA-MicrosoftAccount-OpenIdConnect"/>
-                        <ClaimsExchange Id="SignIn-WithEmail" TechnicalProfileReferenceId="LocalAccountDiscoveryUsingEmailAddress-SignIn"/>
+                        <ClaimsExchange Id="PasswordlessSignIn" TechnicalProfileReferenceId="LocalAccountDiscoveryUsingEmailAddress-SignIn"/>
                         <ClaimsExchange Id="LocalAccountSigninEmailExchange" TechnicalProfileReferenceId="SelfAsserted-LocalAccountSignin-Email"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
@@ -699,7 +699,7 @@
                         <ClaimsExchange Id="GoogleExchange" TechnicalProfileReferenceId="Google-OAUTH"/>
                         <ClaimsExchange Id="MicrosoftAccountExchange" TechnicalProfileReferenceId="MSA-MicrosoftAccount-OpenIdConnect"/>
                         <ClaimsExchange Id="LocalAccountSigninEmailExchange" TechnicalProfileReferenceId="SelfAsserted-LocalAccountSignin-Email"/>
-                        <ClaimsExchange Id="SignIn-WithEmail" TechnicalProfileReferenceId="LocalAccountDiscoveryUsingEmailAddress-SignIn"/>
+                        <ClaimsExchange Id="PasswordlessSignIn" TechnicalProfileReferenceId="LocalAccountDiscoveryUsingEmailAddress-SignIn"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
                 <OrchestrationStep Order="3" Type="ClaimsExchange">
