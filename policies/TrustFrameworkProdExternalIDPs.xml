@@ -50,10 +50,10 @@
             <OrchestrationSteps>
                 <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
                     <ClaimsProviderSelections>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange"/>
                     </ClaimsProviderSelections>
                 </OrchestrationStep>
@@ -64,10 +64,10 @@
             <OrchestrationSteps>
                 <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
                     <ClaimsProviderSelections>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange"/>
                     </ClaimsProviderSelections>
                 </OrchestrationStep>
