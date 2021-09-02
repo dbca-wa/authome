@@ -5,12 +5,12 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_TrustFrameworkExternalProdExtensions"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkExternalProdExtensions">
+ PolicyId="B2C_1A_TrustFrameworkProdExternalIDPs"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkProdExternalIDPs">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkProdBaseExtensions</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkProdExtensions</PolicyId>
     </BasePolicy>
 
     <UserJourneys>

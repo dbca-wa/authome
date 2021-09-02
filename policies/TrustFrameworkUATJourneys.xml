@@ -5,12 +5,12 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_TrustFrameworkUATJourneyExtensions"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkUATJourneyExtensions">
+ PolicyId="B2C_1A_TrustFrameworkUATJourneys"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkUATJourneys">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkExtensions</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkIDPSecrets</PolicyId>
     </BasePolicy>
 
     <BuildingBlocks>
@@ -63,9 +63,9 @@
                             <Value>local</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
-                        <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>newUser</Value>
-                            <Value>true</Value>
+                            <Value>false</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
@@ -140,8 +140,9 @@
                             <Value>false</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
-                        <Precondition Type="ClaimsExist" ExecuteActionsIf="false">
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>newUser</Value>
+                            <Value>false</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
@@ -210,8 +211,9 @@
                             <Value>email</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
-                        <Precondition Type="ClaimsExist" ExecuteActionsIf="true">
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>newUser</Value>
+                            <Value>true</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
@@ -238,8 +240,9 @@
                             <Value>email</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
-                        <Precondition Type="ClaimsExist" ExecuteActionsIf="false">
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>newUser</Value>
+                            <Value>false</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
@@ -374,8 +377,9 @@
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
-                        <Precondition Type="ClaimsExist" ExecuteActionsIf="false">
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>newUser</Value>
+                            <Value>false</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>

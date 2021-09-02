@@ -10,75 +10,148 @@
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkUATBaseExtensions</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkUATJourneys</PolicyId>
     </BasePolicy>
 
+    <BuildingBlocks>
 
-    <UserJourneys>
+        <ClaimsSchema>
+            <ClaimType Id="extension_totpRegisteredUAT">
+                <DisplayName>Totp registered</DisplayName>
+                <DataType>boolean</DataType>
+                <UserInputType>Readonly</UserInputType>
+            </ClaimType>
+        </ClaimsSchema>
 
-        <UserJourney Id="SignUpOrSignIn">
-            <OrchestrationSteps>
-                <OrchestrationStep Order="1" Type="CombinedSignInAndSignUp" ContentDefinitionReferenceId="api.signuporsignin">
-                    <ClaimsProviderSelections>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
-                        <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/>
-                        <ClaimsProviderSelection ValidationClaimsExchangeId="LocalAccountSigninEmailExchange"/>
-                    </ClaimsProviderSelections>
-                    <ClaimsExchanges>
-                        <ClaimsExchange Id="LocalAccountSigninEmailExchange" TechnicalProfileReferenceId="SelfAsserted-LocalAccountSignin-Email"/>
-                    </ClaimsExchanges>
-                </OrchestrationStep>
-            </OrchestrationSteps>
-        </UserJourney>
+        <ContentDefinitions>
 
-        <UserJourney Id="ProfileEdit">
-            <OrchestrationSteps>
-                <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
-                    <ClaimsProviderSelections>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
-                        <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange"/>
-                    </ClaimsProviderSelections>
-                </OrchestrationStep>
-            </OrchestrationSteps>
-        </UserJourney>
+            <!-- This content definition is to render an error page that displays unhandled errors. -->
+            <ContentDefinition Id="api.error">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/unified.html?title=Error</LoadUri>
+            </ContentDefinition>
 
-        <UserJourney Id="MFASet">
-            <OrchestrationSteps>
-                <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
-                    <ClaimsProviderSelections>
-                        <!--ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
-                        <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange"/>
-                    </ClaimsProviderSelections>
-                </OrchestrationStep>
-            </OrchestrationSteps>
-        </UserJourney>
+            <ContentDefinition Id="api.idpselections">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/unified.html?title=Select%2520Identity%2520Provider</LoadUri>
+            </ContentDefinition>
 
-        <UserJourney Id="MFAReset">
-            <OrchestrationSteps>
-                <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
-                    <ClaimsProviderSelections>
-                        <!--ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
-                        <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="SignIn-WithEmail"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange"/>
-                    </ClaimsProviderSelections>
-                </OrchestrationStep>
-            </OrchestrationSteps>
-        </UserJourney>
+            <ContentDefinition Id="api.idpselections.signup">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/unified.html?title=Select%2520Identity%2520Provider</LoadUri>
+            </ContentDefinition>
 
-    </UserJourneys>
+            <ContentDefinition Id="api.signuporsignin">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/unified.html?title=Select%2520Identity%2520Provider</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Please%2520fill%2520your%2520details</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.selectMfaMethod">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Select%2520multi-factor%2520authentication%2520method</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.profileupdate">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Update%2520your%2520profile</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.localaccountsignup">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Local%2520ccount%2520signup</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.localaccountpasswordreset.verifyemail">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Verify%2520your%2520email</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.localaccountpasswordreset">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Input%2520new%2520password</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.phonefactor">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Multi-factor%2520authentication%2520via%2520phone</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.totpfactor.registration">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/totp_register.html?class=self_asserted_container</LoadUri>
+            </ContentDefinition>
+
+        </ContentDefinitions>
+    </BuildingBlocks>
+
+    <ClaimsProviders>
+
+        <ClaimsProvider>
+            <DisplayName>Azure Active Directory</DisplayName>
+            <TechnicalProfiles>
+
+                <TechnicalProfile Id="AAD-UserReadUsingAlternativeSecurityId">
+                    <OutputClaims>
+                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
+                    </OutputClaims>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AAD-UserReadUsingEmailAddress">
+                    <OutputClaims>
+                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
+                    </OutputClaims>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AAD-UserReadUsingObjectId">
+                    <OutputClaims>
+                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
+                    </OutputClaims>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AAD-WriteUserTOTPByObjectId">
+                    <PersistedClaims>
+                        <PersistedClaim ClaimTypeReferenceId="extension_totpRegisteredUAT" DefaultValue="true" AlwaysUseDefaultValue="true"/>
+                    </PersistedClaims>
+                </TechnicalProfile>
+
+            </TechnicalProfiles>
+        </ClaimsProvider>
+
+        <ClaimsProvider>
+            <DisplayName>Verify Email Sending Provider</DisplayName>
+            <TechnicalProfiles>
+                <TechnicalProfile Id="AUTH2-SendOtpViaEmail">
+                    <Metadata>
+                        <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/verifycode</Item>
+                    </Metadata>
+                    <CryptographicKeys>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
+                    </CryptographicKeys>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AUTH2-SendOtpViaUserEmailAccount">
+                    <Metadata>
+                        <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/verifycode</Item>
+                    </Metadata>
+                    <CryptographicKeys>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
+                    </CryptographicKeys>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AUTH2-GenerateTOTPQRCode">
+                    <Metadata>
+                        <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/totp/generate</Item>
+                    </Metadata>
+                    <CryptographicKeys>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
+                    </CryptographicKeys>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AUTH2-VerifyTOTPCode">
+                    <Metadata>
+                        <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/totp/verify</Item>
+                    </Metadata>
+                    <CryptographicKeys>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
+                    </CryptographicKeys>
+                </TechnicalProfile>
+
+            </TechnicalProfiles>
+        </ClaimsProvider>
+
+    </ClaimsProviders>
 
 </TrustFrameworkPolicy>

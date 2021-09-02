@@ -1,19 +1,17 @@
-﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <TrustFrameworkPolicy
- TenantId="dbcab2c.onmicrosoft.com"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
- PolicyId="B2C_1A_DbcaStaff_uat"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_DbcaStaff_uat">
+ TenantId="dbcab2c.onmicrosoft.com"
+ PolicyId="B2C_1A_TrustFrameworkProdInternalIDPs"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkProdInternalIDPs">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkUATBaseExtensions</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkProdExtensions</PolicyId>
     </BasePolicy>
-    <BuildingBlocks>
-</BuildingBlocks>
 
     <UserJourneys>
 
@@ -50,32 +48,17 @@
             </OrchestrationSteps>
         </UserJourney>
 
+        <UserJourney Id="MFAReset">
+            <OrchestrationSteps>
+                <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
+                    <ClaimsProviderSelections>
+                        <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
+                    </ClaimsProviderSelections>
+                </OrchestrationStep>
+            </OrchestrationSteps>
+        </UserJourney>
+
     </UserJourneys>
 
 
-    <RelyingParty>
-        <DefaultUserJourney ReferenceId="SignUpOrSignIn"/>
-        <UserJourneyBehaviors>
-            <ScriptExecution>Allow</ScriptExecution>
-        </UserJourneyBehaviors>
-        <TechnicalProfile Id="PolicyProfile">
-            <DisplayName>PolicyProfile</DisplayName>
-            <Protocol Name="OpenIdConnect"/>
-            <OutputClaims>
-                <OutputClaim ClaimTypeReferenceId="displayName"/>
-                <OutputClaim ClaimTypeReferenceId="givenName"/>
-                <OutputClaim ClaimTypeReferenceId="surname"/>
-                <OutputClaim ClaimTypeReferenceId="objectId" PartnerClaimType="sub"/>
-                <OutputClaim ClaimTypeReferenceId="identityProvider"/>
-                <OutputClaim ClaimTypeReferenceId="userEmailAccount" PartnerClaimType="upn"/>
-                <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false"/>
-                <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" PartnerClaimType="mfaMethod" DefaultValue="none"/>
-
-            </OutputClaims>
-            <SubjectNamingInfo ClaimType="sub"/>
-        </TechnicalProfile>
-    </RelyingParty>
 </TrustFrameworkPolicy>
-
-
-
