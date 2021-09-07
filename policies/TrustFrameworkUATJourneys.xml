@@ -10,7 +10,7 @@
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkIDPSecrets</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkJourneys</PolicyId>
     </BasePolicy>
 
     <BuildingBlocks>
@@ -21,6 +21,7 @@
         <UserJourney Id="SignUpOrSignInUAT">
             <OrchestrationSteps>
 
+                <!-- list login options -->
                 <OrchestrationStep Order="1" Type="CombinedSignInAndSignUp" ContentDefinitionReferenceId="api.signuporsignin">
                     <ClaimsProviderSelections>
                         <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
@@ -32,7 +33,7 @@
                         <ClaimsProviderSelection ValidationClaimsExchangeId="LocalAccountSigninEmailExchange"/>
                     </ClaimsProviderSelections>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="LocalAccountSigninEmailExchange" TechnicalProfileReferenceId="SelfAsserted-LocalAccountSignin-Email"/>
+                        <ClaimsExchange Id="LocalAccountSigninEmailExchange" TechnicalProfileReferenceId="SelfAsserted-LocalAccountSignin"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -50,8 +51,8 @@
                         <ClaimsExchange Id="GoogleExchange" TechnicalProfileReferenceId="Google-OAUTH"/>
                         <ClaimsExchange Id="GitHubExchange" TechnicalProfileReferenceId="Github-OAUTH"/>
                         <ClaimsExchange Id="MicrosoftAccountExchange" TechnicalProfileReferenceId="MSA-MicrosoftAccount-OpenIdConnect"/>
-                        <ClaimsExchange Id="PasswordlessSignIn" TechnicalProfileReferenceId="LocalAccountDiscoveryUsingEmailAddress-SignIn"/>
-                        <ClaimsExchange Id="SignUpWithLogonEmailExchange" TechnicalProfileReferenceId="LocalAccountSignUpStep1-EmailVerify"/>
+                        <ClaimsExchange Id="PasswordlessSignIn" TechnicalProfileReferenceId="SelfAsserted-LocalAccountDiscoveryUsingEmail-SignIn"/>
+                        <ClaimsExchange Id="SignUpWithLogonEmailExchange" TechnicalProfileReferenceId="SelfAsserted-SignUpStep1-EmailVerify"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -60,17 +61,12 @@
                     <Preconditions>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>identityProvider</Value>
-                            <Value>local</Value>
-                            <Action>SkipThisOrchestrationStep</Action>
-                        </Precondition>
-                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
-                            <Value>newUser</Value>
-                            <Value>false</Value>
+                            <Value>local-signup</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADCollectNewUserProperties" TechnicalProfileReferenceId="LocalAccountSignUpStep2-CollectProperties"/>
+                        <ClaimsExchange Id="AADCollectNewUserProperties" TechnicalProfileReferenceId="SelfAsserted-SignUpStep2-UserProperties"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -88,9 +84,8 @@
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
-                <!-- Show self-asserted page only if the directory does not have the user account already (i.e. we do not have an objectId). 
-          This can only happen when authentication happened using a social IDP. If local account was created or authentication done
-          using ESTS in step 2, then an user account must exist in the directory by this time. -->
+                <!-- Collect user properties and create the user account for non-existed social user if collecting user proeprties is required
+                    all local users(including the new local user) already have objectId before this step -->
                 <OrchestrationStep Order="5" Type="ClaimsExchange">
                     <Preconditions>
                         <Precondition Type="ClaimsExist" ExecuteActionsIf="true">
@@ -103,9 +98,22 @@
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
-                <!-- This step reads any user attributes that we may not have received when authenticating using ESTS so they can be sent 
-          in the token. -->
+                <!--  Create the user account for non-existed social user if collecting user proeprties is not required
+                    all local users(including the new local user) already have objectId before this step -->
                 <OrchestrationStep Order="6" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimsExist" ExecuteActionsIf="true">
+                            <Value>objectId</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="AADUserWrite" TechnicalProfileReferenceId="AAD-UserWriteUsingAlternativeSecurityId"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+
+                <!-- Read user data for existing local user , new user's data is already loaded during creating user account-->
+                <OrchestrationStep Order="7" Type="ClaimsExchange">
                     <Preconditions>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>authenticationSource</Value>
@@ -115,20 +123,6 @@
                     </Preconditions>
                     <ClaimsExchanges>
                         <ClaimsExchange Id="AADUserReadWithObjectId" TechnicalProfileReferenceId="AAD-UserReadUsingObjectId"/>
-                    </ClaimsExchanges>
-                </OrchestrationStep>
-                <!-- The previous step (SelfAsserted-Social) could have been skipped if there were no attributes to collect 
-             from the user. So, in that case, create the user in the directory if one does not already exist 
-             (verified using objectId which would be set from the last step if account was created in the directory. -->
-                <OrchestrationStep Order="7" Type="ClaimsExchange">
-                    <Preconditions>
-                        <Precondition Type="ClaimsExist" ExecuteActionsIf="true">
-                            <Value>objectId</Value>
-                            <Action>SkipThisOrchestrationStep</Action>
-                        </Precondition>
-                    </Preconditions>
-                    <ClaimsExchanges>
-                        <ClaimsExchange Id="AADUserWrite" TechnicalProfileReferenceId="AAD-UserWriteUsingAlternativeSecurityId"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -164,18 +158,13 @@
                             <Value>phone</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
-                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
-                            <Value>identityProvider</Value>
-                            <Value>local_passwordless</Value>
-                            <Action>SkipThisOrchestrationStep</Action>
-                        </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
                         <ClaimsExchange Id="PhoneFactor-Verify" TechnicalProfileReferenceId="PhoneFactor-InputOrVerify"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
-                <!--  save phone number and mfa method if mfa method is phone  -->
+                <!--  save phone number and mfa method if mfa method is phone and new phone number is entered -->
                 <OrchestrationStep Order="10" Type="ClaimsExchange">
                     <Preconditions>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
@@ -214,11 +203,6 @@
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>newUser</Value>
                             <Value>true</Value>
-                            <Action>SkipThisOrchestrationStep</Action>
-                        </Precondition>
-                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
-                            <Value>identityProvider</Value>
-                            <Value>local_passwordless</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
@@ -274,18 +258,13 @@
                             <Value>true</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
-                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
-                            <Value>identityProvider</Value>
-                            <Value>local_passwordless</Value>
-                            <Action>SkipThisOrchestrationStep</Action>
-                        </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
                         <ClaimsExchange Id="AUTH2GenerateTOTPQRCode" TechnicalProfileReferenceId="AUTH2-GenerateTOTPQRCode"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
-                <!-- let the user scan the qrcode to regester and verify the token -->
+                <!-- let the user scan the qrcode to regester and verify the token if not registered before-->
                 <OrchestrationStep Order="14" Type="ClaimsExchange">
                     <Preconditions>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
@@ -323,11 +302,6 @@
                         </Precondition>
                         <Precondition Type="ClaimsExist" ExecuteActionsIf="true">
                             <Value>totpQRCodeBitmap</Value>
-                            <Action>SkipThisOrchestrationStep</Action>
-                        </Precondition>
-                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
-                            <Value>identityProvider</Value>
-                            <Value>local_passwordless</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>

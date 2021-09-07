@@ -24,7 +24,7 @@
                 <OutputClaim ClaimTypeReferenceId="surname"/>
                 <OutputClaim ClaimTypeReferenceId="objectId" PartnerClaimType="sub"/>
                 <OutputClaim ClaimTypeReferenceId="identityProvider"/>
-                <OutputClaim ClaimTypeReferenceId="userEmailAccount" PartnerClaimType="upn"/>
+                <OutputClaim ClaimTypeReferenceId="userEmail" PartnerClaimType="upn"/>
                 <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" PartnerClaimType="mfaMethod" DefaultValue="null"/>
             </OutputClaims>
             <SubjectNamingInfo ClaimType="sub"/>

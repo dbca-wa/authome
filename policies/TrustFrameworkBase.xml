@@ -269,12 +269,6 @@
                 <UserHelpText>Parameter provided by the default session management provider to indicate that the object id has been retrieved from an SSO session.</UserHelpText>
             </ClaimType>
 
-            <ClaimType Id="isActiveMFASession">
-                <DisplayName>isActiveMFASession</DisplayName>
-                <DataType>boolean</DataType>
-                <UserHelpText>Parameter provided by the MFA session management to indicate that the user has an active MFA session.</UserHelpText>
-            </ClaimType>
-
             <!-- SECTION III: Additional claims that can be collected from the users, stored in the directory, and sent in the token. Add additional claims here. -->
 
             <ClaimType Id="givenName">
@@ -369,7 +363,7 @@
                 <DataType>string</DataType>
             </ClaimType>
 
-            <ClaimType Id="userEmailAccount">
+            <ClaimType Id="userEmail">
                 <DisplayName>Email Address</DisplayName>
                 <DataType>string</DataType>
                 <UserHelpText/>
@@ -513,7 +507,7 @@
 
             <ClaimsTransformation Id="GenerateEmailRequestBody4UserEmailAccount" TransformationMethod="GenerateJson">
                 <InputClaims>
-                    <InputClaim ClaimTypeReferenceId="userEmailAccount" TransformationClaimType="email"/>
+                    <InputClaim ClaimTypeReferenceId="userEmail" TransformationClaimType="email"/>
                     <InputClaim ClaimTypeReferenceId="otp" TransformationClaimType="otp"/>
                 </InputClaims>
                 <OutputClaims>
@@ -541,7 +535,7 @@
                     <InputParameter Id="stringFormat" DataType="string" Value="{0}"/>
                 </InputParameters>
                 <OutputClaims>
-                    <OutputClaim ClaimTypeReferenceId="userEmailAccount" TransformationClaimType="outputClaim"/>
+                    <OutputClaim ClaimTypeReferenceId="userEmail" TransformationClaimType="outputClaim"/>
                 </OutputClaims>
             </ClaimsTransformation>
             <ClaimsTransformation Id="CopyEmailToUserEmailAccount" TransformationMethod="FormatStringClaim">
@@ -552,7 +546,7 @@
                     <InputParameter Id="stringFormat" DataType="string" Value="{0}"/>
                 </InputParameters>
                 <OutputClaims>
-                    <OutputClaim ClaimTypeReferenceId="userEmailAccount" TransformationClaimType="outputClaim"/>
+                    <OutputClaim ClaimTypeReferenceId="userEmail" TransformationClaimType="outputClaim"/>
                 </OutputClaims>
             </ClaimsTransformation>
 
@@ -751,10 +745,10 @@
 
             <DisplayControl Id="userEmailVerificationControl" UserInterfaceControlType="VerificationControl">
                 <InputClaims>
-                    <InputClaim ClaimTypeReferenceId="userEmailAccount"/>
+                    <InputClaim ClaimTypeReferenceId="userEmail"/>
                 </InputClaims>
                 <DisplayClaims>
-                    <DisplayClaim ClaimTypeReferenceId="userEmailAccount"/>
+                    <DisplayClaim ClaimTypeReferenceId="userEmail"/>
                     <DisplayClaim ClaimTypeReferenceId="verificationCode" ControlClaimType="VerificationCode" Required="true"/>
                 </DisplayClaims>
                 <OutputClaims/>
@@ -781,7 +775,6 @@
         in this section, then it cannot be used in a technical policy.
     -->
     <ClaimsProviders>
-
         <ClaimsProvider>
             <DisplayName>Azure Active Directory</DisplayName>
             <TechnicalProfiles>
@@ -789,14 +782,6 @@
                 <TechnicalProfile Id="AAD-Common">
                     <DisplayName>Azure Active Directory</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.AzureActiveDirectoryProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
-                    <Metadata>
-                        <Item Key="ApplicationObjectId">87e7a395-3332-4d90-a438-87382e521249</Item>
-                        <Item Key="ClientId">3c51eb38-4127-4f36-b068-66ddba30b23b</Item>
-                    </Metadata>
-                    <CryptographicKeys>
-                        <Key Id="issuer_secret" StorageReferenceId="B2C_1A_TokenSigningKeyContainer"/>
-                    </CryptographicKeys>
-
                     <!-- We need this here to suppress the SelfAsserted provider from invoking SSO on validation profiles. -->
                     <IncludeInSso>false</IncludeInSso>
 
@@ -807,8 +792,7 @@
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/>
                 </TechnicalProfile>
 
-                <!-- Technical profiles for social logins -->
-
+                <!-- Create user account for social user  -->
                 <TechnicalProfile Id="AAD-UserWriteUsingAlternativeSecurityId">
                     <Metadata>
                         <Item Key="Operation">Write</Item>
@@ -832,19 +816,18 @@
                         <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
 
                         <!-- Optional claims -->
-                        <PersistedClaim ClaimTypeReferenceId="otherMails"/>
                         <PersistedClaim ClaimTypeReferenceId="givenName"/>
                         <PersistedClaim ClaimTypeReferenceId="surname"/>
+                        <PersistedClaim ClaimTypeReferenceId="otherMails"/>
                     </PersistedClaims>
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="objectId"/>
-                        <!--OutputClaim ClaimTypeReferenceId="newUser" PartnerClaimType="newClaimsPrincipalCreated" /-->
-                        <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="true" AlwaysUseDefaultValue="true"/>
-
                         <!-- The following other mails claim is needed for the case when a user is created, we get otherMails from directory. Self-asserted provider also has an
                  OutputClaims, and if this is absent, Self-Asserted provider will prompt the user for otherMails. -->
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
+
                         <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
+                        <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
 
                     <OutputClaimsTransformations>
@@ -855,6 +838,7 @@
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
+                <!-- Read user account for social user, raise exception if not found -->
                 <TechnicalProfile Id="AAD-UserReadUsingAlternativeSecurityId">
                     <Metadata>
                         <Item Key="Operation">Read</Item>
@@ -873,10 +857,12 @@
                         <!-- Optional claims -->
                         <OutputClaim ClaimTypeReferenceId="userPrincipalName"/>
                         <OutputClaim ClaimTypeReferenceId="displayName"/>
-                        <OutputClaim ClaimTypeReferenceId="otherMails"/>
                         <OutputClaim ClaimTypeReferenceId="givenName"/>
                         <OutputClaim ClaimTypeReferenceId="surname"/>
+                        <OutputClaim ClaimTypeReferenceId="otherMails"/>
+
                         <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
+                        <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
 
                     </OutputClaims>
 
@@ -887,6 +873,7 @@
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
                 </TechnicalProfile>
 
+                <!-- Read user account for social user, don't raise exception if not found -->
                 <TechnicalProfile Id="AAD-UserReadUsingAlternativeSecurityId-NoError">
                     <Metadata>
                         <Item Key="RaiseErrorIfClaimsPrincipalDoesNotExist">false</Item>
@@ -894,8 +881,7 @@
                     <IncludeTechnicalProfile ReferenceId="AAD-UserReadUsingAlternativeSecurityId"/>
                 </TechnicalProfile>
 
-                <!-- Technical profiles for local accounts -->
-
+                <!-- Create user account for local accounts -->
                 <TechnicalProfile Id="AAD-UserWriteUsingLogonEmail">
                     <Metadata>
                         <Item Key="Operation">Write</Item>
@@ -927,12 +913,17 @@
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="objectId"/>
                         <!--OutputClaim ClaimTypeReferenceId="newUser" PartnerClaimType="newClaimsPrincipalCreated" /-->
-                        <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="true" AlwaysUseDefaultValue="true"/>
 
-                        <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication"/>
                         <OutputClaim ClaimTypeReferenceId="userPrincipalName"/>
                         <OutputClaim ClaimTypeReferenceId="signInNames.emailAddress"/>
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
+
+                        <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication"/>
+                        <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="true" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
+                        <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
+
                     </OutputClaims>
                     <OutputClaimsTransformations>
                         <OutputClaimsTransformation ReferenceId="CopySignInNameToUserEmailAccount"/>
@@ -942,6 +933,7 @@
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
+                <!-- read user data with email address for local user -->
                 <TechnicalProfile Id="AAD-UserReadUsingEmailAddress">
                     <Metadata>
                         <Item Key="Operation">Read</Item>
@@ -955,19 +947,22 @@
                     <OutputClaims>
                         <!-- Required claims -->
                         <OutputClaim ClaimTypeReferenceId="objectId"/>
-                        <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication"/>
 
                         <OutputClaim ClaimTypeReferenceId="strongAuthenticationPhoneNumber"/>
 
                         <!-- Optional claims -->
                         <OutputClaim ClaimTypeReferenceId="userPrincipalName"/>
-                        <OutputClaim ClaimTypeReferenceId="displayName"/>
                         <OutputClaim ClaimTypeReferenceId="accountEnabled"/>
-                        <OutputClaim ClaimTypeReferenceId="otherMails"/>
                         <OutputClaim ClaimTypeReferenceId="signInNames.emailAddress"/>
+
+                        <OutputClaim ClaimTypeReferenceId="displayName"/>
+                        <OutputClaim ClaimTypeReferenceId="givenName"/>
+                        <OutputClaim ClaimTypeReferenceId="surname"/>
+                        <OutputClaim ClaimTypeReferenceId="otherMails"/>
 
                         <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
                         <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication"  AlwaysUseDefaultValue="true"/>
 
                     </OutputClaims>
                     <OutputClaimsTransformations>
@@ -976,6 +971,38 @@
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
                 </TechnicalProfile>
 
+                <!-- read user data via objectId for local user and social user  -->
+                <TechnicalProfile Id="AAD-UserReadUsingObjectId">
+                    <Metadata>
+                        <Item Key="Operation">Read</Item>
+                        <Item Key="RaiseErrorIfClaimsPrincipalDoesNotExist">true</Item>
+                    </Metadata>
+                    <IncludeInSso>false</IncludeInSso>
+                    <InputClaims>
+                        <InputClaim ClaimTypeReferenceId="objectId" Required="true"/>
+                    </InputClaims>
+                    <OutputClaims>
+                        <!-- Required claims -->
+                        <OutputClaim ClaimTypeReferenceId="strongAuthenticationPhoneNumber"/>
+
+                        <!-- Optional claims -->
+                        <OutputClaim ClaimTypeReferenceId="signInNames.emailAddress"/>
+                        <OutputClaim ClaimTypeReferenceId="displayName"/>
+                        <OutputClaim ClaimTypeReferenceId="givenName"/>
+                        <OutputClaim ClaimTypeReferenceId="surname"/>
+                        <OutputClaim ClaimTypeReferenceId="otherMails"/>
+
+                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
+                        <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
+                    </OutputClaims>
+                    <OutputClaimsTransformations>
+                        <OutputClaimsTransformation ReferenceId="CopySignInNameToUserEmailAccount"/>
+                    </OutputClaimsTransformations>
+
+                    <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
+                </TechnicalProfile>
+
+                <!-- Save new password with object id for local user -->
                 <TechnicalProfile Id="AAD-UserWritePasswordUsingObjectId">
                     <Metadata>
                         <Item Key="Operation">Write</Item>
@@ -996,8 +1023,7 @@
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
                 </TechnicalProfile>
 
-                <!-- Technical profiles for updating user record using objectId -->
-
+                <!-- update user profile for local user and social user  -->
                 <TechnicalProfile Id="AAD-UserWriteProfileUsingObjectId">
                     <Metadata>
                         <Item Key="Operation">Write</Item>
@@ -1023,36 +1049,7 @@
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
                 </TechnicalProfile>
 
-                <!-- The following technical profile is used to read data after user authenticates. -->
-                <TechnicalProfile Id="AAD-UserReadUsingObjectId">
-                    <Metadata>
-                        <Item Key="Operation">Read</Item>
-                        <Item Key="RaiseErrorIfClaimsPrincipalDoesNotExist">true</Item>
-                    </Metadata>
-                    <IncludeInSso>false</IncludeInSso>
-                    <InputClaims>
-                        <InputClaim ClaimTypeReferenceId="objectId" Required="true"/>
-                    </InputClaims>
-                    <OutputClaims>
-                        <!-- Required claims -->
-                        <OutputClaim ClaimTypeReferenceId="strongAuthenticationPhoneNumber"/>
-
-                        <!-- Optional claims -->
-                        <OutputClaim ClaimTypeReferenceId="signInNames.emailAddress"/>
-                        <OutputClaim ClaimTypeReferenceId="displayName"/>
-                        <OutputClaim ClaimTypeReferenceId="otherMails"/>
-                        <OutputClaim ClaimTypeReferenceId="givenName"/>
-                        <OutputClaim ClaimTypeReferenceId="surname"/>
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
-
-                    </OutputClaims>
-                    <OutputClaimsTransformations>
-                        <OutputClaimsTransformation ReferenceId="CopySignInNameToUserEmailAccount"/>
-                    </OutputClaimsTransformations>
-
-                    <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
-                </TechnicalProfile>
-
+                <!-- update user phone nunmber which is used for phone verification for local user and social user  -->
                 <TechnicalProfile Id="AAD-UserWritePhoneNumberUsingObjectId">
                     <Metadata>
                         <Item Key="Operation">Write</Item>
@@ -1071,6 +1068,7 @@
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
                 </TechnicalProfile>
 
+                <!-- update user selected mfa method for local user and social user  -->
                 <TechnicalProfile Id="AAD-UserWriteMFAMethodUsingObjectId">
                     <Metadata>
                         <Item Key="Operation">Write</Item>
@@ -1088,6 +1086,7 @@
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
                 </TechnicalProfile>
 
+                <!-- update user totp data which is used for totp verification for local user and social user  -->
                 <TechnicalProfile Id="AAD-WriteUserTOTPByObjectId">
                     <Metadata>
                         <Item Key="Operation">Write</Item>
@@ -1114,16 +1113,14 @@
             <DisplayName>Self Asserted</DisplayName>
             <TechnicalProfiles>
 
-                <TechnicalProfile Id="LocalAccountSignUpStep1-EmailVerify">
+                <!-- verify the emaill address for local account signup -->
+                <TechnicalProfile Id="SelfAsserted-SignUpStep1-EmailVerify">
                     <DisplayName>Email Address Verification For Local Account</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
                         <Item Key="ContentDefinitionReferenceId">api.selfasserted</Item>
                         <Item Key="language.button_continue">Continue</Item>
                     </Metadata>
-                    <CryptographicKeys>
-                        <Key Id="issuer_secret" StorageReferenceId="B2C_1A_TokenSigningKeyContainer"/>
-                    </CryptographicKeys>
                     <InputClaims>
                         <InputClaim ClaimTypeReferenceId="email"/>
                     </InputClaims>
@@ -1132,27 +1129,133 @@
                     </DisplayClaims>
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="email" PartnerClaimType="Verified.Email" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="true" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none" AlwaysUseDefaultValue="true"/>
-
-                        <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
-
-                        <!-- Optional claims, to be collected from the user 
-            <OutputClaim ClaimTypeReferenceId="displayName" />-->
+                        <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local-singup" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
                 </TechnicalProfile>
 
+                <!-- Collect the user properties, create the user account and output the user data for local account signup -->
+                <TechnicalProfile Id="SelfAsserted-SignUpStep2-UserProperties">
+                    <DisplayName>User Properties</DisplayName>
+                    <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
+                    <Metadata>
+                        <Item Key="IpAddressClaimReferenceId">IpAddress</Item>
+                        <Item Key="ContentDefinitionReferenceId">api.localaccountsignup</Item>
+                        <Item Key="language.button_continue">Create</Item>
+                        <Item Key="EnforceEmailVerification">False</Item>
+                    </Metadata>
+                    <InputClaimsTransformations>
+                        <InputClaimsTransformation ReferenceId="CopyEmailToReadonlyEmail"/>
+                    </InputClaimsTransformations>
+                    <InputClaims>
+                        <InputClaim ClaimTypeReferenceId="readonlyEmail"/>
+                    </InputClaims>
+                    <OutputClaims>
+                        <OutputClaim ClaimTypeReferenceId="objectId"/>
+                        <OutputClaim ClaimTypeReferenceId="readonlyEmail" Required="true"/>
+                        <OutputClaim ClaimTypeReferenceId="newPassword" Required="true"/>
+                        <OutputClaim ClaimTypeReferenceId="reenterPassword" Required="true"/>
+                        <OutputClaim ClaimTypeReferenceId="executed-SelfAsserted-Input" DefaultValue="true"/>
+
+                        <OutputClaim ClaimTypeReferenceId="givenName"/>
+                        <OutputClaim ClaimTypeReferenceId="surName"/>
+                        <OutputClaim ClaimTypeReferenceId="otherMails"/>
+
+                        <OutputClaim ClaimTypeReferenceId="authenticationSource" />
+                        <OutputClaim ClaimTypeReferenceId="newUser" />
+                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" />
+                        <OutputClaim ClaimTypeReferenceId="identityProvider" />
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" />
+                    </OutputClaims>
+
+                    <ValidationTechnicalProfiles>
+                        <ValidationTechnicalProfile ReferenceId="AAD-UserWriteUsingLogonEmail"/>
+                    </ValidationTechnicalProfiles>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/>
+                </TechnicalProfile>
+
+                <!-- Verify email. Collect the user properties, create the user account and output user data for local account signup (not used in journeys)-->
+                <TechnicalProfile Id="SelfAsserted-LocalAccountSignUp">
+                    <DisplayName>Email signup</DisplayName>
+                    <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
+                    <Metadata>
+                        <Item Key="IpAddressClaimReferenceId">IpAddress</Item>
+                        <Item Key="ContentDefinitionReferenceId">api.localaccountsignup</Item>
+                        <Item Key="language.button_continue">Create</Item>
+                    </Metadata>
+                    <InputClaims>
+                        <InputClaim ClaimTypeReferenceId="email"/>
+                    </InputClaims>
+                    <DisplayClaims>
+                        <DisplayClaim DisplayControlReferenceId="emailVerificationControl"/>
+                        <DisplayClaim ClaimTypeReferenceId="newPassword" Required="true"/>
+                        <DisplayClaim ClaimTypeReferenceId="reenterPassword" Required="true"/>
+
+                        <!-- Optional claims, to be collected from the user -->
+                        <DisplayClaim ClaimTypeReferenceId="givenName"/>
+                        <DisplayClaim ClaimTypeReferenceId="surName"/>
+                    </DisplayClaims>
+                    <OutputClaims>
+                        <OutputClaim ClaimTypeReferenceId="objectId"/>
+                        <OutputClaim ClaimTypeReferenceId="email" PartnerClaimType="Verified.Email" Required="true"/>
+                        <OutputClaim ClaimTypeReferenceId="newPassword" Required="true"/>
+                        <OutputClaim ClaimTypeReferenceId="reenterPassword" Required="true"/>
+                        <OutputClaim ClaimTypeReferenceId="executed-SelfAsserted-Input" DefaultValue="true"/>
+
+                        <OutputClaim ClaimTypeReferenceId="givenName"/>
+                        <OutputClaim ClaimTypeReferenceId="surName"/>
+                        <OutputClaim ClaimTypeReferenceId="otherMails"/>
+
+                        <OutputClaim ClaimTypeReferenceId="authenticationSource"/>
+                        <OutputClaim ClaimTypeReferenceId="newUser"/>
+                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod"/>
+                        <OutputClaim ClaimTypeReferenceId="identityProvider"/>
+                        <OutputClaim ClaimTypeReferenceId="enableMFA"/>
+                    </OutputClaims>
+
+                    <ValidationTechnicalProfiles>
+                        <ValidationTechnicalProfile ReferenceId="AAD-UserWriteUsingLogonEmail"/>
+                    </ValidationTechnicalProfiles>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
+                </TechnicalProfile>
+
+                <!-- Authenticate the local user., the step doesn't output complete user data and need to load user data via objectId later -->
+                <TechnicalProfile Id="SelfAsserted-LocalAccountSignin">
+                    <DisplayName>Local Account Signin</DisplayName>
+                    <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
+                    <Metadata>
+                        <Item Key="SignUpTarget">SignUpWithLogonEmailExchange</Item>
+                        <Item Key="setting.operatingMode">Email</Item>
+                        <Item Key="ContentDefinitionReferenceId">api.selfasserted</Item>
+                    </Metadata>
+                    <IncludeInSso>false</IncludeInSso>
+                    <InputClaims>
+                        <InputClaim ClaimTypeReferenceId="signInName"/>
+                    </InputClaims>
+                    <OutputClaims>
+                        <OutputClaim ClaimTypeReferenceId="objectId"/>
+                        <OutputClaim ClaimTypeReferenceId="signInName" Required="true"/>
+                        <OutputClaim ClaimTypeReferenceId="password" Required="true"/>
+
+                        <OutputClaim ClaimTypeReferenceId="authenticationSource"/>
+                        <OutputClaim ClaimTypeReferenceId="newUser" />
+                        <OutputClaim ClaimTypeReferenceId="identityProvider" />
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" />
+                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" />
+
+                    </OutputClaims>
+                    <ValidationTechnicalProfiles>
+                        <ValidationTechnicalProfile ReferenceId="LocalAccount-Auth"/>
+                    </ValidationTechnicalProfiles>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
+                </TechnicalProfile>
+
+                <!-- collect user properties and create user account for new social user -->
                 <TechnicalProfile Id="SelfAsserted-Social">
                     <DisplayName>User ID signup</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
                         <Item Key="ContentDefinitionReferenceId">api.selfasserted</Item>
                     </Metadata>
-                    <CryptographicKeys>
-                        <Key Id="issuer_secret" StorageReferenceId="B2C_1A_TokenSigningKeyContainer"/>
-                    </CryptographicKeys>
                     <InputClaims>
                         <!-- These claims ensure that any values retrieved in the previous steps (e.g. from an external IDP) are prefilled. 
                  Note that some of these claims may not have any value, for example, if the external IDP did not provide any of
@@ -1168,9 +1271,10 @@
                  referenced below, or a default value is assigned to the claim. A claim is only shown to the user to provide a 
                  value if its value cannot be obtained through any other means. -->
                         <OutputClaim ClaimTypeReferenceId="objectId"/>
-                        <OutputClaim ClaimTypeReferenceId="newUser"/>
                         <OutputClaim ClaimTypeReferenceId="executed-SelfAsserted-Input" DefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
+
+                        <OutputClaim ClaimTypeReferenceId="newUser"/>
 
                         <!-- Optional claims. These claims are collected from the user and can be modified. If a claim is to be persisted in the directory after having been 
                  collected from the user, it needs to be added as a PersistedClaim in the ValidationTechnicalProfile referenced below, i.e. 
@@ -1182,9 +1286,10 @@
                     <ValidationTechnicalProfiles>
                         <ValidationTechnicalProfile ReferenceId="AAD-UserWriteUsingAlternativeSecurityId"/>
                     </ValidationTechnicalProfiles>
-                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-SocialSignup"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
+                <!-- Update user profile -->
                 <TechnicalProfile Id="SelfAsserted-ProfileUpdate">
                     <DisplayName>User ID signup</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
@@ -1219,7 +1324,8 @@
                         <ValidationTechnicalProfile ReferenceId="AAD-UserWriteProfileUsingObjectId"/>
                     </ValidationTechnicalProfiles>
                 </TechnicalProfile>
-
+                    
+                <!-- Select mfa method -->
                 <TechnicalProfile Id="SelfAsserted-Select-MFA-Method">
                     <DisplayName>Allow user to choose their MFA Method</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
@@ -1234,6 +1340,7 @@
                     </OutputClaims>
                 </TechnicalProfile>
 
+                <!-- Verify email address-->
                 <TechnicalProfile Id="SelfAsserted-EmailVerify">
                     <DisplayName>MFA verification via email</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
@@ -1241,183 +1348,20 @@
                         <Item Key="ContentDefinitionReferenceId">api.selfasserted</Item>
                     </Metadata>
                     <InputClaims>
-                        <InputClaim ClaimTypeReferenceId="userEmailAccount"/>
+                        <InputClaim ClaimTypeReferenceId="userEmail"/>
                     </InputClaims>
                     <DisplayClaims>
                         <DisplayClaim DisplayControlReferenceId="userEmailVerificationControl"/>
                     </DisplayClaims>
                     <OutputClaims>
                         <!-- Required claims -->
-                        <OutputClaim ClaimTypeReferenceId="isActiveMFASession" DefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="userEmailAccount" PartnerClaimType="Verified.Email"/>
+                        <OutputClaim ClaimTypeReferenceId="userEmail" PartnerClaimType="Verified.Email"/>
                     </OutputClaims>
-                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-MFA"/>
-                </TechnicalProfile>
-
-            </TechnicalProfiles>
-        </ClaimsProvider>
-
-        <ClaimsProvider>
-            <DisplayName>Local Account</DisplayName>
-            <TechnicalProfiles>
-
-                <TechnicalProfile Id="login-NonInteractive">
-                    <DisplayName>Local Account SignIn</DisplayName>
-                    <Protocol Name="OpenIdConnect"/>
-                    <Metadata>
-                        <Item Key="UserMessageIfClaimsPrincipalDoesNotExist">We can't seem to find your account</Item>
-                        <Item Key="UserMessageIfInvalidPassword">Your password is incorrect</Item>
-                        <Item Key="UserMessageIfOldPasswordUsed">Looks like you used an old password</Item>
-
-                        <Item Key="ProviderName">https://sts.windows.net/</Item>
-                        <Item Key="METADATA">https://login.microsoftonline.com/{tenant}/.well-known/openid-configuration</Item>
-                        <Item Key="authorization_endpoint">https://login.microsoftonline.com/{tenant}/oauth2/token</Item>
-                        <Item Key="response_types">id_token</Item>
-                        <Item Key="response_mode">query</Item>
-                        <Item Key="scope">email openid</Item>
-                        <Item Key="grant_type">password</Item>
-
-                        <!-- Policy Engine Clients -->
-                        <Item Key="UsePolicyInRedirectUri">false</Item>
-                        <Item Key="HttpBinding">POST</Item>
-                    </Metadata>
-                    <InputClaims>
-                        <InputClaim ClaimTypeReferenceId="signInName" PartnerClaimType="username" Required="true"/>
-                        <InputClaim ClaimTypeReferenceId="password" Required="true"/>
-                        <InputClaim ClaimTypeReferenceId="grant_type" DefaultValue="password"/>
-                        <InputClaim ClaimTypeReferenceId="scope" DefaultValue="openid"/>
-                        <InputClaim ClaimTypeReferenceId="nca" PartnerClaimType="nca" DefaultValue="1"/>
-                    </InputClaims>
-                    <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="objectId" PartnerClaimType="oid"/>
-                        <OutputClaim ClaimTypeReferenceId="tenantId" PartnerClaimType="tid"/>
-                        <OutputClaim ClaimTypeReferenceId="givenName" PartnerClaimType="given_name"/>
-                        <OutputClaim ClaimTypeReferenceId="surName" PartnerClaimType="family_name"/>
-                        <OutputClaim ClaimTypeReferenceId="displayName" PartnerClaimType="name"/>
-                        <OutputClaim ClaimTypeReferenceId="userPrincipalName" PartnerClaimType="upn"/>
-                        <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication"/>
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
-                    </OutputClaims>
-                </TechnicalProfile>
-
-                <TechnicalProfile Id="LocalAccountSignUpStep2-CollectProperties">
-                    <DisplayName>User Properties</DisplayName>
-                    <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
-                    <Metadata>
-                        <Item Key="IpAddressClaimReferenceId">IpAddress</Item>
-                        <Item Key="ContentDefinitionReferenceId">api.localaccountsignup</Item>
-                        <Item Key="language.button_continue">Create</Item>
-                        <Item Key="EnforceEmailVerification">False</Item>
-                    </Metadata>
-                    <InputClaimsTransformations>
-                        <InputClaimsTransformation ReferenceId="CopyEmailToReadonlyEmail"/>
-                    </InputClaimsTransformations>
-                    <InputClaims>
-                        <InputClaim ClaimTypeReferenceId="readonlyEmail"/>
-                    </InputClaims>
-                    <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="objectId"/>
-                        <OutputClaim ClaimTypeReferenceId="readonlyEmail" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="newPassword" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="reenterPassword" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="executed-SelfAsserted-Input" DefaultValue="true"/>
-
-                        <!-- Optional claims, to be collected from the user 
-            <OutputClaim ClaimTypeReferenceId="displayName" />-->
-                        <OutputClaim ClaimTypeReferenceId="givenName"/>
-                        <OutputClaim ClaimTypeReferenceId="surName"/>
-                        <OutputClaim ClaimTypeReferenceId="otherMails"/>
-                    </OutputClaims>
-
-                    <ValidationTechnicalProfiles>
-                        <ValidationTechnicalProfile ReferenceId="AAD-UserWriteUsingLogonEmail"/>
-                    </ValidationTechnicalProfiles>
-                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/>
-                </TechnicalProfile>
-
-                <TechnicalProfile Id="LocalAccountSignUpWithLogonEmail">
-                    <DisplayName>Email signup</DisplayName>
-                    <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
-                    <Metadata>
-                        <Item Key="IpAddressClaimReferenceId">IpAddress</Item>
-                        <Item Key="ContentDefinitionReferenceId">api.localaccountsignup</Item>
-                        <Item Key="language.button_continue">Create</Item>
-                    </Metadata>
-                    <CryptographicKeys>
-                        <Key Id="issuer_secret" StorageReferenceId="B2C_1A_TokenSigningKeyContainer"/>
-                    </CryptographicKeys>
-                    <InputClaims>
-                        <InputClaim ClaimTypeReferenceId="email"/>
-                    </InputClaims>
-                    <DisplayClaims>
-                        <DisplayClaim DisplayControlReferenceId="emailVerificationControl"/>
-                        <DisplayClaim ClaimTypeReferenceId="newPassword" Required="true"/>
-                        <DisplayClaim ClaimTypeReferenceId="reenterPassword" Required="true"/>
-
-                        <!-- Optional claims, to be collected from the user -->
-                        <DisplayClaim ClaimTypeReferenceId="givenName"/>
-                        <DisplayClaim ClaimTypeReferenceId="surName"/>
-                    </DisplayClaims>
-                    <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="objectId"/>
-                        <OutputClaim ClaimTypeReferenceId="email" PartnerClaimType="Verified.Email" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="newPassword" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="reenterPassword" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="executed-SelfAsserted-Input" DefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="authenticationSource"/>
-                        <OutputClaim ClaimTypeReferenceId="newUser"/>
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
-
-                        <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
-
-                        <!-- Optional claims, to be collected from the user 
-            <OutputClaim ClaimTypeReferenceId="displayName" />-->
-                        <OutputClaim ClaimTypeReferenceId="givenName"/>
-                        <OutputClaim ClaimTypeReferenceId="surName"/>
-                        <OutputClaim ClaimTypeReferenceId="otherMails"/>
-                    </OutputClaims>
-
-                    <ValidationTechnicalProfiles>
-                        <ValidationTechnicalProfile ReferenceId="AAD-UserWriteUsingLogonEmail"/>
-                    </ValidationTechnicalProfiles>
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
-                <!-- This technical profile uses a validation technical profile to authenticate the user. -->
-                <TechnicalProfile Id="SelfAsserted-LocalAccountSignin-Email">
-                    <DisplayName>Local Account Signin</DisplayName>
-                    <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
-                    <Metadata>
-                        <Item Key="SignUpTarget">SignUpWithLogonEmailExchange</Item>
-                        <Item Key="setting.operatingMode">Email</Item>
-                        <Item Key="ContentDefinitionReferenceId">api.selfasserted</Item>
-                    </Metadata>
-                    <IncludeInSso>false</IncludeInSso>
-                    <InputClaims>
-                        <InputClaim ClaimTypeReferenceId="signInName"/>
-                    </InputClaims>
-                    <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="signInName" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="password" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="objectId"/>
-                        <OutputClaim ClaimTypeReferenceId="authenticationSource"/>
-
-                        <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
-
-                    </OutputClaims>
-                    <ValidationTechnicalProfiles>
-                        <ValidationTechnicalProfile ReferenceId="login-NonInteractive"/>
-                    </ValidationTechnicalProfiles>
-                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
-                </TechnicalProfile>
-
-                <!-- This technical profile forces the user to verify the email address that they provide on the UI. Only after email is verified, the user account is
-        read from the directory. -->
-                <TechnicalProfile Id="LocalAccountDiscoveryUsingEmailAddress">
+                <!-- Verify email address , if succeed, load the user data via email address for local user-->
+                <TechnicalProfile Id="SelfAsserted-LocalAccountDiscoveryUsingEmail">
                     <DisplayName>Reset password using email address</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
@@ -1425,9 +1369,6 @@
                         <Item Key="ContentDefinitionReferenceId">api.localaccountpasswordreset.verifyemail</Item>
                         <Item Key="UserMessageIfClaimsTransformationBooleanValueIsNotEqual">Your account has been locked. Contact your support person to unlock it, then try again.</Item>
                     </Metadata>
-                    <CryptographicKeys>
-                        <Key Id="issuer_secret" StorageReferenceId="B2C_1A_TokenSigningKeyContainer"/>
-                    </CryptographicKeys>
                     <IncludeInSso>false</IncludeInSso>
                     <DisplayClaims>
                         <DisplayClaim DisplayControlReferenceId="emailVerificationControl"/>
@@ -1437,12 +1378,16 @@
                         <OutputClaim ClaimTypeReferenceId="objectId"/>
                         <OutputClaim ClaimTypeReferenceId="userPrincipalName"/>
                         <OutputClaim ClaimTypeReferenceId="authenticationSource"/>
+
+                        <OutputClaim ClaimTypeReferenceId="givenName"/>
+                        <OutputClaim ClaimTypeReferenceId="surname"/>
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
-
                         <OutputClaim ClaimTypeReferenceId="strongAuthenticationPhoneNumber"/>
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
-                        <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
 
+                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" />
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="false" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="newUser"/>
+                        <OutputClaim ClaimTypeReferenceId="authenticationSource"/>
                     </OutputClaims>
 
                     <ValidationTechnicalProfiles>
@@ -1450,15 +1395,13 @@
                     </ValidationTechnicalProfiles>
                 </TechnicalProfile>
 
-                <TechnicalProfile Id="LocalAccountWritePasswordUsingObjectId">
+                <!-- Reset user password -->
+                <TechnicalProfile Id="SelfAsserted-LocalAccountWritePasswordUsingObjectId">
                     <DisplayName>Change password (username)</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
                         <Item Key="ContentDefinitionReferenceId">api.localaccountpasswordreset</Item>
                     </Metadata>
-                    <CryptographicKeys>
-                        <Key Id="issuer_secret" StorageReferenceId="B2C_1A_TokenSigningKeyContainer"/>
-                    </CryptographicKeys>
                     <InputClaims>
                         <InputClaim ClaimTypeReferenceId="objectId"/>
 
@@ -1469,7 +1412,6 @@
                         <OutputClaim ClaimTypeReferenceId="newPassword" Required="true"/>
                         <OutputClaim ClaimTypeReferenceId="reenterPassword" Required="true"/>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local"/>
-                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="signInNames.emailAddress" DefaultValue=""/>
                     </OutputClaims>
                     <OutputClaimsTransformations>
@@ -1480,18 +1422,13 @@
                     </ValidationTechnicalProfiles>
                 </TechnicalProfile>
 
-                <!--Sample: Create new technical profile based on the password reset technical profile that
-            asks the user to provide and verify the email address, and returns the user object id.
-            If the account doesn't exist, the technical profile return following error message "An account could not be found for the provided user ID."
-            The new technical profile sets the display name to "Sign-In with Email" that is shown on the sign-up or sign-in page-->
-                <TechnicalProfile Id="LocalAccountDiscoveryUsingEmailAddress-SignIn">
+                <!--passwordless signin with email-->
+                <TechnicalProfile Id="SelfAsserted-LocalAccountDiscoveryUsingEmail-SignIn">
                     <DisplayName>Sign-In with Email</DisplayName>
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local_passwordless" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
-                    <IncludeTechnicalProfile ReferenceId="LocalAccountDiscoveryUsingEmailAddress"/>
+                    <IncludeTechnicalProfile ReferenceId="SelfAsserted-LocalAccountDiscoveryUsingEmail"/>
                 </TechnicalProfile>
 
             </TechnicalProfiles>
@@ -1511,19 +1448,22 @@
                     <PersistedClaims>
                         <PersistedClaim ClaimTypeReferenceId="objectId"/>
                         <PersistedClaim ClaimTypeReferenceId="signInName"/>
+
+                        <PersistedClaim ClaimTypeReferenceId="givenName"/>
+                        <PersistedClaim ClaimTypeReferenceId="surname"/>
+                        <PersistedClaim ClaimTypeReferenceId="otherMails"/>
+
+                        <PersistedClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber"/>
+
                         <PersistedClaim ClaimTypeReferenceId="authenticationSource"/>
                         <PersistedClaim ClaimTypeReferenceId="identityProvider"/>
-                        <PersistedClaim ClaimTypeReferenceId="newUser"/>
+                        <PersistedClaim ClaimTypeReferenceId="newUser" DefaultValue="false"/>
                         <PersistedClaim ClaimTypeReferenceId="executed-SelfAsserted-Input"/>
+                        <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod"  DefaultValue="none"/>
                     </PersistedClaims>
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="objectIdFromSession" DefaultValue="true"/>
                     </OutputClaims>
-                </TechnicalProfile>
-
-                <!-- Profile name is being used to disambiguate AAD session between sign up and sign in -->
-                <TechnicalProfile Id="SM-SocialSignup">
-                    <IncludeTechnicalProfile ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="SM-SocialLogin">
@@ -1537,15 +1477,15 @@
                     </PersistedClaims>
                 </TechnicalProfile>
 
-                <TechnicalProfile Id="SM-MFA">
+                <TechnicalProfile Id="SM-GoogleLogin">
                     <DisplayName>Session Mananagement Provider</DisplayName>
-                    <Protocol Name="Proprietary" Handler="Web.TPEngine.SSO.DefaultSSOSessionProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
+                    <Protocol Name="Proprietary" Handler="Web.TPEngine.SSO.ExternalLoginSSOSessionProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
+                    <Metadata>
+                        <Item Key="AlwaysFetchClaimsFromProvider">true</Item>
+                    </Metadata>
                     <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber"/>
+                        <PersistedClaim ClaimTypeReferenceId="objectId"/>
                     </PersistedClaims>
-                    <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="isActiveMFASession" DefaultValue="true"/>
-                    </OutputClaims>
                 </TechnicalProfile>
 
             </TechnicalProfiles>
@@ -1576,10 +1516,6 @@
                         <Item Key="issuer_refresh_token_user_identity_claim_type">objectId</Item>
                         <Item Key="SendTokenResponseBodyWithJsonNumbers">true</Item>
                     </Metadata>
-                    <CryptographicKeys>
-                        <Key Id="issuer_secret" StorageReferenceId="B2C_1A_TokenSigningKeyContainer"/>
-                        <Key Id="issuer_refresh_token_key" StorageReferenceId="B2C_1A_TokenEncryptionKeyContainer"/>
-                    </CryptographicKeys>
                     <InputClaims/>
                     <OutputClaims/>
                 </TechnicalProfile>
@@ -1599,6 +1535,7 @@
                         <InputClaim ClaimTypeReferenceId="email" PartnerClaimType="emailAddress"/>
                     </InputClaims>
                 </TechnicalProfile>
+
                 <TechnicalProfile Id="AadSspr-VerifyCode">
                     <DisplayName>Verify Code</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.AadSsprProtocolProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
@@ -1647,7 +1584,7 @@
                         <Item Key="MaxNumAttempts">5</Item>
                     </Metadata>
                     <InputClaims>
-                        <InputClaim ClaimTypeReferenceId="userEmailAccount" PartnerClaimType="identifier"/>
+                        <InputClaim ClaimTypeReferenceId="userEmail" PartnerClaimType="identifier"/>
                     </InputClaims>
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="otp" PartnerClaimType="otpGenerated"/>
@@ -1673,7 +1610,7 @@
                         <Item Key="Operation">VerifyCode</Item>
                     </Metadata>
                     <InputClaims>
-                        <InputClaim ClaimTypeReferenceId="userEmailAccount" PartnerClaimType="identifier"/>
+                        <InputClaim ClaimTypeReferenceId="userEmail" PartnerClaimType="identifier"/>
                         <InputClaim ClaimTypeReferenceId="verificationCode" PartnerClaimType="otpToVerify"/>
                     </InputClaims>
                 </TechnicalProfile>
@@ -1683,6 +1620,7 @@
 
         <ClaimsProvider>
             <DisplayName>PhoneFactor</DisplayName>
+            <!-- Verified the user through phone; if a new phone is inputed, output the new phone number through output 'newPhoneNumberEntered'   -->
             <TechnicalProfiles>
                 <TechnicalProfile Id="PhoneFactor-InputOrVerify">
                     <DisplayName>PhoneFactor</DisplayName>
@@ -1691,9 +1629,6 @@
                         <Item Key="ContentDefinitionReferenceId">api.phonefactor</Item>
                         <Item Key="ManualPhoneNumberEntryAllowed">true</Item>
                     </Metadata>
-                    <CryptographicKeys>
-                        <Key Id="issuer_secret" StorageReferenceId="B2C_1A_TokenSigningKeyContainer"/>
-                    </CryptographicKeys>
                     <InputClaimsTransformations>
                         <InputClaimsTransformation ReferenceId="CreateUserIdForMFA"/>
                     </InputClaimsTransformations>
@@ -1705,7 +1640,7 @@
                         <OutputClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber" PartnerClaimType="Verified.OfficePhone"/>
                         <OutputClaim ClaimTypeReferenceId="newPhoneNumberEntered" PartnerClaimType="newPhoneNumberEntered"/>
                     </OutputClaims>
-                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-MFA"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="PhoneFactor-EditOrVerify">
@@ -1715,9 +1650,6 @@
                         <Item Key="ContentDefinitionReferenceId">api.phonefactor</Item>
                         <Item Key="ManualPhoneNumberEntryAllowed">true</Item>
                     </Metadata>
-                    <CryptographicKeys>
-                        <Key Id="issuer_secret" StorageReferenceId="B2C_1A_TokenSigningKeyContainer"/>
-                    </CryptographicKeys>
                     <InputClaimsTransformations>
                         <InputClaimsTransformation ReferenceId="CreateUserIdForMFA"/>
                     </InputClaimsTransformations>
@@ -1728,7 +1660,7 @@
                         <OutputClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber" PartnerClaimType="Verified.OfficePhone"/>
                         <OutputClaim ClaimTypeReferenceId="newPhoneNumberEntered" PartnerClaimType="newPhoneNumberEntered"/>
                     </OutputClaims>
-                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-MFA"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
             </TechnicalProfiles>
@@ -1779,7 +1711,7 @@
                         <Item Key="SendClaimsIn">Body</Item>
                     </Metadata>
                     <InputClaims>
-                        <InputClaim ClaimTypeReferenceId="userEmailAccount" PartnerClaimType="email"/>
+                        <InputClaim ClaimTypeReferenceId="userEmail" PartnerClaimType="email"/>
                         <InputClaim ClaimTypeReferenceId="identityProvider" PartnerClaimType="idp"/>
                     </InputClaims>
                     <OutputClaims>
@@ -1806,7 +1738,7 @@
                     </Metadata>
                     <InputClaims>
                         <InputClaim ClaimTypeReferenceId="totpCode" PartnerClaimType="totpCode"/>
-                        <InputClaim ClaimTypeReferenceId="userEmailAccount" PartnerClaimType="email"/>
+                        <InputClaim ClaimTypeReferenceId="userEmail" PartnerClaimType="email"/>
                         <InputClaim ClaimTypeReferenceId="identityProvider" PartnerClaimType="idp"/>
                     </InputClaims>
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/>
@@ -1825,22 +1757,17 @@
                     <Metadata>
                         <Item Key="ContentDefinitionReferenceId">api.selfasserted.totpfactor.registration</Item>
                     </Metadata>
-                    <CryptographicKeys>
-                        <Key Id="issuer_secret" StorageReferenceId="B2C_1A_TokenSigningKeyContainer"/>
-                    </CryptographicKeys>
                     <InputClaims>
                         <InputClaim ClaimTypeReferenceId="email"/>
                         <InputClaim ClaimTypeReferenceId="totpQRCodeBitmap"/>
                     </InputClaims>
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpCode" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="totpQRCodeBitmap"/>
-                        <OutputClaim ClaimTypeReferenceId="isActiveMFASession" DefaultValue="true"/>
                     </OutputClaims>
                     <ValidationTechnicalProfiles>
                         <ValidationTechnicalProfile ReferenceId="AUTH2-VerifyTOTPCode"/>
                     </ValidationTechnicalProfiles>
-                    <UseTechnicalProfileForSessionManagement ReferenceId="SSOSession-PhoneFactor"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
                 <!-- Demo: The following technical profile asks the user to provide the TOTP code
@@ -1851,30 +1778,66 @@
                     <Metadata>
                         <Item Key="ContentDefinitionReferenceId">api.selfasserted</Item>
                     </Metadata>
-                    <CryptographicKeys>
-                        <Key Id="issuer_secret" StorageReferenceId="B2C_1A_TokenSigningKeyContainer"/>
-                    </CryptographicKeys>
                     <InputClaims>
                         <InputClaim ClaimTypeReferenceId="email"/>
                     </InputClaims>
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpCode" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="isActiveMFASession" DefaultValue="true"/>
                     </OutputClaims>
                     <ValidationTechnicalProfiles>
                         <ValidationTechnicalProfile ReferenceId="AUTH2-VerifyTOTPCode"/>
                     </ValidationTechnicalProfiles>
-                    <UseTechnicalProfileForSessionManagement ReferenceId="SSOSession-PhoneFactor"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
-                <TechnicalProfile Id="SSOSession-PhoneFactor">
-                    <DisplayName>Session Mananagement Provider</DisplayName>
-                    <Protocol Name="Proprietary" Handler="Web.TPEngine.SSO.DefaultSSOSessionProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
+            </TechnicalProfiles>
+        </ClaimsProvider>
+
+        <ClaimsProvider>
+            <DisplayName>Local Account</DisplayName>
+            <TechnicalProfiles>
+                <TechnicalProfile Id="LocalAccount-Auth">
+                    <DisplayName>Local Account</DisplayName>
+                    <Protocol Name="OpenIdConnect"/>
+                    <Metadata>
+                        <Item Key="UserMessageIfClaimsPrincipalDoesNotExist">We can't seem to find your account</Item>
+                        <Item Key="UserMessageIfInvalidPassword">Your password is incorrect</Item>
+                        <Item Key="UserMessageIfOldPasswordUsed">Looks like you used an old password</Item>
+
+                        <Item Key="ProviderName">https://sts.windows.net/</Item>
+                        <Item Key="METADATA">https://login.microsoftonline.com/{tenant}/.well-known/openid-configuration</Item>
+                        <Item Key="authorization_endpoint">https://login.microsoftonline.com/{tenant}/oauth2/token</Item>
+                        <Item Key="response_types">id_token</Item>
+                        <Item Key="response_mode">query</Item>
+                        <Item Key="scope">email openid</Item>
+                        <Item Key="grant_type">password</Item>
+
+                        <!-- Policy Engine Clients -->
+                        <Item Key="UsePolicyInRedirectUri">false</Item>
+                        <Item Key="HttpBinding">POST</Item>
+                    </Metadata>
+                    <InputClaims>
+                        <InputClaim ClaimTypeReferenceId="signInName" PartnerClaimType="username" Required="true"/>
+                        <InputClaim ClaimTypeReferenceId="password" Required="true"/>
+                        <InputClaim ClaimTypeReferenceId="grant_type" DefaultValue="password"/>
+                        <InputClaim ClaimTypeReferenceId="scope" DefaultValue="openid"/>
+                        <InputClaim ClaimTypeReferenceId="nca" PartnerClaimType="nca" DefaultValue="1"/>
+                    </InputClaims>
                     <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="isActiveMFASession" DefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="objectId" PartnerClaimType="oid"/>
+                        <OutputClaim ClaimTypeReferenceId="tenantId" PartnerClaimType="tid"/>
+                        <OutputClaim ClaimTypeReferenceId="givenName" PartnerClaimType="given_name"/>
+                        <OutputClaim ClaimTypeReferenceId="surName" PartnerClaimType="family_name"/>
+                        <OutputClaim ClaimTypeReferenceId="displayName" PartnerClaimType="name"/>
+                        <OutputClaim ClaimTypeReferenceId="userPrincipalName" PartnerClaimType="upn"/>
+
+                        <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
+                        <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
                 </TechnicalProfile>
-
             </TechnicalProfiles>
         </ClaimsProvider>
 
@@ -1924,13 +1887,6 @@
                     </ErrorHandlers>
                 </TechnicalProfile>
 
-                <TechnicalProfile Id="SM-GoogleLogin">
-                    <DisplayName>Session Mananagement Provider</DisplayName>
-                    <Protocol Name="Proprietary" Handler="Web.TPEngine.SSO.ExternalLoginSSOSessionProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="objectId"/>
-                    </PersistedClaims>
-                </TechnicalProfile>
             </TechnicalProfiles>
         </ClaimsProvider>
 
