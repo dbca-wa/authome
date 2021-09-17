@@ -61,12 +61,12 @@
                     <Preconditions>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>identityProvider</Value>
-                            <Value>local-signup</Value>
+                            <Value>local_signup</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADCollectNewUserProperties" TechnicalProfileReferenceId="SelfAsserted-SignUpStep2-UserProperties"/>
+                        <ClaimsExchange Id="AADCollectProperties4NewLocalUser" TechnicalProfileReferenceId="SelfAsserted-SignUpStep2-UserProperties"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -94,7 +94,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="SelfAsserted-Social" TechnicalProfileReferenceId="SelfAsserted-Social"/>
+                        <ClaimsExchange Id="SelfAssertedSocial" TechnicalProfileReferenceId="SelfAsserted-Social"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -108,7 +108,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADUserWrite" TechnicalProfileReferenceId="AAD-UserWriteUsingAlternativeSecurityId"/>
+                        <ClaimsExchange Id="AADUserWriteUsingAlternativeSecurityId" TechnicalProfileReferenceId="AAD-UserWriteUsingAlternativeSecurityId"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -118,6 +118,11 @@
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>authenticationSource</Value>
                             <Value>socialIdpAuthentication</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>newUser</Value>
+                            <Value>true</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
@@ -141,7 +146,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="SelfAsserted-Select-MFA-Method" TechnicalProfileReferenceId="SelfAsserted-Select-MFA-Method"/>
+                        <ClaimsExchange Id="SelfAssertedSelectMFAMethod" TechnicalProfileReferenceId="SelfAsserted-Select-MFA-Method"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -160,7 +165,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="PhoneFactor-Verify" TechnicalProfileReferenceId="PhoneFactor-InputOrVerify"/>
+                        <ClaimsExchange Id="PhoneFactorInputOrVerify" TechnicalProfileReferenceId="PhoneFactor-InputOrVerify"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -183,7 +188,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADUserWriteWithObjectId" TechnicalProfileReferenceId="AAD-UserWritePhoneNumberUsingObjectId"/>
+                        <ClaimsExchange Id="AADUserWritePhoneNumberUsingObjectId" TechnicalProfileReferenceId="AAD-UserWritePhoneNumberUsingObjectId"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -207,7 +212,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="SelfAsserted-EmailVerify-existing-user" TechnicalProfileReferenceId="SelfAsserted-EmailVerify"/>
+                        <ClaimsExchange Id="SelfAssertedEmailVerify4ExistingUser" TechnicalProfileReferenceId="SelfAsserted-EmailVerify"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -236,7 +241,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="SelfAsserted-EmailVerify-new-socialuser" TechnicalProfileReferenceId="SelfAsserted-EmailVerify"/>
+                        <ClaimsExchange Id="SelfAssertedEmailVerify4NewSocialuser" TechnicalProfileReferenceId="SelfAsserted-EmailVerify"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -358,7 +363,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AAD-UserWriteMFAMethodUsingObjectId" TechnicalProfileReferenceId="AAD-UserWriteMFAMethodUsingObjectId"/>
+                        <ClaimsExchange Id="AADUserWriteMFAMethodUsingObjectId" TechnicalProfileReferenceId="AAD-UserWriteMFAMethodUsingObjectId"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 

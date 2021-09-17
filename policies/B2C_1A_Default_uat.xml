@@ -16,7 +16,7 @@
 </BuildingBlocks>
 
     <RelyingParty>
-        <DefaultUserJourney ReferenceId="SignUpOrSignInUAT"/>
+        <DefaultUserJourney ReferenceId="SignUpOrSignIn"/>
         <UserJourneyBehaviors>
             <ScriptExecution>Allow</ScriptExecution>
         </UserJourneyBehaviors>

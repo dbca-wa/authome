@@ -505,7 +505,7 @@
                 </OutputClaims>
             </ClaimsTransformation>
 
-            <ClaimsTransformation Id="GenerateEmailRequestBody4UserEmailAccount" TransformationMethod="GenerateJson">
+            <ClaimsTransformation Id="GenerateEmailRequestBody4UserEmail" TransformationMethod="GenerateJson">
                 <InputClaims>
                     <InputClaim ClaimTypeReferenceId="userEmail" TransformationClaimType="email"/>
                     <InputClaim ClaimTypeReferenceId="otp" TransformationClaimType="otp"/>
@@ -527,7 +527,7 @@
                 </OutputClaims>
             </ClaimsTransformation>
 
-            <ClaimsTransformation Id="CopySignInNameToUserEmailAccount" TransformationMethod="FormatStringClaim">
+            <ClaimsTransformation Id="CopySignInNameToUserEmail" TransformationMethod="FormatStringClaim">
                 <InputClaims>
                     <InputClaim ClaimTypeReferenceId="signInNames.emailAddress" TransformationClaimType="inputClaim"/>
                 </InputClaims>
@@ -538,7 +538,7 @@
                     <OutputClaim ClaimTypeReferenceId="userEmail" TransformationClaimType="outputClaim"/>
                 </OutputClaims>
             </ClaimsTransformation>
-            <ClaimsTransformation Id="CopyEmailToUserEmailAccount" TransformationMethod="FormatStringClaim">
+            <ClaimsTransformation Id="CopyEmailToUserEmail" TransformationMethod="FormatStringClaim">
                 <InputClaims>
                     <InputClaim ClaimTypeReferenceId="email" TransformationClaimType="inputClaim"/>
                 </InputClaims>
@@ -755,13 +755,13 @@
                 <Actions>
                     <Action Id="SendCode">
                         <ValidationClaimsExchange>
-                            <ValidationClaimsExchangeTechnicalProfile TechnicalProfileReferenceId="GenerateOtp4UserEmailAccount"/>
-                            <ValidationClaimsExchangeTechnicalProfile TechnicalProfileReferenceId="AUTH2-SendOtpViaUserEmailAccount"/>
+                            <ValidationClaimsExchangeTechnicalProfile TechnicalProfileReferenceId="GenerateOtp4UserEmail"/>
+                            <ValidationClaimsExchangeTechnicalProfile TechnicalProfileReferenceId="AUTH2-SendOtpViaUserEmail"/>
                         </ValidationClaimsExchange>
                     </Action>
                     <Action Id="VerifyCode">
                         <ValidationClaimsExchange>
-                            <ValidationClaimsExchangeTechnicalProfile TechnicalProfileReferenceId="VerifyOtp4UserEmailAccount"/>
+                            <ValidationClaimsExchangeTechnicalProfile TechnicalProfileReferenceId="VerifyOtp4UserEmail"/>
                         </ValidationClaimsExchange>
                     </Action>
                 </Actions>
@@ -831,7 +831,7 @@
                     </OutputClaims>
 
                     <OutputClaimsTransformations>
-                        <OutputClaimsTransformation ReferenceId="CopyEmailToUserEmailAccount"/>
+                        <OutputClaimsTransformation ReferenceId="CopyEmailToUserEmail"/>
                     </OutputClaimsTransformations>
 
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
@@ -839,7 +839,7 @@
                 </TechnicalProfile>
 
                 <!-- Read user account for social user, raise exception if not found -->
-                <TechnicalProfile Id="AAD-UserReadUsingAlternativeSecurityId">
+                <TechnicalProfile Id="AAD-UserReadUsingAlternativeSecurityId-NoSession">
                     <Metadata>
                         <Item Key="Operation">Read</Item>
                         <Item Key="RaiseErrorIfClaimsPrincipalDoesNotExist">true</Item>
@@ -867,10 +867,15 @@
                     </OutputClaims>
 
                     <OutputClaimsTransformations>
-                        <OutputClaimsTransformation ReferenceId="CopyEmailToUserEmailAccount"/>
+                        <OutputClaimsTransformation ReferenceId="CopyEmailToUserEmail"/>
                     </OutputClaimsTransformations>
 
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AAD-UserReadUsingAlternativeSecurityId">
+                    <IncludeTechnicalProfile ReferenceId="AAD-UserReadUsingAlternativeSecurityId-NoSession"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
                 <!-- Read user account for social user, don't raise exception if not found -->
@@ -926,7 +931,7 @@
 
                     </OutputClaims>
                     <OutputClaimsTransformations>
-                        <OutputClaimsTransformation ReferenceId="CopySignInNameToUserEmailAccount"/>
+                        <OutputClaimsTransformation ReferenceId="CopySignInNameToUserEmail"/>
                     </OutputClaimsTransformations>
 
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
@@ -972,7 +977,7 @@
                 </TechnicalProfile>
 
                 <!-- read user data via objectId for local user and social user  -->
-                <TechnicalProfile Id="AAD-UserReadUsingObjectId">
+                <TechnicalProfile Id="AAD-UserReadUsingObjectId-NoSession">
                     <Metadata>
                         <Item Key="Operation">Read</Item>
                         <Item Key="RaiseErrorIfClaimsPrincipalDoesNotExist">true</Item>
@@ -996,10 +1001,15 @@
                         <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
                     <OutputClaimsTransformations>
-                        <OutputClaimsTransformation ReferenceId="CopySignInNameToUserEmailAccount"/>
+                        <OutputClaimsTransformation ReferenceId="CopySignInNameToUserEmail"/>
                     </OutputClaimsTransformations>
 
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AAD-UserReadUsingObjectId">
+                    <IncludeTechnicalProfile ReferenceId="AAD-UserReadUsingObjectId-NoSession"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
                 <!-- Save new password with object id for local user -->
@@ -1050,7 +1060,7 @@
                 </TechnicalProfile>
 
                 <!-- update user phone nunmber which is used for phone verification for local user and social user  -->
-                <TechnicalProfile Id="AAD-UserWritePhoneNumberUsingObjectId">
+                <TechnicalProfile Id="AAD-UserWritePhoneNumberUsingObjectId-NoSession">
                     <Metadata>
                         <Item Key="Operation">Write</Item>
                         <Item Key="RaiseErrorIfClaimsPrincipalAlreadyExists">false</Item>
@@ -1068,8 +1078,13 @@
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
                 </TechnicalProfile>
 
+                <TechnicalProfile Id="AAD-UserWritePhoneNumberUsingObjectId">
+                    <IncludeTechnicalProfile ReferenceId="AAD-UserWritePhoneNumberUsingObjectId-NoSession"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
+                </TechnicalProfile>
+
                 <!-- update user selected mfa method for local user and social user  -->
-                <TechnicalProfile Id="AAD-UserWriteMFAMethodUsingObjectId">
+                <TechnicalProfile Id="AAD-UserWriteMFAMethodUsingObjectId-NoSession">
                     <Metadata>
                         <Item Key="Operation">Write</Item>
                         <Item Key="RaiseErrorIfClaimsPrincipalAlreadyExists">false</Item>
@@ -1086,8 +1101,13 @@
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
                 </TechnicalProfile>
 
+                <TechnicalProfile Id="AAD-UserWriteMFAMethodUsingObjectId">
+                    <IncludeTechnicalProfile ReferenceId="AAD-UserWriteMFAMethodUsingObjectId-NoSession"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
+                </TechnicalProfile>
+                    
                 <!-- update user totp data which is used for totp verification for local user and social user  -->
-                <TechnicalProfile Id="AAD-WriteUserTOTPByObjectId">
+                <TechnicalProfile Id="AAD-WriteUserTOTPByObjectId-NoSession">
                     <Metadata>
                         <Item Key="Operation">Write</Item>
                         <Item Key="RaiseErrorIfClaimsPrincipalDoesNotExist">true</Item>
@@ -1104,6 +1124,11 @@
                         <OutputClaim ClaimTypeReferenceId="totpRegistered" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AAD-WriteUserTOTPByObjectId">
+                    <IncludeTechnicalProfile ReferenceId="AAD-WriteUserTOTPByObjectId-NoSession"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
             </TechnicalProfiles>
@@ -1129,8 +1154,9 @@
                     </DisplayClaims>
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="email" PartnerClaimType="Verified.Email" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local-singup" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local_signup" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
                 <!-- Collect the user properties, create the user account and output the user data for local account signup -->
@@ -1166,11 +1192,15 @@
                         <OutputClaim ClaimTypeReferenceId="identityProvider" />
                         <OutputClaim ClaimTypeReferenceId="enableMFA" />
                     </OutputClaims>
+                    <OutputClaimsTransformations>
+                        <OutputClaimsTransformation ReferenceId="CopyEmailToUserEmail"/>
+                    </OutputClaimsTransformations>
+
 
                     <ValidationTechnicalProfiles>
                         <ValidationTechnicalProfile ReferenceId="AAD-UserWriteUsingLogonEmail"/>
                     </ValidationTechnicalProfiles>
-                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
                 <!-- Verify email. Collect the user properties, create the user account and output user data for local account signup (not used in journeys)-->
@@ -1326,7 +1356,7 @@
                 </TechnicalProfile>
                     
                 <!-- Select mfa method -->
-                <TechnicalProfile Id="SelfAsserted-Select-MFA-Method">
+                <TechnicalProfile Id="SelfAsserted-Select-MFA-Method-NoSession">
                     <DisplayName>Allow user to choose their MFA Method</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
@@ -1338,10 +1368,16 @@
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" Required="true"/>
                     </OutputClaims>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="SelfAsserted-Select-MFA-Method">
+                    <IncludeTechnicalProfile ReferenceId="SelfAsserted-Select-MFA-Method-NoSession"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
                 <!-- Verify email address-->
-                <TechnicalProfile Id="SelfAsserted-EmailVerify">
+                <TechnicalProfile Id="SelfAsserted-EmailVerify-NoSession">
                     <DisplayName>MFA verification via email</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
@@ -1357,6 +1393,11 @@
                         <!-- Required claims -->
                         <OutputClaim ClaimTypeReferenceId="userEmail" PartnerClaimType="Verified.Email"/>
                     </OutputClaims>
+                    <!--UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/-->
+                </TechnicalProfile>
+                
+                <TechnicalProfile Id="SelfAsserted-EmailVerify">
+                    <IncludeTechnicalProfile ReferenceId="SelfAsserted-EmailVerify-NoSession"/>
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
@@ -1415,7 +1456,7 @@
                         <OutputClaim ClaimTypeReferenceId="signInNames.emailAddress" DefaultValue=""/>
                     </OutputClaims>
                     <OutputClaimsTransformations>
-                        <OutputClaimsTransformation ReferenceId="CopySignInNameToUserEmailAccount"/>
+                        <OutputClaimsTransformation ReferenceId="CopySignInNameToUserEmail"/>
                     </OutputClaimsTransformations>
                     <ValidationTechnicalProfiles>
                         <ValidationTechnicalProfile ReferenceId="AAD-UserWritePasswordUsingObjectId"/>
@@ -1452,18 +1493,28 @@
                         <PersistedClaim ClaimTypeReferenceId="givenName"/>
                         <PersistedClaim ClaimTypeReferenceId="surname"/>
                         <PersistedClaim ClaimTypeReferenceId="otherMails"/>
-
+                        <PersistedClaim ClaimTypeReferenceId="userEmail"/>
                         <PersistedClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber"/>
 
                         <PersistedClaim ClaimTypeReferenceId="authenticationSource"/>
                         <PersistedClaim ClaimTypeReferenceId="identityProvider"/>
-                        <PersistedClaim ClaimTypeReferenceId="newUser" DefaultValue="false"/>
+                        <PersistedClaim ClaimTypeReferenceId="newUser" />
                         <PersistedClaim ClaimTypeReferenceId="executed-SelfAsserted-Input"/>
-                        <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod"  DefaultValue="none"/>
+                        <PersistedClaim ClaimTypeReferenceId="enableMFA"/>
+                        <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod"/>
+                        <PersistedClaim ClaimTypeReferenceId="totpRegistered"/>
                     </PersistedClaims>
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="objectIdFromSession" DefaultValue="true"/>
                     </OutputClaims>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="SM-MFA">
+                    <DisplayName>Session Mananagement Provider</DisplayName>
+                    <Protocol Name="Proprietary" Handler="Web.TPEngine.SSO.DefaultSSOSessionProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
+                    <PersistedClaims>
+                        <PersistedClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber"/>
+                    </PersistedClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="SM-SocialLogin">
@@ -1572,7 +1623,7 @@
                     </OutputClaims>
                 </TechnicalProfile>
 
-                <TechnicalProfile Id="GenerateOtp4UserEmailAccount">
+                <TechnicalProfile Id="GenerateOtp4UserEmail">
                     <DisplayName>Generate one time password</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.OneTimePasswordProtocolProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
@@ -1603,7 +1654,7 @@
                     </InputClaims>
                 </TechnicalProfile>
 
-                <TechnicalProfile Id="VerifyOtp4UserEmailAccount">
+                <TechnicalProfile Id="VerifyOtp4UserEmail">
                     <DisplayName>Verify one time password</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.OneTimePasswordProtocolProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
@@ -1643,7 +1694,7 @@
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
-                <TechnicalProfile Id="PhoneFactor-EditOrVerify">
+                <TechnicalProfile Id="PhoneFactor-EditOrVerify-NoSession">
                     <DisplayName>PhoneFactor</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.PhoneFactorProtocolProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
@@ -1660,7 +1711,7 @@
                         <OutputClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber" PartnerClaimType="Verified.OfficePhone"/>
                         <OutputClaim ClaimTypeReferenceId="newPhoneNumberEntered" PartnerClaimType="newPhoneNumberEntered"/>
                     </OutputClaims>
-                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/>
                 </TechnicalProfile>
 
             </TechnicalProfiles>
@@ -1685,7 +1736,7 @@
                     </InputClaims>
                 </TechnicalProfile>
 
-                <TechnicalProfile Id="AUTH2-SendOtpViaUserEmailAccount">
+                <TechnicalProfile Id="AUTH2-SendOtpViaUserEmail">
                     <DisplayName>Use Rest API to send the code the the user via email</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.RestfulProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
@@ -1694,7 +1745,7 @@
                         <Item Key="ClaimUsedForRequestPayload">emailRequestBody</Item>
                     </Metadata>
                     <InputClaimsTransformations>
-                        <InputClaimsTransformation ReferenceId="GenerateEmailRequestBody4UserEmailAccount"/>
+                        <InputClaimsTransformation ReferenceId="GenerateEmailRequestBody4UserEmail"/>
                     </InputClaimsTransformations>
                     <InputClaims>
                         <InputClaim ClaimTypeReferenceId="emailRequestBody"/>
@@ -1703,7 +1754,7 @@
 
                 <!--The following technical profile generates a time-based one-time password (TOTP).
         We use the technical  profile to register new user-->
-                <TechnicalProfile Id="AUTH2-GenerateTOTPQRCode">
+                <TechnicalProfile Id="AUTH2-GenerateTOTPQRCode-NoSession">
                     <DisplayName>Generate TOTP QR Code</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.RestfulProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
@@ -1720,13 +1771,20 @@
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/>
                 </TechnicalProfile>
 
-                <TechnicalProfile Id="AUTH2-RegenerateTOTPQRCode">
+                <TechnicalProfile Id="AUTH2-GenerateTOTPQRCode">
+                    <IncludeTechnicalProfile ReferenceId="AUTH2-GenerateTOTPQRCode-NoSession"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AUTH2-RegenerateTOTPQRCode-NoSession">
                     <DisplayName>Regenerate TOTP QR Code</DisplayName>
                     <InputClaims>
                         <InputClaim ClaimTypeReferenceId="regenerate" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                     </InputClaims>
-                    <IncludeTechnicalProfile ReferenceId="AUTH2-GenerateTOTPQRCode"/>
+                    <IncludeTechnicalProfile ReferenceId="AUTH2-GenerateTOTPQRCode-NoSession"/>
                 </TechnicalProfile>
+
+
                 <!-- The following technical profile verifies a time-based one-time password (TOTP).
         We call this technical profile during registration process and sign-in process-->
                 <TechnicalProfile Id="AUTH2-VerifyTOTPCode">
@@ -1751,7 +1809,7 @@
             <TechnicalProfiles>
 
                 <!-- The following technical profile registers a verification phone. -->
-                <TechnicalProfile Id="TOTPFactor-Register">
+                <TechnicalProfile Id="TOTPFactor-Register-NoSession">
                     <DisplayName>TOTP Factor</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
@@ -1763,16 +1821,21 @@
                     </InputClaims>
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpCode" Required="true"/>
+                        <OutputClaim ClaimTypeReferenceId="totpQRCodeBitmap"/>
                     </OutputClaims>
                     <ValidationTechnicalProfiles>
                         <ValidationTechnicalProfile ReferenceId="AUTH2-VerifyTOTPCode"/>
                     </ValidationTechnicalProfiles>
-                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/>
                 </TechnicalProfile>
 
+                <TechnicalProfile Id="TOTPFactor-Register">
+                    <IncludeTechnicalProfile ReferenceId="TOTPFactor-Register-NoSession"/>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
+                </TechnicalProfile>
                 <!-- Demo: The following technical profile asks the user to provide the TOTP code
         and run calls the validation technical profile to validate the TOTP-->
-                <TechnicalProfile Id="TOTPFactor-Challenge">
+                <TechnicalProfile Id="TOTPFactor-Challenge-NoSession">
                     <DisplayName>App Factor</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
@@ -1787,6 +1850,11 @@
                     <ValidationTechnicalProfiles>
                         <ValidationTechnicalProfile ReferenceId="AUTH2-VerifyTOTPCode"/>
                     </ValidationTechnicalProfiles>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="TOTPFactor-Challenge">
+                    <IncludeTechnicalProfile ReferenceId="TOTPFactor-Challenge-NoSession"/>
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 

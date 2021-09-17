@@ -44,7 +44,7 @@
                     <Preconditions>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>identityProvider</Value>
-                            <Value>local-signup</Value>
+                            <Value>local_signup</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
@@ -77,7 +77,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="SelfAsserted-Social" TechnicalProfileReferenceId="SelfAsserted-Social"/>
+                        <ClaimsExchange Id="SelfAssertedSocial" TechnicalProfileReferenceId="SelfAsserted-Social"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -91,7 +91,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADUserWrite" TechnicalProfileReferenceId="AAD-UserWriteUsingAlternativeSecurityId"/>
+                        <ClaimsExchange Id="AADUserWriteUsingAlternativeSecurityId" TechnicalProfileReferenceId="AAD-UserWriteUsingAlternativeSecurityId"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -129,7 +129,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="SelfAsserted-Select-MFA-Method" TechnicalProfileReferenceId="SelfAsserted-Select-MFA-Method"/>
+                        <ClaimsExchange Id="SelfAssertedSelectMFAMethod" TechnicalProfileReferenceId="SelfAsserted-Select-MFA-Method"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -148,7 +148,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="PhoneFactor-Verify" TechnicalProfileReferenceId="PhoneFactor-InputOrVerify"/>
+                        <ClaimsExchange Id="PhoneFactorInputOrVerify" TechnicalProfileReferenceId="PhoneFactor-InputOrVerify"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -171,7 +171,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADUserWriteWithObjectId" TechnicalProfileReferenceId="AAD-UserWritePhoneNumberUsingObjectId"/>
+                        <ClaimsExchange Id="AADUserWritePhoneNumberUsingObjectId" TechnicalProfileReferenceId="AAD-UserWritePhoneNumberUsingObjectId"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -195,7 +195,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="SelfAsserted-EmailVerify-existing-user" TechnicalProfileReferenceId="SelfAsserted-EmailVerify"/>
+                        <ClaimsExchange Id="SelfAssertedEmailVerify4ExistingUser" TechnicalProfileReferenceId="SelfAsserted-EmailVerify"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -224,7 +224,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="SelfAsserted-EmailVerify-new-socialuser" TechnicalProfileReferenceId="SelfAsserted-EmailVerify"/>
+                        <ClaimsExchange Id="SelfAssertedEmailVerify4NewSocialuser" TechnicalProfileReferenceId="SelfAsserted-EmailVerify"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -346,7 +346,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AAD-UserWriteMFAMethodUsingObjectId" TechnicalProfileReferenceId="AAD-UserWriteMFAMethodUsingObjectId"/>
+                        <ClaimsExchange Id="AADUserWriteMFAMethodUsingObjectId" TechnicalProfileReferenceId="AAD-UserWriteMFAMethodUsingObjectId"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -392,7 +392,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADUserReadUsingAlternativeSecurityId" TechnicalProfileReferenceId="AAD-UserReadUsingAlternativeSecurityId"/>
+                        <ClaimsExchange Id="AADUserReadUsingAlternativeSecurityId" TechnicalProfileReferenceId="AAD-UserReadUsingAlternativeSecurityId-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -406,7 +406,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADUserReadWithObjectId" TechnicalProfileReferenceId="AAD-UserReadUsingObjectId"/>
+                        <ClaimsExchange Id="AADUserReadWithObjectId" TechnicalProfileReferenceId="AAD-UserReadUsingObjectId-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -420,7 +420,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="SelfAsserted-EmailVerify-existing-user" TechnicalProfileReferenceId="SelfAsserted-EmailVerify"/>
+                        <ClaimsExchange Id="SelfAssertedEmailVerify4ExistingUser" TechnicalProfileReferenceId="SelfAsserted-EmailVerify-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -434,7 +434,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="SelfAsserted-Select-MFA-Method" TechnicalProfileReferenceId="SelfAsserted-Select-MFA-Method"/>
+                        <ClaimsExchange Id="SelfAssertedSelectMFAMethod" TechnicalProfileReferenceId="SelfAsserted-Select-MFA-Method-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -454,7 +454,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="PhoneFactor-Verify" TechnicalProfileReferenceId="PhoneFactor-EditOrVerify"/>
+                        <ClaimsExchange Id="PhoneFactor-Verify" TechnicalProfileReferenceId="PhoneFactor-EditOrVerify-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -473,7 +473,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADUserWriteWithObjectId" TechnicalProfileReferenceId="AAD-UserWritePhoneNumberUsingObjectId"/>
+                        <ClaimsExchange Id="AADUserWritePhoneNumberUsingObjectId" TechnicalProfileReferenceId="AAD-UserWritePhoneNumberUsingObjectId-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -485,14 +485,9 @@
                             <Value>false</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
-                        <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>extension_mfaMethod</Value>
-                            <Value>totp</Value>
-                            <Action>SkipThisOrchestrationStep</Action>
-                        </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AUTH2GenerateTOTPQRCode" TechnicalProfileReferenceId="AUTH2-RegenerateTOTPQRCode"/>
+                        <ClaimsExchange Id="AUTH2RegenerateTOTPQRCode" TechnicalProfileReferenceId="AUTH2-RegenerateTOTPQRCode-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -511,7 +506,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="TOTPFactorRegister" TechnicalProfileReferenceId="TOTPFactor-Register"/>
+                        <ClaimsExchange Id="TOTPFactorRegister" TechnicalProfileReferenceId="TOTPFactor-Register-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -528,13 +523,9 @@
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
-                        <Precondition Type="ClaimsExist" ExecuteActionsIf="false">
-                            <Value>totpQRCodeBitmap</Value>
-                            <Action>SkipThisOrchestrationStep</Action>
-                        </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADWriteUserTOTPByObjectId" TechnicalProfileReferenceId="AAD-WriteUserTOTPByObjectId"/>
+                        <ClaimsExchange Id="AADWriteUserTOTPByObjectId" TechnicalProfileReferenceId="AAD-WriteUserTOTPByObjectId-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -558,7 +549,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AAD-UserWriteMFAMethodUsingObjectId" TechnicalProfileReferenceId="AAD-UserWriteMFAMethodUsingObjectId"/>
+                        <ClaimsExchange Id="AADUserWriteMFAMethodUsingObjectId" TechnicalProfileReferenceId="AAD-UserWriteMFAMethodUsingObjectId-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -594,7 +585,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADUserRead" TechnicalProfileReferenceId="AAD-UserReadUsingAlternativeSecurityId"/>
+                        <ClaimsExchange Id="AADUserRead" TechnicalProfileReferenceId="AAD-UserReadUsingAlternativeSecurityId-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -607,7 +598,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADUserReadWithObjectId" TechnicalProfileReferenceId="AAD-UserReadUsingObjectId"/>
+                        <ClaimsExchange Id="AADUserReadWithObjectId" TechnicalProfileReferenceId="AAD-UserReadUsingObjectId-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -664,7 +655,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADUserRead" TechnicalProfileReferenceId="AAD-UserReadUsingAlternativeSecurityId"/>
+                        <ClaimsExchange Id="AADUserRead" TechnicalProfileReferenceId="AAD-UserReadUsingAlternativeSecurityId-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
                 <OrchestrationStep Order="4" Type="ClaimsExchange">
@@ -676,7 +667,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADUserReadWithObjectId" TechnicalProfileReferenceId="AAD-UserReadUsingObjectId"/>
+                        <ClaimsExchange Id="AADUserReadWithObjectId" TechnicalProfileReferenceId="AAD-UserReadUsingObjectId-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -690,7 +681,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="SelfAsserted-Select-MFA-Method" TechnicalProfileReferenceId="SelfAsserted-Select-MFA-Method"/>
+                        <ClaimsExchange Id="SelfAssertedSelectMFAMethod" TechnicalProfileReferenceId="SelfAsserted-Select-MFA-Method-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -710,7 +701,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="PhoneFactor-Verify" TechnicalProfileReferenceId="PhoneFactor-EditOrVerify"/>
+                        <ClaimsExchange Id="PhoneFactor-Verify" TechnicalProfileReferenceId="PhoneFactor-EditOrVerify-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -729,7 +720,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADUserWriteWithObjectId" TechnicalProfileReferenceId="AAD-UserWritePhoneNumberUsingObjectId"/>
+                        <ClaimsExchange Id="AADUserWritePhoneNumberUsingObjectId" TechnicalProfileReferenceId="AAD-UserWritePhoneNumberUsingObjectId-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -748,7 +739,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="SelfAssertedEmailVerify" TechnicalProfileReferenceId="SelfAsserted-EmailVerify"/>
+                        <ClaimsExchange Id="SelfAssertedEmailVerify4ExistingUser" TechnicalProfileReferenceId="SelfAsserted-EmailVerify-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -772,7 +763,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AUTH2GenerateTOTPQRCode" TechnicalProfileReferenceId="AUTH2-GenerateTOTPQRCode"/>
+                        <ClaimsExchange Id="AUTH2GenerateTOTPQRCode" TechnicalProfileReferenceId="AUTH2-GenerateTOTPQRCode-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -795,7 +786,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="TOTPFactorRegister" TechnicalProfileReferenceId="TOTPFactor-Register"/>
+                        <ClaimsExchange Id="TOTPFactorRegister" TechnicalProfileReferenceId="TOTPFactor-Register-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -818,7 +809,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="TOTPFactorChallenge" TechnicalProfileReferenceId="TOTPFactor-Challenge"/>
+                        <ClaimsExchange Id="TOTPFactorChallenge" TechnicalProfileReferenceId="TOTPFactor-Challenge-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
@@ -841,12 +832,35 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AADWriteUserTOTPByObjectId" TechnicalProfileReferenceId="AAD-WriteUserTOTPByObjectId"/>
+                        <ClaimsExchange Id="AADRegisterTOTPByObjectId" TechnicalProfileReferenceId="AAD-WriteUserTOTPByObjectId-NoSession"/>
+                    </ClaimsExchanges>
+                </OrchestrationStep>
+
+                <!-- save the totp registered flag and mfa method for newly registered user -->
+                <OrchestrationStep Order="13" Type="ClaimsExchange">
+                    <Preconditions>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                            <Value>enableMFA</Value>
+                            <Value>false</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
+                            <Value>extension_mfaMethod</Value>
+                            <Value>totp</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                        <Precondition Type="ClaimsExist" ExecuteActionsIf="true">
+                            <Value>totpQRCodeBitmap</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
+                    </Preconditions>
+                    <ClaimsExchanges>
+                        <ClaimsExchange Id="AADSetMFA2TOTPByObjectId" TechnicalProfileReferenceId="AAD-UserWriteMFAMethodUsingObjectId-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
                 <!-- save the selected mfa method only if the method is not phone and totp method -->
-                <OrchestrationStep Order="13" Type="ClaimsExchange">
+                <OrchestrationStep Order="14" Type="ClaimsExchange">
                     <Preconditions>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>enableMFA</Value>
@@ -865,11 +879,11 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="AAD-UserWriteMFAMethodUsingObjectId" TechnicalProfileReferenceId="AAD-UserWriteMFAMethodUsingObjectId"/>
+                        <ClaimsExchange Id="AADUserWriteMFAMethodUsingObjectId" TechnicalProfileReferenceId="AAD-UserWriteMFAMethodUsingObjectId-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
-                <OrchestrationStep Order="14" Type="SendClaims" CpimIssuerTechnicalProfileReferenceId="JwtIssuer"/>
+                <OrchestrationStep Order="15" Type="SendClaims" CpimIssuerTechnicalProfileReferenceId="JwtIssuer"/>
 
             </OrchestrationSteps>
             <ClientDefinition ReferenceId="DefaultWeb"/>

@@ -82,7 +82,7 @@
             <DisplayName>Azure Active Directory</DisplayName>
             <TechnicalProfiles>
 
-                <TechnicalProfile Id="AAD-UserReadUsingAlternativeSecurityId">
+                <TechnicalProfile Id="AAD-UserReadUsingAlternativeSecurityId-NoSession">
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredProd" DefaultValue="false"/>
                     </OutputClaims>
@@ -94,13 +94,13 @@
                     </OutputClaims>
                 </TechnicalProfile>
 
-                <TechnicalProfile Id="AAD-UserReadUsingObjectId">
+                <TechnicalProfile Id="AAD-UserReadUsingObjectId-NoSession">
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredProd" DefaultValue="false"/>
                     </OutputClaims>
                 </TechnicalProfile>
 
-                <TechnicalProfile Id="AAD-WriteUserTOTPByObjectId">
+                <TechnicalProfile Id="AAD-WriteUserTOTPByObjectId-NoSession">
                     <PersistedClaims>
                         <PersistedClaim ClaimTypeReferenceId="extension_totpRegisteredProd" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                     </PersistedClaims>
@@ -122,7 +122,7 @@
                     </CryptographicKeys>
                 </TechnicalProfile>
 
-                <TechnicalProfile Id="AUTH2-SendOtpViaUserEmailAccount">
+                <TechnicalProfile Id="AUTH2-SendOtpViaUserEmail">
                     <Metadata>
                         <Item Key="ServiceUrl">https://auth2.dbca.wa.gov.au/sso/verifycode</Item>
                     </Metadata>
@@ -131,7 +131,7 @@
                     </CryptographicKeys>
                 </TechnicalProfile>
 
-                <TechnicalProfile Id="AUTH2-GenerateTOTPQRCode">
+                <TechnicalProfile Id="AUTH2-GenerateTOTPQRCode-NoSession">
                     <Metadata>
                         <Item Key="ServiceUrl">https://auth2.dbca.wa.gov.au/sso/totp/generate</Item>
                     </Metadata>
