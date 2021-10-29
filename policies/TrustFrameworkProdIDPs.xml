@@ -20,7 +20,7 @@
                 <OrchestrationStep Order="1" Type="CombinedSignInAndSignUp" ContentDefinitionReferenceId="api.signuporsignin">
                     <ClaimsProviderSelections>
                         <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/>
@@ -38,7 +38,7 @@
                 <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
                     <ClaimsProviderSelections>
                         <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/>
