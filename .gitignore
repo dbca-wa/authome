@@ -9,9 +9,13 @@ venv/
 *.sw[po]
 gmon.out
 .sass-cache/
+.python-version
+gunicorn_*.py
 
 # Database/fixture dumps
 *.pgdump
 *.dump
 *.db
 *.sqlite3
+start_server
+build_image*

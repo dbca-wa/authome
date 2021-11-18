@@ -1,0 +1,38 @@
+[
+{
+    "model": "authome.identityprovider",
+    "pk": 1,
+    "fields": {
+        "name": "dbca_staff",
+        "idp": "https://sts.windows.net/7b934664-cdcf-4e28-a3ee-1a5bcca0a1b6/",
+        "userflow": "B2C_1_dbca_staff",
+        "logout_url": null,
+        "modified": "2020-11-26T02:20:04.259Z",
+        "created": "2020-11-26T02:08:39.430Z"
+    }
+},
+{
+    "model": "authome.identityprovider",
+    "pk": 2,
+    "fields": {
+        "name": "github",
+        "idp": "github.com",
+        "userflow": "B2C_1_github",
+        "logout_url": "https://github.com/logout",
+        "modified": "2020-11-26T02:21:24.732Z",
+        "created": "2020-11-26T02:21:24.732Z"
+    }
+},
+{
+    "model": "authome.identityprovider",
+    "pk": 3,
+    "fields": {
+        "name": "google",
+        "idp": "google.com",
+        "userflow": "B2C_1_google",
+        "logout_url": "https://accounts.google.com/Logout?ec=GAdAwAE",
+        "modified": "2020-11-26T02:22:11.972Z",
+        "created": "2020-11-26T02:22:11.972Z"
+    }
+}
+]

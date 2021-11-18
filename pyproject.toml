@@ -1,0 +1,37 @@
+[tool.poetry]
+name = "authome"
+version = "1.0.1"
+description = "HTTP service for single sign-on session tracking"
+authors = ["ASI <asi@dbca.wa.gov.au>"]
+license = "Apache-2.0"
+
+[tool.poetry.dependencies]
+python = "^3.7"
+Django = "3.2.5"
+django-ipware = "3.0.1"
+social-auth-app-django = "3.1.0"
+social-auth-core = "3.0.0"
+psycopg2-binary = "2.8.6"
+gunicorn = "20.0.4"
+dj-database-url = "0.5.0"
+django-dotenv = "1.4.2"
+django-extensions = "3.0.8"
+dj-static = "0.0.6"
+cryptography = "3.2.1"
+django-debug-toolbar = "3.2"
+python-memcached = "1.59"
+django-redis = "4.12.1"
+qrcode = "6.1"
+pyotp = "2.6.0"
+Pillow = "8.1.0"
+
+[tool.poetry.dev-dependencies]
+ipython = "^7.18.1"
+coverage = "^5.3"
+coveralls = "^2.1.2"
+mock = "^4.0.2"
+ipdb = "^0.13.4"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"

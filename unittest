@@ -1,0 +1,3 @@
+#!/bin/bash
+#source venv/bin/activate && python manage.py test authome --keepdb
+poetry run python manage.py test authome --keepdb --pattern="test_*.py"

@@ -1,0 +1,28 @@
+[
+{
+    "model": "authome.usergroupauthorization",
+    "pk": 1,
+    "fields": {
+        "domain": "*",
+        "paths": null,
+        "excluded_paths": "[\"*\"]",
+        "sortkey": "80:*",
+        "modified": "2020-11-26T02:14:15.860Z",
+        "created": "2020-11-26T02:14:20.709Z",
+        "usergroup": 1
+    }
+},
+{
+    "model": "authome.usergroupauthorization",
+    "pk": 2,
+    "fields": {
+        "domain": "*",
+        "paths": null,
+        "excluded_paths": null,
+        "sortkey": "80:*",
+        "modified": "2020-11-26T02:14:41.412Z",
+        "created": "2020-11-26T02:14:46.068Z",
+        "usergroup": 2
+    }
+}
+]

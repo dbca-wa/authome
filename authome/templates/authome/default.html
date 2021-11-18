@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en-US"><head>
+    
+    <title>{{title}}</title>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://ajax.aspnetcdn.com/ajax/bootstrap/3.3.5/css/bootstrap.min.css" rel="stylesheet" type="text/css">
+    <script src="/sso/static/admin/js/vendor/jquery/jquery.min.js"></script>
+    <style>
+        body {
+            font-family: Segoe UI,SegoeUI,"Helvetica Neue",Helvetica,Arial,sans-serif;
+            text-align: left;
+        }
+        .row {
+            width: 100%;
+            margin: 0;
+            display: table-cell;
+            vertical-align: middle;
+        }
+        .container {
+            text-align: center;
+            width:100%;
+            display:table;
+        }
+
+        .col-lg-6{
+            max-width:800px;
+            width: 100%;
+            float: none;
+            display: inline-block;
+            vertical-align: top;
+            padding: 0;
+        }
+
+        .content_container .panel-default{
+            padding: 40px 30px;
+            margin-top: auto;
+            margin-bottom: auto;
+            height: 100%;
+            background-color: #fff;
+        }
+        .content_container .row .panel-default .panel-body {
+            width: auto;
+            margin: 0 auto;
+            padding: 0;
+        }
+        .content_container .row .panel-default #api {
+            display: table;
+            margin: 0;
+            width: 100%;
+            text-align:left;
+        }
+    </style>
+    {{extracss | safe}}
+</head>
+<body>
+    {{body | safe}}
+    <div style="display:none">
+    <div id="real_content_div">
+    {{content|safe}}
+    </div>
+    </div>
+    
+    <script>
+        $("#real_content_div").detach().appendTo('#api')
+    </script>
+</body>
+</html>
+    
+
