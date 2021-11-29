@@ -1,6 +1,6 @@
 import os
 
-from authome.utils import env,get_digest_function
+from authome.utils import env, get_digest_function
 from datetime import timedelta
 import dj_database_url
 
@@ -271,13 +271,13 @@ def get_cache(server):
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
             }
-        } 
+        }
     else:
         return {
             'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
             'LOCATION': server,
         }
-   
+
 CACHE_SERVER = env("CACHE_SERVER")
 CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
 CACHE_USER_SERVER = env("CACHE_USER_SERVER")
@@ -286,7 +286,7 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     CACHES = {}
     if CACHE_SERVER:
         CACHES['default'] = get_cache(CACHE_SERVER)
-   
+
     if CACHE_SESSION_SERVER:
         CACHES["session"] = get_cache(CACHE_SESSION_SERVER)
         SESSION_ENGINE = "authome.session" if LOGLEVEL in ["DEBUG"] else  "django.contrib.sessions.backends.cache"

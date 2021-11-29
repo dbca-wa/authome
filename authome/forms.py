@@ -29,7 +29,7 @@ class UserGroupForm(forms.ModelForm):
     class Meta:
         model = UserGroup
         fields = "__all__"
-        
+
 class AuthorizationForm(forms.ModelForm):
     check_domain_js = """
 value = this.value.trim()
@@ -81,14 +81,14 @@ class UserAuthorizationForm(AuthorizationForm):
     class Meta:
         model = UserAuthorization
         fields = "__all__"
-        
+
 
 class IdentityProviderForm(forms.ModelForm):
     logout_url = forms.CharField(required=True,widget=forms.TextInput(attrs={"style":"width:80%"}))
     class Meta:
         model = IdentityProvider
         fields = "__all__"
-        
+
 class CustomizableUserflowForm(forms.ModelForm):
     domain = forms.CharField(required=True,widget=forms.TextInput(),help_text=get_help_text(CustomizableUserflow,"domain"))
     class Meta:
@@ -100,4 +100,4 @@ class CustomizableUserflowForm(forms.ModelForm):
             'verifyemail_body': forms.Textarea(attrs={'style':'width:80%;height:500px'}),
             'verifyemail_subject': forms.TextInput(attrs={'style':'width:80%;'})
         }
-        
+
