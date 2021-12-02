@@ -37,6 +37,9 @@ urlpatterns = [
     path('sso/totp/generate',views.totp_generate,name="totp_generate"),
     path('sso/totp/verify',views.totp_verify,name="totp_verify"),
 
+    path('sso/healthcheck',views.healthcheck,name="healthcheck"),
+    path('sso/status',views.status,name="status"),
+
     path('sso/', include('social_django.urls', namespace='social')),
     path('admin/', admin.site.urls),
     path('', views.home, name='home'),

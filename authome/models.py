@@ -1055,7 +1055,16 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
         usergroups = cache.get_email_groups(email)
         if not usergroups:
-            trees = list(cls.get_grouptree())
+            try:
+                trees = list(cls.get_grouptree())
+            except:
+                #for some unknown reason, cls.get_grouptree return None, that is impossible from the logic, except the first loading is failed, but even that happened, the cache will be automatically reloaded later.
+                if not cls.get_grouptree():
+                    cache.refresh_usergroups()
+                    cache.refresh_usergroupauthorization()
+                    trees = list(cls.get_grouptree())
+                else:
+                    raise
             usergroups = []
             while trees:
                 matched = False

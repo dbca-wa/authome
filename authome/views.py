@@ -1126,3 +1126,22 @@ def handler400(request,exception,**kwargs):
     code = exception.http_code or 400
     return TemplateResponse(request,"authome/default.html",context=context,status=code)
   
+def status(request):
+    content = {}
+
+    content["healthy"] = cache.healthy
+    content["memorycache"] = cache.status
+    content["sessioncache"] = str(settings.CACHES[settings.SESSION_CACHE_ALIAS]) if settings.USER_CACHE_ALIAS else "None"
+    content["usercache"] = str(settings.CACHES[settings.USER_CACHE_ALIAS]) if settings.USER_CACHE_ALIAS else "None"
+    content["defaultcache"] = str(settings.CACHES["default"]) if settings.CACHE_SERVER else "None"
+
+
+    content = json.dumps(content)
+    return HttpResponse(content=content,content_type="application/json")
+
+def healthcheck(request):
+    healthy,msg = cache.healthy
+    if healthy:
+        return HttpResponse("ok")
+    else:
+        return HttpResponse(status=503,content=msg)

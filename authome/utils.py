@@ -8,6 +8,8 @@ import base64
 import qrcode
 import logging
 
+
+from django.utils import timezone
 from django.contrib.auth import REDIRECT_FIELD_NAME
 
 __version__ = '1.0.0'
@@ -198,3 +200,6 @@ def get_digest_function(algorithm):
             continue
 
     raise Exception("Digest algorithm({}) Not Support".format(algorithm))
+
+def format_datetime(dt):
+    return timezone.localtime(dt).strftime("%y-%m-%d %H:%M:%S") if dt else None
