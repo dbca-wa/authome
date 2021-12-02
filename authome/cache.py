@@ -197,10 +197,18 @@ class MemoryCache(object):
 
     @property
     def usergrouptree(self):
+        if not self._usergrouptree:
+            logger.error("The usergrouptree cache is Empty, Try to refresh the data to bring the cache back to normal state")
+            self.refresh_usergroups()
+
         return self._usergrouptree
 
     @property
     def usergroups(self):
+        if not self._usergroups:
+            logger.error("The usergroups cache is Empty, Try to refresh the data to bring the cache back to normal state")
+            self.refresh_usergroups()
+
         return self._usergroups
 
     @property
@@ -235,6 +243,10 @@ class MemoryCache(object):
 
     @property
     def usergroupauthorization(self):
+        if not self._usergroupauthorization:
+            logger.error("The usergroupauthorization cache is Empty, Try to refresh the data to bring the cache back to normal state")
+            self.refresh_usergroupauthorization()
+
         return self._usergroupauthorization
 
     @usergroupauthorization.setter
@@ -491,7 +503,7 @@ class MemoryCache(object):
 
     def refresh_usergroups(self,force=False):
         from .models import UserGroupChange,UserGroup
-        if (force or self._usergrouptree is None or UserGroupChange.is_changed()):
+        if (force or not self._usergrouptree or UserGroupChange.is_changed()):
             logger.debug("UserGroup was changed, clean cache usergroupptree and user_requests_map")
             self._user_authorization_map.clear()
             self._user_authorization_map_ts = timezone.now()
@@ -519,7 +531,7 @@ class MemoryCache(object):
 
     def refresh_usergroupauthorization(self,force=False):
         from .models import UserGroupAuthorizationChange,UserGroupAuthorization
-        if (force or self._usergroupauthorization is None or UserGroupAuthorizationChange.is_changed()):
+        if (force or not self._usergroupauthorization or UserGroupAuthorizationChange.is_changed()):
             logger.debug("UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map")
             self._user_authorization_map.clear()
             self._user_authorization_map_ts = timezone.now()
@@ -533,16 +545,24 @@ class MemoryCache(object):
             self.refresh_usergroupauthorization(force)
 
     def refresh_idp_cache(self,force=False):
-        if self._idp_cache_check_time.can_run() or force:
+        if not self._idps:
+            from .models import IdentityProvider
+            self._idp_cache_check_time.can_run()
+            IdentityProvider.refresh_cache()
+        elif self._idp_cache_check_time.can_run() or force:
             from .models import IdentityProviderChange,IdentityProvider
-            if ( self._idps is None or IdentityProviderChange.is_changed()):
+            if IdentityProviderChange.is_changed():
                 IdentityProvider.refresh_cache()
 
 
     def refresh_userflow_cache(self,force=False):
-        if self._userflow_cache_check_time.can_run() or force:
+        if not self._userflows:
+            from .models import CustomizableUserflow
+            self._userflow_cache_check_time.can_run()
+            CustomizableUserflow.refresh_cache()
+        elif self._userflow_cache_check_time.can_run() or force:
             from .models import CustomizableUserflowChange,CustomizableUserflow
-            if ( self._userflows is None or CustomizableUserflowChange.is_changed()):
+            if CustomizableUserflowChange.is_changed():
                 CustomizableUserflow.refresh_cache()
 
 
@@ -550,22 +570,22 @@ class MemoryCache(object):
     def status(self):
         result = {}
         result["UserGroup"] = {
-            "grouptree_size":None if self._usergrouptree is None else len(self._usergrouptree),
-            "groupsize":None if self._usergroups is None else len(self._usergroups),
-            "dbcagroup":str(self._dbca_group),
-            "publicgroup":str(self._public_group),
+            "grouptree_size":None if self.usergrouptree is None else len(self.usergrouptree),
+            "groupsize":None if self.usergroups is None else len(self.usergroups),
+            "dbcagroup":str(self.dbca_group),
+            "publicgroup":str(self.public_group),
             "latest_refresh_time":format_datetime(self._usergrouptree_ts),
             "next_check_time":format_datetime(self._authorization_cache_check_time.next_runtime)
         }
     
         result["UserGroupAuthorization"] = {
-            "usergroupauthorization_size":None if self._usergroupauthorization is None else len(self._usergroupauthorization),
+            "usergroupauthorization_size":None if self.usergroupauthorization is None else len(self.usergroupauthorization),
             "latest_refresh_time":format_datetime(self._usergroupauthorization_ts),
             "next_check_time":format_datetime(self._authorization_cache_check_time.next_runtime)
         }
     
         result["CustomizableUserflow"] = {
-            "userflow_size":None if self._userflows is None else len(self._userflows),
+            "userflow_size":None if self.userflows is None else len(self.userflows),
             "userflowmap_size":None if self._userflows_map is None else len(self._userflows_map),
             "defaultuserflow":str(self._defaultuserflow),
             "latest_refresh_time":format_datetime(self._userflows_ts),
@@ -574,7 +594,7 @@ class MemoryCache(object):
     
     
         result["IdentityProvider"] = {
-            "identityprovider_size":None if self._idps is None else len(self._idps),
+            "identityprovider_size":None if self.idps is None else len(self.idps),
             "latest_refresh_time":format_datetime(self._idps_ts),
             "next_check_time":format_datetime(self._idp_cache_check_time.next_runtime)
         }
@@ -615,28 +635,28 @@ class MemoryCache(object):
 
     @property
     def healthy(self):
-        if not self._usergrouptree :
+        if not self.usergrouptree :
             return (False,"The UserGroup tree cache is empty")
 
-        if not self._usergroups:
+        if not self.usergroups:
             return (False,"The UserGroup cache is empty")
 
-        if not self._dbca_group:
+        if not self.dbca_group:
             return (False,"The cached dbca user group is None")
 
-        if not self._public_group:
+        if not self.public_group:
             return (False,"The cached public user group is None")
 
-        if not self._usergroupauthorization:
+        if not self.usergroupauthorization:
             return (False,"The UserGroupAuthorization cache is empty.")
 
-        if not self._userflows:
+        if not self.userflows:
             return (False,"The CustomizableUserflow cache is empty")
 
         if not self._defaultuserflow:
             return (False,"The cached default userflow is None")
 
-        if not self._idps:
+        if not self.idps:
             return (False,"The IdentityProvider cache is empty")
 
         if self._user_authorization_map is None :
