@@ -2,17 +2,17 @@ import logging
 import urllib.parse
 import re
 
-from django.core.exceptions import PermissionDenied
 from django.conf import settings
 
 from social_core.backends import azuread_b2c
 from social_core.exceptions import AuthException
 
-from .models import IdentityProvider,CustomizableUserflow,User
+from .models import IdentityProvider, CustomizableUserflow
 from .utils import get_redirect_domain
 from .exceptions import AzureADB2CAuthenticateFailed
 
 logger = logging.getLogger(__name__)
+
 
 class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
     AUTHORIZATION_URL = '{base_url}/oauth2/v2.0/authorize'
@@ -71,7 +71,7 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
 
     @property
     def logout_url(self):
-        return self.LOGOUT_URL.format(base_url=self.base_url) 
+        return self.LOGOUT_URL.format(base_url=self.base_url)
 
     def auth_extra_arguments(self):
         """
@@ -97,4 +97,3 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
                 raise AzureADB2CAuthenticateFailed(self.strategy.request,self.strategy.request.http_error_code,error_code,self.strategy.request.http_error_message,ex)
             else:
                 raise AzureADB2CAuthenticateFailed(self.strategy.request,400,error_code,"Failed to authenticate the user.{}",ex)
-

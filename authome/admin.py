@@ -4,22 +4,23 @@ import traceback
 from django.contrib import admin
 from django.utils import timezone
 from django.conf import settings
-from django.contrib import messages,auth
+from django.contrib import messages, auth
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils.html import mark_safe
 from django.templatetags.static import static
 from django.db.models import Q
 from django.contrib.admin.views.main import ChangeList
-from django.urls import reverse,resolve
+from django.urls import reverse
 
 from . import models
 from . import forms
 
 logger = logging.getLogger(__name__)
 
+
 class CacheableChangeList(ChangeList):
-    def __init__(self, *args,**kwargs):
-        super().__init__(*args,**kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         logger.debug("Refresh the model({}) data if required".format(self.model))
         self.model.refresh_cache_if_required()
 
@@ -43,6 +44,7 @@ class CacheableListTitleMixin(object):
         Return the ChangeList class for use on the changelist page.
         """
         return CacheableChangeList
+
 
 class DatetimeMixin(object):
     def _modified(self,obj):
@@ -80,7 +82,9 @@ class DatetimeMixin(object):
             return timezone.localtime(obj.last_verified).strftime("%Y-%m-%d %H:%M:%S")
     _date_joined.short_description = "Last Verified"
 
+
 admin.site.unregister(auth.models.Group)
+
 
 class UserGroupsMixin(object):
     group_change_url_name = 'admin:{}_{}_change'.format(models.UserGroup._meta.app_label,models.UserGroup._meta.model_name)
@@ -96,7 +100,7 @@ class UserGroupsMixin(object):
                     result = "{0} , <A style='margin-left:5px' href='{2}'>{1}</A>".format(result,group.name,url)
                 else:
                     result = "<A href='{1}'>{0}</A>".format(group.name,url)
-                
+
             return mark_safe("{} ({})".format(result,usergroupnames))
     _usergroups.short_description = "User Groups"
 
@@ -139,11 +143,13 @@ class UserAdmin(UserGroupsMixin,DatetimeMixin,auth.admin.UserAdmin):
     def has_add_permission(self, request, obj=None):
         return False
 
+
 class SystemUser(models.User):
     class Meta:
         proxy = True
         verbose_name="System User"
         verbose_name_plural="       System Users"
+
 
 @admin.register(SystemUser)
 class SystemUserAdmin(UserGroupsMixin,DatetimeMixin,auth.admin.UserAdmin):
@@ -192,6 +198,7 @@ class UserGroupAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
     ordering = ('parent_group','name',)
     form = forms.UserGroupForm
 
+
 @admin.register(models.UserGroupAuthorization)
 class UserGroupAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
     list_display = ('usergroup','domain','paths','excluded_paths','_modified','_created')
@@ -199,6 +206,7 @@ class UserGroupAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,admin.Mo
     fields = ('usergroup','domain','paths','excluded_paths','_modified')
     ordering = ('usergroup',models.sortkey_c.asc())
     form = forms.UserGroupAuthorizationForm
+
 
 #@admin.register(models.UserAuthorization)
 class UserAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
@@ -208,10 +216,12 @@ class UserAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAd
     ordering = ('user',models.sortkey_c.asc())
     form = forms.UserAuthorizationForm
 
+
 class UserAccessToken(models.User):
     class Meta:
         proxy = True
         verbose_name_plural = "      Access Tokens"
+
 
 class TokenStatusFilter(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
@@ -234,7 +244,6 @@ class TokenStatusFilter(admin.SimpleListFilter):
         else:
             return [("all_token","All Token"),('valid_token','Valid Token'),("Expired_token","Expired Token")]
 
-
     def queryset(self, request, queryset):
         """
         Returns the filtered queryset based on the value
@@ -256,7 +265,6 @@ class TokenStatusFilter(admin.SimpleListFilter):
             return queryset.filter(token__isnull=False,token__token__isnull=False,token__expired__lt=timezone.localdate())
         else:
             return queryset
-
 
 
 @admin.register(UserAccessToken)
@@ -345,7 +353,6 @@ class UserTokenAdmin(DatetimeMixin,auth.admin.UserAdmin):
             except Exception as ex:
                 logger.error("{}:Failed to generate access token..{}".format(user.email,traceback.format_exc()))
                 self.message_user(request, "{}:Failed to generate access token..{}".format(user.email,str(ex)),level=messages.ERROR)
-
 
     def revoke_token(self,request, queryset):
         token = None
@@ -452,6 +459,7 @@ class IdentityProviderAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdm
     fields = ('idp','name','userflow','logout_method','logout_url','_modified','_created')
     ordering = ('name','idp',)
 
+
 @admin.register(models.CustomizableUserflow)
 class CustomizableUserflowAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
     list_display = ('domain','fixed','default','profile_edit','mfa_set',"mfa_reset",'password_reset','_modified','_created')
@@ -459,6 +467,7 @@ class CustomizableUserflowAdmin(CacheableListTitleMixin,DatetimeMixin,admin.Mode
     form = forms.CustomizableUserflowForm
     fields = ('domain','fixed','default','profile_edit','mfa_set',"mfa_reset",'password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body",'_modified','_created')
     ordering = (models.sortkey_c.asc(),)
+
 
 @admin.register(models.UserTOTP)
 class UserTOTPAdmin(DatetimeMixin,admin.ModelAdmin):
@@ -476,4 +485,3 @@ class UserTOTPAdmin(DatetimeMixin,admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
-

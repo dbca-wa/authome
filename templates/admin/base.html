@@ -28,11 +28,11 @@
     <div id="header" style="background:#2D2F32">
         <div id="logo" style="margin-left:50px;vertical-align:middle">
             <img src="{% static "images/logo.svg" %}" style="width:318.45px;height:92px"/>
-            
+
         </div>
         <div  style="vertical-align:middle;margin-left:30px">
             <img src="{% static "images/WW4WA_White_small.png" %}" style="vertical-align:middle"/>
-            
+
         </div>
         {% block usertools %}
         <div id="user-tools">
@@ -44,9 +44,9 @@
             {% block userlinks %}
             <span style="padding-left:30px">
                 {% if logout_url %}
-                    <a href="{{ logout_url }}">{% trans 'Logout' %}</a> 
+                    <a href="{{ logout_url }}">{% trans 'Logout' %}</a>
                 {% else %}
-                    <a href="/sso/auth_logout">{% trans 'Logout' %}</a> 
+                    <a href="/sso/auth_logout">{% trans 'Logout' %}</a>
                 {% endif %}
             </span>
             {% endblock %}
@@ -89,7 +89,7 @@
     <footer >
         <div style="float:left;padding-left:50px;color:#999;">
             <pre>
-&copy; 2020 Department of Biodiversity, Conservation and Attractions
+&copy; Department of Biodiversity, Conservation and Attractions
             </pre>
         </div>
         <div style="float:right;padding-right:50px;color:#999;">

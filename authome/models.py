@@ -1,24 +1,21 @@
 import re
 import logging
 import random
-from datetime import datetime,timedelta
+from datetime import datetime, timedelta
 
 from django.conf import settings
-from django.contrib.sessions.models import Session
-from django.core import management
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from django.db import models,transaction
+from django.db import models, transaction
 from django.contrib.postgres.fields import ArrayField
-from django.db.models.signals import pre_delete,pre_save,post_save,post_delete
+from django.db.models.signals import pre_delete, pre_save, post_save, post_delete
 from django.dispatch import receiver
 from django.contrib.auth.models import AbstractUser
 
-from ipware.ip import get_client_ip
 import hashlib
 
 from .cache import cache
-from .utils import get_defaultcache,get_usercache
+from .utils import get_defaultcache, get_usercache
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +32,9 @@ The following lists all valid options in the checking order
 """
 
 help_text_domain = """
-A domain or domain pattern 
+A domain or domain pattern
 The following lists all valid options in the checking order
-    1. Single Domain : Represent a single domain. For example oim.dbca.wa.gov.au. 
+    1. Single Domain : Represent a single domain. For example oim.dbca.wa.gov.au.
     2. Regex Domain  : '*" represents any strings. For example  pbs*dbca.wa.gov.au
     3. Suffix Domain : Starts with '.' followed by a domain. For example .dbca.wa.gov.au
     4. All Domain    : '*'
@@ -65,7 +62,7 @@ class DbObjectMixin(object):
     """
     A mixin class to provide property "db_obj" which is the object with same id in database
     Return None if the object is a new instance.
-    
+
     """
     _db_obj = None
 
@@ -201,7 +198,7 @@ class SufixRequestDomain(RequestDomain):
 
 class RegexRequestDomain(RequestDomain):
     """
-    The configure domain uses '*' represents any number of any characters 
+    The configure domain uses '*' represents any number of any characters
     Match all domains which is identified by configured domain
     """
     base_sort_key = 40
@@ -230,7 +227,7 @@ class CacheableMixin(object):
     @classmethod
     def is_outdated(cls):
         return cls.get_model_change_cls().is_changed()
- 
+
     @classmethod
     def get_cachetime(cls):
         return cls.get_model_change_cls().get_cachetime()
@@ -254,7 +251,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     IdentityProvider 'local' means local account
     IdentityProvider 'local_passwordless' means autenticating user without password
     """
-    MANUALLY_LOGOUT = 1 
+    MANUALLY_LOGOUT = 1
     AUTO_LOGOUT = 2
     AUTO_LOGOUT_WITH_POPUP_WINDOW = 3
 
@@ -317,7 +314,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
         Return idp from cache
         """
         return cache.idps.get(idpid) if idpid else None
-  
+
     @classmethod
     def get_logout_url(cls,idpid):
         """
@@ -405,7 +402,7 @@ Email: enquiries@dbca.wa.gov.au
         <tbody><tr>
             <td style="background:#e3e3e3" width="1"></td>
             <td width="24">&nbsp;</td>
-            <td id="m_4438416264798791343PageBody" colspan="2" style="border-bottom:1px solid #e3e3e3;padding:10px 0 20px;border-bottom-style:hidden" width="640" valign="top">		
+            <td id="m_4438416264798791343PageBody" colspan="2" style="border-bottom:1px solid #e3e3e3;padding:10px 0 20px;border-bottom-style:hidden" width="640" valign="top">
                 <table cellspacing="0" cellpadding="0" border="0">
                 <tbody><tr>
                     <td style="font-size:10pt;line-height:13pt;color:#000" width="630">
@@ -437,7 +434,7 @@ Email: enquiries@dbca.wa.gov.au
             <td width="1">&nbsp;</td>
             <td width="1"></td>
             <td width="1">&nbsp;</td>
-            <td width="1" valign="top"></td>			 
+            <td width="1" valign="top"></td>
             <td width="29">&nbsp;</td>
             <td style="background:#e3e3e3" width="1"></td>
         </tr>
@@ -498,7 +495,7 @@ Email: enquiries@dbca.wa.gov.au
             self._request_domain = RequestDomain.get_instance(self.domain)
 
         return self._request_domain
-        
+
     def clean(self):
         """
         Validate the changed data
@@ -554,7 +551,7 @@ Email: enquiries@dbca.wa.gov.au
         for o in cls.objects.all().order_by(sortkey_c.asc()):
             if o.is_default:
                 defaultuserflow = o
-                
+
             userflows.append(o)
 
             if not last_modified:
@@ -580,7 +577,7 @@ Email: enquiries@dbca.wa.gov.au
                 o.defaultuserflow = None
 
         cache.userflows = (userflows,defaultuserflow,size,refreshtime)
-        
+
 
 class UserEmail(object):
     """
@@ -720,7 +717,7 @@ class RegexUserEmail(UserEmail):
                     c_index += 1
                 else:
                     return False
-                
+
             return p_index >= len(self.config)
 
 class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
@@ -759,7 +756,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                     groupnames.insert(index,group.groupid)
                 group = group.parent_group
         return ",".join(groupnames)
-        
+
     def is_changed(self,update_fields=None):
         changed = super().is_changed(update_fields)
         if changed:
@@ -838,7 +835,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                             break
                     if not contained:
                         raise ValidationError("The email pattern({}) in the child group({}) is not contained by the current group({})".format(child_useremail.config,child_group,self))
-    
+
                 #check whether excluded user eamil in this group is not contained by child group
                 for excluded_useremail in self.excluded_useremails:
                     contained = False
@@ -892,7 +889,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                     elif contained_type == "contained_by_brother":
                         raise ValidationError("The email pattern({3}) in the brother group({2}) containes the email pattern({1}) in the group({0})".format(self,checked_useremail.config,brother_group,brother_useremail.config))
         """
-    
+
 
     @property
     def is_public_group(self):
@@ -1042,7 +1039,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
             added = False
             while index >= 0:
                 if groups[index].is_group(group):
-                    #already added 
+                    #already added
                     added = True
                     break
                 elif group.parent_group.is_group(groups[index]):
@@ -1068,7 +1065,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                             trees.append(subgroup)
                     else:
                         _add_group(usergroups,group)
-    
+
                 elif group.parent_group :
                     _add_group(usergroups,group.parent_group)
             if usergroups:
@@ -1261,7 +1258,7 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
             self._request_domain = RequestDomain.get_instance(self.domain)
 
         return self._request_domain
-        
+
     def get_request_paths(self,paths):
         if not paths:
             return []
@@ -1338,8 +1335,8 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
                 if authorization.request_domain.match(domain):
                     return [authorization]
         """
-        
-        #try to find the matched usergroupauthorization 
+
+        #try to find the matched usergroupauthorization
         matched_authorizations = []
         usergroups = UserGroup.find_groups(email)[0]
 
@@ -1411,9 +1408,9 @@ def _can_access_debug(email,domain,path):
             if not usergroups:
                 #Not in any user group. can't access
                 return False
-    
+
             groupskey = cache.get_email_groupskey(email)
-    
+
         authorizations = cache.get_authorizations(groupskey,domain)
         if authorizations is None:
             authorizations = AuthorizationMixin.find_authorizations(email,domain)
@@ -1469,7 +1466,7 @@ class UserAuthorization(CacheableMixin,AuthorizationMixin):
             else:
                 userauthorization[authorization.user] = [authorization]
                 previous_user = authorization.user
-        
+
         cache.userauthorization = (userauthorization,size,refreshtime)
 
     @classmethod
@@ -1726,7 +1723,7 @@ if defaultcache:
         @classmethod
         def get_cachesize(cls):
             return cache._idps_size
-        
+
         @classmethod
         def get_next_refreshtime(cls):
             return cache._idp_cache_check_time.next_runtime
@@ -1755,7 +1752,7 @@ if defaultcache:
         @classmethod
         def get_cachesize(cls):
             return cache._userflows_size
-        
+
         @classmethod
         def get_next_refreshtime(cls):
             return cache._userflow_cache_check_time.next_runtime
@@ -1814,7 +1811,7 @@ if defaultcache:
         @classmethod
         def get_cachesize(cls):
             return cache._userauthorization_size
-        
+
         @classmethod
         def get_next_refreshtime(cls):
             return cache._authorization_cache_check_time.next_runtime
@@ -1844,7 +1841,7 @@ if defaultcache:
         @classmethod
         def get_cachesize(cls):
             return cache._usergroupauthorization_size
-        
+
         @classmethod
         def get_next_refreshtime(cls):
             return cache._authorization_cache_check_time.next_runtime
@@ -1878,8 +1875,8 @@ else:
 
         @classmethod
         def is_changed(cls):
-            if ( 
-                cls.model.objects.filter(modified__gt=cls.get_cachetime()).exists() or  
+            if (
+                cls.model.objects.filter(modified__gt=cls.get_cachetime()).exists() or
                 cls.model.objects.all().count() != cls.get_cachesize()
             ):
                 logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
@@ -1898,7 +1895,7 @@ else:
         @classmethod
         def get_cachesize(cls):
             return cache._idps_size
-        
+
         @classmethod
         def get_next_refreshtime(cls):
             return cache._idp_cache_check_time.next_runtime
@@ -1907,7 +1904,7 @@ else:
         def refresh_cache_if_required(cls):
             cache.refresh_idp_cache()
 
-        
+
     class CustomizagbleUserflowChange(ModelChange):
         model = CustomizableUserflow
 
@@ -1918,7 +1915,7 @@ else:
         @classmethod
         def get_cachesize(cls):
             return cache._userflows_size
-        
+
         @classmethod
         def get_next_refreshtime(cls):
             return cache._userflow_cache_check_time.next_runtime
@@ -1956,7 +1953,7 @@ else:
         @classmethod
         def get_cachesize(cls):
             return cache._userauthorization_size
-        
+
         @classmethod
         def get_next_refreshtime(cls):
             return cache._authorization_cache_check_time.next_runtime
@@ -1975,7 +1972,7 @@ else:
         @classmethod
         def get_cachesize(cls):
             return cache._usergroupauthorization_size
-        
+
         @classmethod
         def get_next_refreshtime(cls):
             return cache._authorization_cache_check_time.next_runtime
@@ -1983,4 +1980,3 @@ else:
         @classmethod
         def refresh_cache_if_required(cls):
             cache.refresh_usergroupauthorization()
-

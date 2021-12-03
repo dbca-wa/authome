@@ -1,7 +1,6 @@
-from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden,JsonResponse
+from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.template.response import TemplateResponse
-from django.contrib.auth import login, logout
-from django.core.exceptions import ObjectDoesNotExist
+from django.contrib.auth import logout
 from django.urls import reverse
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
@@ -13,18 +12,15 @@ from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.template import engines
 from django.utils.crypto import get_random_string
 
-import social_django.views
 from social_django.utils import psa
-from social_core.actions import do_auth,do_complete
+from social_core.actions import do_auth, do_complete
 
 from ipware.ip import get_client_ip
 import json
 import base64
-import hashlib
 import re
 import traceback
 import logging
-from datetime import datetime
 import urllib.parse
 from pyotp.totp import TOTP
 
@@ -116,8 +112,8 @@ def get_absolute_url(url,domain):
 
 def get_post_b2c_logout_url(request,idp=None,encode=True):
     """
-    Get post b2c logout url which will be redirect to by dbcab2c after log out from dbca b2c. 
-    The logout url is based on idp's logout method. 
+    Get post b2c logout url which will be redirect to by dbcab2c after log out from dbca b2c.
+    The logout url is based on idp's logout method.
         1. idp without logout url: logout url is /sso/signedout
         2. idp with automatically logout method: logout url is the idp's logout url
         3. idp with automatically logout method via popup window: logout url is /sso/signedout, but returned page will open a browser window to logout from idp and then close the window automatically
@@ -216,7 +212,7 @@ def _populate_response(request,f_cache,cache_key,user,session_key=None):
     cached_response["X-auth-cache-hit"] = "success"
     response["remote-user"] = user.email
     cached_response["remote-user"] = user.email
-    # cache the response 
+    # cache the response
     f_cache(cache_key,cached_response)
     logger.debug("cache the sso auth data for the user({}) with key({})".format(user.email,cache_key))
 
@@ -225,7 +221,7 @@ def _populate_response(request,f_cache,cache_key,user,session_key=None):
 def _auth_prod(request):
     """
     has minimum logs, used in prod mode
-    Authenticate and authorization the request; 
+    Authenticate and authorization the request;
     If succeed,get the response from cache; if failed, populate one and cache it.
     Return
         None: not authenticated
@@ -262,7 +258,7 @@ def _auth_debug(request):
     has the same logic as _auth_prod
     """
     start = timezone.now()
-    
+
     logger.debug("==============Start to authenticate the user================")
     if not request.user.is_authenticated:
         #not authenticated
@@ -309,7 +305,7 @@ def _auth_debug(request):
         return _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
 
 
-#set autentication and authorization method to _auth_prod or _auth_debug based on running mode  
+#set autentication and authorization method to _auth_prod or _auth_debug based on running mode
 _auth = _auth_prod if settings.RELEASE else _auth_debug
 
 @csrf_exempt
@@ -369,13 +365,13 @@ def auth_basic(request):
     username, token = _parse_basic(auth_basic)
 
     #try to get the reponse from cache with username and token
-    auth_basic_key = cache.get_basic_auth_key(username,token) 
+    auth_basic_key = cache.get_basic_auth_key(username,token)
     response= cache.get_basic_auth(auth_basic_key)
     if response:
         #found the cached reponse, already authenticated
         useremail = response['X-email']
         if settings.CHECK_AUTH_BASIC_PER_REQUEST:
-            #check whehter user token is valid or not 
+            #check whehter user token is valid or not
             #get the user object via useremail
             user = models.User.objects.get(email__iexact=useremail)
             if not user.token or not user.token.is_valid(token):
@@ -391,12 +387,12 @@ def auth_basic(request):
                     #not authenticated, return basic auth required reponse
                     logger.debug("Failed to authenticate the user({}) with token".format(username))
                     return BASIC_AUTH_REQUIRED_RESPONSE
-            
+
             #token is valid
             useremail = user.email
 
         request.session.modified = False
-        #check authorization    
+        #check authorization
         res = check_authorization(request,useremail)
         if res:
             #not authorized
@@ -478,7 +474,7 @@ def logout_view(request):
 def home(request):
     """
     View method for path '/'
-    redirect to next url if authenticated and authorized; 
+    redirect to next url if authenticated and authorized;
     redirect to '/sso/forbidden' if authenticated but not authorized
     Trigger authentication user flow if not authenticated
     """
@@ -567,7 +563,7 @@ def profile(request):
     except Exception as ex:
         logger.error("Failed to get access token for the user({}).{}".format(user.email,traceback.format_exc()))
         content["access_token_error"] = str(ex)
-        
+
     content = json.dumps(content)
     return HttpResponse(content=content,content_type="application/json")
 
@@ -624,7 +620,7 @@ def signout(request,**kwargs):
     Called by pipeline to automatically logout the user beceause some errors occured druing authentication.
     """
     if kwargs.get("message"):
-        #has error message, return a page to show the message and let the user trigger the logout flow 
+        #has error message, return a page to show the message and let the user trigger the logout flow
         kwargs["auto_signout_delay_seconds"] = settings.AUTO_SIGNOUT_DELAY_SECONDS
         return TemplateResponse(request,"authome/signout.html",context=kwargs)
     else:
@@ -651,13 +647,13 @@ def _init_userflow_pagelayout(request,userflow,container_class):
         #page_layout is configured, init page_layout using template engine
         context={"container_class":container_class}
         page_layout = userflow.page_layout
-    
+
         page_layout = django_engine.from_string(page_layout).render(
             context=context,
             request=request
         )
         setattr(userflow,container_class,page_layout)
-    
+
         if not hasattr(userflow,"inited_extracss"):
             #init extracss using template engine
             extracss = userflow.extracss or ""
@@ -1036,7 +1032,7 @@ def totp_generate(request):
 
         user_totp.save()
         logger.debug("Generate secret key for user({}<{}>)".format(user_email,idp))
-     
+
     #get the totp url
     totpurl = utils.get_totpurl(user_totp.secret_key,user_totp.name,user_totp.issuer,user_totp.timestep,user_totp.prefix,algorithm=user_totp.algorithm,digits=user_totp.digits)
     #generate the qrcode and encode it as base64 string
@@ -1045,7 +1041,7 @@ def totp_generate(request):
     data = {
         "qrCode" : qrcode
     }
-    
+
     return JsonResponse(data,status=200)
 
 
@@ -1082,8 +1078,8 @@ def totp_verify(request):
 
     if settings.TOTP_CHECK_LAST_CODE and totpcode == user_totp.last_verified_code:
         #totpcode is the last checked totp code,
-        return CONFLICT_RESPONSE 
-        
+        return CONFLICT_RESPONSE
+
     totp = TOTP(user_totp.secret_key,digits=user_totp.digits,digest=utils.get_digest_function(user_totp.algorithm)[1],name=user_totp.name,issuer=user_totp.issuer,interval=user_totp.timestep)
     if totp.verify(totpcode,valid_window=settings.TOTP_VALIDWINDOW):
         #verified
@@ -1095,7 +1091,7 @@ def totp_verify(request):
     else:
         #verify failed.
         logger.debug("Failed to verify totp code.{}".format(data))
-        return CONFLICT_RESPONSE 
+        return CONFLICT_RESPONSE
 
 def handler400(request,exception,**kwargs):
     """
@@ -1145,3 +1141,4 @@ def healthcheck(request):
         return HttpResponse("ok")
     else:
         return HttpResponse(status=503,content=msg)
+

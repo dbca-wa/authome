@@ -1,20 +1,16 @@
-import traceback
 import logging
-import time
-from datetime import datetime,timedelta
+from datetime import datetime, timedelta
 from collections import OrderedDict
 
-from django.core.cache import caches
 from django.conf import settings
 from django.utils import timezone
-from django.http import HttpResponse
-from django.db.models.signals import post_save,post_delete
 
 from .utils import get_defaultcache,format_datetime
 
 logger = logging.getLogger(__name__)
 
 defaultcache = get_defaultcache()
+
 
 class TaskRunable(object):
     def can_run(self,dt=None):
@@ -43,17 +39,17 @@ class IntervalTaskRunable(TaskRunable):
 
         if not self._next_time:
             #not run before, don't run before the next scheduled runtime.
-            today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo) 
+            today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo)
             self._next_time = today + timedelta(seconds = (int((dt - today).seconds / self._interval) + 1) * self._interval)
             logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         elif self._next_time > dt:
-            #Don't run before the next scheduled runtime  
+            #Don't run before the next scheduled runtime
             logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         else:
             #Run now, and set the next scheudled runtime.
-            today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo) 
+            today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo)
             self._next_time = today + timedelta(seconds = (int((dt - today).seconds / self._interval) + 1) * self._interval)
             logger.debug("Run task({}) now, next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return True
@@ -63,6 +59,7 @@ class IntervalTaskRunable(TaskRunable):
         if not self._next_time:
             self.can_run()
         return self._next_time
+
 
 class HourListTaskRunable(TaskRunable):
     """
@@ -127,6 +124,7 @@ class HourListTaskRunable(TaskRunable):
             self.can_run()
         return self._next_time
 
+
 class MemoryCache(object):
     """
     Local memory cache
@@ -140,26 +138,26 @@ class MemoryCache(object):
         self._public_group = None
         self._usergrouptree_size = None
         self._usergrouptree_ts = None
-    
+
         """
         #model UserAuthorization cache
         self._userauthorization = None
         self._userauthorization_size = None
         self._userauthorization_ts = None
         """
-    
+
         #model UserGroupAuthorization cache
         self._usergroupauthorization = None
         self._usergroupauthorization_size = None
         self._usergroupauthorization_ts = None
-    
+
         #model CustomizableUserflow cache
         self._userflows = None
         self._userflows_map = {}
         self._defaultuserflow = None
         self._userflows_size = None
         self._userflows_ts = None
-    
+
         #IdentityProvider cache
         self._idps = None
         self._idps_size = None
@@ -176,7 +174,7 @@ class MemoryCache(object):
         self._basic_auth_map = OrderedDict() 
         self._basic_auth_map_ts = None
 
-        #the map between email and groups 
+        #the map between email and groups
         self._groupskey_map = {}
         self._email_groups_map = OrderedDict()
         self._public_email_groups_map = OrderedDict()
@@ -187,13 +185,13 @@ class MemoryCache(object):
         self._auth_cache_clean_time = HourListTaskRunable("authentication cache",settings.AUTH_CACHE_CLEAN_HOURS)
 
         #The runable task to check UserGroup, UserAuthorization and UserGroupAuthorication cache
-        self._authorization_cache_check_time = IntervalTaskRunable("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_INTERVAL) if settings.AUTHORIZATION_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_HOURS) 
+        self._authorization_cache_check_time = IntervalTaskRunable("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_INTERVAL) if settings.AUTHORIZATION_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("authorization cache",settings.AUTHORIZATION_CACHE_CHECK_HOURS)
 
         #The runable task to check CustomizableUserflow cache
-        self._userflow_cache_check_time = IntervalTaskRunable("customizable userflow cache",settings.USERFLOW_CACHE_CHECK_INTERVAL) if settings.USERFLOW_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("customizable userflow cache",settings.USERFLOW_CACHE_CHECK_HOURS) 
+        self._userflow_cache_check_time = IntervalTaskRunable("customizable userflow cache",settings.USERFLOW_CACHE_CHECK_INTERVAL) if settings.USERFLOW_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("customizable userflow cache",settings.USERFLOW_CACHE_CHECK_HOURS)
 
         #The runable task to check IdentityProvider cache
-        self._idp_cache_check_time = IntervalTaskRunable("idp cache",settings.IDP_CACHE_CHECK_INTERVAL) if settings.IDP_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("idp cache",settings.IDP_CACHE_CHECK_HOURS) 
+        self._idp_cache_check_time = IntervalTaskRunable("idp cache",settings.IDP_CACHE_CHECK_INTERVAL) if settings.IDP_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("idp cache",settings.IDP_CACHE_CHECK_HOURS)
 
     @property
     def usergrouptree(self):
@@ -227,7 +225,7 @@ class MemoryCache(object):
             self._usergrouptree,self._usergroups,self._public_group,self._dbca_group,self._usergrouptree_size,self._usergrouptree_ts = value
         else:
             self._usergrouptree,self._usergroups,self._public_group,self._dbca_group,self._usergrouptree_size,self._usergrouptree_ts = None,None,None,None,None,None
-    
+
     """
     @property
     def userauthorization(self):
@@ -255,7 +253,7 @@ class MemoryCache(object):
             self._usergroupauthorization,self._usergroupauthorization_size,self._usergroupauthorization_ts = value
         else:
             self._usergroupauthorization,self._usergroupauthorization_size,self._usergroupauthorization_ts = None,None,None
-        
+
     def get_authorizations(self,groupskey,domain):
         """
         During authorization, this method is the first method to be invoked, and then the methods 'userauthrizations','usergrouptree' and 'usergroupauthorization' will be invoked if required.
@@ -305,8 +303,6 @@ class MemoryCache(object):
         else:
             return self._defaultuserflow
 
-
-
     @userflows.setter
     def userflows(self,value):
         if value:
@@ -333,14 +329,14 @@ class MemoryCache(object):
 
     def get_email_groupskey(self,email):
         return self._email_groups_map.get(email) or self._public_email_groups_map.get(email)
-        
+
     def set_email_groups(self,email,groups):
         """
         cache the email and groups mapping
         """
         #get the key of the groups
         groupskey = self.get_groups_key(groups[0])
-        
+
         #set the map between email and groupskey
         if len(groups[0]) > 1 or groups[0][0] != self._public_group:
             self._email_groups_map[email] = groupskey
@@ -353,7 +349,6 @@ class MemoryCache(object):
         if groupskey not in self._groups_map:
             self._groups_map[groupskey] = groups
 
-
     def get_email_groups(self,email):
         #try to get the groupskey from email_groups and then from public email groups
         groupskey = self._email_groups_map.get(email) or self._public_email_groups_map.get(email)
@@ -362,7 +357,6 @@ class MemoryCache(object):
             return None
 
         return self._groups_map.get(groupskey)
-
 
     def get_auth_key(self,email,session_key):
         return session_key
@@ -383,7 +377,7 @@ class MemoryCache(object):
 
     def set_auth(self,key,response):
         """
-        cache the auth response content and return the populated http response 
+        cache the auth response content and return the populated http response
         """
         now = timezone.now()
         self._auth_map[key] = [response,now,now + settings.AUTH_CACHE_EXPIRETIME]
@@ -393,7 +387,7 @@ class MemoryCache(object):
 
     def update_auth(self,key,response):
         """
-        cache the updated auth response content and return the populated http response 
+        cache the updated auth response content and return the populated http response
         """
         data = self._auth_map.get(key)
         if data:
@@ -430,7 +424,7 @@ class MemoryCache(object):
 
     def set_basic_auth(self,key,response):
         """
-        cache the auth token response content and return the populated http response 
+        cache the auth token response content and return the populated http response
         """
         self._basic_auth_map[key[0]] = [response,key[1],timezone.now() + settings.AUTH_BASIC_CACHE_EXPIRETIME]
 
@@ -439,7 +433,7 @@ class MemoryCache(object):
 
     def update_basic_auth(self,key,response):
         """
-        cache the updated auth token response content and return the populated http response 
+        cache the updated auth token response content and return the populated http response
         """
         data = self._basic_auth_map.get(key[0])
         if data:
@@ -698,4 +692,3 @@ class MemoryCache(object):
         return (True,"ok")
 
 cache = MemoryCache()
-
