@@ -1,12 +1,17 @@
+import logging
+
 from django.urls import include, path
 from django.contrib import admin
 from django.conf import settings
 from django.template.response import TemplateResponse
+from django.views.generic.base import RedirectView
 
 from . import views
 from .cache import cache
 
 import authome.patch
+
+logger = logging.getLogger(__name__)
 
 urlpatterns = [
     path('sso/auth_logout', views.logout_view, name='logout'),
@@ -43,6 +48,8 @@ urlpatterns = [
     path('sso/', include('social_django.urls', namespace='social')),
     path('admin/', admin.site.urls),
     path('', views.home, name='home'),
+
+    path("favicon.ico",RedirectView.as_view(url="{}images/favicon.ico".format(settings.STATIC_URL)))
 ]
 
 if settings.DEBUG:
@@ -54,10 +61,19 @@ handler400 = views.handler400
 #load cache
 try:
     cache.refresh_authorization_cache(True)
+except:
+    import traceback
+    logger.error("Failed to load UserGroup and UserGroupAuthorization cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
+    
+try:
     cache.refresh_idp_cache(True)
+except:
+    import traceback
+    logger.error("Failed to load IdentityProvider cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
+    
+try:
     cache.refresh_userflow_cache(True)
 except:
     import traceback
-    traceback.print_exc()
-    pass
+    logger.error("Failed to load CustomizableUserflow cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
     
