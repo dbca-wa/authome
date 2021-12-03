@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.http import HttpResponse
 from django.db.models.signals import post_save,post_delete
 
-from .utils import get_defaultcache
+from .utils import get_defaultcache,format_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -167,17 +167,21 @@ class MemoryCache(object):
 
         #user authorization cache
         self._user_authorization_map = OrderedDict() 
+        self._user_authorization_map_ts = None
     
         #user authentication cache
         self._auth_map = OrderedDict() 
+        self._auth_map_ts = None
         #user basic authentication cache
         self._basic_auth_map = OrderedDict() 
+        self._basic_auth_map_ts = None
 
         #the map between email and groups 
         self._groupskey_map = {}
         self._email_groups_map = OrderedDict()
         self._public_email_groups_map = OrderedDict()
         self._groups_map = {}
+        self._emailgroups_ts = None
 
         #The runable task to clean authenticaton map and basic authenticaton map
         self._auth_cache_clean_time = HourListTaskRunable("authentication cache",settings.AUTH_CACHE_CLEAN_HOURS)
@@ -193,10 +197,18 @@ class MemoryCache(object):
 
     @property
     def usergrouptree(self):
+        if not self._usergrouptree:
+            logger.error("The usergrouptree cache is Empty, Try to refresh the data to bring the cache back to normal state")
+            self.refresh_usergroups()
+
         return self._usergrouptree
 
     @property
     def usergroups(self):
+        if not self._usergroups:
+            logger.error("The usergroups cache is Empty, Try to refresh the data to bring the cache back to normal state")
+            self.refresh_usergroups()
+
         return self._usergroups
 
     @property
@@ -231,6 +243,10 @@ class MemoryCache(object):
 
     @property
     def usergroupauthorization(self):
+        if not self._usergroupauthorization:
+            logger.error("The usergroupauthorization cache is Empty, Try to refresh the data to bring the cache back to normal state")
+            self.refresh_usergroupauthorization()
+
         return self._usergroupauthorization
 
     @usergroupauthorization.setter
@@ -418,7 +434,7 @@ class MemoryCache(object):
         """
         self._basic_auth_map[key[0]] = [response,key[1],timezone.now() + settings.AUTH_BASIC_CACHE_EXPIRETIME]
 
-        self._enforce_maxsize("token auth map",self._basic_auth_map,settings.AUTH_BASIC_CACHE_SIZE)
+        self._enforce_maxsize("token auth map",self._basic_auth_map,settings.BASIC_AUTH_CACHE_SIZE)
         self.clean_auth_cache()
 
     def update_basic_auth(self,key,response):
@@ -480,16 +496,21 @@ class MemoryCache(object):
     def clean_auth_cache(self,force=False):
         if self._auth_cache_clean_time.can_run() or force:
             self._auth_map.clear()
+            self._auth_map_ts = timezone.now()
+
             self._basic_auth_map.clear()
+            self._basic_auth_map_ts = timezone.now()
 
     def refresh_usergroups(self,force=False):
         from .models import UserGroupChange,UserGroup
-        if (force or self._usergrouptree is None or UserGroupChange.is_changed()):
+        if (force or not self._usergrouptree or UserGroupChange.is_changed()):
             logger.debug("UserGroup was changed, clean cache usergroupptree and user_requests_map")
             self._user_authorization_map.clear()
+            self._user_authorization_map_ts = timezone.now()
             self._email_groups_map.clear()
             self._public_email_groups_map.clear()
             self._groups_map.clear()
+            self._emailgroups_ts = timezone.now()
             if len(self._groupskey_map) >= 2000:
                 #groupskey map is too big, clear it.
                 self._groupskey_map.clear()
@@ -503,15 +524,17 @@ class MemoryCache(object):
         if (force or self._userauthorization is None or UserAuthorizationChange.is_changed()):
             logger.debug("UserAuthorization was changed, clean cache userauthorization and user_requests_map")
             self._user_authorization_map.clear()
+            self._user_authorization_map_ts = timezone.now()
             #reload user requests
             UserAuthorization.refresh_cache()
     """
 
     def refresh_usergroupauthorization(self,force=False):
         from .models import UserGroupAuthorizationChange,UserGroupAuthorization
-        if (force or self._usergroupauthorization is None or UserGroupAuthorizationChange.is_changed()):
+        if (force or not self._usergroupauthorization or UserGroupAuthorizationChange.is_changed()):
             logger.debug("UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map")
             self._user_authorization_map.clear()
+            self._user_authorization_map_ts = timezone.now()
             #reload user group requests
             UserGroupAuthorization.refresh_cache()
 
@@ -522,17 +545,157 @@ class MemoryCache(object):
             self.refresh_usergroupauthorization(force)
 
     def refresh_idp_cache(self,force=False):
-        if self._idp_cache_check_time.can_run() or force:
+        if not self._idps:
+            from .models import IdentityProvider
+            self._idp_cache_check_time.can_run()
+            IdentityProvider.refresh_cache()
+        elif self._idp_cache_check_time.can_run() or force:
             from .models import IdentityProviderChange,IdentityProvider
-            if ( self._idps is None or IdentityProviderChange.is_changed()):
+            if IdentityProviderChange.is_changed():
                 IdentityProvider.refresh_cache()
 
 
     def refresh_userflow_cache(self,force=False):
-        if self._userflow_cache_check_time.can_run() or force:
+        if not self._userflows:
+            from .models import CustomizableUserflow
+            self._userflow_cache_check_time.can_run()
+            CustomizableUserflow.refresh_cache()
+        elif self._userflow_cache_check_time.can_run() or force:
             from .models import CustomizableUserflowChange,CustomizableUserflow
-            if ( self._userflows is None or CustomizableUserflowChange.is_changed()):
+            if CustomizableUserflowChange.is_changed():
                 CustomizableUserflow.refresh_cache()
+
+
+    @property
+    def status(self):
+        result = {}
+        result["UserGroup"] = {
+            "grouptree_size":None if self.usergrouptree is None else len(self.usergrouptree),
+            "groupsize":None if self.usergroups is None else len(self.usergroups),
+            "dbcagroup":str(self.dbca_group),
+            "publicgroup":str(self.public_group),
+            "latest_refresh_time":format_datetime(self._usergrouptree_ts),
+            "next_check_time":format_datetime(self._authorization_cache_check_time.next_runtime)
+        }
+    
+        result["UserGroupAuthorization"] = {
+            "usergroupauthorization_size":None if self.usergroupauthorization is None else len(self.usergroupauthorization),
+            "latest_refresh_time":format_datetime(self._usergroupauthorization_ts),
+            "next_check_time":format_datetime(self._authorization_cache_check_time.next_runtime)
+        }
+    
+        result["CustomizableUserflow"] = {
+            "userflow_size":None if self.userflows is None else len(self.userflows),
+            "userflowmap_size":None if self._userflows_map is None else len(self._userflows_map),
+            "defaultuserflow":str(self._defaultuserflow),
+            "latest_refresh_time":format_datetime(self._userflows_ts),
+            "next_check_time":format_datetime(self._userflow_cache_check_time.next_runtime)
+        }
+    
+    
+        result["IdentityProvider"] = {
+            "identityprovider_size":None if self.idps is None else len(self.idps),
+            "latest_refresh_time":format_datetime(self._idps_ts),
+            "next_check_time":format_datetime(self._idp_cache_check_time.next_runtime)
+        }
+    
+        result["userauthorizationmap"] = {
+            "authorizationmap_size":None if self._user_authorization_map is None else len(self._user_authorization_map),
+            "authorizationmap_maxsize":settings.AUTHORIZATION_CACHE_SIZE,
+            "latest_clean_time":format_datetime(self._user_authorization_map_ts),
+            "next_check_time":format_datetime(self._authorization_cache_check_time.next_runtime)
+        }
+    
+        result["userauthenticationmap"] = {
+            "authenticationmap_size":None if self._auth_map is None else len(self._auth_map),
+            "authenticationmap_maxsize":settings.AUTH_CACHE_SIZE,
+            "latest_clean_time":format_datetime(self._auth_map_ts),
+            "next_clean_time":format_datetime(self._auth_cache_clean_time.next_runtime)
+        }
+    
+        result["basicauthmap"] = {
+            "basicauthmap_size":None if self._basic_auth_map is None else len(self._basic_auth_map),
+            "basicauthmap_maxsize":settings.BASIC_AUTH_CACHE_SIZE,
+            "latest_clean_time":format_datetime(self._basic_auth_map_ts),
+            "next_clean_time":format_datetime(self._auth_cache_clean_time.next_runtime)
+        }
+    
+        result["usergrouplist"] = {
+            "groupskey_size":None if self._groupskey_map is None else len(self._groupskey_map),
+            "usergroupsmap_size":None if self._email_groups_map is None else len(self._email_groups_map),
+            "usergroupsmap_maxsize":settings.EMAIL_GROUPS_CACHE_SIZE,
+            "publicusergroupsmap_size":None if self._public_email_groups_map is None else len(self._public_email_groups_map),
+            "publicusergroupsmap_maxsize":settings.PUBLIC_EMAIL_GROUPS_CACHE_SIZE,
+            "groupsmap_size":None if self._groups_map is None else len(self._groups_map),
+            "latest_clean_time":format_datetime(self._emailgroups_ts),
+            "next_check_time":format_datetime(self._authorization_cache_check_time.next_runtime)
+        }
+    
+        return result
+
+    @property
+    def healthy(self):
+        if not self.usergrouptree :
+            return (False,"The UserGroup tree cache is empty")
+
+        if not self.usergroups:
+            return (False,"The UserGroup cache is empty")
+
+        if not self.dbca_group:
+            return (False,"The cached dbca user group is None")
+
+        if not self.public_group:
+            return (False,"The cached public user group is None")
+
+        if not self.usergroupauthorization:
+            return (False,"The UserGroupAuthorization cache is empty.")
+
+        if not self.userflows:
+            return (False,"The CustomizableUserflow cache is empty")
+
+        if not self._defaultuserflow:
+            return (False,"The cached default userflow is None")
+
+        if not self.idps:
+            return (False,"The IdentityProvider cache is empty")
+
+        if self._user_authorization_map is None :
+            return (False,"The user authorization cache is None")
+            
+        if len(self._user_authorization_map) > (settings.AUTHORIZATION_CACHE_SIZE + 100) :
+            return (False,"The size({}) of the user authorization cache exceed the maximum cache size({})".format(len(self._user_authorization_map), settings.AUTHORIZATION_CACHE_SIZE))
+            
+        if self._auth_map is None  :
+            return (False,"The user authentication cache is None")
+    
+        if len(self._auth_map) > settings.AUTH_CACHE_SIZE + 100 :
+            return (False,"The size({}) of the user authentication cache exceed the maximum cache size({})".format(len(self._auth_map), settings.AUTH_CACHE_SIZE))
+    
+        if self._basic_auth_map is None :
+            return (False,"The basic authentication cache is None")
+    
+        if len(self._basic_auth_map) > settings.BASIC_AUTH_CACHE_SIZE + 100 :
+            return (False,"The size({}) of the basic authentication cache exceed the maximum cache size({})".format(len(self._basic_auth_map), settings.BASIC_AUTH_CACHE_SIZE))
+    
+        if self._groupskey_map is None :
+            return (False,"The groups key map cache is None")
+    
+        if self._email_groups_map is None:
+            return (False,"The email groups map cache is None")
+    
+        if len(self._email_groups_map) > settings.EMAIL_GROUPS_CACHE_SIZE + 100:
+            return (False,"The size({}) of the user groups map cache exceed the maximum cache size({})".format(len(self._email_groups_map), settings.EMAIL_GROUPS_CACHE_SIZE))
+    
+        if self._public_email_groups_map is None:
+            return (False,"The public user groups map cache is None")
+    
+        if len(self._public_email_groups_map) > settings.PUBLIC_EMAIL_GROUPS_CACHE_SIZE + 100:
+            return (False,"The size({}) of the public user groups map cache exceed the maximum cache size({})".format(len(self._public_email_groups_map), settings.PUBLIC_EMAIL_GROUPS_CACHE_SIZE))
+    
+        if self._groups_map is None:
+            return (False,"The groups map cache is None")
+    
+        return (True,"ok")
 
 cache = MemoryCache()
 

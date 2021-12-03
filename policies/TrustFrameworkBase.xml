@@ -348,7 +348,7 @@
                     <Enumeration Text="Totp Token" Value="totp" SelectByDefault="true"/>
                     <Enumeration Text="Phone" Value="phone" SelectByDefault="false"/>
                     <Enumeration Text="Email" Value="email" SelectByDefault="false"/>
-                    <Enumeration Text="None " Value="none" SelectByDefault="false"/>
+                    <!--Enumeration Text="None " Value="none" SelectByDefault="false"/-->
                 </Restriction>
             </ClaimType>
 
@@ -813,7 +813,7 @@
                         <PersistedClaim ClaimTypeReferenceId="userPrincipalName"/>
                         <PersistedClaim ClaimTypeReferenceId="mailNickName" DefaultValue="unknown"/>
                         <PersistedClaim ClaimTypeReferenceId="displayName" DefaultValue="unknown"/>
-                        <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
+                        <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
 
                         <!-- Optional claims -->
                         <PersistedClaim ClaimTypeReferenceId="givenName"/>
@@ -826,7 +826,7 @@
                  OutputClaims, and if this is absent, Self-Asserted provider will prompt the user for otherMails. -->
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
 
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
+                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
                         <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
 
@@ -861,7 +861,7 @@
                         <OutputClaim ClaimTypeReferenceId="surname"/>
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
 
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
+                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
                         <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
 
                     </OutputClaims>
@@ -907,7 +907,7 @@
                         <PersistedClaim ClaimTypeReferenceId="newPassword" PartnerClaimType="password"/>
                         <PersistedClaim ClaimTypeReferenceId="displayName" DefaultValue="unknown"/>
                         <PersistedClaim ClaimTypeReferenceId="passwordPolicies" DefaultValue="DisablePasswordExpiration"/>
-                        <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
+                        <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
                         <!--PersistedClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber" PartnerClaimType="strongAuthenticationPhoneNumber" /-->
 
                         <!-- Optional claims. -->
@@ -925,7 +925,7 @@
 
                         <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication"/>
                         <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="true" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
+                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
 
@@ -965,7 +965,7 @@
                         <OutputClaim ClaimTypeReferenceId="surname"/>
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
 
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
+                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
                         <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication"  AlwaysUseDefaultValue="true"/>
 
@@ -997,7 +997,7 @@
                         <OutputClaim ClaimTypeReferenceId="surname"/>
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
 
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
+                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
                         <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
                     <OutputClaimsTransformations>
@@ -1901,7 +1901,7 @@
 
                         <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="none"/>
+                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
