@@ -549,12 +549,12 @@ def profile(request):
         if not token or not token.enabled:
             content["access_token_error"] = "Access token is not enabled, please ask administrator to enable."
         elif not token.token:
-            content["access_token_error"] = "Access token is created, please ask administrator to create"
+            content["access_token_error"] = "Access token is not created, please ask administrator to create"
         elif token.is_expired:
             content["access_token"] = token.token
             content["access_token_created"] = timezone.localtime(token.created).strftime("%Y-%m-%d %H:%M:%S")
             content["access_token_expired"] = token.expired.strftime("%Y-%m-%d")
-            content["access_token_error"] = "Access token is expired, please ask administroator to recreate"
+            content["access_token_error"] = "Access token is expired, please ask administrator to recreate"
         else:
             content["access_token"] = token.token
             content["access_token_created"] = timezone.localtime(token.created).strftime("%Y-%m-%d %H:%M:%S")
