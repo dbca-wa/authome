@@ -31,7 +31,7 @@ class BaseAuthTestCase(TestCase):
         else:
             print("Running in dev mode")
         settings.AUTH_CACHE_SIZE=2000
-        settings.AUTH_BASIC_CACHE_SIZE=1000
+        settings.BASIC_AUTH_CACHE_SIZE=1000
         settings.AUTH_BASIC_CACHE_EXPIRETIME=timedelta(seconds=3600)
         settings.AUTH_CACHE_EXPIRETIME=timedelta(seconds=3600)
         settings.AUTH_CACHE_CLEAN_HOURS = [0]
@@ -103,7 +103,7 @@ class BaseAuthCacheTestCase(BaseAuthTestCase):
     def setUp(self):
         super().setUp()
         settings.AUTH_CACHE_SIZE=3
-        settings.AUTH_BASIC_CACHE_SIZE=3
+        settings.BASIC_AUTH_CACHE_SIZE=3
         settings.AUTH_BASIC_CACHE_EXPIRETIME=timedelta(seconds=5)
         settings.AUTH_CACHE_EXPIRETIME=timedelta(seconds=5)
         settings.AUTH_CACHE_CLEAN_HOURS = [i for i in range(0,24)]
