@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from django.test import TestCase, Client
+from django.core.exceptions import ValidationError
 
 from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access
 from .cache import cache
@@ -18,6 +19,61 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
         public_group.id = None
         with self.assertRaises(Exception,msg="Save the second public user group should throw exception"):
             public_group.save()
+
+    def test_validation(self):
+        index = 0
+        for test_data,expected_result in [
+            (("test1",None,["@test1.com"],["blocked1@test1.com","blocked2@test1.com"],True),None),
+            (("test2","test1",["developer_*@test1.com"],None,True),None),
+            (("test2","test1",["developer*@test1.com","blocked1@test1.com"],None,False),ValidationError("The excluded email pattern({}) in the parent group({}) is contained by the current group({})".format("blocked1@test1.com","test1","test2"))),
+            (("test2","test1",["developer_*@test1.com"],["blocked1@test1.com"],False),ValidationError("The excluded email pattern({}) is not contained by email patterns configured in current group({})".format("blocked1@test1.com","test2"))),
+            (("test2","test1",["@test1.com"],["blocked1@test1.com"],False),ValidationError("The excluded email pattern({}) in the parent group({}) is contained by the current group({})".format("blocked2@test1.com","test1","test2"))),
+            (("test2","test1",["developer_*@test1.com","test2@test2.com"],None,False),ValidationError("The email pattern({}) in the current group({}) is not contained by the parent group({})".format("test2@test2.com","test2","test1"))),
+
+            (("test3","test1",["developer_*@test1.com","blocked1@test1.com"],None,True),ValidationError("The excluded email pattern({}) in the parent group({}) is contained by the current group({})".format("blocked1@test1.com","test1","test3"))),
+
+            (("test4","test1",["developer_*@test1.com"],["blocked1@test1.com"],True),ValidationError("The excluded email pattern({}) is not contained by email patterns configured in current group({})".format("blocked1@test1.com","test4"))),
+
+            (("test5","test1",["@test1.com"],["blocked1@test1.com"],True),ValidationError("The excluded email pattern({}) in the parent group({}) is contained by the current group({})".format("blocked2@test1.com","test1","test5"))),
+
+            (("test6","test1",["developer_*@test1.com","test2@test2.com"],None,True),ValidationError("The email pattern({}) in the current group({}) is not contained by the parent group({})".format("test2@test2.com","test6","test1"))),
+
+            (("test10","test2",["developer_*@test1.com"],None,True),None),
+            (("test11","test10",["developer_*@test1.com"],None,True),None),
+            (("test12","test11",["developer_*@test1.com"],None,True),None),
+            (("test10","test10",["developer_*@test1.com"],None,False),ValidationError("The parent group of the group ({0}) can't be itself".format("test10"))),
+            (("test10","test12",["developer_*@test1.com"],None,False),ValidationError("The parent group({1}) of the group ({0}) can't be descendant of the group({0})".format("test10","test12"))),
+            (("test10","test11",["developer_*@test1.com"],None,False),ValidationError("The parent group({1}) of the group ({0}) can't be descendant of the group({0})".format("test10","test11")))
+        ]:
+            index += 1
+            if test_data[1]:
+                pgroup = UserGroup.objects.get(name=test_data[1])
+            else:
+                pgroup = None
+            if test_data[-1]:
+                obj = UserGroup(name=test_data[0],groupid=test_data[0].upper(),users=test_data[2],excluded_users=test_data[3],parent_group=pgroup)
+            else:
+                obj = UserGroup.objects.get(name=test_data[0])
+                obj.groupid = test_data[0].upper()
+                obj.users = test_data[2]
+                obj.excluded_users = test_data[3]
+                obj.parent_group = pgroup
+
+            try:
+                if index == 14:
+                    #import ipdb;ipdb.set_trace()
+                    pass
+                obj.clean()
+                obj.save()
+                if expected_result:
+                    raise Exception("Test case({}) failed.user group saved successfully but should raise a exception,{}".format(index,expected_result))
+            except Exception as ex:
+                if expected_result:
+                    self.assertEqual((ex.__class__,str(ex)),(expected_result.__class__,str(expected_result)),msg="Test case({}) failed. msg={}, expected msg={}".format(index,ex,expected_result))
+                else:
+                    raise Exception("Test case({}) failed.{}".format(index,str(ex)))
+                    
+
 
     def test_save(self):
         index = 0
