@@ -785,6 +785,18 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
         if not self.parent_group and not self.is_public_group:
             self.parent_group = self.public_group()
+
+        #check whether the parent group  is the group itself or is the descendant of itself
+        if self.id:
+            pgroup = self.parent_group
+            while pgroup:
+                if pgroup.id == self.id:
+                    if pgroup.id == self.parent_group.id:
+                        raise ValidationError("The parent group of the group ({0}) can't be itself".format(self.name))
+                    else:
+                        raise ValidationError("The parent group({1}) of the group ({0}) can't be descendant of the group({0})".format(self.name,self.parent_group.name))
+                pgroup = pgroup.parent_group
+
         #check whether excluded_users is contained by users
         for excluded_useremail in self.excluded_useremails:
             contained = False
