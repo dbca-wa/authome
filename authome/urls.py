@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 from django.urls import include, path
 from django.contrib import admin
@@ -62,18 +63,18 @@ handler400 = views.handler400
 try:
     cache.refresh_authorization_cache(True)
 except:
-    import traceback
-    logger.error("Failed to load UserGroup and UserGroupAuthorization cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
+    if not settings.IGNORE_LOADING_ERROR:
+        raise Exception("Failed to load UserGroup and UserGroupAuthorization cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
     
 try:
     cache.refresh_idp_cache(True)
 except:
-    import traceback
-    logger.error("Failed to load IdentityProvider cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
+    if not settings.IGNORE_LOADING_ERROR:
+        raise Exception("Failed to load IdentityProvider cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
     
 try:
     cache.refresh_userflow_cache(True)
 except:
-    import traceback
-    logger.error("Failed to load CustomizableUserflow cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
+    if not settings.IGNORE_LOADING_ERROR:
+        raise Exception("Failed to load CustomizableUserflow cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
     

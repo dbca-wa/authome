@@ -263,10 +263,11 @@ class AuthorizationTestCase(BaseAuthCacheTestCase):
                                 ("dev_role_manager",["dev_role_leader_manager*@gunfire.com","audit_dev_role_leader_manager*@gunfire.com"],None,None)
                             ])
                         ]),
+                        ("dev_manager",["dev_manager*@gunfire.com"],None,None)
                     ]),
                     ("support",["support_*@gunfire.com","audit_support*@gunfire.com"],None,None),
                 ]),
-                ("audit",["audit*@gunfire.com"],None,[]),
+                ("audit",["audit*@gunfire.com","dev_manager*@gunfire.com"],None,[]),
 
             ])
         ]
@@ -293,11 +294,13 @@ class AuthorizationTestCase(BaseAuthCacheTestCase):
 
             ("dev_map_manager","map.dev.gunfire.com",None,["=/start","=/shutdown","/audit"]),
 
-            ("dev_role","map.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/approve$","^.*/deploy$","^.*/remove$","/audit"]),
+            ("dev_role","role.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/approve$","^.*/deploy$","^.*/remove$","/audit"]),
 
-            ("dev_role_leader","map.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/remove$","/audit"]),
+            ("dev_role_leader","role.dev.gunfire.com",None,["=/start","=/shutdown","/tasks","^.*/remove$","/audit"]),
 
-            ("dev_role_manager","map.dev.gunfire.com",None,["=/start","=/shutdown","/audit"])
+            ("dev_role_manager","role.dev.gunfire.com",None,["=/start","=/shutdown","/audit"]),
+
+            ("dev_manager","^(role|map).dev.gunfire.com",None,["=/start","=/shutdown","/audit"]),
         ]
 
         self.test_userauthorization = [
@@ -516,6 +519,52 @@ class AuthorizationTestCase(BaseAuthCacheTestCase):
             ("audit_dev_map_leader_manager1@gunfire.com","map.dev.gunfire.com","/task1/remove/now",True),
             ("audit_dev_map_leader_manager1@gunfire.com","support.gunfire.com","/audit/",True),
             ("audit_dev_map_leader_manager1@gunfire.com","gunfire.com","/audit/",True),
+
+            ("dev_manager1@gunfire.com","test.com","/test/remove",False),
+            ("dev_manager1@gunfire.com","gunfire.com","/about",True),
+            ("dev_manager1@gunfire.com","gunfire.com","/register",False),
+            ("dev_manager1@gunfire.com","gunfire.com","/unregister",False),
+            ("dev_manager1@gunfire.com","gunfire.com","/",True),
+            ("dev_manager1@gunfire.com","dev.gunfire.com","/",True),
+            ("dev_manager1@gunfire.com","support.gunfire.com","/",False),
+            ("dev_manager1@gunfire.com","shop.gunfire.com","/",True),
+            ("dev_manager1@gunfire.com","shop.gunfire.com","/register",True),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/",True),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/start",False),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/start/map1",True),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/shutdown",False),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/shutdown/map1",True),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/tasks",True),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/tasks/today",True),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/approve",True),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/task1/approve",True),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/task1/approve/now",True),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/deploy",True),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/task1/deploy",True),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/task1/deploy/now",True),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/remove",True),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/task1/remove",True),
+            ("dev_manager1@gunfire.com","map.dev.gunfire.com","/task1/remove/now",True),
+
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/",True),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/start",False),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/start/map1",True),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/shutdown",False),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/shutdown/map1",True),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/tasks",True),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/tasks/today",True),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/approve",True),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/task1/approve",True),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/task1/approve/now",True),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/deploy",True),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/task1/deploy",True),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/task1/deploy/now",True),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/remove",True),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/task1/remove",True),
+            ("dev_manager1@gunfire.com","role.dev.gunfire.com","/task1/remove/now",True),
+
+            ("dev_manager1@gunfire.com","support.gunfire.com","/audit/",True),
+            ("dev_manager1@gunfire.com","gunfire.com","/audit/",True),
 
         ]
 
