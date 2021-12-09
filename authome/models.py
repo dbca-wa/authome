@@ -25,19 +25,20 @@ usercache = get_usercache()
 help_text_users = """
 List all possible user emails in this group separated by new line character.
 The following lists all valid options in the checking order
-    1. All emails    : *
-    2. Domain emails : starts with '@', followed by email domain. For example@dbca.wa.gov.au
-    3. Email pattern : '*' represents any strings. For example test_*@dbca.wa.gov.au
-    4. User email    : represent a single user email, For example test_user01@dbca.wa.gov.au
+    1. All Emails    : *
+    2. Domain Email  : Starts with '@', followed by email domain. For example@dbca.wa.gov.au
+    3. Email Pattern : A email pattern,'*' represents any strings. For example test_*@dbca.wa.gov.au
+    4. User Email    : A single user email, For example test_user01@dbca.wa.gov.au
 """
 
 help_text_domain = """
 A domain or domain pattern
 The following lists all valid options in the checking order
-    1. Single Domain : Represent a single domain. For example oim.dbca.wa.gov.au.
-    2. Regex Domain  : '*" represents any strings. For example  pbs*dbca.wa.gov.au
-    3. Suffix Domain : Starts with '.' followed by a domain. For example .dbca.wa.gov.au
-    4. All Domain    : '*'
+    1. Single Domain  : Represent a single domain. For example oim.dbca.wa.gov.au.
+    2. Domain Pattern : A domain pattern, '*" represents any strings. For example  pbs*dbca.wa.gov.au
+    3. Domain Regex   : A regex string starts with '^'. For example  ^pbs[^\.]*\.dbca\.wa\.gov\.au$
+    4. Suffix Domain  : A string Starts with '.' followed by a domain. For example .dbca.wa.gov.au
+    5. All Domain     : '*'
 """
 
 help_text_paths = """
@@ -205,7 +206,10 @@ class RegexRequestDomain(RequestDomain):
     def __init__(self,domain):
         super().__init__(domain)
         try:
-            self._re = re.compile("^{}$".format(domain.replace(".","\.").replace("*","[a-zA-Z0-9\._\-]*")))
+            if domain.startswith("^") :
+                self._re = re.compile(domain)
+            else:
+                self._re = re.compile("^{}$".format(domain.replace(".","\.").replace("*","[a-zA-Z0-9\._\-]*")))
         except Exception as ex:
             raise ValidationError("The regex domain config({}) is invalid.{}".format(domain,str(ex)))
 

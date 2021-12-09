@@ -23,7 +23,7 @@ FROM python_libs_authome
 COPY manage.py gunicorn.py ./
 COPY authome ./authome
 COPY templates ./templates
-RUN python manage.py collectstatic --noinput --no-post-process
+RUN export IGNORE_LOADING_ERROR=True ; python manage.py collectstatic --noinput --no-post-process
 
 RUN cp -rf /app/release /app/dev
 
