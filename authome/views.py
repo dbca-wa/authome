@@ -1169,7 +1169,7 @@ def checkauthorization(request):
                 url["domain"] = default_domain
             if not url["path"] :
                 url["path"] = "/"
-            url["url"] = "{}{}{}".format(url["domain"],":{}".format(url["port"]) if url["port"] else "",url["path"])
+            url["checked_url"] = "{}{}{}".format(url["domain"],":{}".format(url["port"]) if url["port"] else "",url["path"])
 
         result = []
         for user in users:
@@ -1181,11 +1181,11 @@ def checkauthorization(request):
                     for i in range(len(check_result[1])):
                         check_result[1][i] = [check_result[1][i][0].name if check_result[1][i][0] else None,check_result[1][i][1].name if check_result[1][i][1] else None,check_result[1][i][2]]
                     
-                    result.append((user,url["url"],check_result))
+                    result.append([user,url["url"],url["checked_url"],check_result])
                 elif url["path"].startswith("/sso/"):
-                    result.append((user,url["url"],True ))
+                    result.append([user,url["url"],url["checked_url"],True ])
                 else:
-                    result.append((user,url["url"],models.can_access(user,url["domain"] ,url["path"]) ))
+                    result.append([user,url["url"],url["checked_url"],models.can_access(user,url["domain"] ,url["path"]) ])
             else:
                 userresult = {}
                 result.append((user,userresult))
@@ -1196,11 +1196,11 @@ def checkauthorization(request):
                         for i in range(len(check_result[1])):
                             check_result[1][i] = [check_result[1][i][0].name if check_result[1][i][0] else None,check_result[1][i][1].name if check_result[1][i][1] else None,check_result[1][i][2]]
                     
-                        userresult[url["url"]] = check_result
+                        userresult[url["url"]] = [url["checked_url"],check_result]
                     elif url["path"].startswith("/sso/"):
-                        userresult[url["url"]] = True
+                        userresult[url["url"]] = [url["checked_url"],True]
                     else:
-                        userresult[url["url"]] = models.can_access(user,url["domain"],url["path"] )
+                        userresult[url["url"]] = [url["checked_url"],models.can_access(user,url["domain"],url["path"] )]
 
         if flatuser and len(users) == 1:
             result = result[0]
