@@ -32,6 +32,19 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
 
     logger.debug("Data returned from B2C.\n{}".format( "\n".join( sorted(["{} = {}".format(k,v) for k,v in kwargs['response'].items()]) )))
 
+    email = details.get("email")
+
+    #reset is_staff and is_superuser property based on user category.
+    if email:
+        dbcagroup = UserGroup.dbca_group()
+        usergroups = UserGroup.find_groups(email)[0]
+        if any(group.is_group(dbcagroup) for group in usergroups ):
+            details["is_staff"] = True
+            if not user:
+                details["is_superuser"] = False
+        else:
+            details["is_staff"] = False
+            details["is_superuser"] = False
 
     if hasattr(request,"policy"):
         #not a sign in request
@@ -40,7 +53,7 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     #get the identityprovider from b2c response
     idp = kwargs['response'].get("idp",IdentityProvider.LOCAL_PROVIDER)
     idp_obj,created = IdentityProvider.objects.get_or_create(idp=idp)
-    logger.debug("authenticate the user({}) with identity provider({}={})".format(details.get("email"),idp_obj.idp,idp))
+    logger.debug("authenticate the user({}) with identity provider({}={})".format(email,idp_obj.idp,idp))
 
     #get backend logout url
     backend_logout_url = backend.logout_url if hasattr(backend,"logout_url") else settings.BACKEND_LOGOUT_URL
@@ -52,8 +65,6 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
         logger.debug("Redirect to '{}' to logout from identity provider".format(logout_url))
         response = signout(request,logout_url=logout_url,message="Your account was disabled.")
         return response
-
-    email = details.get("email")
 
     #check whether identity provider is the same as the configured identity provider
     if email:
@@ -78,18 +89,6 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
             #clear the session
             request.session.flush()
             return response
-
-    #reset is_staff and is_superuser property based on user category.
-    dbcagroup = UserGroup.dbca_group()
-    usergroups = UserGroup.find_groups(email)[0]
-    if any(group.is_group(dbcagroup) for group in usergroups ):
-        details["is_staff"] = True
-        if not user:
-            details["is_superuser"] = False
-    else:
-        details["is_staff"] = False
-        details["is_superuser"] = False
-    details["email"] = email
 
     backend.strategy.session_set("idp", idp_obj.idp)
 
