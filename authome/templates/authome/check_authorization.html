@@ -42,7 +42,10 @@
     <table style="border:none;width:100%">
     <thead>
     <tr class="form-row field-name">
-        <th colspan=3 style="text-align:left;text-transform:none" ><span>URL:</span><span id="id_url_check" style="margin-left:10px;color:blue"></span></th>
+        <th colspan=3 style="text-align:left;text-transform:none" >
+            <span>Original URL:</span><span id="id_url_original" style="margin-left:10px;color:blue"></span>
+            <span style="margin-left:20px">Checked URL:</span><span id="id_url_checked" style="margin-left:10px;color:blue"></span>
+        </th>
     </tr>
     <tr class="form-row field-name">
         <th>User</label></th>
@@ -72,9 +75,9 @@
             alert("Doesn't support multiple urls.")
             return
         }
+        django.jQuery("#id_url_original").html(url)
         requestdata["user"] = users;
         requestdata["url"] = url;
-        django.jQuery("#id_url_check").html(url)
         django.jQuery.ajax({
             method:"POST",
             url:"/sso/checkauthorization",
@@ -89,9 +92,9 @@
             var html_str = ""
             var checked_url = ""
             django.jQuery.each(data,function(index,userauthorization){
-                html_str += '<tr class="form-row field-name"><td><label class="required"  style="white-space: nowrap;padding-right:5px">' + userauthorization[0] + '</label></td><td  style="text-align:center;width:40px">' + (userauthorization[2][0]?"<img src='{% static "admin/img/icon-yes.svg" %}'>":"<img src='{% static "admin/img/icon-no.svg" %}'>") + '</td><td  style="white-space:nowrap">'
+                html_str += '<tr class="form-row field-name"><td><label class="required"  style="white-space: nowrap;padding-right:5px">' + userauthorization[0] + '</label></td><td  style="text-align:center;width:40px">' + (userauthorization[3][0]?"<img src='{% static "admin/img/icon-yes.svg" %}'>":"<img src='{% static "admin/img/icon-no.svg" %}'>") + '</td><td  style="white-space:nowrap">'
 
-                django.jQuery.each(userauthorization[2][1],function(index,data){
+                django.jQuery.each(userauthorization[3][1],function(index,data){
                     html_str += "<span style='padding-left:10px;padding-right:5px'>" + data[0] + "</span>" + (data[2]?"<img src='{% static "admin/img/icon-yes.svg" %}'>":"<img src='{% static "admin/img/icon-no.svg" %}'>")
                     if (data[0] != data[1]) {
                         html_str += "<span style='font-style: italic;'>(via " + data[1] + ")</span>"
@@ -102,9 +105,9 @@
                 html_str += "</td></tr>"
 
                 django.jQuery("#id_checkresult").html(html_str)
-                checked_url = userauthorization[1]
+                checked_url = userauthorization[2]
             })
-            django.jQuery("#id_url_check").html(checked_url)
+            django.jQuery("#id_url_checked").html(checked_url)
         })
     }
 </script>
