@@ -102,13 +102,33 @@ def env(key, default=None, required=False, value_type=None,subvalue_type=None):
     return _convert(key,value,default=default,required=required,value_type=value_type,subvalue_type=subvalue_type)
 
 
-url_re = re.compile("^(http(s)?://)?(?P<domain>(localhost|([a-zA-Z0-9_\-]+(\.[a-zA-Z0-9_\-]+)+)))(:(?P<port>[0-9]+))?(\/|\?|$)",re.IGNORECASE)
-def get_domain(url):
+url_re = re.compile("^((http(s)?://)?(?P<domain>[^:/\?]+)(:(?P<port>[0-9]+))?)?(?P<path>/[^\?]*)?(\?(?P<parameters>.*))?$",re.IGNORECASE)
+def parse_url(url):
     """
     Return domain from url
     """
     if url:
         m = url_re.search(url)
+        if m :
+            return {
+                "url":url,
+                "domain":m.group("domain"),
+                "port":m.group("port"),
+                "path":m.group("path"),
+                "parameters":m.group("parameters")
+            }
+        else:
+            raise Exception("Invalid url({})".format(url))
+    else:
+        raise Exception("Url is empty")
+
+domain_url_re = re.compile("^(http(s)?://)?(?P<domain>[^:/\?]+)",re.IGNORECASE)
+def get_domain(url):
+    """
+    Return domain from url
+    """
+    if url:
+        m = domain_url_re.search(url)
         if m :
             return m.group('domain')
         else:

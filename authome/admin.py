@@ -11,6 +11,7 @@ from django.templatetags.static import static
 from django.db.models import Q
 from django.contrib.admin.views.main import ChangeList
 from django.urls import reverse
+from django.template.response import TemplateResponse
 
 from . import models
 from . import forms
@@ -111,9 +112,20 @@ class UserGroupsMixin(object):
             return models.UserGroup.find_groups(obj.email,cacheable=False)[1]
     _usergroupnames.short_description = "User Group Names"
 
+class UserAuthorizationCheckMixin(object):
+    def check_authorization(self,request, queryset):
+        users = queryset.values_list("email",flat=True)
+
+        users = ",".join(users) if users else ""
+        return TemplateResponse(request, "authome/check_authorization.html", {"users":users,"opts":self.model._meta})
+
+
+    check_authorization.short_description = 'Check Authorization'
+
+
 
 @admin.register(models.User)
-class UserAdmin(UserGroupsMixin,DatetimeMixin,auth.admin.UserAdmin):
+class UserAdmin(UserAuthorizationCheckMixin,UserGroupsMixin,DatetimeMixin,auth.admin.UserAdmin):
     list_display = ('username', 'email', 'first_name', 'last_name','is_active', 'is_staff','last_idp','_last_login')
     list_filter = ( 'is_superuser',)
     readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","_email","_usergroups")
@@ -128,6 +140,7 @@ class UserAdmin(UserGroupsMixin,DatetimeMixin,auth.admin.UserAdmin):
 
     change_form_template = 'admin/change_form.html'
     form = forms.UserCreateForm
+    actions = ["check_authorization"]
 
     def get_queryset(self,request):
         qs = super().get_queryset(request)

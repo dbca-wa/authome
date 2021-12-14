@@ -85,16 +85,15 @@ def check_authorization(request,useremail):
     except:
         pass
 
-    if models.can_access(useremail,domain,path):
+    if path.startswith("/sso/"):
+        logger.debug("All paths startswith '/sso' are opened for everyone by default.")
+        return None
+    elif models.can_access(useremail,domain,path):
         logger.debug("User({}) can access https://{}{}".format(useremail,domain,path))
         return None
     else:
         logger.debug("User({}) can't access https://{}{}".format(useremail,domain,path))
-        if path.startswith("/sso/"):
-            #sso related request, should always be authorized for all domains.
-            return None
-        else:
-            return NOT_AUTHORIZED_RESPONSE
+        return NOT_AUTHORIZED_RESPONSE
 
 def get_absolute_url(url,domain):
     """
@@ -1141,4 +1140,74 @@ def healthcheck(request):
         return HttpResponse("ok")
     else:
         return HttpResponse(status=503,content=msg)
+
+def checkauthorization(request):
+    if request.method == "GET":
+        return TemplateResponse(request, "authome/check_authorization.html", {"users":"","opts":None})
+
+    try:
+        default_domain = request.headers.get("x-upstream-server-name") or request.get_host()
+        urls = request.POST["url"]
+        users = request.POST["user"]
+        details = request.POST.get("details","false").lower() == "true"
+        flaturl = request.POST.get("flaturl","false").lower() == "true"
+        flatuser = request.POST.get("flatuser","false").lower() == "true"
+
+        if urls:
+            urls = [u.strip() for u in urls.split(",") if u.strip()]
+        if users:
+            users = [u.strip() for u in users.split(",") if u.strip() and "@"  in u]
+    
+        if not urls:
+            return HttpResponse(status=400,content="URL is empty")
+        if not users:
+            return HttpResponse(status=400,content="User is empty")
+    
+        urls = [ utils.parse_url(u) for u in urls]
+        for url in urls:
+            if not url["domain"]:
+                url["domain"] = default_domain
+            if not url["path"] :
+                url["path"] = "/"
+            url["url"] = "{}{}{}".format(url["domain"],":{}".format(url["port"]) if url["port"] else "",url["path"])
+
+        result = []
+        for user in users:
+            if flaturl and len(urls) == 1:
+                url = urls[0]
+                if details:
+                    check_result = models.check_authorization(user,url["domain"] ,url["path"])
+                    #check result is a tupe (Allow?,[(usergroup,checkgroup,allow?),]), change the usergroup to the name of user group
+                    for i in range(len(check_result[1])):
+                        check_result[1][i] = [check_result[1][i][0].name if check_result[1][i][0] else None,check_result[1][i][1].name if check_result[1][i][1] else None,check_result[1][i][2]]
+                    
+                    result.append((user,url["url"],check_result))
+                elif url["path"].startswith("/sso/"):
+                    result.append((user,url["url"],True ))
+                else:
+                    result.append((user,url["url"],models.can_access(user,url["domain"] ,url["path"]) ))
+            else:
+                userresult = {}
+                result.append((user,userresult))
+                for url in urls:
+                    if details:
+                        check_result = models.check_authorization(user,url["domain"] ,url["path"] )
+                        #check result is a tupe (Allow?,[(usergroup,checkgroup,allow?),]), change the usergroup to the name of user group
+                        for i in range(len(check_result[1])):
+                            check_result[1][i] = [check_result[1][i][0].name if check_result[1][i][0] else None,check_result[1][i][1].name if check_result[1][i][1] else None,check_result[1][i][2]]
+                    
+                        userresult[url["url"]] = check_result
+                    elif url["path"].startswith("/sso/"):
+                        userresult[url["url"]] = True
+                    else:
+                        userresult[url["url"]] = models.can_access(user,url["domain"],url["path"] )
+
+        if flatuser and len(users) == 1:
+            result = result[0]
+
+        return HttpResponse(content=json.dumps(result),content_type="application/json")
+    except Exception as ex:
+        traceback.print_exc()
+        return HttpResponse(status=400,content=str(ex))
+
 
