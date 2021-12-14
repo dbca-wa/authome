@@ -1379,11 +1379,70 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
                 else:
                     checkgroup = checkgroup.parent_group
 
-        #can't find the matched object
+        return matched_authorizations
+
+    @staticmethod
+    def find_all_authorizations(email,domain):
+        """
+        email should be in lower case
+        domain should be in lower case
+        return   a list of tuple (usergroup, authorizationgroup,authorization)
+        """
+
+        #try to find the matched usergroupauthorization
+        matched_authorizations = []
+        usergroups = UserGroup.find_groups(email)[0]
+
+        matched = False
+        for usergroup in usergroups:
+            checkgroup = usergroup
+            while checkgroup:
+                authorizations = UserGroupAuthorization.get_authorizations(checkgroup)
+                matched = False
+                if authorizations:
+                    for authorization in authorizations:
+                        if authorization.request_domain.match(domain):
+                            matched_authorizations.append((usergroup,checkgroup,authorization))
+                            matched = True
+                            break
+                if matched:
+                    break
+                else:
+                    if not checkgroup.parent_group:
+                        matched_authorizations.append((usergroup,checkgroup,None))
+                        break
+                    else:
+                        checkgroup = checkgroup.parent_group
+
         return matched_authorizations
 
     class Meta:
         abstract = True
+
+def check_authorization(email,domain,path):
+    """
+    Return True if the user(email) can access domain/path; otherwise return False
+    """
+    email = email.lower()
+    domain = domain.lower()
+    authorizations = AuthorizationMixin.find_all_authorizations(email,domain)
+    if authorizations:
+        result = []
+        allow = False
+        for o in authorizations:
+            if path.startswith("/sso/"):
+                result.append((o[0],o[1],True))
+                allow = True
+            elif not o[2]:
+                result.append((o[0],o[1],False))
+            elif o[2].allow(path):
+                result.append((o[0],o[1],True))
+                allow = True
+            else:
+                result.append((o[0],o[1],False))
+        return (allow,result)
+    else:
+        return (False,[])
 
 def _can_access(email,domain,path):
     """
