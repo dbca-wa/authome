@@ -1756,8 +1756,8 @@ if defaultcache:
     class ModelChange(object):
         key = None
         @classmethod
-        def change(cls):
-            defaultcache.set(cls.key,timezone.now())
+        def change(cls,timeout=None):
+            defaultcache.set(cls.key,timezone.now(),timeout=timeout)
 
         @classmethod
         def get_cachetime(cls):
