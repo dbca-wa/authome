@@ -31,7 +31,7 @@ class IntervalTaskRunable(TaskRunable):
         self._interval = interval
         self._next_time = None
 
-    _seconds_4_nextrun = lambda seconds_in_day,interval: seconds_in_day + (interval - seconds_in_day % interval)
+    _seconds_4_nextrun = staticmethod(lambda seconds_in_day,interval: seconds_in_day + (interval - seconds_in_day % interval))
     def can_run(self,dt=None):
         if dt:
             dt = timezone.localtime(dt)
