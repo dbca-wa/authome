@@ -31,6 +31,7 @@ class IntervalTaskRunable(TaskRunable):
         self._interval = interval
         self._next_time = None
 
+    _seconds_4_nextrun = lambda seconds_in_day,interval: seconds_in_day + (interval - seconds_in_day % interval)
     def can_run(self,dt=None):
         if dt:
             dt = timezone.localtime(dt)
@@ -40,7 +41,7 @@ class IntervalTaskRunable(TaskRunable):
         if not self._next_time:
             #not run before, don't run before the next scheduled runtime.
             today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo)
-            self._next_time = today + timedelta(seconds = (int((dt - today).seconds / self._interval) + 1) * self._interval)
+            self._next_time = today + timedelta(seconds = self._seconds_4_nextrun((dt - today).seconds,self._interval))
             logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         elif self._next_time > dt:
@@ -50,7 +51,7 @@ class IntervalTaskRunable(TaskRunable):
         else:
             #Run now, and set the next scheudled runtime.
             today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo)
-            self._next_time = today + timedelta(seconds = (int((dt - today).seconds / self._interval) + 1) * self._interval)
+            self._next_time = today + timedelta(seconds = self._seconds_4_nextrun((dt - today).seconds,self._interval))
             logger.debug("Run task({}) now, next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return True
 
