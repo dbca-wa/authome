@@ -1775,7 +1775,7 @@ if defaultcache:
         def is_changed(cls):
             last_modified = defaultcache.get(cls.key)
             if not last_modified:
-                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+                #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
             elif not cls.get_cachetime():
                 logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
@@ -1784,12 +1784,12 @@ if defaultcache:
                 logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
                 return True
             else:
-                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+                #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
 
 
     class IdentityProviderChange(ModelChange):
-        key = "idp_last_modified"
+        key = settings.GET_CACHE_KEY("idp_last_modified")
 
         @classmethod
         def get_cachetime(cls):
@@ -1818,7 +1818,7 @@ if defaultcache:
             IdentityProviderChange.change()
 
     class CustomizableUserflowChange(ModelChange):
-        key = "customizableuserflow_last_modified"
+        key = settings.GET_CACHE_KEY("customizableuserflow_last_modified")
 
         @classmethod
         def get_cachetime(cls):
@@ -1847,7 +1847,7 @@ if defaultcache:
             CustomizableUserflowChange.change()
 
     class UserGroupChange(ModelChange):
-        key = "usergroup_last_modified"
+        key = settings.GET_CACHE_KEY("usergroup_last_modified")
 
         @classmethod
         def get_cachetime(cls):
@@ -1877,7 +1877,7 @@ if defaultcache:
             UserGroupChange.change()
 
     class UserAuthorizationChange(ModelChange):
-        key = "userauthorization_last_modified"
+        key = settings.GET_CACHE_KEY("userauthorization_last_modified")
 
         @classmethod
         def get_cachetime(cls):
@@ -1907,7 +1907,7 @@ if defaultcache:
             UserAuthorizationChange.change()
 
     class UserGroupAuthorizationChange(ModelChange):
-        key = "usergroupauthorization_last_modified"
+        key = settings.GET_CACHE_KEY("usergroupauthorization_last_modified")
 
         @classmethod
         def get_cachetime(cls):
@@ -1957,7 +1957,7 @@ else:
                 logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
                 return True
             else:
-                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+                #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
 
     class IdentityProviderChange(ModelChange):

@@ -214,6 +214,7 @@ if USERFLOW_CACHE_CHECK_INTERVAL < 0:
 
 PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
 BACKEND_LOGOUT_URL=env('BACKEND_LOGOUT_URL')
+CACHE_KEY_PREFIX=env('CACHE_KEY_PREFIX',default="")
 
 DBCA_STAFF_GROUPID=env('DBCA_STAFF_GROUPID',default="DBCA") # The emails belongs to group 'dbca staff' are allowed to self sign up (no pre-registration required).
 
@@ -265,7 +266,7 @@ if DEBUG:
     }
 
 def get_cache(server):
-    if server.lower().startswith('redis://'):
+    if server.lower().startswith('redis'):
         return {
             "BACKEND": "django_redis.cache.RedisCache",
             "LOCATION": server,
@@ -283,25 +284,40 @@ CACHE_SERVER = env("CACHE_SERVER")
 CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
 CACHE_USER_SERVER = env("CACHE_USER_SERVER")
 USER_CACHE_ALIAS = None
+GET_CACHE_KEY = lambda key:key
+GET_USER_KEY = lambda userid:str(userid)
 if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     CACHES = {}
     if CACHE_SERVER:
         CACHES['default'] = get_cache(CACHE_SERVER)
+        if CACHE_KEY_PREFIX:
+            default_key_pattern = "{}_{{}}".format(CACHE_KEY_PREFIX)
+            GET_CACHE_KEY = lambda key:default_key_pattern.format(key)
+        else:
+            GET_CACHE_KEY = lambda key:key
 
     if CACHE_SESSION_SERVER:
         CACHES["session"] = get_cache(CACHE_SESSION_SERVER)
-        SESSION_ENGINE = "authome.session" if LOGLEVEL in ["DEBUG"] else  "django.contrib.sessions.backends.cache"
+        SESSION_ENGINE = "authome.sessiondebug" if LOGLEVEL in ["DEBUG"] else  "authome.session"
         SESSION_CACHE_ALIAS = "session"
     elif CACHE_SERVER:
-        SESSION_ENGINE = "authome.session" if LOGLEVEL in ["DEBUG"] else  "django.contrib.sessions.backends.cache"
+        SESSION_ENGINE = "authome.sessiondebug" if LOGLEVEL in ["DEBUG"] else  "authome.session"
         SESSION_CACHE_ALIAS = "default"
 
     if CACHE_USER_SERVER:
         CACHES["user"] = get_cache(CACHE_USER_SERVER)
-        GET_USER_KEY = lambda userid:userid
+        if CACHE_KEY_PREFIX:
+            user_key_pattern = "{}_{{}}".format(CACHE_KEY_PREFIX)
+            GET_USER_KEY = lambda userid:user_key_pattern.format(userid)
+        else:
+            GET_USER_KEY = lambda userid:str(userid)
         USER_CACHE_ALIAS = "user"
     elif CACHE_SERVER:
-        GET_USER_KEY = lambda userid:"user_{}".format(userid)
+        if CACHE_KEY_PREFIX:
+            user_key_pattern = "{}_user_{{}}".format(CACHE_KEY_PREFIX)
+        else:
+            user_key_pattern = "user_{}"
+        GET_USER_KEY = lambda userid:user_key_pattern.format(userid)
         USER_CACHE_ALIAS = "default"
 
     USER_CACHE_TIMEOUT = env("USER_CACHE_TIMEOUT",86400)

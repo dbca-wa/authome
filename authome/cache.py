@@ -42,11 +42,11 @@ class IntervalTaskRunable(TaskRunable):
             #not run before, don't run before the next scheduled runtime.
             today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo)
             self._next_time = today + timedelta(seconds = self._seconds_4_nextrun((dt - today).seconds,self._interval))
-            logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            #logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         elif self._next_time > dt:
             #Don't run before the next scheduled runtime
-            logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            #logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         else:
             #Run now, and set the next scheudled runtime.
@@ -102,11 +102,11 @@ class HourListTaskRunable(TaskRunable):
                 else:
                     self._index += 1
                 self._next_time += self._timediffs[self._index]
-            logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            #logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         elif self._next_time > dt:
             #don't run before the next sheduled time
-            logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            #logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         else:
             #run and set the next scheduled time
