@@ -20,7 +20,7 @@ from .cache import cache
 class PerformanceTestCase(TestCase):
     TEST_USER_NUMBER = env("TEST_USER_NUMBER",default=100)
     TEST_TIME = env("TEST_TIME",default=300) #in seconds
-    TEST_INTERVAL = env("TEST_INTERVAL",default=10) / 1000 #configured in milliseconds
+    REQUEST_INTERVAL = env("REQUEST_INTERVAL",default=10) / 1000 #configured in milliseconds
     TEST_SERVER = env("TEST_SERVER",default="http://127.0.0.1:8080")
     
     auth_url = "{}{}".format(TEST_SERVER,reverse('auth'))
@@ -122,7 +122,7 @@ class PerformanceTestCase(TestCase):
                     cls.total_authtime = processtime
                 else:
                     cls.total_authtime += processtime
-                time.sleep(cls.TEST_INTERVAL)
+                time.sleep(cls.REQUEST_INTERVAL)
     
             result = {
                 "min_authtime"      : self.min_authtime,
