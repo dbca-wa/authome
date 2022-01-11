@@ -1,21 +1,10 @@
 import logging
 
 import  django.contrib.sessions.backends.cache
-from django.utils import timezone
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-KEY_PREFIX = "django.contrib.sessions.cache"
 class SessionStore(django.contrib.sessions.backends.cache.SessionStore):
-    """
-    Override the cache session store to provide the performance related log
-    """
-    def load(self):
-        logger.debug("Start to load session from cache")
-        now = timezone.now()
-        try:
-            return super().load()
-        finally:
-            diff = timezone.now() - now
-            logger.debug("Spend {} milliseconds to load session data from cache".format(round((diff.seconds * 1000 + diff.microseconds)/1000)))
-        
+    cache_key_prefix = "{}_session".format(settings.CACHE_KEY_PREFIX) if settings.CACHE_KEY_PREFIX else "session"
+
