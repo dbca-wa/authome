@@ -1,4 +1,5 @@
 from multiprocessing import Process,Pipe
+import traceback
 import time
 import random
 import json
@@ -88,6 +89,7 @@ class PerformanceTestCase(TestCase):
     max_reponsesendtime = 0
     total_responsesendtime = 0
     
+    format_datetime = staticmethod(lambda t: t.strftime("%Y-%m-%d %H:%M:%S.%f") if t  else "N/A")
     format_processtime = staticmethod(lambda t: ("{} ms".format(round((t.total_seconds() if hasattr(t,"total_seconds") else t) * 1000,2))) if t  else "N/A")
 
     @classmethod
@@ -306,7 +308,7 @@ class PerformanceTestCase(TestCase):
                     self.assertEqual(len(processingsteps),1,msg="Each request should have one and only one steps, but now have {} steps".format(len(processingsteps)))
                     processtime = endtime - starttime
                     if cls.TEST_REQUESTS:
-                        self.print_processingsteps(testuser.email,"/sso/auth",processtime.total_seconds(),processingsteps)
+                        self.print_processingsteps(testuser.email,"/sso/auth",starttime,endtime,processingsteps)
     
                     #print("Spend {3} to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.auth_url,testuser.session.session_key,self.format_processtime(processtime)))
                     if not cls.authrequest["min_processtime"] or cls.authrequest["min_processtime"] >  processtime:
@@ -323,6 +325,7 @@ class PerformanceTestCase(TestCase):
     
                     self.parse_processingsteps(starttime,endtime,processingsteps)
                 except Exception as ex:
+                    traceback.print_exc()
                     endtime = timezone.localtime()
                     processtime = endtime - starttime
                     error = str(ex)
@@ -437,23 +440,28 @@ class PerformanceTestCase(TestCase):
 
         _merge_steps_data(cls.authrequest["steps"],performancedata["steps"])
 
-    def print_processingsteps(self,name,requesttype,processtime,processingsteps):
-        print("{:<20} {:<30} - processing time : {:<10} ".format(
+    def print_processingsteps(self,name,requesttype,starttime,endtime,processingsteps):
+        processtime = (endtime - starttime).total_seconds()
+        print("{:<20} {:<30} - starttime : {} endtime: {} processing time : {:<10} ".format(
             requesttype,
             name,
+            self.format_datetime(starttime),
+            self.format_datetime(endtime),
             self.format_processtime(processtime)
         ))
         def _print_steps(indent,total_processtime,steps):
             monitored_processtime = 0
             for step in steps:
-                print("{}{:<30} - processing time : {:<10} , Percentage: {}".format(
+                print("{}{:<30} - starttime : {} endtime : {} processing time : {:<10} , Percentage: {}".format(
                     indent,
                     step[0],
+                    self.format_datetime(step[1]),
+                    self.format_datetime(step[2]),
                     self.format_processtime(step[2] - step[1]),
                     "{}%".format(round(((step[2] - step[1]).total_seconds() / total_processtime) * 100,2))
                 ))
                 monitored_processtime += (step[2] - step[1]).total_seconds()
-                _print_steps(indent + "    ",(step[2] - step[1]).total_seconds(),step[3])
+                _print_steps(indent + "    ",(step[2] - step[1]).total_seconds(),step[4])
             if steps:
                 other_processtime =  total_processtime - monitored_processtime
                 if other_processtime > 0:
@@ -594,6 +602,8 @@ class PerformanceTestCase(TestCase):
         
         
         
+    def _post_teardown(self):
+        pass
         
             
 
