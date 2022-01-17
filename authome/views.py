@@ -30,6 +30,8 @@ from . import utils
 from . import emails
 from .exceptions import HttpResponseException
 
+from . import performance
+
 logger = logging.getLogger(__name__)
 django_engine = engines['django']
 
@@ -217,7 +219,7 @@ def _populate_response(request,f_cache,cache_key,user,session_key=None):
 
     return response
 
-def _auth_prod(request):
+def _auth(request):
     """
     has minimum logs, used in prod mode
     Authenticate and authorization the request;
@@ -227,86 +229,53 @@ def _auth_prod(request):
         200 Response: authenticated and authorized
         403 Response: authenticated but not authorized.
     """
-    if not request.user.is_authenticated:
-        #not authenticated
-        return None
+    try:
+        performance.start_processingstep("auth")
+        performance.start_processingstep("authentication")
+        try:
+            if not request.user.is_authenticated:
+                #not authenticated
+                return None
+        finally:
+            performance.end_processingstep("authentication")
+            pass
 
-    #authenticated
-    #check authorization
-    res = check_authorization(request,request.user.email)
-    if res:
-        #not authorized
-        return res
+      
+        performance.start_processingstep("authorization")
+        try:
+            #authenticated
+            #check authorization
+            res = check_authorization(request,request.user.email)
+            if res:
+                #not authorized
+                return res
+        finally:
+            performance.end_processingstep("authorization")
+            pass
 
-    #authorized
-    #get the reponse from cache
-    user = request.user
-    auth_key = cache.get_auth_key(user.email,request.session.session_key)
-    response = cache.get_auth(auth_key,user.modified)
+    
+        performance.start_processingstep("create_response")
+        try:
+            #authorized
+            #get the reponse from cache
+            user = request.user
+            auth_key = cache.get_auth_key(user.email,request.session.session_key)
+            response = cache.get_auth(auth_key,user.modified)
+    
+            if response and models.UserGroup.find_groups(user.email)[1] == response["X-groups"]:
+                #response cached
+                return response
+            else:
+                #reponse not cached, populate one and cache it.
+                return _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
+        finally:
+            performance.end_processingstep("create_response")
+            pass
 
-    if response and models.UserGroup.find_groups(user.email)[1] == response["X-groups"]:
-        #response cached
-        return response
-    else:
-        #reponse not cached, populate one and cache it.
-        return _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
-
-def _auth_debug(request):
-    """
-    Has lots of logs,used in debug mode
-    has the same logic as _auth_prod
-    """
-    start = timezone.now()
-
-    logger.debug("==============Start to authenticate the user================")
-    if not request.user.is_authenticated:
-        #not authenticated
-        diff = timezone.now() - start
-        logger.debug("Spend {} milliseconds to find that user is not authenticated".format(round((diff.seconds * 1000 + diff.microseconds)/1000)))
-        return None
-
-    #authenticated
-    diff = timezone.now() - start
-    logger.debug("Spend {} milliseconds to find that user is authenticated".format(round((diff.seconds * 1000 + diff.microseconds)/1000)))
-    before = timezone.now()
-
-    #check authorization
-    res = check_authorization(request,request.user.email)
-    if res:
-        #not authorized
-        diff = timezone.now() - before
-        logger.debug("Spend {} milliseconds to find that user is not authorized".format(round((diff.seconds * 1000 + diff.microseconds)/1000)))
-        return res
-
-    #authorized
-    diff = timezone.now() - before
-    logger.debug("Spend {} milliseconds to find that user is authorized".format(round((diff.seconds * 1000 + diff.microseconds)/1000)))
-    before = timezone.now()
-
-    #get the reponse from cache
-    user = request.user
-    auth_key = cache.get_auth_key(user.email,request.session.session_key)
-    response = cache.get_auth(auth_key,user.modified)
-
-    if response and models.UserGroup.find_groups(user.email)[1] == response["X-groups"]:
-        #response cached
-        diff = timezone.now() - before
-        diff1 = timezone.now() - start
-        logger.debug("Spend {} milliseconds to get the cached response,total spend {} milliseconds to process the request".format(round((diff.seconds * 1000 + diff.microseconds)/1000), round((diff1.seconds * 1000 + diff1.microseconds)/1000)))
-        logger.debug("==============End to authenticate the user================")
-        return response
-    else:
-        #response not cached; populate one and cache it
-        diff = timezone.now() - before
-        diff1 = timezone.now() - start
-        logger.debug("Spend {} milliseconds to generate and cache the response, total spend {} milliseconds to process the request".format(round((diff.seconds * 1000 + diff.microseconds)/1000),round((diff1.seconds * 1000 + diff1.microseconds)/1000)))
-        logger.debug("==============End to authenticate the user================")
-        return _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
-
-
-#set autentication and authorization method to _auth_prod or _auth_debug based on running mode
-_auth = _auth_prod if settings.RELEASE else _auth_debug
-
+    finally:
+        performance.end_processingstep("auth")
+        pass
+        
 @csrf_exempt
 def auth(request):
     """

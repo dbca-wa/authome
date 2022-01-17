@@ -298,10 +298,10 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
 
     if CACHE_SESSION_SERVER:
         CACHES["session"] = get_cache(CACHE_SESSION_SERVER)
-        SESSION_ENGINE = "authome.sessiondebug" if LOGLEVEL in ["DEBUG"] else  "authome.session"
+        SESSION_ENGINE = "authome.sessiondebug" if DEBUG else  "authome.session"
         SESSION_CACHE_ALIAS = "session"
     elif CACHE_SERVER:
-        SESSION_ENGINE = "authome.sessiondebug" if LOGLEVEL in ["DEBUG"] else  "authome.session"
+        SESSION_ENGINE = "authome.sessiondebug" if DEBUG else  "authome.session"
         SESSION_CACHE_ALIAS = "default"
 
     if CACHE_USER_SERVER:
@@ -321,3 +321,4 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
         USER_CACHE_ALIAS = "default"
 
     USER_CACHE_TIMEOUT = env("USER_CACHE_TIMEOUT",86400)
+

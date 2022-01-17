@@ -6,16 +6,17 @@ from django.utils import timezone
 import authome.session
 logger = logging.getLogger(__name__)
 
+from . import performance
+
 class SessionStore(authome.session.SessionStore):
     """
     Override the cache session store to provide the performance related log
     """
     def load(self):
-        logger.debug("Start to load session from cache")
-        now = timezone.now()
         try:
+            performance.start_processingstep("get_session_from_cache")
             return super().load()
         finally:
-            diff = timezone.now() - now
-            logger.debug("Spend {} milliseconds to load session data from cache".format(round((diff.seconds * 1000 + diff.microseconds)/1000)))
+            performance.end_processingstep("get_session_from_cache")
+            pass
         

@@ -1444,7 +1444,7 @@ def check_authorization(email,domain,path):
     else:
         return (False,[])
 
-def _can_access(email,domain,path):
+def can_access(email,domain,path):
     """
     Return True if the user(email) can access domain/path; otherwise return False
     """
@@ -1467,43 +1467,6 @@ def _can_access(email,domain,path):
         return any(obj.allow(path) for obj in authorizations)
     else:
         return False
-
-def _can_access_debug(email,domain,path):
-    """
-    Return True if the user(email) can access domain/path; otherwise return False
-    """
-    email = email.lower()
-    domain = domain.lower()
-    start = datetime.now()
-    authorizations = None
-    try:
-        groupskey = cache.get_email_groupskey(email)
-        if not groupskey:
-            usergroups = UserGroup.find_groups(email)[0]
-            if not usergroups:
-                #Not in any user group. can't access
-                return False
-
-            groupskey = cache.get_email_groupskey(email)
-
-        authorizations = cache.get_authorizations(groupskey,domain)
-        if authorizations is None:
-            authorizations = AuthorizationMixin.find_authorizations(email,domain)
-            cache.set_authorizations(groupskey,domain,authorizations)
-        if authorizations:
-            return any(obj.allow(path) for obj in authorizations)
-        else:
-            return False
-    finally:
-        diff = datetime.now() - start
-        if diff.seconds > 0 or diff.microseconds > settings.AUTH_CHECKING_THRESHOLD_TIME:
-            logger.warning("spend {0} milliseconds to check the authroization.user={1}, http request=https://{2}{3}".format(round((diff.seconds * 1000000 + diff.microseconds)/1000),email,domain,path))
-            pass
-        else:
-            logger.debug("spend {0} milliseconds to check the authroization.user={1}, http request=https://{2}{3}, authorization object=\r\n\t{4})".format(round((diff.seconds * 1000000 + diff.microseconds)/1000),email,domain,path,"\r\n\t".join("{}({},domain={},paths={},excluded_paths={})".format(authorization.__class__.__name__,authorization,authorization.domain,authorization.paths,authorization.excluded_paths) for authorization in authorizations) if authorizations else "None"))
-            pass
-
-can_access = _can_access if settings.RELEASE else _can_access_debug
 
 class UserAuthorization(CacheableMixin,AuthorizationMixin):
     user = models.EmailField(max_length=64)
