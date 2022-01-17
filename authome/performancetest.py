@@ -325,7 +325,6 @@ class PerformanceTestCase(TestCase):
     
                     self.parse_processingsteps(starttime,endtime,processingsteps)
                 except Exception as ex:
-                    traceback.print_exc()
                     endtime = timezone.localtime()
                     processtime = endtime - starttime
                     error = str(ex)
