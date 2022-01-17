@@ -44,6 +44,8 @@ class PerformanceTestCase(TestCase):
         "max_processtime" : None,
         "total_processtime" : None,
         "total_requests" : 0,
+        "errors": {
+        },
         "steps":[
             [
                 "requestsend",
@@ -86,7 +88,7 @@ class PerformanceTestCase(TestCase):
     max_reponsesendtime = 0
     total_responsesendtime = 0
     
-    format_processtime = staticmethod(lambda t:"{} ms".format(round((t.total_seconds() if hasattr(t,"total_seconds") else t) * 1000,2)))
+    format_processtime = staticmethod(lambda t: ("{} ms".format(round((t.total_seconds() if hasattr(t,"total_seconds") else t) * 1000,2))) if t  else "N/A")
 
     @classmethod
     def setUpClass(cls):
@@ -206,8 +208,8 @@ class PerformanceTestCase(TestCase):
                     performance_dict = [
                         step[0],
                         {
-                            "min_processtime" : 0,
-                            "max_processtime" : 0,
+                            "min_processtime" : None,
+                            "max_processtime" : None,
                             "total_processtime" : None,
                             "total_requests" : 0
                         },
@@ -294,31 +296,58 @@ class PerformanceTestCase(TestCase):
             while (not cls.TEST_REQUESTS and timezone.localtime() < end_time) or (cls.TEST_REQUESTS and httprequests < cls.TEST_REQUESTS) :
                 httprequests += 1
                 starttime = timezone.localtime()
-                #print("Begin to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.auth_url,testuser.session.session_key))
-                res = requests.get(cls.auth_url,cookies={settings.SESSION_COOKIE_NAME:testuser.session.session_key})
-                res = res.json()
-                endtime = timezone.localtime()
-                self.assertEqual(res["status_code"],200,msg="Should return 200 response for authenticated request")
-                processingsteps = performance.parse_processingsteps(res["processingsteps"])
-                self.assertEqual(len(processingsteps),1,msg="Each request should have one and only one steps, but now have {} steps".format(len(processingsteps)))
-                processtime = endtime - starttime
-                if cls.TEST_REQUESTS:
-                    self.print_processingsteps(testuser.email,"/sso/auth",processtime.total_seconds(),processingsteps)
+                try:
+                    #print("Begin to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.auth_url,testuser.session.session_key))
+                    res = requests.get(cls.auth_url,cookies={settings.SESSION_COOKIE_NAME:testuser.session.session_key})
+                    res = res.json()
+                    endtime = timezone.localtime()
+                    self.assertEqual(res["status_code"],200,msg="Should return 200 response for authenticated request")
+                    processingsteps = performance.parse_processingsteps(res["processingsteps"])
+                    self.assertEqual(len(processingsteps),1,msg="Each request should have one and only one steps, but now have {} steps".format(len(processingsteps)))
+                    processtime = endtime - starttime
+                    if cls.TEST_REQUESTS:
+                        self.print_processingsteps(testuser.email,"/sso/auth",processtime.total_seconds(),processingsteps)
+    
+                    #print("Spend {3} to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.auth_url,testuser.session.session_key,self.format_processtime(processtime)))
+                    if not cls.authrequest["min_processtime"] or cls.authrequest["min_processtime"] >  processtime:
+                        cls.authrequest["min_processtime"] = processtime
+            
+                    if not cls.authrequest["max_processtime"] or  cls.authrequest["max_processtime"] <  processtime:
+                        cls.authrequest["max_processtime"] = processtime
+            
+                    cls.authrequest["total_requests"] += 1
+                    if not cls.authrequest["total_processtime"]:
+                        cls.authrequest["total_processtime"] = processtime
+                    else:
+                        cls.authrequest["total_processtime"] += processtime
+    
+                    self.parse_processingsteps(starttime,endtime,processingsteps)
+                except Exception as ex:
+                    endtime = timezone.localtime()
+                    processtime = endtime - starttime
+                    error = str(ex)
+                    errordata = cls.authrequest["errors"].get(error)
+                    if not errordata:
+                        errordata = {
+                            "min_processtime" : None,
+                            "max_processtime" : None,
+                            "total_processtime" : None,
+                            "total_requests" : 0
+                        }
+                        cls.authrequest["errors"][error] = errordata
 
-                #print("Spend {3} to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.auth_url,testuser.session.session_key,self.format_processtime(processtime)))
-                if not cls.authrequest["min_processtime"] or cls.authrequest["min_processtime"] >  processtime:
-                    cls.authrequest["min_processtime"] = processtime
-        
-                if not cls.authrequest["max_processtime"] or  cls.authrequest["max_processtime"] <  processtime:
-                    cls.authrequest["max_processtime"] = processtime
-        
-                cls.authrequest["total_requests"] += 1
-                if not cls.authrequest["total_processtime"]:
-                    cls.authrequest["total_processtime"] = processtime
-                else:
-                    cls.authrequest["total_processtime"] += processtime
+                    errordata["total_requests"]= errordata.get("total_requests",0) + 1
+                    if not errordata["min_processtime"] or errordata["min_processtime"] >  processtime:
+                        errordata["min_processtime"] = processtime
+            
+                    if not errordata["max_processtime"] or  errordata["max_processtime"] <  processtime:
+                        errordata["max_processtime"] = processtime
+            
+                    if not errordata["total_processtime"]:
+                        errordata["total_processtime"] = processtime
+                    else:
+                        errordata["total_processtime"] += processtime
 
-                self.parse_processingsteps(starttime,endtime,processingsteps)
                 time.sleep(cls.REQUEST_INTERVAL)
     
             if c_conn:
@@ -334,6 +363,34 @@ class PerformanceTestCase(TestCase):
 
     def merge_performancedata(self,performancedata):
         cls = self.__class__
+
+        if performancedata["errors"]:
+            for error,errordata in performancedata["errors"].items():
+                m_errordata = cls.authrequest["errors"].get(error)
+                if not m_errordata:
+                    m_errordata = {
+                        "min_processtime" : None,
+                        "max_processtime" : None,
+                        "total_processtime" : None,
+                        "total_requests" : 0
+                    }
+                    cls.authrequest["errors"][error] = m_errordata
+                
+                processtime = errordata["min_processtime"]
+                if not m_errordata["min_processtime"] or m_errordata["min_processtime"] >  processtime:
+                    m_errordata["min_processtime"] = processtime
+        
+                processtime = errordata["max_processtime"]
+                if not m_errordata["max_processtime"] or  m_errordata["max_processtime"] <  processtime:
+                    m_errordata["max_processtime"] = processtime
+        
+                m_errordata["total_requests"] += errordata["total_requests"]
+
+                processtime = errordata["total_processtime"]
+                if not m_errordata["total_processtime"]:
+                    m_errordata["total_processtime"] = processtime
+                else:
+                    m_errordata["total_processtime"] += processtime
 
         if not performancedata["total_requests"]:
             return
@@ -352,6 +409,7 @@ class PerformanceTestCase(TestCase):
             cls.authrequest["total_processtime"] = processtime
         else:
             cls.authrequest["total_processtime"] += processtime
+
 
         def _merge_steps_data(stepsdata,userstepsdata):
             for userstepdata in userstepsdata:
@@ -426,12 +484,23 @@ class PerformanceTestCase(TestCase):
                     self.format_processtime(step[1]["min_processtime"]),
                     self.format_processtime(step[1]["max_processtime"]),
                     self.format_processtime(step[1]["total_processtime"].total_seconds() / step[1]["total_requests"]) if step[1]["total_processtime"] else 0,
-                    "{}%".format(round((step[1]["total_processtime"].total_seconds() / total_processtime) * 100,2))
+                    "{}%".format(round((step[1]["total_processtime"].total_seconds() / total_processtime) * 100,2)) if total_processtime else "N/A"
                 ))
-                _print_steps(indent + "    ",step[1]["total_processtime"].total_seconds(),step[2])
+                _print_steps(indent + "    ",step[1]["total_processtime"].total_seconds() if step[1]["total_processtime"] else None,step[2])
 
-        _print_steps("    ",performancedata["total_processtime"].total_seconds(),performancedata["steps"])
+        _print_steps("    ",performancedata["total_processtime"].total_seconds() if performancedata["total_processtime"] else None,performancedata["steps"])
         
+        if performancedata["errors"]:
+            print("    ------------------------------------------------------------------------------------")
+            print("    Errors")
+            for error,errordata in performancedata["errors"].items():
+                print("        {:<30} - Requests : {:<10} , Min Processtime : {:<11} , Max Processtime : {:<11} , Avg Processtime  : {:<11}".format(
+                    error,
+                    errordata["total_requests"],
+                    self.format_processtime(errordata["min_processtime"]),
+                    self.format_processtime(errordata["max_processtime"]),
+                    self.format_processtime(errordata["total_processtime"].total_seconds() / errordata["total_requests"]) if errordata["total_processtime"] else 0,
+                ))
 
     def test_performance(self):
         cls = self.__class__
@@ -481,11 +550,13 @@ class PerformanceTestCase(TestCase):
                 p.start()
     
             first = True
+            exs = []
             for testuser,p_conn,p in processes:
                 result = p_conn.recv()
                 p.join()
                 if isinstance(result,Exception):
-                    raise result
+                    exs.append(result)
+                    continue
                 if first:
                     first = False
                     print("""Test Environment
@@ -510,13 +581,15 @@ class PerformanceTestCase(TestCase):
                         cls.REQUEST_INTERVAL * 1000, 
                         cls.TEST_TIME
                     ))
-                if cls.PRINT_USER_PERFORMANCE_DATA:
+                if cls.PRINT_USER_PERFORMANCE_DATA :
                     self.print_performancedata(testuser.email,result)
                 self.merge_performancedata(result)
 
 
             print("================================================================================================")
             self.print_performancedata("Total({} users)".format(cls.TEST_USER_NUMBER),cls.authrequest)
+            if exs:
+                print("============================exceptions======================================================")
 
         
         
