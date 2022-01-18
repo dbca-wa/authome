@@ -479,7 +479,7 @@ class PerformanceTestCase(TestCase):
         print("    ------------------------------------------------------------------------------------")
         print("    Processes")
         for processname,processdata in performancedata["processes"].items():
-            print("        {:<50} Created After: {:>30} - Requests : {:<10} , Min Processtime : {:<11} , Max Processtime : {:<11} , Avg Processtime  : {:<11}".format(
+            print("        {:<50} Created After: {:<30} - Requests : {:<10} , Min Processtime : {:<11} , Max Processtime : {:<11} , Avg Processtime  : {:<11}".format(
                 processname,
                 processdata["createdafter"],
                 processdata["total_requests"],

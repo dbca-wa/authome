@@ -14,9 +14,12 @@ logger = logging.getLogger(__name__)
 
 _processing_info = threading.local()
 
-processcreatetime = timezone.make_aware(datetime.fromtimestamp(psutil.Process(os.getpid()).create_time())).strftime("%Y-%m-%d %H:%M:%S.%f")
-processname = "{}-{}-{}".format(socket.gethostname(),processcreatetime,os.getpid())
-print("process createtime = {}".format(processcreatetime))
+def get_processinfo():
+    processcreatetime = timezone.make_aware(datetime.fromtimestamp(psutil.Process(os.getpid()).create_time())).strftime("%Y-%m-%d %H:%M:%S.%f")
+    return (processcreatetime,"{}-{}-{}".format(socket.gethostname(),processcreatetime,os.getpid()))
+
+processcreatetime,processname = get_processinfo()
+print("Worker process({}) is ready to process request".format(processname))
 
 def _get_processingstep(index):
     if not index:
@@ -115,6 +118,7 @@ def performancetester_wrapper(func):
     def _process(*args,**kwargs):
         res = func(*args,**kwargs)
         end_processingstep("requestprocessing")
+        processcreatetime,processname = get_processinfo()
         data =  {
             "status_code":res.status_code,
             "processingsteps":get_processingsteps(),
