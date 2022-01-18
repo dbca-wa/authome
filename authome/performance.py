@@ -1,5 +1,8 @@
 import threading
 import logging
+import socket
+import os
+import psutil
 from datetime import datetime
 
 from django.core.signals import request_started,request_finished
@@ -10,6 +13,10 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 _processing_info = threading.local()
+
+processcreatetime = timezone.make_aware(datetime.fromtimestamp(psutil.Process(os.getpid()).create_time())).strftime("%Y-%m-%d %H:%M:%S.%f")
+processname = "{}-{}-{}".format(socket.gethostname(),processcreatetime,os.getpid())
+print("process createtime = {}".format(processcreatetime))
 
 def _get_processingstep(index):
     if not index:
@@ -90,6 +97,8 @@ def format_processingsteps(steps):
 
     return steps
 
+def parse_datetime(dt):
+    return timezone.make_aware(datetime.strptime(dt,"%Y-%m-%d %H:%M:%S.%f"))
  
 def parse_processingsteps(steps):
     if not steps:
@@ -108,7 +117,9 @@ def performancetester_wrapper(func):
         end_processingstep("requestprocessing")
         data =  {
             "status_code":res.status_code,
-            "processingsteps":get_processingsteps()
+            "processingsteps":get_processingsteps(),
+            "processname":processname,
+            "processcreatetime":processcreatetime
         }
         return JsonResponse(data,status=200)
 
