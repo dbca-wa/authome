@@ -27,7 +27,7 @@ class PerformanceTestCase(TestCase):
     TEST_USER_NUMBER = env("TEST_USER_NUMBER",default=100)
     TEST_USER_BASEID = int(env("TEST_USER_BASEID",default=1))
     TEST_TIME = env("TEST_TIME",default=300) #in seconds
-    TEST_REQUESTS = env("TEST_REQUESTS",default=None) #in seconds
+    TEST_REQUESTS = env("TEST_REQUESTS",default=0) 
     REQUEST_INTERVAL = env("REQUEST_INTERVAL",default=10) / 1000 #configured in milliseconds
     TESTED_SERVER = env("TESTED_SERVER",default="http://127.0.0.1:8080")
     PRINT_USER_PERFORMANCE_DATA = env("PRINT_USER_PERFORMANCE_DATA",default=False)
@@ -114,6 +114,7 @@ class PerformanceTestCase(TestCase):
             cls.auth_url = "{}/sso/authperformance".format(cls.TESTED_SERVER)
             cls.CLEAN_TEST_CACHE_DATA = False 
             cls.TEST_TIME = testdata["TEST_TIME"]
+            cls.TEST_REQUESTS = testdata["TEST_REQUESTS"]
             cls.REQUEST_INTERVAL = testdata["REQUEST_INTERVAL"] / 1000 
 
             cls.testusers = []
@@ -507,6 +508,7 @@ class PerformanceTestCase(TestCase):
             testdata = {
                 "TESTED_SERVER" : cls.TESTED_SERVER,
                 "TEST_TIME" : cls.TEST_TIME,
+                "TEST_REQUESTS" : cls.TEST_REQUESTS,
                 "REQUEST_INTERVAL" : cls.REQUEST_INTERVAL * 1000 ,
                 "CACHE_SESSION_SERVER" : settings.CACHE_SESSION_SERVER,
                 "CACHE_USER_SERVER" : settings.CACHE_USER_SERVER,
