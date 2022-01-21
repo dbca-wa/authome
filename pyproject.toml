@@ -27,7 +27,7 @@ Pillow = "8.1.0"
 PyJWT = "1.7.1"
 
 [tool.poetry.dev-dependencies]
-ipython = "^7.18.1"
+ipython = "^7.31.1"
 coverage = "^5.3"
 coveralls = "^2.1.2"
 mock = "^4.0.2"
