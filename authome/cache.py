@@ -4,13 +4,26 @@ from collections import OrderedDict
 
 from django.conf import settings
 from django.utils import timezone
+from django.core.cache import caches
 
-from .utils import get_defaultcache,format_datetime
+from .utils import format_datetime
 
 logger = logging.getLogger(__name__)
 
-defaultcache = get_defaultcache()
+if settings.USER_CACHES == 0:
+    get_usercache = lambda userid:None
+elif settings.USER_CACHES == 1:
+    get_usercache = lambda userid:caches[settings.USER_CACHE_ALIAS]
+else:
+    get_usercache = lambda userid:caches[settings.USER_CACHE_ALIAS(userid)]
 
+if settings.CACHE_SERVER:
+    get_defaultcache = lambda :caches['default']
+else:
+    get_defaultcache = lambda :None
+
+
+defaultcache = get_defaultcache()
 
 class TaskRunable(object):
     def can_run(self,dt=None):

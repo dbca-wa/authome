@@ -7,13 +7,11 @@ from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 
 from .models import User
-from .utils import get_usercache
+from .cache import get_usercache
 
 from . import performance
 
 logger = logging.getLogger(__name__)
-
-usercache = get_usercache()
 
 anonymoususer = auth.models.AnonymousUser()
 
@@ -22,7 +20,7 @@ override django builtin method _get_user
 To improve the perforance and debug, provide different function in each scenario, (the combination of debug and usercache)
 
 """
-if usercache:
+if settings.USER_CACHE_ALIAS:
     def _get_user(request):
         """
         Return the user model instance associated with the given request session.
@@ -32,6 +30,7 @@ if usercache:
         try:
             userid = auth._get_user_session_key(request)
             userkey = settings.GET_USER_KEY(userid)
+            usercache = get_usercache(userid)
             
             performance.start_processingstep("get_user_from_cache")
             try:

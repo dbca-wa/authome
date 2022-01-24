@@ -11,11 +11,10 @@ from django.contrib.auth import REDIRECT_FIELD_NAME
 
 from .models import IdentityProvider,UserGroup
 from .views import signout, get_post_b2c_logout_url
-from .utils import get_usercache
+from .cache import get_usercache
 
 logger = logging.getLogger(__name__)
 
-usercache = get_usercache()
 
 def email_lowercase(backend,details, user=None,*args, **kwargs):
     """
@@ -134,6 +133,7 @@ def user_details(strategy, details, user=None, *args, **kwargs):
 
     if changed:
         strategy.storage.user.changed(user)
+        usercache = get_usercache(user.id)
         if usercache:
             usercache.set(settings.GET_USER_KEY(user.id),user,settings.USER_CACHE_TIMEOUT)
             logger.debug("Cache the user({}) data to usercache".format(user.email))

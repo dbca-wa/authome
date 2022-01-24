@@ -17,6 +17,7 @@ from social_core.actions import do_auth, do_complete
 
 from ipware.ip import get_client_ip
 import json
+import psutil
 import base64
 import re
 import traceback
@@ -1098,6 +1099,7 @@ def status(request):
     content["sessioncache"] = str(settings.CACHES[settings.SESSION_CACHE_ALIAS]) if settings.USER_CACHE_ALIAS else "None"
     content["usercache"] = str(settings.CACHES[settings.USER_CACHE_ALIAS]) if settings.USER_CACHE_ALIAS else "None"
     content["defaultcache"] = str(settings.CACHES["default"]) if settings.CACHE_SERVER else "None"
+    content["processmemory"] = "{}M".format(round(psutil.Process().memory_info().rss / (1024 * 1024),2))
 
 
     content = json.dumps(content)

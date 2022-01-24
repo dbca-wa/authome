@@ -14,13 +14,11 @@ from django.contrib.auth.models import AbstractUser
 
 import hashlib
 
-from .cache import cache
-from .utils import get_defaultcache, get_usercache
+from .cache import cache,get_defaultcache,get_usercache
 
 logger = logging.getLogger(__name__)
 
 defaultcache = get_defaultcache()
-usercache = get_usercache()
 
 help_text_users = """
 List all possible user emails in this group separated by new line character.
@@ -1694,6 +1692,7 @@ class UserListener(object):
     @receiver(post_save, sender=User)
     def post_save_user(sender,instance,created,**kwargs):
         if not created:
+            usercache = get_usercache(instance.id)
             if usercache.get(settings.GET_USER_KEY(instance.id)):
                 usercache.set(settings.GET_USER_KEY(instance.id),instance,settings.USER_CACHE_TIMEOUT)
                 logger.debug("Cache the latest data of the user({1}<{0}>) to usercache".format(instance.id,instance.email))
@@ -1701,6 +1700,7 @@ class UserListener(object):
     @staticmethod
     @receiver(post_delete, sender=User)
     def post_delete_user(sender,instance,**kwargs):
+        usercache = get_usercache(instance.id)
         usercache.delete(settings.GET_USER_KEY(instance.id))
 
 class UserGroupListener(object):

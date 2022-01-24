@@ -37,10 +37,10 @@ WORKDIR /app
 RUN echo "#!/bin/bash \n\
 if [[ \"\$DEBUG\" == \"True\" || -n \"\${LOGLEVEL}\" ]]; then \n\
     echo \"Running in dev mode\" \n\
-    cd /app/dev && gunicorn authome.wsgi --config=gunicorn.py \n\
+    cd /app/dev && gunicorn authome.wsgi --bind=:8080 --config=gunicorn.py \n\
 else \n\
     echo \"Running in release mode\" \n\
-    cd /app/release && gunicorn authome.wsgi --config=gunicorn.py \n\
+    cd /app/release && gunicorn authome.wsgi --bind=:8080 --config=gunicorn.py \n\
 fi \n\
 " > start_app
 

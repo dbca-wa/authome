@@ -8,7 +8,6 @@ import base64
 import qrcode
 import logging
 
-
 from django.utils import timezone
 from django.contrib.auth import REDIRECT_FIELD_NAME
 
@@ -143,31 +142,6 @@ def get_redirect_domain(request):
     next_url = request.session.get(REDIRECT_FIELD_NAME)
     return get_domain(next_url)
 
-def get_usercache():
-    """
-    Return user cache; if not configured, return None
-    """
-    from django.conf import settings
-    from django.core.cache import caches
-    try:
-        if settings.USER_CACHE_ALIAS:
-            return caches[settings.USER_CACHE_ALIAS]
-        else:
-            return None
-    except:
-        return None
-
-
-def get_defaultcache():
-    """
-    Return default cache; if not configured, return None
-    """
-    from django.conf import settings
-    from django.core.cache import caches
-    try:
-        return caches['default']
-    except:
-        return None
 
 def get_totpurl(secret, name, issuer, timestep, prefix=None,algorithm="SHA1",digits=6):
     """
@@ -223,3 +197,4 @@ def get_digest_function(algorithm):
 
 def format_datetime(dt):
     return timezone.localtime(dt).strftime("%y-%m-%d %H:%M:%S") if dt else None
+

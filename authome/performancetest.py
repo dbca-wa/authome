@@ -16,10 +16,10 @@ from django.conf import settings
 
 from . import urls
 
-from . import session
-from .utils import env,get_usercache
+from . import cachesessionstore
+from .utils import env
 from . import models
-from .cache import cache
+from .cache import cache,get_usercache
 from authome import performance
 
 
@@ -91,7 +91,7 @@ class PerformanceTestCase(TestCase):
     total_responsesendtime = 0
     
     format_datetime = staticmethod(lambda t: t.strftime("%Y-%m-%d %H:%M:%S.%f") if t  else "N/A")
-    format_processtime = staticmethod(lambda t: ("{} ms".format(round((t.total_seconds() if hasattr(t,"total_seconds") else t) * 1000,2))) if t  else "N/A")
+    format_processtime = staticmethod(lambda t: ("{} ms".format(round((t.total_seconds() if hasattr(t,"total_seconds") else t) * 1000,2))) if t is not None  else "N/A")
 
     @classmethod
     def setUpClass(cls):
@@ -107,7 +107,7 @@ class PerformanceTestCase(TestCase):
             settings.CACHE_SERVER = testdata["CACHE_SERVER"]
             settings.SESSION_COOKIE_NAME = testdata.get("SESSION_COOKIE_NAME")
             settings.CACHE_KEY_PREFIX = testdata.get("CACHE_KEY_PREFIX")
-            session.SessionStore.cache_key_prefix = "{}_session".format(settings.CACHE_KEY_PREFIX) if settings.CACHE_KEY_PREFIX else "session"
+            cachesessionstore.SessionStore.cache_key_prefix = "{}_session".format(settings.CACHE_KEY_PREFIX) if settings.CACHE_KEY_PREFIX else "session"
             usersessiondata = testdata["usersession"]
 
             cls.TESTED_SERVER = testdata["TESTED_SERVER"]
@@ -122,23 +122,22 @@ class PerformanceTestCase(TestCase):
                 userdata = usersessiondata[email]
                 testuser = models.User(email=email,id=userdata["id"])
 
-                usersession = session.SessionStore(userdata["sessionkey"])
+                usersession = cachesessionstore.SessionStore(userdata["sessionkey"])
 
                 testuser.session=usersession
                 cls.testusers.append(testuser)
             print("Loaded {1} test users from file({0})".format(cls.TEST_DATA_FILE,cls.TEST_USER_NUMBER))
         else:
-            cls.usercache =get_usercache()
-
             cls.testusers = []
         
-            userid = 0
+            userid = cls.TEST_USER_BASEID * -1
             for testemail in testemails:
-                userid -= 1
                 testuser = models.User(username=testemail,email=testemail,first_name="",last_name="",systemuser=True,is_staff=True,is_superuser=False,id=userid)
+                userid -= 1
     
-                cls.usercache.set(settings.GET_USER_KEY(testuser.id),testuser,86400 * 14)
-                usersession = session.SessionStore()
+                usercache = get_usercache(testuser.id)
+                usercache.set(settings.GET_USER_KEY(testuser.id),testuser,86400 * 14)
+                usersession = cachesessionstore.SessionStore()
     
                 usersession[USER_SESSION_KEY] = str(testuser.id)
                 usersession[BACKEND_SESSION_KEY] = "django.contrib.auth.backends.ModelBackend"
@@ -156,12 +155,13 @@ class PerformanceTestCase(TestCase):
             print("Clean the cached session data and user data")
             for testuser in cls.testusers:
                 testuser.session.delete()
+                usercache = get_usercache(testuser.id)
                 #print("Delete session key {}".format(testuser.session.cache_key_prefix + testuser.session.session_key))
-                cls.usercache.delete(settings.GET_USER_KEY(testuser.id))
+                usercache.delete(settings.GET_USER_KEY(testuser.id))
                 #print("Delete user {} from cache with key({})".format(testuser.email,settings.GET_USER_KEY(testuser.id)))
                 pass
 
-    def parse_processingsteps(self,test_starttime,test_endtime,starttime,endtime,processname,processcreatetime,processingsteps):
+    def parse_processingsteps(self,test_starttime,test_endtime,starttime,endtime,processname,processcreatetime,processmemory,processingsteps):
         cls = self.__class__
         index = [0]
         p_steps = [] #a list of tuple(parent step, last processed sub step index,parent_perforance_data)
@@ -188,13 +188,17 @@ class PerformanceTestCase(TestCase):
                 if not p_performance_dict:
                     p_performance_dict = {
                         "processcreatetime":processcreatetime.strftime("%Y-%m-%d %H:%M:%S.%f"),
-                        "createdafter":"0 milliseconds" if processcreatetime <= test_starttime else self.format_processtime(processcreatetime - test_starttime),
+                        "createdafter":0 if processcreatetime <= test_starttime else (processcreatetime - test_starttime).total_seconds(),
+                        "processmemory":processmemory ,
                         "min_processtime": None,
                         "max_processtime": None,
                         "total_processtime": None,
                         "total_requests" : 0
                     }
                     cls.authrequest["processes"][processname] = p_performance_dict
+                else:
+                    if p_performance_dict["processmemory"] < processmemory:
+                        p_performance_dict["processmemory"] = processmemory
 
                 _process_processtime(p_performance_dict,step[2] - step[1])
 
@@ -275,7 +279,6 @@ class PerformanceTestCase(TestCase):
             if sleep_time and sleep_time > 0:
                 time.sleep(sleep_time)
             testuser = cls.testusers[index]
-
             httprequests = 0
             while (not cls.TEST_REQUESTS and timezone.localtime() < test_endtime) or (cls.TEST_REQUESTS and httprequests < cls.TEST_REQUESTS) :
                 httprequests += 1
@@ -289,6 +292,7 @@ class PerformanceTestCase(TestCase):
                     processingsteps = performance.parse_processingsteps(res["processingsteps"])
                     processname = res["processname"]
                     processcreatetime = performance.parse_datetime(res["processcreatetime"])
+                    processmemory = res["processmemory"]
                     self.assertEqual(len(processingsteps),1,msg="Each request should have one and only one steps, but now have {} steps".format(len(processingsteps)))
                     processtime = endtime - starttime
                     if cls.TEST_REQUESTS:
@@ -307,7 +311,7 @@ class PerformanceTestCase(TestCase):
                     else:
                         cls.authrequest["total_processtime"] += processtime
     
-                    self.parse_processingsteps(test_starttime,test_endtime,starttime,endtime,processname,processcreatetime,processingsteps)
+                    self.parse_processingsteps(test_starttime,test_endtime,starttime,endtime,processname,processcreatetime,processmemory,processingsteps)
                 except Exception as ex:
                     if cls.TEST_USER_NUMBER <= 2 and cls.TEST_REQUESTS < 5:
                         traceback.print_exc()
@@ -376,12 +380,16 @@ class PerformanceTestCase(TestCase):
                 m_processdata = {
                     "processcreatetime":processdata["processcreatetime"],
                     "createdafter":processdata["createdafter"],
+                    "processmemory":processdata["processmemory"],
                     "min_processtime" : None,
                     "max_processtime" : None,
                     "total_processtime" : None,
                     "total_requests" : 0
                 }
                 cls.authrequest["processes"][processname] = m_processdata
+            else:
+                if m_processdata["processmemory"] < processdata["processmemory"]:
+                    m_processdata["processmemory"] = processdata["processmemory"]
          
             _merge_performancedata(m_processdata,processdata)
 
@@ -454,6 +462,7 @@ class PerformanceTestCase(TestCase):
         _print_steps("    ",processtime,processingsteps)
         
     def print_performancedata(self,name,performancedata):
+        cls = self.__class__
         print("{:<30} - Requests : {:<10} , Min Processtime : {:<11} , Max Processtime : {:<11} , Avg Processtime  : {:<11}".format(
             name,
             performancedata["total_requests"],
@@ -479,13 +488,13 @@ class PerformanceTestCase(TestCase):
         print("    ------------------------------------------------------------------------------------")
         print("    Processes")
         for processname,processdata in performancedata["processes"].items():
-            print("        {:<50} Created After: {:<30} - Requests : {:<10} , Min Processtime : {:<11} , Max Processtime : {:<11} , Avg Processtime  : {:<11}".format(
-                processname,
-                processdata["createdafter"],
+            print("        {:<80} - Requests : {:<7} , Min Processtime : {:<8} , Max Processtime : {:<11} , Avg Processtime  : {:<10} , Total Processtime : {}".format(
+                " {}({}:{}:{}%)".format(processname,self.format_processtime(processdata["createdafter"]),"{}M".format(round(processdata["processmemory"])),round((processdata["total_processtime"].total_seconds()/(cls.TEST_TIME - processdata["createdafter"])) * 100,2)   ),
                 processdata["total_requests"],
                 self.format_processtime(processdata["min_processtime"]),
                 self.format_processtime(processdata["max_processtime"]),
                 self.format_processtime(processdata["total_processtime"].total_seconds() / processdata["total_requests"]) if processdata["total_processtime"] else 0,
+                self.format_processtime(processdata["total_processtime"]) if processdata["total_processtime"] else 0,
             ))
 
         if performancedata["errors"]:

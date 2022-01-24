@@ -123,7 +123,8 @@ def performancetester_wrapper(func):
             "status_code":res.status_code,
             "processingsteps":get_processingsteps(),
             "processname":processname,
-            "processcreatetime":processcreatetime
+            "processcreatetime":processcreatetime,
+            "processmemory":psutil.Process().memory_info().rss / (1024 * 1024)
         }
         return JsonResponse(data,status=200)
 

@@ -1,12 +1,13 @@
 # Gunicorn configuration settings.
 import multiprocessing
 
-bind = ":8080"
+#bind = ":8080"
 # Don't start too many workers:
-workers = min(multiprocessing.cpu_count() * 2 + 1, 16)
+workers = multiprocessing.cpu_count() + 2
+worker_connections = 50000
 # Give workers an expiry:
-max_requests = 2048
-max_requests_jitter = 256
+max_requests = 100000
+max_requests_jitter = 5000
 preload_app = True
 # Set longer timeout for workers
 timeout = 180
