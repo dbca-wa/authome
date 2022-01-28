@@ -21,6 +21,8 @@ else:
 
 firstsessioncache = get_firstsessioncache()
 
+process_seq_key = "{}:{}".format(settings.CACHE_KEY_PREFIX,settings.SESSION_COOKIE_NAME) if settings.CACHE_KEY_PREFIX else settings.SESSION_COOKIE_NAME
+
 VALID_DIGITIAL_CHARS = string.digits + string.ascii_uppercase
 def convert_decimal(number,decimal):
     remain_number = number
@@ -42,7 +44,7 @@ def convert_decimal(number,decimal):
     return converted_number
         
 class _AbstractSessionStore(SessionBase):
-    cache_key_prefix = "{}-session-".format(settings.CACHE_KEY_PREFIX) if settings.CACHE_KEY_PREFIX else "session-"
+    cache_key_prefix = "{}-session:".format(settings.CACHE_KEY_PREFIX) if settings.CACHE_KEY_PREFIX else "session:"
 
     def _get_cache(self,session_key=None):
         return None
@@ -50,6 +52,13 @@ class _AbstractSessionStore(SessionBase):
     @property
     def cache_key(self):
         return self.cache_key_prefix + self._get_or_create_session_key()
+
+
+    def get_cache_key(self,session_key=None):
+        if not session_key:
+            session_key = self.session_key
+        return self.cache_key_prefix + session_key
+
 
     def load(self):
         try:
@@ -115,8 +124,8 @@ if settings.SYNC_MODE:
         @classmethod
         def _init_process_prefix(cls):
             if not cls._process_prefix:
-                firstsessioncache.get_or_set(settings.SESSION_COOKIE_NAME,0,timeout=None)
-                cls._process_prefix = convert_decimal(firstsessioncache.incr(settings.SESSION_COOKIE_NAME),36)
+                firstsessioncache.get_or_set(process_seq_key,0,timeout=None)
+                cls._process_prefix = convert_decimal(firstsessioncache.incr(process_seq_key),36)
                 logger.info("Got process prefix({}) for session key.".format(cls._process_prefix))
 
 
@@ -143,8 +152,8 @@ else:
         @classmethod
         def _init_process_prefix(cls):
             cls._process_prefix = queue.Queue(maxsize=10)
-            firstsessioncache.get_or_set(settings.SESSION_COOKIE_NAME,0,timeout=None)
-            n = firstsessioncache.incr(settings.SESSION_COOKIE_NAME,10) - 9
+            firstsessioncache.get_or_set(process_seq_key,0,timeout=None)
+            n = firstsessioncache.incr(process_seq_key,10) - 9
             for i in range(n,n + 10):
                 cls._process_prefix.put(convert_decimal(i,36))
 
@@ -167,7 +176,6 @@ else:
                         return session_key
             finally:
                 cls._process_prefix.put(prefix)
-
 
 
 if settings.SESSION_CACHES == 1:

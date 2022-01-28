@@ -267,7 +267,7 @@ if DEBUG:
         'SHOW_TOOLBAR_CALLBACK':show_toolbar
     }
 
-def get_cache(server):
+def GET_CACHE_CONF(server):
     if server.lower().startswith('redis'):
         return {
             "BACKEND": "django_redis.cache.RedisCache",
@@ -294,9 +294,9 @@ USER_CACHES = 0
 if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     CACHES = {}
     if CACHE_SERVER:
-        CACHES['default'] = get_cache(CACHE_SERVER)
+        CACHES['default'] = GET_CACHE_CONF(CACHE_SERVER)
         if CACHE_KEY_PREFIX:
-            default_key_pattern = "{}_{{}}".format(CACHE_KEY_PREFIX)
+            default_key_pattern = "{}:{{}}".format(CACHE_KEY_PREFIX)
             GET_CACHE_KEY = lambda key:default_key_pattern.format(key)
         else:
             GET_CACHE_KEY = lambda key:key
@@ -305,11 +305,11 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
         CACHE_SESSION_SERVER = [s.strip() for s in CACHE_SESSION_SERVER.split(",") if s and s.strip()]
         SESSION_CACHES = len(CACHE_SESSION_SERVER)
         if SESSION_CACHES == 1:
-            CACHES["session"] = get_cache(CACHE_SESSION_SERVER[0])
+            CACHES["session"] = GET_CACHE_CONF(CACHE_SESSION_SERVER[0])
             SESSION_CACHE_ALIAS = "session"
         else:
             for i in range(0,SESSION_CACHES) :
-                CACHES["session{}".format(i)] = get_cache(CACHE_SESSION_SERVER[i])
+                CACHES["session{}".format(i)] = GET_CACHE_CONF(CACHE_SESSION_SERVER[i])
 
             SESSION_CACHE_ALIAS = lambda sessionkey:"session{}".format((ord(sessionkey[-1]) + ord(sessionkey[-2])) % SESSION_CACHES)
         SESSION_ENGINE = "authome.cachesessionstoredebug" if DEBUG else  "authome.cachesessionstore"
@@ -322,23 +322,23 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
         CACHE_USER_SERVER = [s.strip() for s in CACHE_USER_SERVER.split(",") if s and s.strip()]
         USER_CACHES = len(CACHE_USER_SERVER)
         if USER_CACHES == 1:
-            CACHES["user"] = get_cache(CACHE_USER_SERVER[0])
+            CACHES["user"] = GET_CACHE_CONF(CACHE_USER_SERVER[0])
             USER_CACHE_ALIAS = "user"
         else:
             for i in range(0,USER_CACHES) :
-                CACHES["user{}".format(i)] = get_cache(CACHE_USER_SERVER[i])
+                CACHES["user{}".format(i)] = GET_CACHE_CONF(CACHE_USER_SERVER[i])
 
             USER_CACHE_ALIAS = lambda userid:"user{}".format(abs(userid) % USER_CACHES)
         if CACHE_KEY_PREFIX:
-            user_key_pattern = "{}_{{}}".format(CACHE_KEY_PREFIX)
+            user_key_pattern = "{}:{{}}".format(CACHE_KEY_PREFIX)
             GET_USER_KEY = lambda userid:user_key_pattern.format(userid)
         else:
             GET_USER_KEY = lambda userid:str(userid)
     elif CACHE_SERVER:
         if CACHE_KEY_PREFIX:
-            user_key_pattern = "{}_user_{{}}".format(CACHE_KEY_PREFIX)
+            user_key_pattern = "{}:user:{{}}".format(CACHE_KEY_PREFIX)
         else:
-            user_key_pattern = "user_{}"
+            user_key_pattern = "user:{}"
         GET_USER_KEY = lambda userid:user_key_pattern.format(userid)
         USER_CACHE_ALIAS = "default"
         USER_CACHES = 1
