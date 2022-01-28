@@ -135,5 +135,5 @@ def user_details(strategy, details, user=None, *args, **kwargs):
         strategy.storage.user.changed(user)
         usercache = get_usercache(user.id)
         if usercache:
-            usercache.set(settings.GET_USER_KEY(user.id),user,settings.USER_CACHE_TIMEOUT)
+            usercache.set(settings.GET_USER_KEY(user.id),user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
             logger.debug("Cache the user({}) data to usercache".format(user.email))

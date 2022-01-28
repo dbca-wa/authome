@@ -1694,7 +1694,7 @@ class UserListener(object):
         if not created:
             usercache = get_usercache(instance.id)
             if usercache.get(settings.GET_USER_KEY(instance.id)):
-                usercache.set(settings.GET_USER_KEY(instance.id),instance,settings.USER_CACHE_TIMEOUT)
+                usercache.set(settings.GET_USER_KEY(instance.id),instance,settings.STAFF_CACHE_TIMEOUT if instance.is_staff else settings.USER_CACHE_TIMEOUT)
                 logger.debug("Cache the latest data of the user({1}<{0}>) to usercache".format(instance.id,instance.email))
 
     @staticmethod

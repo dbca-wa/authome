@@ -49,7 +49,7 @@ if settings.USER_CACHE_ALIAS:
 
                 performance.start_processingstep("set_user_to_cache")
                 try:
-                    usercache.set(userkey,user,settings.USER_CACHE_TIMEOUT)
+                    usercache.set(userkey,user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
                 finally:
                     performance.end_processingstep("set_user_to_cache")
                     pass
