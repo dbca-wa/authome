@@ -3,6 +3,7 @@ import string
 
 from django.conf import settings
 from django.utils import timezone
+from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 
 from django.contrib.sessions.backends.base import (
     CreateError, SessionBase, UpdateError,VALID_KEY_CHARS
@@ -53,6 +54,12 @@ class _AbstractSessionStore(SessionBase):
     def cache_key(self):
         return self.cache_key_prefix + self._get_or_create_session_key()
 
+
+    def get_session_cookie_age(self):
+        if self.get(USER_SESSION_KEY):
+            return settings.SESSION_COOKIE_AGE
+        else:
+            return settings.GUEST_SESSION_AGE
 
     def get_cache_key(self,session_key=None):
         if not session_key:

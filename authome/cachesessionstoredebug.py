@@ -2,6 +2,7 @@ import logging
 
 from django.conf import settings
 from django.utils import timezone
+from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 
 import authome.cachesessionstore
 logger = logging.getLogger(__name__)
@@ -12,6 +13,12 @@ class SessionStore(authome.cachesessionstore.SessionStore):
     """
     Override the cache session store to provide the performance related log
     """
+    def _get_new_session_key(self):
+        "Return session key that isn't being used."
+        session_key = super()._get_new_session_key()
+        logger.debug("Create a new session key {}".format(session_key))
+        return session_key
+
     def load(self):
         try:
             performance.start_processingstep("get_session_from_cache")
@@ -26,6 +33,7 @@ class SessionStore(authome.cachesessionstore.SessionStore):
             return super().create()
         finally:
             performance.end_processingstep("create_session")
+            logger.debug("Add a new session({}) for {} into cache".format(self.session_key,self.get(USER_SESSION_KEY,'GUEST')))
             pass
 
         
@@ -35,6 +43,7 @@ class SessionStore(authome.cachesessionstore.SessionStore):
             return super().save(must_create=must_create)
         finally:
             performance.end_processingstep("save_session_in_cache")
+            logger.debug("Save a session({}) for {} into cache".format(self.session_key,self.get(USER_SESSION_KEY,'GUEST')))
             pass
 
 
@@ -44,6 +53,7 @@ class SessionStore(authome.cachesessionstore.SessionStore):
             return super().delete(session_key=session_key)
         finally:
             performance.end_processingstep("delete_session_from_cache")
+            logger.debug("Delete a session({}) for {} from cache".format(session_key or self.session_key,self.get(USER_SESSION_KEY,'GUEST')))
             pass
 
     def exists(self, session_key):

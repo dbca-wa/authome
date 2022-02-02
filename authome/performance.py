@@ -13,6 +13,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 _processing_info = threading.local()
+_processing_info.enabled = False
 
 def get_processinfo():
     processcreatetime = timezone.make_aware(datetime.fromtimestamp(psutil.Process(os.getpid()).create_time())).strftime("%Y-%m-%d %H:%M:%S.%f")

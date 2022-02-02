@@ -2,6 +2,7 @@ import telnetlib
 import re
 import json
 import os
+import urllib
 import base64
 from datetime import datetime,timedelta
 
@@ -10,6 +11,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.core.cache.backends.memcached import MemcachedCache
 from django.core.cache import _create_cache
+from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 
 from django_redis import get_redis_connection
 
@@ -56,12 +58,15 @@ def migrate_caches(source_caches,default_cache_key_re,user_cache_key_re,session_
     Migrate the cache data from source cache servers to current cache servers
     Only support memcached and redis
     """
+    empty_keys = []
     expired_keys = []
     unrecognized_keys = []
     session_keys = 0
+    guest_session_keys = 0
     user_keys = 0
     data_keys = 0
     process_seq_keys = 0
+    processed_keys = 0
 
     cacheid = 0
     for source_cache in source_caches:
@@ -70,52 +75,74 @@ def migrate_caches(source_caches,default_cache_key_re,user_cache_key_re,session_
         cache_server_client = CacheServerClient.create_server_client(cachename,source_cache)
         try:
             for cachekey,value,expireat in cache_server_client.items():
-                if expireat and expireat < timezone.now():
-                    #key is expired, ignore
-                    expired_keys.append("{}={}, expireat:{}".format(cachekey,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
-                    continue
-                m = session_cache_key_re.search(cachekey)
-                if m:
-                    #session key
-                    key = m.group("key")
-                    _save_session(key,value,expireat)
-                    session_keys += 1
-                    continue
-                m = user_cache_key_re.search(cachekey)
-                if m:
-                    #user key
-                    key = m.group("key")
-                    _save_user(key,value,expireat)
-                    user_keys += 1
-                    continue
-                m =  process_seq_key_re.search(cachekey)
-                if m:
-                    #process seq key
-                    key = m.group("key")
-                    _save_process_seq(key,value,expireat)
-                    process_seq_keys += 1
-                    continue
-                m = default_cache_key_re.search(cachekey)
-                if m:
-                    #general data key
-                    key = m.group("key")
-                    _save_data(key,value,expireat)
-                    data_keys += 1
-                    continue
-                unrecognized_keys.append("{}={}, expireat:{}".format(cachekey,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
+                try:
+                    if expireat and expireat < timezone.now():
+                        #key is expired, ignore
+                        expired_keys.append("{}={}, expireat:{}".format(cachekey,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
+                        continue
+    
+                    if not value:
+                        empty_keys.append("{} expireat:{}".format(cachekey,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
+                        continue
+    
+                    m = session_cache_key_re.search(cachekey)
+                    if m:
+                        #session key
+                        key = m.group("key")
+                        if value.get(USER_SESSION_KEY):
+                            _save_session(key,value,expireat)
+                            session_keys += 1
+                        else:
+                            guest_session_keys += 1
+
+                        continue
+                    m = user_cache_key_re.search(cachekey)
+                    if m:
+                        #user key
+                        key = m.group("key")
+                        _save_user(key,value,expireat)
+                        user_keys += 1
+                        continue
+                    m =  process_seq_key_re.search(cachekey)
+                    if m:
+                        #process seq key
+                        key = m.group("key")
+                        _save_process_seq(key,value,expireat)
+                        process_seq_keys += 1
+                        continue
+                    m = default_cache_key_re.search(cachekey)
+                    if m:
+                        #general data key
+                        key = m.group("key")
+                        _save_data(key,value,expireat)
+                        data_keys += 1
+                        continue
+                    unrecognized_keys.append("{}={}, expireat:{}".format(cachekey,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
+                finally:
+                    processed_keys += 1
+                    if processed_keys % 1000 == 0:
+                        print("Processed {} keys, Session Keys : {} , Guest Session Keys : {} ,  User Keys : {} , Process Seq Keys : {} , Data Keys : {}".format(processed_keys,session_keys,guest_session_keys,user_keys,process_seq_keys,data_keys))
         finally:
             cache_server_client.close()
 
     print("""Migrated Cached Data:
-    Migrated Session Keys     : {}
-    Migrated User Keys        : {}
-    Migrated Data Keys        : {}
-    Migrated Process Seq Keys : {}
-""".format(session_keys,user_keys,data_keys,process_seq_keys))
+    Total Migrated Keys        : {}
+    Migrated Session Keys      : {}
+    Ignored Guest Session Keys : {}
+    Migrated User Keys         : {}
+    Migrated Data Keys         : {}
+    Migrated Process Seq Keys  : {}
+""".format(processed_keys,session_keys,guest_session_keys,user_keys,data_keys,process_seq_keys))
     if expired_keys:
         print("    =========================================================================")
         print("    Expired Keys")
         for key in expired_keys:
+            print("        {}".format(key))
+
+    if empty_keys:
+        print("    =========================================================================")
+        print("    Empty Keys")
+        for key in empty_keys:
             print("        {}".format(key))
 
     if unrecognized_keys:
@@ -152,9 +179,11 @@ def export_caches(source_caches,
 
     unrecognized_keys = []
     session_keys = 0
+    guest_session_keys = 0
     user_keys = 0
     data_keys = 0
     process_seq_keys = 0
+    empty_keys = []
 
     #prepare the file system cache to store the cached data
     if os.path.exists(exported_dir):
@@ -174,18 +203,29 @@ def export_caches(source_caches,
     settings.CACHES["__exported_session"] = {
         'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
         'LOCATION': session_cache_dir,
+        "OPTIONS":{
+            "MAX_ENTRIES":40000000
+        }
     }
     settings.CACHES["__exported_user"] = {
         'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
         'LOCATION': user_cache_dir,
+        "OPTIONS":{
+            "MAX_ENTRIES":40000000
+        }
     }
     settings.CACHES["__exported_data"] = {
         'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
         'LOCATION': data_cache_dir,
+        "OPTIONS":{
+            "MAX_ENTRIES":40000000
+        }
     }
     session_cache = _create_cache("__exported_session")
     user_cache = _create_cache("__exported_user")
     data_cache = _create_cache("__exported_data")
+
+    processed_keys = 0
  
     with open(keys_file,'wt') as f:
         cacheid = 0
@@ -195,45 +235,71 @@ def export_caches(source_caches,
             cache_server_client = CacheServerClient.create_server_client(cachename,source_cache)
             try:
                 for cachekey,value,expireat in cache_server_client.items():
-                    m = session_cache_key_re.search(cachekey)
-                    if m:
-                        f.write(json.dumps(["session",m.groupdict(),expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None]))
-                        f.write("\n")
-                        session_cache.set(m.group("key"),value,timeout=None)
-                        session_keys += 1
-                        continue
-                    m = user_cache_key_re.search(cachekey)
-                    if m:
-                        f.write(json.dumps(["user",m.groupdict(),expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None]))
-                        f.write("\n")
-                        user_cache.set(m.group("key"),value,timeout=None)
-                        user_keys += 1
-                        continue
-                    m =  process_seq_key_re.search(cachekey)
-                    if m:
-                        f.write(json.dumps(["process_seq",m.groupdict(),expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None]))
-                        f.write("\n")
-                        session_cache.set(m.group("key"),value,timeout=None)
-                        process_seq_keys += 1
-                        continue
-                    m = default_cache_key_re.search(cachekey)
-                    if m:
-                        f.write(json.dumps(["data",m.groupdict(),expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None]))
-                        f.write("\n")
-                        data_cache.set(m.group("key"),value,timeout=None)
-                        data_keys += 1
-                        continue
-                    unrecognized_keys.append("{}={}, expireat:{}".format(cachekey,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
+                    try:
+                        if not value:
+                            empty_keys.append("{} expireat:{}".format(cachekey,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
+                            continue
+    
+                        m = session_cache_key_re.search(cachekey)
+                        if m:
+                            if value.get(USER_SESSION_KEY):
+                                f.write(json.dumps(["session",m.groupdict(),expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None]))
+                                f.write("\n")
+                                if not session_cache.add(m.group("key"),value,timeout=None):
+                                    raise Exception("Failed to save the key({}) to file system cache.".format(m.group("key")))
+                                session_keys += 1
+                            else:
+                                guest_session_keys += 1
+
+                            continue
+                        m = user_cache_key_re.search(cachekey)
+                        if m:
+                            f.write(json.dumps(["user",m.groupdict(),expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None]))
+                            f.write("\n")
+                            if not user_cache.add(m.group("key"),value,timeout=None):
+                                raise Exception("Failed to save the key({}) to file system cache.".format(m.group("key")))
+                            user_keys += 1
+                            continue
+                        m =  process_seq_key_re.search(cachekey)
+                        if m:
+                            f.write(json.dumps(["process_seq",m.groupdict(),expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None]))
+                            f.write("\n")
+                            if not session_cache.add(m.group("key"),value,timeout=None):
+                                raise Exception("Failed to save the key({}) to file system cache.".format(m.group("key")))
+                            process_seq_keys += 1
+                            continue
+                        m = default_cache_key_re.search(cachekey)
+                        if m:
+                            f.write(json.dumps(["data",m.groupdict(),expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None]))
+                            f.write("\n")
+                            if not data_cache.add(m.group("key"),value,timeout=None):
+                                raise Exception("Failed to save the key({}) to file system cache.".format(m.group("key")))
+                            data_keys += 1
+                            continue
+                        unrecognized_keys.append("{}={}, expireat:{}".format(cachekey,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
+                    finally:
+                        processed_keys += 1
+                        if processed_keys % 1000 == 0:
+                            print("Processed {} keys, Session Keys : {} , Guest Session Keys : {} ,  User Keys : {} , Process Seq Keys : {} , Data Keys : {}".format(processed_keys,session_keys,guest_session_keys,user_keys,process_seq_keys,data_keys))
             finally:
                 cache_server_client.close()
 
 
     print("""Exported Cached Data:
-    Exported Session Keys     : {}
-    Exported User Keys        : {}
-    Exported Data Keys        : {}
-    Exported Process Seq Keys : {}
-""".format(session_keys,user_keys,data_keys,process_seq_keys))
+    Total Exported Keys        : {}
+    Exported Session Keys      : {}
+    Ignored Guest Session Keys : {}
+    Exported User Keys         : {}
+    Exported Data Keys         : {}
+    Exported Process Seq Keys  : {}
+    
+""".format(processed_keys,session_keys,guest_session_keys,user_keys,data_keys,process_seq_keys))
+    if empty_keys:
+        print("    =========================================================================")
+        print("    Empty Keys")
+        for key in empty_keys:
+            print("        {}".format(key))
+
     if unrecognized_keys:
         print("    =========================================================================")
         print("    Unrecognized Keys")
@@ -255,14 +321,23 @@ def import_caches(import_dir="./cached_data"):
     settings.CACHES["__import_session"] = {
         'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
         'LOCATION': session_cache_dir,
+        "OPTIONS":{
+            "MAX_ENTRIES":40000000
+        }
     }
     settings.CACHES["__import_user"] = {
         'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
         'LOCATION': user_cache_dir,
+        "OPTIONS":{
+            "MAX_ENTRIES":40000000
+        }
     }
     settings.CACHES["__import_data"] = {
         'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
         'LOCATION': data_cache_dir,
+        "OPTIONS":{
+            "MAX_ENTRIES":40000000
+        }
     }
     session_cache = _create_cache("__import_session")
     user_cache = _create_cache("__import_user")
@@ -270,48 +345,84 @@ def import_caches(import_dir="./cached_data"):
  
     expired_keys = []
     session_keys = 0
+    guest_session_keys = 0
     user_keys = 0
     data_keys = 0
     process_seq_keys = 0
+
+    processed_keys = 0
+
+    session_report= {}
 
     with open(keys_file,'rt') as f:
         data = f.readline()
         while data:
             data = data.strip()
-            if data:
-                datatype,cachekey,expireat = json.loads(data)
-                expireat =  timezone.make_aware(datetime.strptime(expireat,"%Y-%m-%d %H:%M:%S.%f")) if expireat else None
-                if expireat and expireat < timezone.now():
-                    expired_keys.append("{}={}, expireat".format(cachekey,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f")))
-                    continue
-                value = None
-                if datatype == "session":
-                    value = session_cache.get(cachekey["key"])
-                    _save_session(cachekey["key"],value,expireat)
-                    session_keys += 1
-                elif datatype == "user":
-                    value = user_cache.get(cachekey["key"])
-                    _save_user(cachekey["key"],value,expireat)
-                    user_keys += 1
-                elif datatype == "data":
-                    value = data_cache.get(cachekey["key"])
-                    _save_data(cachekey["key"],value,expireat)
-                    data_keys += 1
-                elif datatype == "process_seq":
-                    value = session_cache.get(cachekey["key"])
-                    _save_process_seq(cachekey["key"],value,expireat)
-                    process_seq_keys += 1
+            try:
+                if data:
+                    #print("Processing key:{}".format(data))
+                    datatype,cachekey,expireat = json.loads(data)
+                    expireat =  timezone.make_aware(datetime.strptime(expireat,"%Y-%m-%d %H:%M:%S.%f")) if expireat else None
+                    if expireat and expireat < timezone.now():
+                        expired_keys.append("{}={}, expireat".format(cachekey,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f")))
+                        continue
+                    value = None
+                    if datatype == "session":
+                        value = session_cache.get(cachekey["key"])
+                        if value.get(USER_SESSION_KEY):
+                            _save_session(cachekey["key"],value,expireat)
+                            session_report[value.get(USER_SESSION_KEY)] = session_report.get(value.get(USER_SESSION_KEY),0) + 1
+                            session_keys += 1
+                        elif len(value.keys()) == 0:
+                            session_report["EMPTY"] = session_report.get("EMPTY",0) + 1
+                            guest_session_keys += 1
+                        else:
+                            keys = [k for k in value.keys()]
+                            keys.sort()
+                            keys = tuple(keys)
+                            session_report[keys] = session_report.get(keys,0) + 1
+                            session_report["GUEST"] = session_report.get("GUEST",0) + 1
+                            guest_session_keys += 1
+                    elif datatype == "user":
+                        value = user_cache.get(cachekey["key"])
+                        _save_user(cachekey["key"],value,expireat)
+                        user_keys += 1
+                    elif datatype == "data":
+                        value = data_cache.get(cachekey["key"])
+                        _save_data(cachekey["key"],value,expireat)
+                        data_keys += 1
+                    elif datatype == "process_seq":
+                        value = session_cache.get(cachekey["key"])
+                        _save_process_seq(cachekey["key"],value,expireat)
+                        process_seq_keys += 1
+    
+                    #print("{} : {}={}".format(datatype,cachekey["key"],value))
 
-                print("{} : {}={}".format(datatype,cachekey["key"],value))
-            data = f.readline()
+            finally:
+                processed_keys += 1
+                if processed_keys % 1000 == 0:
+                    print("Processed {} keys, Session Keys : {} , Guest Session Keys : {} ,  User Keys : {} , Process Seq Keys : {} , Data Keys : {} , Expired Keys : {}".format(processed_keys,session_keys,guest_session_keys,user_keys,process_seq_keys,data_keys,len(expired_keys)))
+                data = f.readline()
 
 
     print("""Imported Cache Data:
-    Imported Session Keys     : {}
-    Imported User Keys        : {}
-    Imported Data Keys        : {}
-    Imported Process Seq Keys : {}
-""".format(session_keys,user_keys,data_keys,process_seq_keys))
+    Total Imported Keys        : {}
+    Imported Session Keys      : {}
+    Ignored Guest Session Keys : {}
+    Imported User Keys         : {}
+    Imported Data Keys         : {}
+    Imported Process Seq Keys  : {}
+    Imported Expired Keys      : {}
+""".format(processed_keys,session_keys,guest_session_keys,user_keys,data_keys,process_seq_keys,len(expired_keys)))
+    print("    =========================================================================")
+    print("    Expired Session Keys : {}".format(session_keys))
+    for k,v in session_report.items():
+        if k in ("GUEST","EMPTY"):
+            continue
+        print("        User({}) : {}".format(k,v))
+    print("        User(GUEST) : {}".format(session_report.get("GUEST",0)))
+    print("        User(EMPTY) : {}".format(session_report.get("EMPTY",0)))
+
     if expired_keys:
         print("    =========================================================================")
         print("    Expired Keys")
@@ -338,7 +449,8 @@ def _save(cache,key,value,expireat):
     elif value is None:
         return
     elif timezone.now() < expireat:
-        cache.set(key,value,timeout=int((expireat - timezone.now()).total_seconds()))
+        if not cache.add(key,value,timeout=int((expireat - timezone.now()).total_seconds())):
+            raise Exception("Failed to save the item({}={}) to current cache server".format(key,value))
 
 
 class CacheServerClient(object):
@@ -370,9 +482,11 @@ class CacheServerClient(object):
 
 
 class MemCachedServerClient(CacheServerClient):
+    version_re = re.compile("^\s*VERSION\s+(?P<version>[0-9](\.[0-9]+)*)\s*$")
     uptime_re = re.compile("^STAT\s+uptime\s+(?P<seconds>\d+)$")
     key_number_re = re.compile("^STAT\s+items\s*:\s*(?P<slab>\d+)\s*:\s*number\s+(?P<keys>\d+)$")
     key_row_re = re.compile("^ITEM (?P<key>\S+)\s+\[\d+\s+b\s*;\s*(?P<expireat>\d+)\s+s]$")
+    lru_row_re = re.compile("^\s*key=(?P<key>\S+)\s+exp=(?P<expireat>-?\d+).+$")
     def __init__(self,name,server):
         super().__init__(name,server)
         self._host,self._port = server.split(":")
@@ -380,6 +494,14 @@ class MemCachedServerClient(CacheServerClient):
         self._client = telnetlib.Telnet(self._host,self._port)
         self._server = server
         self._uptime = None
+        #data = self._client.read_until("END".encode('ascii'))
+        data = self.send_command('version',end='XXXXX',timeout=1).decode()
+        m = self.version_re.search(data)
+        if not m:
+            raise Exception("Can't find memcached's version")
+        self._version = [int(i) for i in m.group("version").split(".")]
+        print("MemCached's version is {}".format(m.group("version")))
+
         for row in self.send_command('stats').split("\n".encode('ascii')):
             row = row.decode().strip()
             m =  self.uptime_re.search(row)
@@ -394,19 +516,72 @@ class MemCachedServerClient(CacheServerClient):
         else:
             print("Found memcached server's uptime '{}'".format(self._uptime.strftime("%Y-%m-%d %H:%M:%S.%f")))
 
-    def send_command(self,command):
-        self._client.write('{}\n'.format(command).encode('ascii'))
-        try:
-            data = self._client.read_until("END".encode('ascii'))
-        except:
-            print("Failed to decode.{}={}".format(command,data))
-        return data[:-3]
+        if self._version[0] < 1 or (self._version[0] == 1 and (self._version[1] < 4 or (self._version[1] == 4 and self._version[2] < 31))):
+            self.items = self._items_from_stats_items
+        else:
+            self.items = self._items_from_lru
+
+    def send_command(self,command,client=None,end='END',timeout=2):
+        client = client or self._client
+        client.write('{}\n'.format(command).encode('ascii'))
+        data = client.read_until(end.encode('ascii'),timeout=timeout)
+        if data.endswith(end.encode('ascii')):
+            return data[:-3].strip()
+        else:
+            return data
+
+    def readline_from_command(self,command,client=None,end='END',timeout=2):
+        client = client or self._client
+        client.write('{}\n'.format(command).encode('ascii'))
+        end = end.encode('ascii')
+        finished = False
+        while not finished:
+            data = client.read_until("\n".encode('ascii'),timeout=timeout)
+            if not data:
+                finished = True
+                break
+            data = data.strip().split("\n".encode("ascii"))
+            for row in data:
+                row = row.strip()
+                if not row:
+                    continue
+                if row == end:
+                    finished = True
+                    break
+                yield row
 
     def close(self):
         if self._client:
             self._client.close()
 
-    def items(self):
+    def _items_from_lru(self):
+        for row in self.readline_from_command('lru_crawler metadump all',timeout=10):
+            if not row:
+                continue
+            row = urllib.parse.unquote(row.decode().strip())
+            m =  self.lru_row_re.search(row)
+            if not m:
+                raise Exception("Failed to parse row '{}'".format(row))
+            key = m.group("key")
+            cache_key_m = cache_key_re.search(key)
+            if not cache_key_m:
+                raise Exception("Failed to parse cache key '{}'".format(key))
+            cache_key = cache_key_m.group("cachekey")
+            expireat = int(m.group("expireat"))
+            if expireat < 0:
+                expireat = None
+            else:
+                expireat =  timezone.make_aware(datetime.fromtimestamp(expireat))
+                if expireat < self._uptime:
+                    #never expired
+                    expireat = None
+            value = self.get(cache_key)
+            #print("{} : {}={} expire at={}".format(self._server,cache_key,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
+            yield (cache_key,value,expireat)
+
+
+
+    def _items_from_stats_items(self):
         for row in self.send_command('stats items').split("\n".encode('ascii')):
             if not row:
                 continue
@@ -416,9 +591,7 @@ class MemCachedServerClient(CacheServerClient):
                 continue
             slab = m.group("slab")
             keys = m.group("keys")
-            for keyrow in self.send_command('stats cachedump {} {}'.format(slab,keys)).split("\n".encode('ascii')):
-                if not keyrow:
-                    continue
+            for keyrow in self.readline_from_command('stats cachedump {} {}'.format(slab,keys)):
                 keyrow = keyrow.decode().strip()
                 if not keyrow:
                     continue
@@ -435,7 +608,7 @@ class MemCachedServerClient(CacheServerClient):
                     #never expired
                     expireat = None
                 value = self.get(cache_key)
-                print("{} : {}={} expire at={}".format(self._server,cache_key,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
+                #print("{} : {}={} expire at={}".format(self._server,cache_key,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
                 yield (cache_key,value,expireat)
 
                 
@@ -457,6 +630,6 @@ class RedisServerClient(CacheServerClient):
             else:
                 expireat = None
             value = self.get(cache_key)
-            print("{} : {}={} expire at={}".format(self._server,cache_key,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
+            #print("{} : {}={} expire at={}".format(self._server,cache_key,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
             yield (cache_key,value,expireat)
 
