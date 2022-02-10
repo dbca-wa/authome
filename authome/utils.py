@@ -65,6 +65,17 @@ def _convert(key,value, default=None, required=False, value_type=None,subvalue_t
                         pass
                     result.append(_convert(key,subvalue,required=True,value_type=subvalue_type))
                 return tuple(result)
+    elif issubclass(value_type,dict):
+        result = dict([ ( d.strip()  for d in item.split("=",1))  for item in value.split(",") if item and item.strip() ])
+        for k,v in result.items():
+            if default and default.get(k) is not None:
+                result[k] = _convert(k,v,default=default.get(k))
+            else:
+                try:
+                    result[k] = ast.literal_eval(v)
+                except:
+                   pass
+        return result
     elif issubclass(value_type, bool):
         value = str(value).strip()
         if not value:
@@ -90,6 +101,8 @@ def env(key, default=None, required=False, value_type=None,subvalue_type=None):
     """
     try:
         value = os.environ[key]
+        if value:
+            value = value.strip()
         value = ast.literal_eval(value)
     except (SyntaxError, ValueError):
         pass
