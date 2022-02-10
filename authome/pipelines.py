@@ -55,7 +55,7 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     logger.debug("authenticate the user({}) with identity provider({}={})".format(email,idp_obj.idp,idp))
 
     #get backend logout url
-    backend_logout_url = backend.logout_url if hasattr(backend,"logout_url") else settings.BACKEND_LOGOUT_URL
+    backend_logout_url = backend.logout_url 
 
     if user and not user.is_active:
         #use is inactive, automatically logout 

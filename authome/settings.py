@@ -1,6 +1,6 @@
 import os
 
-from authome.utils import env, get_digest_function
+from .utils import env, get_digest_function
 from datetime import timedelta
 import dj_database_url
 
@@ -60,9 +60,6 @@ TOTP_ALGORITHM,TOTP_DIGEST = get_digest_function(TOTP_ALGORITHM)
 # Azure AD settings
 AZUREAD_AUTHORITY = env('AZUREAD_AUTHORITY', 'https://login.microsoftonline.com')
 AZUREAD_RESOURCE = env('AZUREAD_RESOURCE', '00000002-0000-0000-c000-000000000000')
-
-SOCIAL_AUTH_AZUREAD_OAUTH2_KEY = env('AZUREAD_CLIENTID', 'clientid')
-SOCIAL_AUTH_AZUREAD_OAUTH2_SECRET = env('AZUREAD_SECRETKEY', 'secret')
 
 SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_BASE_URL = env('AZUREAD_B2C_BASE_URL', 'baseurl')
 SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_KEY = env('AZUREAD_B2C_CLIENTID', 'clientid')
@@ -215,7 +212,6 @@ if USERFLOW_CACHE_CHECK_INTERVAL < 0:
     USERFLOW_CACHE_CHECK_INTERVAL = 0
 
 PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
-BACKEND_LOGOUT_URL=env('BACKEND_LOGOUT_URL')
 CACHE_KEY_PREFIX=env('CACHE_KEY_PREFIX',default="")
 
 DBCA_STAFF_GROUPID=env('DBCA_STAFF_GROUPID',default="DBCA") # The emails belongs to group 'dbca staff' are allowed to self sign up (no pre-registration required).
@@ -226,6 +222,16 @@ AUTO_SIGNOUT_DELAY_SECONDS=env('AUTO_SIGNOUT_DELAY_SECONDS',default=10)
 AUTH_CHECKING_THRESHOLD_TIME=env('AUTH_CHECKING_THRESHOLD_TIME',default=50) * 1000 #in milliseconds, should be less than 1000
 
 GUEST_SESSION_AGE=env('GUEST_SESSION_AGE',default=3600) #login session timeout in seconds
+SWITCH_TO_AUTH_LOCAL=env('SWITCH_TO_AUTH_LOCAL',default=False) #Switch to magic auth to login in user if azure ad b2c does not work.
+
+
+VERIFY_CODE_LENGTH=env('VERIFY_CODE_LENGTH',default=6) 
+VERIFY_CODE_AGE=env('VERIFY_CODE_AGE',default=300) #the age of verify code, in seconds
+SIGNUP_TOKEN_LENGTH=env('SIGNUP_TOKEN_LENGTH',default=64) 
+SIGNUP_TOKEN_AGE=env('SIGNUP_TOKEN_AGE',default=3600) #the age of signup token, in seconds
+
+VERIFY_CODE_DIGITAL=env('VERIFY_CODE_DIGITAL',default=True)
+
 # Logging settings - log to stdout/stderr
 LOGGING = {
     'version': 1,
@@ -268,25 +274,28 @@ if DEBUG:
         'SHOW_TOOLBAR_CALLBACK':show_toolbar
     }
 
-def GET_CACHE_CONF(server):
+def GET_CACHE_CONF(server,options={}):
     if server.lower().startswith('redis'):
+        options["CLIENT_CLASS"] = "django_redis.client.DefaultClient"
         return {
             "BACKEND": "django_redis.cache.RedisCache",
             "LOCATION": server,
-            "OPTIONS": {
-                "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            }
+            "OPTIONS": options
         }
     else:
         return {
             'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
             'LOCATION': server,
+            "OPTIONS": options
         }
 
 SYNC_MODE = env("SYNC_MODE",True)
 CACHE_SERVER = env("CACHE_SERVER")
+CACHE_SERVER_OPTIONS = env("CACHE_SERVER_OPTIONS",default={})
 CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
+CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
 CACHE_USER_SERVER = env("CACHE_USER_SERVER")
+CACHE_USER_SERVER_OPTIONS = env("CACHE_USER_SERVER_OPTIONS",default={})
 USER_CACHE_ALIAS = None
 GET_CACHE_KEY = lambda key:key
 GET_USER_KEY = lambda userid:str(userid)
@@ -295,7 +304,7 @@ USER_CACHES = 0
 if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     CACHES = {}
     if CACHE_SERVER:
-        CACHES['default'] = GET_CACHE_CONF(CACHE_SERVER)
+        CACHES['default'] = GET_CACHE_CONF(CACHE_SERVER,CACHE_SERVER_OPTIONS)
         if CACHE_KEY_PREFIX:
             default_key_pattern = "{}:{{}}".format(CACHE_KEY_PREFIX)
             GET_CACHE_KEY = lambda key:default_key_pattern.format(key)
@@ -306,11 +315,11 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
         CACHE_SESSION_SERVER = [s.strip() for s in CACHE_SESSION_SERVER.split(",") if s and s.strip()]
         SESSION_CACHES = len(CACHE_SESSION_SERVER)
         if SESSION_CACHES == 1:
-            CACHES["session"] = GET_CACHE_CONF(CACHE_SESSION_SERVER[0])
+            CACHES["session"] = GET_CACHE_CONF(CACHE_SESSION_SERVER[0],CACHE_SESSION_SERVER_OPTIONS)
             SESSION_CACHE_ALIAS = "session"
         else:
             for i in range(0,SESSION_CACHES) :
-                CACHES["session{}".format(i)] = GET_CACHE_CONF(CACHE_SESSION_SERVER[i])
+                CACHES["session{}".format(i)] = GET_CACHE_CONF(CACHE_SESSION_SERVER[i],CACHE_USER_SERVER_OPTIONS)
 
             SESSION_CACHE_ALIAS = lambda sessionkey:"session{}".format((ord(sessionkey[-1]) + ord(sessionkey[-2])) % SESSION_CACHES)
         SESSION_ENGINE = "authome.cachesessionstoredebug" if DEBUG else  "authome.cachesessionstore"

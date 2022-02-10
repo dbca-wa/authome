@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 urlpatterns = [
     path('sso/auth_logout', views.logout_view, name='logout'),
+    path('sso/auth_local', views.auth_local, name='auth_local'),
     path('sso/auth', views.auth, name='auth'),
     path('sso/auth_optional', views.auth_optional, name='auth_optional'),
     path('sso/auth_basic', views.auth_basic, name='auth_basic'),

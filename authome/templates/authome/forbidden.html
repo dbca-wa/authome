@@ -1,6 +1,8 @@
 {% extends "authome/default.html" %}
 {% load i18n static %}
 
+<title>Access denied</title>
+
 {% block extrapagecss %}
 <style>
 .unified_container .col-lg-6 {
@@ -11,13 +13,9 @@
 .unified_container .row .panel-default .panel-body {
     max-width:none;
 }
-pre {
-    border:none;
-    background-color:white;
-}
 </style>
 {% endblock extrapagecss %}
 
 {% block realcontent %}
-<pre id="message" style="line-height:30px;font-size:20px;text-align:left;white-space: break-spaces;">{{message}}</pre>
+<h4>You are not allowed to access this page</h4>
 {% endblock realcontent %}

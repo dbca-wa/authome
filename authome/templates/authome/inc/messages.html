@@ -1,0 +1,5 @@
+{% if messages %}
+<ul class="messagelist">{% for message in messages %}
+  <li{% if message.0 %} class="{{ message.0 }}"{% endif %}>{{ message.1|capfirst }}</li>
+{% endfor %}</ul>
+{% endif %}

@@ -3,6 +3,7 @@ import urllib.parse
 import re
 
 from django.conf import settings
+from django.urls import reverse
 
 from social_core.backends import azuread_b2c
 from social_core.exceptions import AuthException
@@ -20,6 +21,11 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
     ACCESS_TOKEN_URL = '{base_url}/oauth2/v2.0/token'
     JWKS_URL = '{base_url}/discovery/v2.0/keys'
     LOGOUT_URL = '{base_url}/oauth2/v2.0/logout?post_logout_redirect_uri={{}}'
+
+    def  __init__(self,*args,**kwargs):
+        self.switch_auth_url()
+        super().__init__(*args,**kwargs)
+        print(self.auth_url)
 
     @property
     def policy(self):
@@ -97,3 +103,13 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
                 raise AzureADB2CAuthenticateFailed(self.strategy.request,self.strategy.request.http_error_code,error_code,self.strategy.request.http_error_message,ex)
             else:
                 raise AzureADB2CAuthenticateFailed(self.strategy.request,400,error_code,"Failed to authenticate the user.{}",ex)
+
+    _auth_local_url = reverse("auth_local")
+    def auth_local_url(self):
+        return self._auth_local_url
+
+    def switch_auth_url(self):
+        if settings.SWITCH_TO_AUTH_LOCAL:
+            self.auth_url = self.auth_local_url
+        else:
+            self.auth_url = super().auth_url

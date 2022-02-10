@@ -1,4 +1,4 @@
-from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden, JsonResponse
+from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden, JsonResponse,HttpResponseNotAllowed
 from django.template.response import TemplateResponse
 from django.contrib.auth import logout
 from django.urls import reverse
@@ -11,6 +11,10 @@ from django.views.decorators.cache import never_cache
 from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.template import engines
 from django.utils.crypto import get_random_string
+from django.contrib import messages
+from django.contrib.auth import login
+
+from django_redis import get_redis_connection
 
 from social_django.utils import psa
 from social_core.actions import do_auth, do_complete
@@ -23,15 +27,19 @@ import re
 import traceback
 import logging
 import urllib.parse
+import string
+from collections import OrderedDict
 from pyotp.totp import TOTP
 
 from . import models
-from .cache import cache
+from .cache import cache,get_defaultcache
 from . import utils
 from . import emails
 from .exceptions import HttpResponseException
 
 from . import performance
+
+defaultcache = get_defaultcache()
 
 logger = logging.getLogger(__name__)
 django_engine = engines['django']
@@ -75,18 +83,20 @@ def _parse_basic(basic_auth):
         raise Exception('Missing password')
     return basic_auth_raw.split(":", 1)
 
-def check_authorization(request,useremail):
+def check_authorization(request,useremail,domain=None,path=None):
     """
     Check whether the user(identified by email) has the permission to access the resource
     Return None if authorized;otherwise return forbidden response
     """
     #get the real request domain and request path from request header set in nginx if have;otherwise use the domain and path from http request
-    domain = request.headers.get("x-upstream-server-name") or request.get_host()
-    path = request.headers.get("x-upstream-request-uri") or request.path
-    try:
-        path = path[:path.index("?")]
-    except:
-        pass
+    if not domain:
+        domain = request.headers.get("x-upstream-server-name") or request.get_host()
+    if not path:
+        path = request.headers.get("x-upstream-request-uri") or request.path
+        try:
+            path = path[:path.index("?")]
+        except:
+            pass
 
     if path.startswith("/sso/"):
         logger.debug("All paths startswith '/sso' are opened for everyone by default.")
@@ -421,6 +431,212 @@ def auth_basic(request):
             #return basi auth required response if any exception occured.
             return BASIC_AUTH_REQUIRED_RESPONSE
 
+email_re = re.compile("^[a-zA-Z0-9\.!#\$\%\&’'\*\+\/\=\?\^_`\{\|\}\~\-]+@[a-zA-Z0-9\-]+(\.[a-zA-Z0-9-]+)*$")
+VALID_CODE_CHARS = string.digits if settings.VERIFY_CODE_DIGITAL else (string.ascii_uppercase + string.digits)
+VALID_TOKEN_CHARS = string.ascii_uppercase + string.digits
+
+get_verifycode_key = lambda email:settings.GET_CACHE_KEY("verifycode:{}".format(email))
+get_signuptoken_key = lambda email:settings.GET_CACHE_KEY("signuptoken:{}".format(email))
+get_codeid = lambda :"{}.{}".format(timezone.now().timestamp(),get_random_string(10,VALID_TOKEN_CHARS))
+
+def auth_local(request):
+    if request.method == "GET":
+        next_url = request.GET.get(REDIRECT_FIELD_NAME)
+        if next_url:
+            if not next_url.startswith("https://") and not next_url.startswith("http://"):
+                if next_url.startswith("/"):
+                    next_url = "https://{}{}".format(request.get_host(),next_url)
+                else:
+                    next_url = "https://{}".format(next_url)
+        elif request.headers.get("x-upstream-server-name"):
+            next_url = "https://{}{}".format(request.headers.get("x-upstream-server-name"),request.headers.get("x-upstream-request-uri"))
+        else:
+            next_url = request.session.get(REDIRECT_FIELD_NAME)
+            if next_url:
+                if not next_url.startswith("https://") and not next_url.startswith("http://"):
+                    next_url = "https://{}".format(next_url)
+    else:
+        next_url = request.POST.get("next","")
+
+    if not next_url:
+        next_url = "https://{}/sso/profile".format(request.get_host())
+
+    domain = utils.get_domain(next_url)
+
+    if request.user.is_authenticated:
+        #already authenticated
+        return HttpResponseRedirect(next_url)
+
+    container_class = "unified_container"
+    userflow = models.CustomizableUserflow.get_userflow(domain)
+    _init_userflow_pagelayout(request,userflow,container_class)
+
+    page_layout = getattr(userflow,container_class)
+    extracss = userflow.inited_extracss
+
+    context = {"body":page_layout,"extracss":extracss,"domain":domain,"next":next_url}
+
+    if request.method == "GET":
+        context["codeid"] = get_codeid()
+        return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+    elif request.method == "POST":
+        action = request.POST.get("action")
+        email = request.POST.get("email","").strip().lower()
+        context["email"] = email
+        if not action:
+            context["messages"] = [("error","Action is missing")]
+            context["codeid"] = request.POST.get("codeid") or get_codeid()
+            return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+        elif action == "changeemail":
+            context["codeid"] = request.POST.get("codeid") or get_codeid()
+            return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+        elif action in ( "sendcode","resendcode"):
+            codeid = request.POST.get("codeid" if action == "sendcode" else "newcodeid") or get_codeid()
+            context["codeid"] = codeid
+            if not email:
+                context["messages"] = [("error","Email is required")]
+                return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+            if not email_re.search(email):
+                context["messages"] = [("error","Email is invalid")]
+                return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+
+            codekey = get_verifycode_key(email)
+            code = defaultcache.get(codekey)
+            if code and code.startswith(codeid + "="):
+                context["messages"] = [("info","Verification code has already been sent to {}; Please verify your email address via received code.".format(email))]
+                logger.debug("Verification code has already been sent to {}, no need to send again".format(context["email"]))
+            else:
+                code = get_random_string(settings.VERIFY_CODE_LENGTH,VALID_CODE_CHARS)
+                defaultcache.set(get_verifycode_key(email),"{}={}".format(codeid,code),timeout=settings.VERIFY_CODE_AGE)
+                context["otp"] = code
+
+                #initialized the userflow if required
+                _init_userflow_verifyemail(request,userflow)
+
+                #get the verificatio email body
+                verifyemail_body = userflow.verifyemail_body_template.render(
+                    context=context,
+                    request=request
+                )
+                #send email
+                emails.send_email(userflow.verifyemail_from,context["email"],userflow.verifyemail_subject,verifyemail_body)
+                context["messages"] = [("info","Verification code has been sent to {}; Please verify your email address via received code.".format(email))]
+                logger.debug("Verification code has been sent to {}.".format(context["email"])) 
+            context["newcodeid"] = get_codeid()
+            return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
+        elif action == "verifycode":
+            codeid = request.POST.get("codeid")
+            if not codeid:
+                context["messages"] = [("error","Codeid is missing.")]
+                codeid = get_codeid()
+                context["codeid"] = codeid
+                return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+            context["codeid"] = codeid
+
+            if not email:
+                context["messages"] = [("error","Email is missing.")]
+                return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+            if not email_re.search(email):
+                context["messages"] = [("error","Email is invalid")]
+                return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+
+            context["newcodeid"] = request.POST.get("newcodeid") or get_codeid()
+
+            inputcode = request.POST.get("code","").strip().upper()
+            if not inputcode:
+                context["messages"] = [("error","Please input the code to verify.")]
+                return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
+            
+            codekey = get_verifycode_key(email)
+            code = defaultcache.get(codekey)
+            if not code:
+                context["messages"] = [("error","The code is expired, Please resend code.")]
+                return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
+
+            elif not code.startswith(codeid + "="):
+                context["messages"] = [("error","The verfication code was sent by other device,please resend the code again.")]
+                return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
+            elif code[len(codeid) + 1:] != inputcode:
+                context["messages"] = [("error","The input code is invalid, please check the email and verify again.")]
+                return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
+                
+            #verify successfully
+            user = models.User.objects.filter(email=email).first()
+            if user:
+                idp,created = models.IdentityProvider.objects.get_or_create(idp=models.IdentityProvider.AUTH_EMAIL_VERIFY[0],defaults={"name":models.IdentityProvider.AUTH_EMAIL_VERIFY[1]})
+                user.last_idp = idp
+                user.last_login = timezone.now()
+                user.save(update_fields=["last_idp","last_login"])
+                login(request,user,'django.contrib.auth.backends.ModelBackend')
+                defaultcache.delete(codekey)
+                return HttpResponseRedirect(next_url)
+            else:
+                #Userr does not exist, signup
+                token = get_random_string(settings.SIGNUP_TOKEN_LENGTH,VALID_TOKEN_CHARS)
+                defaultcache.set(get_signuptoken_key(email),token,timeout=settings.SIGNUP_TOKEN_AGE)
+                context["token"] = token
+                return TemplateResponse(request,"authome/signin_signup.html",context=context)
+        elif action == "signup":
+            defaultcache.delete(get_verifycode_key(email))
+            if not email:
+                context["codeid"] = get_codeid()
+                context["messages"] = [("error","Email is missing.")]
+                return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+            if not email_re.search(email):
+                context["codeid"] = get_codeid()
+                context["messages"] = [("error","Email address is invalid")]
+                return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+            inputtoken = request.POST.get("token","").strip()
+            if not inputtoken:
+                context["codeid"] = get_codeid()
+                context["messages"] = [("error","Signup token is missing")]
+                return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+
+            tokenkey = get_signuptoken_key(email)
+            token = defaultcache.get(tokenkey)
+            if not token:
+                context["codeid"] = get_codeid()
+                context["messages"] = [("error","The signup token is expired, please signin again.")]
+                return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+            elif token != inputtoken:
+                context["codeid"] = get_codeid()
+                context["messages"] = [("error","The signup token is invalid, please signin again")]
+                return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+                
+            firstname = request.POST.get("firstname","").strip()
+            lastname = request.POST.get("lastname","").strip()
+            context["firstname"] = firstname
+            context["lastname"] = lastname
+
+            if not firstname:
+                context["token"] = token
+                context["messages"] = [("error","First name is required")]
+                return TemplateResponse(request,"authome/signin_signup.html",context=context)
+            
+            if not lastname:
+                context["token"] = token
+                context["messages"] = [("error","Last name is required")]
+                return TemplateResponse(request,"authome/signin_signup.html",context=context)
+            
+            dbcagroup = models.UserGroup.dbca_group()
+            usergroups = models.UserGroup.find_groups(email)[0]
+            if any(group.is_group(dbcagroup) for group in usergroups ):
+                is_staff = True
+            else:
+                is_staff = False
+
+            idp,created = models.IdentityProvider.objects.get_or_create(idp=models.IdentityProvider.AUTH_EMAIL_VERIFY[0],defaults={"name":models.IdentityProvider.AUTH_EMAIL_VERIFY[1]})
+            user,created = models.User.objects.update_or_create(email=email,username=email,defaults={"is_staff":is_staff,"last_idp":idp,"last_login":timezone.now()})
+            login(request,user,'django.contrib.auth.backends.ModelBackend')
+            defaultcache.delete(tokenkey)
+        
+            return HttpResponseRedirect(next_url)
+        else:
+            context["messages"] = [("error","Action({}) Not Support".format(action))]
+            context["codeid"] = get_codeid()
+            return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+    else:
+        return  HttpResponseNotAllowed(["GET","POST"])
 
 def logout_view(request):
     """
@@ -435,8 +651,6 @@ def logout_view(request):
     #redirect to backend to logout backend
     if backend_logout_url:
         return HttpResponseRedirect(backend_logout_url.format(urllib.parse.quote(post_logout_url)))
-    elif settings.BACKEND_LOGOUT_URL:
-        return HttpResponseRedirect(settings.BACKEND_LOGOUT_URL.format(urllib.parse.quote(post_logout_url)))
     else:
         return HttpResponseRedirect(post_logout_url)
 
@@ -523,7 +737,7 @@ def profile(request):
             content["access_token"] = token.token
             content["access_token_created"] = timezone.localtime(token.created).strftime("%Y-%m-%d %H:%M:%S")
             content["access_token_expired"] = token.expired.strftime("%Y-%m-%d")
-            content["access_token_error"] = "Access token is expired, please ask administroator to recreate"
+            content["access_token_error"] = "Access token is expired, please ask administrator to recreate"
         else:
             content["access_token"] = token.token
             content["access_token_created"] = timezone.localtime(token.created).strftime("%Y-%m-%d %H:%M:%S")
@@ -567,22 +781,18 @@ def signedout(request):
         context["idp_logout_url"] = idp.logout_url
         context["auto_logout"] = True if idp.logout_method == models.IdentityProvider.AUTO_LOGOUT_WITH_POPUP_WINDOW else False
 
-    content = django_engine.get_template("authome/inc/signedout.html").render(
-        context=context,
-        request=request
-    )
-    container_class = "content_container"
+    container_class = "unified_container"
     userflow = models.CustomizableUserflow.get_userflow(domain)
     _init_userflow_pagelayout(request,userflow,container_class)
 
     page_layout = getattr(userflow,container_class)
     extracss = userflow.inited_extracss
 
-    context = {"body":page_layout,"extracss":extracss,"content":content,"title":"You are signed out."}
+    context = {"body":page_layout,"extracss":extracss,"relogin":relogin_url,"auto_logout": False}
     if domain:
         context["domain"] = domain
 
-    return TemplateResponse(request,"authome/default.html",context=context)
+    return TemplateResponse(request,"authome/signedout.html",context=context)
 
 def signout(request,**kwargs):
     """
@@ -670,10 +880,21 @@ def adb2c_view(request,template,**kwargs):
     """
     domain = request.GET.get('domain', None)
     container_class = request.GET.get('class')
+    title = request.GET.get('title', "Signup or Signin")
+    return domain_related_page(request,template,domain,title,container_class=container_class)
+
+def domain_related_page(request,template,domain,title,container_class=None):
+    """
+    View method for path '/sso/xxx.html'
+    Used by b2c to provide the customized page layout
+    three optional url parameters
+      domain: the app domain used to provide customization per app
+      container_class: the css class used in page layout, it should be the same css class as the css class used in builtin css copied from b2c default template.
+      title: page title, defaule is "Signup or Singin"
+    """
     if not container_class:
         container_class = "{}_container".format(template)
     logger.debug("Request the customized authentication interface for domain({}) and container_class({})".format(domain,container_class))
-    title = request.GET.get('title', "Signup or Signin")
     userflow = models.CustomizableUserflow.get_userflow(domain)
 
     _init_userflow_pagelayout(request,userflow,container_class)
@@ -692,30 +913,19 @@ def forbidden(request):
     View method for path '/sso/forbidden'
     Provide a consistent,customized forbidden page.
     """
-    context = {}
     domain = request.headers.get("x-upstream-server-name") or request.get_host()
     path = request.headers.get("x-upstream-request-uri") or request.path
-    context["domain"] = domain
-    context["path"] = path
-    context["url"] = "https://{}{}".format(domain,path)
-    logger.debug("forbidden context = {}".format(context))
 
-    content = django_engine.get_template("authome/inc/forbidden.html").render(
-        context=context,
-        request=request
-    )
-    container_class = "content_container"
+    container_class = "unified_container"
     userflow = models.CustomizableUserflow.get_userflow(domain)
     _init_userflow_pagelayout(request,userflow,container_class)
 
     page_layout = getattr(userflow,container_class)
     extracss = userflow.inited_extracss
 
-    context = {"body":page_layout,"extracss":extracss,"content":content,"title":"Access denied"}
-    if domain:
-        context["domain"] = domain
+    context = {"body":page_layout,"extracss":extracss,"path":path,"url":"https://{}{}".format(domain,path),"domain":domain}
 
-    return TemplateResponse(request,"authome/default.html",context=context)
+    return TemplateResponse(request,"authome/forbidden.html",context=context)
 
 
 
@@ -931,6 +1141,7 @@ def verify_code_via_email(request):
     _init_userflow_verifyemail(request,userflow)
 
     data = json.loads(request.body.decode())
+    data["email"] = data.get("email","userEmail")
 
     #get the verificatio email body
     verifyemail_body = userflow.verifyemail_body_template.render(
@@ -1073,35 +1284,69 @@ def handler400(request,exception,**kwargs):
             return res
 
     domain = request.headers.get("x-upstream-server-name") or utils.get_redirect_domain(request) or request.get_host()
-    content = django_engine.get_template("authome/inc/error.html").render(
-        context={"message":str(exception)},
-        request=request
-    )
-    container_class = "content_container"
+    container_class = "unified_container"
     userflow = models.CustomizableUserflow.get_userflow(domain)
     _init_userflow_pagelayout(request,userflow,container_class)
 
     page_layout = getattr(userflow,container_class)
     extracss = userflow.inited_extracss
 
-    context = {"body":page_layout,"extracss":extracss,"content":content,"title":"Authentication failed."}
-    if domain:
-        context["domain"] = domain
+    context = {"body":page_layout,"extracss":extracss,"message":str(exception),"title":"Authentication failed." if request.path.startswith("/sso/") else "Error","domain":domain}
 
-    code = exception.http_code or 400
-    return TemplateResponse(request,"authome/default.html",context=context,status=code)
-  
+    code = exception.http_code if (hasattr(exception,"http_code") and exception.http_code) else 400
+    return TemplateResponse(request,"authome/error.html",context=context,status=code)
+ 
+def get_active_redis_connections(cachename):
+    r = get_redis_connection(cachename) 
+    connection_pool = r.connection_pool
+    return connection_pool._created_connections
+
 def status(request):
-    content = {}
+    content = OrderedDict()
 
     content["healthy"] = cache.healthy
+    content["memory"] = "{}MB".format(round(psutil.Process().memory_info().rss / (1024 * 1024),2))
+    redis_servers = OrderedDict()
+    content["redis server"] = redis_servers
+    if settings.CACHE_USER_SERVER:
+        if settings.USER_CACHES  == 1:
+            if settings.CACHE_USER_SERVER[0].lower().startswith("redis"):
+                name = "user"
+                r = get_redis_connection(name) 
+                connection_pool = r.connection_pool
+                redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_USER_SERVER[0],get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
+        else:
+            for i in range(settings.USER_CACHES):
+                if not settings.CACHE_USER_SERVER[i].lower().startswith("redis"):
+                    continue
+                name = "user{}".format(i)
+                r = get_redis_connection(name) 
+                connection_pool = r.connection_pool
+                redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_USER_SERVER[i],get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
+
+    if settings.CACHE_SESSION_SERVER:
+        if settings.SESSION_CACHES  == 1:
+            if settings.CACHE_SESSION_SERVER[0].lower().startswith("redis"):
+                name = "session"
+                r = get_redis_connection(name) 
+                connection_pool = r.connection_pool
+                redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_SESSION_SERVER[0],get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
+        else:
+            for i in range(settings.SESSION_CACHES):
+                if not settings.CACHE_SESSION_SERVER[i].lower().startswith("redis"):
+                    continue
+                name = "session{}".format(i)
+                r = get_redis_connection(name) 
+                connection_pool = r.connection_pool
+                redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_SESSION_SERVER[i],get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
+
+    if settings.CACHE_SERVER and settings.CACHE_SERVER.lower().startswith("redis"):
+        name = "default"
+        r = get_redis_connection(name) 
+        connection_pool = r.connection_pool
+        redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_SERVER,get_active_redis_connections(name),settings.CACHE_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
+
     content["memorycache"] = cache.status
-    content["sessioncache"] = str(settings.CACHES[settings.SESSION_CACHE_ALIAS]) if settings.USER_CACHE_ALIAS else "None"
-    content["usercache"] = str(settings.CACHES[settings.USER_CACHE_ALIAS]) if settings.USER_CACHE_ALIAS else "None"
-    content["defaultcache"] = str(settings.CACHES["default"]) if settings.CACHE_SERVER else "None"
-    content["processmemory"] = "{}M".format(round(psutil.Process().memory_info().rss / (1024 * 1024),2))
-
-
     content = json.dumps(content)
     return HttpResponse(content=content,content_type="application/json")
 

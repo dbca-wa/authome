@@ -1,0 +1,37 @@
+{% extends "authome/default.html" %}
+{% load i18n static %}
+
+{% block title %}Signup {% endblock title %}
+
+{% block extrapagecss %}
+<link rel="stylesheet" type="text/css" href="/sso/static/css/message.css">1
+{% endblock extrapagecss %}
+
+{% block realcontent %}
+{% include "authome/inc/messages.html"%}
+
+<form method="post" action="{% url 'auth_local' %}" id="signinform" class="localAccount">
+{% csrf_token %}
+<input type="hidden" id="id_token" name="token" value="{{token}}">
+<input type="hidden" id="id_next" name="next" value="{{next}}">
+<div class="intro">
+   <h2>
+    Signup
+   </h2>
+</div>
+<div class="entry">
+   <div class="entry-item">
+       <input type="email" title="Please enter a valid email address." id="id_email" name="email" value="{{email}}" aria-label="Email Address" readonly style="border:none;font-weight:bold;padding-left:0px">
+   </div>
+   <div class="entry-item" >
+       <input type="text" title="Please input the First name" id="id_firstname" name="firstname" placeholder="First Name" value="{{firstname}}" aria-label="First Name" required>
+   </div>
+   <div class="entry-item" >
+       <input type="text" title="Please input the Last name" id="id_lastname" name="lastname" placeholder="Last Name" value="{{lastname}}" aria-label="Last Name" required>
+   </div>
+   <div class="buttons" style="text-align:center">
+      <button id="id_signup" type="submit" name="action" value="signup" form="signinform">Sign up</button>
+   </div>
+</div>
+</form>
+{% endblock realcontent %}
