@@ -128,14 +128,14 @@ class UserAuthorizationCheckMixin(object):
 class UserAdmin(UserAuthorizationCheckMixin,UserGroupsMixin,DatetimeMixin,auth.admin.UserAdmin):
     list_display = ('username', 'email', 'first_name', 'last_name','is_active', 'is_staff','last_idp','_last_login')
     list_filter = ( 'is_superuser',)
-    readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","_email","_usergroups")
+    readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","_email","_usergroups","last_idp")
     fieldsets = (
         (None, {'fields': ('_email', )}),
         ('Personal info', {'fields': ('username','first_name', 'last_name',"_usergroups")}),
         ('Permissions', {
             'fields': ('is_active', 'is_staff', 'is_superuser', ),
         }),
-        ('Important dates', {'fields': ('_last_login', '_date_joined')}),
+        ('Important dates', {'fields': ('last_idp','_last_login', '_date_joined')}),
     )
 
     change_form_template = 'admin/change_form.html'
