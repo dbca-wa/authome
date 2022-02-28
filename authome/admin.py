@@ -205,11 +205,22 @@ class SystemUserAdmin(UserGroupsMixin,DatetimeMixin,auth.admin.UserAdmin):
 
 @admin.register(models.UserGroup)
 class UserGroupAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
-    list_display = ('name','groupid','parent_group','users','excluded_users','identity_provider','_modified','_created')
+    list_display = ('name','groupid','parent_group','users','excluded_users','identity_provider','_session_timeout','_modified','_created')
     readonly_fields = ('_modified',)
-    fields = ('name','groupid','parent_group','users','excluded_users','identity_provider','_modified')
+    fields = ('name','groupid','parent_group','users','excluded_users','identity_provider','session_timeout','_modified')
     ordering = ('parent_group','name',)
     form = forms.UserGroupForm
+
+    def _session_timeout(self,obj):
+        if not obj :
+            return ""
+        else:
+            result = obj.sessiontimeout
+            if result == 0:
+                return ""
+            else:
+                return result
+    _session_timeout.short_description = "Session Timeout"
 
 
 @admin.register(models.UserGroupAuthorization)

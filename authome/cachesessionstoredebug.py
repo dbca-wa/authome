@@ -21,11 +21,36 @@ class SessionStore(authome.cachesessionstore.SessionStore):
 
     def load(self):
         try:
-            performance.start_processingstep("get_session_from_cache")
-            return super().load()
-        finally:
-            performance.end_processingstep("get_session_from_cache")
-            pass
+            try:
+                performance.start_processingstep("get_session_from_cache")
+                sessioncache = self._get_cache()
+                cachekey = self.cache_key
+                session_data = sessioncache.get(cachekey)
+            finally:
+                performance.end_processingstep("get_session_from_cache")
+                pass
+
+            timeout = session_data.get("session_timeout")
+            if timeout and session_data.get(USER_SESSION_KEY):
+                if hasattr(sessioncache,"expire"):
+                    performance.start_processingstep("set_sessiontimeout_in_cache")
+                    try:
+                        sessioncache.expire(cachekey,timeout)
+                    finally:
+                        performance.end_processingstep("set_sessiontimeout_in_cache")
+                        pass
+                        
+        except Exception:
+            # Some backends (e.g. memcache) raise an exception on invalid
+            # cache keys. If this happens, reset the session. See #17810.
+            session_data = None
+        if session_data is not None:
+            return session_data
+        if self._session_key and "-" in self._session_key:
+            #this is a authenticated session key
+            self.expired_session_key = self._session_key
+        self._session_key = None
+        return {}
 
     def create(self):
         try:

@@ -1,4 +1,4 @@
-.env
+.env*
 env*
 *-dev.*
 .coverage
@@ -18,5 +18,6 @@ gunicorn_*.py
 *.dump
 *.db
 *.sqlite3
-start_server
+start_*
 build_image*
+

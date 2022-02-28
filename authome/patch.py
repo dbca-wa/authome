@@ -21,14 +21,13 @@ To improve the perforance and debug, provide different function in each scenario
 
 """
 if settings.USER_CACHE_ALIAS:
-    def _get_user(request):
+    def load_user(userid):
         """
         Return the user model instance associated with the given request session.
         If no user is retrieved, return an instance of `AnonymousUser`.
         """
         user = None
         try:
-            userid = auth._get_user_session_key(request)
             userkey = settings.GET_USER_KEY(userid)
             usercache = get_usercache(userid)
             
@@ -61,14 +60,13 @@ if settings.USER_CACHE_ALIAS:
 
         return user or anonymoususer
 else:
-    def _get_user(request):
+    def load_user(userid):
         """
         Return the user model instance associated with the given request session.
         If no user is retrieved, return an instance of `AnonymousUser`.
         """
         user = None
         try:
-            userid = auth._get_user_session_key(request)
             performance.start_processingstep("fetch_user_from_db")
             try:
                 user = User.objects.get(pk = userid)
@@ -81,6 +79,15 @@ else:
             pass
 
         return user or anonymoususer
+
+def _get_user(request):
+    try:
+        userid = auth._get_user_session_key(request)
+    except:
+        return anonymoususer
+
+    return load_user(userid)
+    
 
 auth.get_user = _get_user
 

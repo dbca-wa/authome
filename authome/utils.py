@@ -15,6 +15,14 @@ __version__ = '1.0.0'
 
 logger = logging.getLogger(__name__)
 
+_serverid = None
+def get_serverid():
+    global _serverid
+    if not _serverid:
+        from django.conf import settings
+        _serverid = "{0}-{1}-{2}".format(settings.SERVER_TYPE,socket.gethostname(),os.getpid())
+    return _serverid
+
 def _convert(key,value, default=None, required=False, value_type=None,subvalue_type=None):
     if value_type is None:
         if default is not None:

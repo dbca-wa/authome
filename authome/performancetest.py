@@ -133,6 +133,7 @@ class PerformanceTestCase(TestCase):
             userid = cls.TEST_USER_BASEID * -1
             for testemail in testemails:
                 testuser = models.User(username=testemail,email=testemail,first_name="",last_name="",systemuser=True,is_staff=True,is_superuser=False,id=userid)
+                usergroups = models.UserGroup.find_groups(testemail)[0]
                 userid -= 1
     
                 usercache = get_usercache(testuser.id)
@@ -142,6 +143,8 @@ class PerformanceTestCase(TestCase):
                 usersession[USER_SESSION_KEY] = str(testuser.id)
                 usersession[BACKEND_SESSION_KEY] = "django.contrib.auth.backends.ModelBackend"
                 usersession[HASH_SESSION_KEY] = ""
+                usersession["session_timeout"] = 600
+
                 usersession.save()
     
                 #print("create the session({1}) for user({0})".format(testuser,usersession.session_key))

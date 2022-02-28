@@ -45,6 +45,8 @@ IGNORE_LOADING_ERROR = env('IGNORE_LOADING_ERROR',False)
 EMAIL_HOST = env('EMAIL_HOST', default="")
 EMAIL_PORT = env('EMAIL_PORT', 25)
 
+AUTH2_DOMAIN = env("AUTH2_DOMAIN",default="auth2.dbca.wa.gov.au")
+
 TOTP_SECRET_KEY_LENGTH = env("TOTP_SECRET_KEY_LENGTH",default=50)
 TOTP_ISSUER = env("TOTP_ISSUER",default="DBCA")
 TOTP_PREFIX = env("TOTP_PREFIX",default="auth2")
@@ -101,6 +103,23 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_HTTPONLY = env('SESSION_COOKIE_HTTPONLY', False)
 SESSION_COOKIE_SECURE = env('SESSION_COOKIE_SECURE', False)
 CSRF_COOKIE_SECURE = env('CSRF_COOKIE_SECURE', False)
+
+GUEST_SESSION_AGE=env('GUEST_SESSION_AGE',default=3600) #login session timeout in seconds
+SESSION_AGE=env('SESSION_AGE',default=1209600)
+SESSION_COOKIE_AGE=SESSION_AGE * 2
+
+SESSION_COOKIE_DOMAINS=env("SESSION_COOKIE_DOMAINS",default={})
+
+def GET_SESSION_COOKIE_DOMAIN(domain):
+    if domain.endswith(SESSION_COOKIE_DOMAIN):
+        return  SESSION_COOKIE_DOMAIN
+    else:
+        for k,v in SESSION_COOKIE_DOMAINS.items():
+            if domain.endswith(k):
+                return v
+
+        return None
+        
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -221,7 +240,6 @@ AUTO_SIGNOUT_DELAY_SECONDS=env('AUTO_SIGNOUT_DELAY_SECONDS',default=10)
 
 AUTH_CHECKING_THRESHOLD_TIME=env('AUTH_CHECKING_THRESHOLD_TIME',default=50) * 1000 #in milliseconds, should be less than 1000
 
-GUEST_SESSION_AGE=env('GUEST_SESSION_AGE',default=3600) #login session timeout in seconds
 SWITCH_TO_AUTH_LOCAL=env('SWITCH_TO_AUTH_LOCAL',default=False) #Switch to magic auth to login in user if azure ad b2c does not work.
 
 

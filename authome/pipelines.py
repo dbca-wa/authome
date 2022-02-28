@@ -93,8 +93,10 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
 
     details["last_idp"] = idp_obj
 
-    logger.debug("set backend logout url to {}".format(backend_logout_url))
-    backend.strategy.session_set("backend_logout_url",backend_logout_url)
+    timeout = UserGroup.get_session_timeout(usergroups)
+    if timeout:
+        backend.strategy.session_set("session_timeout",timeout)
+        pass
 
 
 def user_details(strategy, details, user=None, *args, **kwargs):

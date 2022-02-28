@@ -305,6 +305,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
         for obj in cls.objects.all():
             size += 1
             idps[obj.idp] = obj
+            idps[obj.id] = obj
             if not modified:
                 modified = obj.modified
             elif modified < obj.modified:
@@ -457,15 +458,13 @@ Email: enquiries@dbca.wa.gov.au
 </body>
 </html>"""
 
-    _editable_columns = ("default","mfa_set","mfa_reset","email","profile_edit","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body","sortkey")
+    _editable_columns = ("default","mfa_set","mfa_reset","profile_edit","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body","sortkey")
 
     domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
     fixed = models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
     default = models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
     mfa_set = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa set user flow")
     mfa_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa reset user flow")
-    #is not used in current logic
-    email = models.CharField(max_length=64,null=True,blank=True,help_text="The email signup and signin user flow")
     profile_edit = models.CharField(max_length=64,null=True,blank=True,help_text="The user profile edit user flow")
     password_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The user password reset user flow")
 
@@ -572,7 +571,7 @@ Email: enquiries@dbca.wa.gov.au
         for o in userflows:
             if o != defaultuserflow:
                 o.defaultuserflow = defaultuserflow
-                for name in ("fixed","default","mfa_set","mfa_reset","email","profile_edit","password_reset"):
+                for name in ("fixed","default","mfa_set","mfa_reset","profile_edit","password_reset"):
                     if not getattr(o,name):
                         setattr(o,name,getattr(defaultuserflow,name))
 
@@ -727,7 +726,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     _useremails = None
     _excluded_useremails = None
 
-    _editable_columns = ("users","parent_group","excluded_users","identity_provider","groupid")
+    _editable_columns = ("users","parent_group","excluded_users","identity_provider","groupid","session_timeout")
 
     name = models.CharField(max_length=32,unique=True,null=False)
     groupid = models.SlugField(max_length=32,null=False)
@@ -735,12 +734,39 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     users = _ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
     excluded_users = _ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
     identity_provider = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,null=True,blank=True)
+    session_timeout = models.PositiveSmallIntegerField(null=True,editable=True,blank=True,help_text="Session timeout in seconds, 0 means never timeout")
     modified = models.DateTimeField(editable=False,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
+
+
+    @property
+    def sessiontimeout(self):
+        if self.session_timeout is not None:
+            return self.session_timeout
+        elif self.parent_group:
+            return self.parent_group.sessiontimeout
+        else:
+            return None
+
 
     @classmethod
     def get_model_change_cls(self):
         return UserGroupChange
+
+    @classmethod
+    def get_session_timeout(cls,usergroups):
+        """
+        Return the session timeout from groups.
+        """
+        timeout = 0
+        for group in usergroups:
+            t = group.sessiontimeout
+            if not t:
+                return t
+            if timeout < t:
+                timeout = t
+
+        return timeout
 
     @classmethod
     def get_groupnames(cls,usergroups):

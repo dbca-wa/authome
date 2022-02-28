@@ -25,15 +25,14 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
     def  __init__(self,*args,**kwargs):
         self.switch_auth_url()
         super().__init__(*args,**kwargs)
-        print(self.auth_url)
 
     @property
     def policy(self):
         request = self.strategy.request
-        if hasattr(request,"policy"):
+        if request and hasattr(request,"policy"):
             policy = request.policy
         else:
-            domain = get_redirect_domain(request)
+            domain = get_redirect_domain(request) if request else None
             userflow = CustomizableUserflow.get_userflow(domain)
             if userflow.fixed:
                 logger.debug("Use the fixed userflow({1}.{2}) for domain({0})".format(domain,userflow.domain,userflow.fixed))
@@ -42,13 +41,10 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
                 logger.debug("Use the default userflow({1}.{2}) for domain({0})".format(domain,userflow.domain,userflow.default))
                 policy = userflow.default
             else:
-                idp = request.COOKIES.get(settings.PREFERED_IDP_COOKIE_NAME,None)
-                idp = IdentityProvider.get_idp(idp)
+                idpid = request.COOKIES.get(settings.PREFERED_IDP_COOKIE_NAME,None) if request else None
+                idp = IdentityProvider.get_idp(idpid) if idpid else None
                 if idp and idp.userflow:
-                    if idp == IdentityProvider.LOCAL_PROVIDER:
-                        policy = userflow.email or idp.userflow
-                    else:
-                        policy = idp.userflow
+                    policy = idp.userflow
                 else:
                     policy = userflow.default
 
@@ -63,10 +59,12 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
     @property
     def base_url(self):
         return "{}/{}".format(self.setting('BASE_URL'),self.policy)
+        """
         if self.policy.startswith("B2C_1_"):
             return "{}/{}".format(self.setting('BASE_URL'),self.policy)
         else:
             return self.setting('BASE_URL')
+        """
 
     def get_profile_edit_url(self,next_url,policy='B2C_1_email_profile'):
         return "{base_url}/oauth2/v2.0/authorize?client_id={client_id}&redirect_uri={next_url}&scope=openid+email&response_type=code".format(
@@ -74,6 +72,15 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
             client_id=self.setting('KEY'),
             next_url=urllib.parse.quote(next_url)
         )
+
+    _default_logout_url = None
+    @classmethod
+    def get_logout_url(cls):
+        if not cls._default_logout_url:
+            cls._default_logout_url = cls().logout_url
+
+        return cls._default_logout_url
+
 
     @property
     def logout_url(self):

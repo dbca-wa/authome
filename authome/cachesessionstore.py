@@ -6,10 +6,12 @@ from django.utils import timezone
 from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 
 from django.contrib.sessions.backends.base import (
-    CreateError, SessionBase, UpdateError,VALID_KEY_CHARS
+    CreateError, SessionBase, UpdateError
 )
 from django.core.cache import caches
 from django.utils.crypto import  get_random_string
+
+from . import models
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,9 @@ firstsessioncache = get_firstsessioncache()
 
 process_seq_key = "{}:{}".format(settings.CACHE_KEY_PREFIX,settings.SESSION_COOKIE_NAME) if settings.CACHE_KEY_PREFIX else settings.SESSION_COOKIE_NAME
 
-VALID_DIGITIAL_CHARS = string.digits + string.ascii_uppercase
+VALID_DIGITIAL_CHARS = string.digits + string.ascii_lowercase
+VALID_KEY_CHARS = VALID_DIGITIAL_CHARS
+
 def convert_decimal(number,decimal):
     remain_number = number
     converted_number = None
@@ -41,11 +45,57 @@ def convert_decimal(number,decimal):
         else:
             converted_number =  c
 
-
     return converted_number
+
+def to_decimal(s,decimal):
+    number = 0
+    s = s.lower()
+    l = len(s)
+    for i in range(l):
+        c = s[i]
+        p = l - 1 - i
+        if p == 0:
+            number += VALID_DIGITIAL_CHARS.index(c)
+        else:
+            number += VALID_DIGITIAL_CHARS.index(c) * pow(decimal,p)
+
+    return number
+
+    
+
         
 class _AbstractSessionStore(SessionBase):
     cache_key_prefix = "{}-session:".format(settings.CACHE_KEY_PREFIX) if settings.CACHE_KEY_PREFIX else "session:"
+    _idppk = None
+    expired_session_key = None
+
+    def __init__(self, session_key=None):
+        super().__init__(session_key)
+        if session_key and "-" in session_key:
+            self._idppk = to_decimal(session_key[0:session_key.index("-")],36)
+    
+
+    @property
+    def idpid(self):
+        idpid = self.get("idp") 
+        if idpid:
+            return idpid
+        elif self._idppk:
+            idp = models.IdentityProvider.get_idp(self._idppk)
+            if idp:
+                return idp.idp
+            else:
+                return None
+
+    def flush(self):
+        self.expired_session_key = None
+        super().flush()
+
+    def is_empty(self):
+        if self.expired_session_key:
+            return False
+        else:
+            return super().is_empty()
 
     def _get_cache(self,session_key=None):
         return None
@@ -61,6 +111,22 @@ class _AbstractSessionStore(SessionBase):
         else:
             return settings.GUEST_SESSION_AGE
 
+    def get_session_age(self):
+        try:
+            timeout = self._session_cache.get("session_timeout")
+            if timeout:
+                return timeout
+        except:
+            pass
+
+        if self.get(USER_SESSION_KEY):
+            return settings.SESSION_AGE
+        else:
+            return settings.GUEST_SESSION_AGE
+
+    def get_expiry_age(self, **kwargs):
+        return self.get_session_cookie_age()
+
     def get_cache_key(self,session_key=None):
         if not session_key:
             session_key = self.session_key
@@ -69,13 +135,25 @@ class _AbstractSessionStore(SessionBase):
 
     def load(self):
         try:
-            session_data = self._get_cache().get(self.cache_key)
+            sessioncache = self._get_cache()
+            cachekey = self.cache_key
+            session_data = sessioncache.get(cachekey)
+            timeout = session_data.get("session_timeout")
+            if timeout and session_data.get(USER_SESSION_KEY):
+                try:
+                    sessioncache.expire(cachekey,timeout)
+                except:
+                    pass
         except Exception:
             # Some backends (e.g. memcache) raise an exception on invalid
             # cache keys. If this happens, reset the session. See #17810.
             session_data = None
         if session_data is not None:
             return session_data
+
+        if self._session_key and "-" in self._session_key:
+            #this is a authenticated session key
+            self.expired_session_key = self._session_key
         self._session_key = None
         return {}
 
@@ -106,7 +184,7 @@ class _AbstractSessionStore(SessionBase):
             func = self._get_cache().set
         result = func(self.cache_key,
                       self._get_session(no_load=must_create),
-                      self.get_expiry_age())
+                      self.get_session_age())
         if must_create and not result:
             raise CreateError
 
@@ -119,6 +197,7 @@ class _AbstractSessionStore(SessionBase):
                 return
             session_key = self.session_key
         self._get_cache(session_key).delete(self.cache_key_prefix + session_key)
+        
 
     @classmethod
     def clear_expired(cls):
@@ -146,8 +225,16 @@ if settings.SYNC_MODE:
         def _get_new_session_key(self):
             "Return session key that isn't being used."
             cls = self.__class__
+            idpid = self.get("idp")
+            if idpid:
+                idp = models.IdentityProvider.get_idp(idpid)
+                idpid = convert_decimal(idp.id,36)
             while True:
-                session_key = "{}-{}".format(cls._get_process_prefix(),get_random_string(32, VALID_KEY_CHARS))
+                if idpid:
+                    session_key = "{3}-{1}{0}{2}".format(self._get_process_prefix(),get_random_string(16, VALID_KEY_CHARS),get_random_string(16, VALID_KEY_CHARS),idpid)
+                else:
+                    session_key = "{1}{0}{2}".format(self._get_process_prefix(),get_random_string(16, VALID_KEY_CHARS),get_random_string(16, VALID_KEY_CHARS))
+
                 if not self.exists(session_key):
                     return session_key
 
@@ -176,9 +263,17 @@ else:
             "Return session key that isn't being used."
             cls = self.__class__
             prefix = cls._get_process_prefix()
+            idpid = self.get("idp")
+            if idpid:
+                idp = models.IdentityProvider.get_idp(idpid)
+                idpid = convert_decimal(idp.id,36)
             try:
                 while True:
-                    session_key = "{}-{}".format(prefix,get_random_string(32, VALID_KEY_CHARS))
+                    if idp:
+                        session_key = "{3}-{1}{0}{2}".format(prefix,get_random_string(16, VALID_KEY_CHARS),get_random_string(16, VALID_KEY_CHARS),idpid)
+                    else:
+                        session_key = "{1}{0}{2}".format(prefix,get_random_string(16, VALID_KEY_CHARS),get_random_string(16, VALID_KEY_CHARS))
+
                     if not self.exists(session_key):
                         return session_key
             finally:
