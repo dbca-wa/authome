@@ -510,7 +510,7 @@ def auth_local(request):
     if request.user.is_authenticated:
         #already authenticated
         next_url_domain = utils.get_domain(next_url)
-        if next_url_domain.endswith(settings.AUTH2_DOMAIN):
+        if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
             return HttpResponseRedirect(next_url)
         else:
             return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
@@ -624,7 +624,7 @@ def auth_local(request):
                     request.session["session_timeout"] = timeout
                 defaultcache.delete(codekey)
                 next_url_domain = utils.get_domain(next_url)
-                if next_url_domain.endswith(settings.AUTH2_DOMAIN):
+                if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                     return HttpResponseRedirect(next_url)
                 else:
                     return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
@@ -692,7 +692,7 @@ def auth_local(request):
             defaultcache.delete(tokenkey)
         
             next_url_domain = utils.get_domain(next_url)
-            if next_url_domain.endswith(settings.AUTH2_DOMAIN):
+            if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                 return HttpResponseRedirect(next_url)
             else:
                 return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
