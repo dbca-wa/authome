@@ -509,7 +509,11 @@ def auth_local(request):
 
     if request.user.is_authenticated:
         #already authenticated
-        return HttpResponseRedirect(next_url)
+        next_url_domain = utils.get_domain(next_url)
+        if next_url_domain.endswith(settings.AUTH2_DOMAIN):
+            return HttpResponseRedirect(next_url)
+        else:
+            return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
 
     container_class = "unified_container"
     userflow = models.CustomizableUserflow.get_userflow(domain)
