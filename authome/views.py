@@ -619,7 +619,11 @@ def auth_local(request):
                 if timeout:
                     request.session["session_timeout"] = timeout
                 defaultcache.delete(codekey)
-                return HttpResponseRedirect(next_url)
+                next_url_domain = utils.get_domain(next_url)
+                if next_url_domain.endswith(settings.AUTH2_DOMAIN):
+                    return HttpResponseRedirect(next_url)
+                else:
+                    return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
             else:
                 #Userr does not exist, signup
                 token = get_random_string(settings.SIGNUP_TOKEN_LENGTH,VALID_TOKEN_CHARS)
@@ -683,7 +687,11 @@ def auth_local(request):
                 request.session["session_timeout"] = timeout
             defaultcache.delete(tokenkey)
         
-            return HttpResponseRedirect(next_url)
+            next_url_domain = utils.get_domain(next_url)
+            if next_url_domain.endswith(settings.AUTH2_DOMAIN):
+                return HttpResponseRedirect(next_url)
+            else:
+                return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
         else:
             context["messages"] = [("error","Action({}) Not Support".format(action))]
             context["codeid"] = get_codeid()
