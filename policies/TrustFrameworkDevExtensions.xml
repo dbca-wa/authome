@@ -207,25 +207,6 @@
             </TechnicalProfiles>
         </ClaimsProvider>
 
-            
-        <ClaimsProvider>
-            <DisplayName>Self Asserted</DisplayName>
-            <TechnicalProfiles>
-                <TechnicalProfile Id="SelfAsserted-SignUpStep1-EmailVerify">
-                    <Metadata>
-                        <Item Key="ContentDefinitionReferenceId">api.selfasserted.SignUpStep1-EmailVerify</Item>
-                    </Metadata>
-                </TechnicalProfile>
-                    
-                <TechnicalProfile Id="SelfAsserted-SignUpStep2-UserProperties">
-                    <Metadata>
-                        <Item Key="ContentDefinitionReferenceId">api.selfasserted.SignUpStep2-UserProperties</Item>
-                    </Metadata>
-                </TechnicalProfile>
-            </TechnicalProfiles>
-        </ClaimsProvider>
-
-
     </ClaimsProviders>
 
 </TrustFrameworkPolicy>
