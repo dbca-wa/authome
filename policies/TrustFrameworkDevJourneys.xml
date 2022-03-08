@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TrustFrameworkPolicy
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+ xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
+ PolicySchemaVersion="0.3.0.0"
+ TenantId="dbcab2c.onmicrosoft.com"
+ PolicyId="B2C_1A_TrustFrameworkDevJourneys"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkDevJourneys">
+
+    <BasePolicy>
+        <TenantId>dbcab2c.onmicrosoft.com</TenantId>
+        <PolicyId>B2C_1A_TrustFrameworkJourneys</PolicyId>
+    </BasePolicy>
+
+    <BuildingBlocks>
+
+    </BuildingBlocks>
+
+</TrustFrameworkPolicy>
