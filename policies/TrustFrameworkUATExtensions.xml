@@ -21,6 +21,18 @@
                 <DataType>boolean</DataType>
                 <UserInputType>Readonly</UserInputType>
             </ClaimType>
+
+            <ClaimType Id="extension_mfaMethodUAT">
+                <DisplayName>Please select your preferred MFA method</DisplayName>
+                <DataType>string</DataType>
+                <UserInputType>RadioSingleSelect</UserInputType>
+                <Restriction>
+                    <Enumeration Text="Totp Token" Value="totp" SelectByDefault="true"/>
+                    <Enumeration Text="Phone" Value="phone" SelectByDefault="false"/>
+                    <Enumeration Text="Email" Value="email" SelectByDefault="false"/>
+                    <!--Enumeration Text="None " Value="none" SelectByDefault="false"/-->
+                </Restriction>
+            </ClaimType>
         </ClaimsSchema>
 
         <ContentDefinitions>
@@ -43,6 +55,14 @@
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Please%2520fill%2520your%2520details</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.SignUpStep1-EmailVerify">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Please%2520verify%2520your%2520email</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.SignUpStep2-UserProperties">
                 <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Please%2520fill%2520your%2520details</LoadUri>
             </ContentDefinition>
 
@@ -86,24 +106,59 @@
                 <TechnicalProfile Id="AAD-UserReadUsingAlternativeSecurityId-NoSession">
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
                     </OutputClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AAD-UserReadUsingEmailAddress">
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
                     </OutputClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AAD-UserReadUsingObjectId-NoSession">
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
                     </OutputClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AAD-WriteUserTOTPByObjectId-NoSession">
                     <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="extension_totpRegisteredUAT" DefaultValue="true" AlwaysUseDefaultValue="true"/>
+                        <PersistedClaim  ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="true" AlwaysUseDefaultValue="true"/>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="totp" AlwaysUseDefaultValue="true"/>
+                    </PersistedClaims>
+                </TechnicalProfile>
+
+                    
+                <TechnicalProfile Id="AAD-UserWriteUsingAlternativeSecurityId">
+                    <PersistedClaims>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
+                    </PersistedClaims>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AAD-UserWriteUsingLogonEmail">
+                    <PersistedClaims>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
+                    </PersistedClaims>
+                </TechnicalProfile>
+
+                <!--TechnicalProfile Id="AAD-UserWritePasswordUsingObjectId">
+                    <PersistedClaims>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
+                    </PersistedClaims>
+                </TechnicalProfile-->
+
+                <TechnicalProfile Id="AAD-UserWritePhoneNumberUsingObjectId-NoSession">
+                    <PersistedClaims>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" />
+                    </PersistedClaims>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AAD-UserWriteMFAMethodUsingObjectId-NoSession">
+                    <PersistedClaims>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" />
                     </PersistedClaims>
                 </TechnicalProfile>
 

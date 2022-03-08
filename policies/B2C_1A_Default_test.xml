@@ -31,7 +31,7 @@
                 <OutputClaim ClaimTypeReferenceId="identityProvider"/>
                 <OutputClaim ClaimTypeReferenceId="userEmail" PartnerClaimType="upn"/>
                 <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false"/>
-                <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" PartnerClaimType="mfaMethod" DefaultValue="none"/>
+                <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="mfaMethod" DefaultValue="none"/>
 
             </OutputClaims>
             <SubjectNamingInfo ClaimType="sub"/>

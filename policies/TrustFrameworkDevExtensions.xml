@@ -21,6 +21,18 @@
                 <DataType>boolean</DataType>
                 <UserInputType>Readonly</UserInputType>
             </ClaimType>
+
+            <ClaimType Id="extension_mfaMethodDev">
+                <DisplayName>Please select your preferred MFA method</DisplayName>
+                <DataType>string</DataType>
+                <UserInputType>RadioSingleSelect</UserInputType>
+                <Restriction>
+                    <Enumeration Text="Totp Token" Value="totp" SelectByDefault="true"/>
+                    <Enumeration Text="Phone" Value="phone" SelectByDefault="false"/>
+                    <Enumeration Text="Email" Value="email" SelectByDefault="false"/>
+                    <!--Enumeration Text="None " Value="none" SelectByDefault="false"/-->
+                </Restriction>
+            </ClaimType>
         </ClaimsSchema>
 
         <ContentDefinitions>
@@ -48,20 +60,10 @@
 
             <ContentDefinition Id="api.selfasserted.SignUpStep1-EmailVerify">
                 <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/signup_verifyemail.html?title=Please%2520verify%2520your%2520email%26class=self_asserted_container</LoadUri>
-                <RecoveryUri>~/common/default_page_error.html</RecoveryUri>
-                <DataUri>urn:com:microsoft:aad:b2c:elements:contract:selfasserted:2.1.0</DataUri>
-                <Metadata>
-                    <Item Key="DisplayName">Collect information from user page</Item>
-                </Metadata>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.SignUpStep2-UserProperties">
-                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/signup_userprofile.html??title=Please%2520fill%2520your%2520details%26class=self_asserted_container</LoadUri>
-                <RecoveryUri>~/common/default_page_error.html</RecoveryUri>
-                <DataUri>urn:com:microsoft:aad:b2c:elements:contract:selfasserted:2.1.0</DataUri>
-                <Metadata>
-                    <Item Key="DisplayName">Collect information from user page</Item>
-                </Metadata>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/signup_userprofile.html?title=Please%2520fill%2520your%2520details%26class=self_asserted_container</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.selectMfaMethod">
@@ -104,24 +106,59 @@
                 <TechnicalProfile Id="AAD-UserReadUsingAlternativeSecurityId-NoSession">
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredDev" DefaultValue="false"/>
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" DefaultValue="email"/>
                     </OutputClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AAD-UserReadUsingEmailAddress">
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredDev" DefaultValue="false"/>
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" DefaultValue="email"/>
                     </OutputClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AAD-UserReadUsingObjectId-NoSession">
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredDev" DefaultValue="false"/>
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" DefaultValue="email"/>
                     </OutputClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AAD-WriteUserTOTPByObjectId-NoSession">
                     <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="extension_totpRegisteredDev" DefaultValue="true" AlwaysUseDefaultValue="true"/>
+                        <PersistedClaim  ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredDev" DefaultValue="true" AlwaysUseDefaultValue="true"/>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" DefaultValue="totp" AlwaysUseDefaultValue="true"/>
+                    </PersistedClaims>
+                </TechnicalProfile>
+
+                    
+                <TechnicalProfile Id="AAD-UserWriteUsingAlternativeSecurityId">
+                    <PersistedClaims>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" DefaultValue="email"/>
+                    </PersistedClaims>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AAD-UserWriteUsingLogonEmail">
+                    <PersistedClaims>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" DefaultValue="email"/>
+                    </PersistedClaims>
+                </TechnicalProfile>
+
+                <!--TechnicalProfile Id="AAD-UserWritePasswordUsingObjectId">
+                    <PersistedClaims>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" DefaultValue="email"/>
+                    </PersistedClaims>
+                </TechnicalProfile-->
+
+                <TechnicalProfile Id="AAD-UserWritePhoneNumberUsingObjectId-NoSession">
+                    <PersistedClaims>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" />
+                    </PersistedClaims>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AAD-UserWriteMFAMethodUsingObjectId-NoSession">
+                    <PersistedClaims>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" />
                     </PersistedClaims>
                 </TechnicalProfile>
 
