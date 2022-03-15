@@ -58,12 +58,16 @@
                 <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/self_asserted.html?title=Please%2520fill%2520your%2520details</LoadUri>
             </ContentDefinition>
 
-            <ContentDefinition Id="api.selfasserted.SignUpStep1-EmailVerify">
-                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/signup_verifyemail.html?title=Please%2520verify%2520your%2520email%26class=self_asserted_container</LoadUri>
+            <ContentDefinition Id="api.selfasserted.emailverify">
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/b2c_verifyemail.html?title=Please%2520verify%2520your%2520email%26class=self_asserted_container</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.useremailverify">
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/b2c_verifyuseremail.html?title=Please%2520verify%2520your%2520email%26class=self_asserted_container</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.SignUpStep2-UserProperties">
-                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/signup_userprofile.html?title=Please%2520fill%2520your%2520details%26class=self_asserted_container</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/b2c_signup_userprofile.html?title=Please%2520fill%2520your%2520details%26class=self_asserted_container</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.selectMfaMethod">
@@ -76,10 +80,6 @@
 
             <ContentDefinition Id="api.localaccountsignup">
                 <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/self_asserted.html?title=Local%2520ccount%2520signup</LoadUri>
-            </ContentDefinition>
-
-            <ContentDefinition Id="api.localaccountpasswordreset.verifyemail">
-                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/self_asserted.html?title=Verify%2520your%2520email</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.localaccountpasswordreset">
