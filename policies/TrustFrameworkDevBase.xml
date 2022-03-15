@@ -28,7 +28,7 @@
 
             <!-- The claim socialIdpUserId has been renamed to issuerUserId -->
             <ClaimType Id="setPasswordHeader">
-                <DisplayName>Please choose a password(minimum 8 characters)</DisplayName>
+                <DisplayName>Please choose a password (minimum 16 characters)</DisplayName>
                 <DataType>string</DataType>
                 <UserInputType>Readonly</UserInputType>
             </ClaimType>
@@ -108,9 +108,7 @@
                 <DataType>string</DataType>
                 <UserHelpText>Enter new password</UserHelpText>
                 <UserInputType>Password</UserInputType>
-                <Restriction>
-                    <Pattern RegularExpression="^((?=.*[a-z])(?=.*[A-Z])(?=.*\d)|(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9])|(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])|(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]))([A-Za-z\d@#$%^&amp;*\-_+=[\]{}|\\:',?/`~&quot;();!]|\.(?!@)){8,16}$" HelpText="8-16 characters, containing 3 out of 4 of the following: Lowercase characters, uppercase characters, digits (0-9), and one or more of the following symbols: @ # $ % ^ &amp; * - _ + = [ ] { } | \ : ' , ? / ` ~ &quot; ( ) ; ."/>
-                </Restriction>
+                <PredicateValidationReference Id="CustomPassword" />
             </ClaimType>
             <!-- The password regular expression above is constructed for AAD passwords based on restrictions at https://msdn.microsoft.com/en-us/library/azure/jj943764.aspx
 
@@ -132,9 +130,7 @@
                 <DataType>string</DataType>
                 <UserHelpText>Confirm new password</UserHelpText>
                 <UserInputType>Password</UserInputType>
-                <Restriction>
-                    <Pattern RegularExpression="^((?=.*[a-z])(?=.*[A-Z])(?=.*\d)|(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9])|(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])|(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]))([A-Za-z\d@#$%^&amp;*\-_+=[\]{}|\\:',?/`~&quot;();!]|\.(?!@)){8,16}$" HelpText=" "/>
-                </Restriction>
+                <PredicateValidationReference Id="CustomPassword" />
             </ClaimType>
 
             <ClaimType Id="passwordPolicies">
@@ -421,6 +417,59 @@
 
 
         </ClaimsSchema>
+        <Predicates>
+           <Predicate Id="LengthRange" Method="IsLengthRange">
+             <UserHelpText>The password must be between 16 and 64 characters.</UserHelpText>
+             <Parameters>
+               <Parameter Id="Minimum">16</Parameter>
+               <Parameter Id="Maximum">64</Parameter>
+             </Parameters>
+           </Predicate>
+           <Predicate Id="Lowercase" Method="IncludesCharacters">
+             <UserHelpText>a lowercase letter</UserHelpText>
+             <Parameters>
+               <Parameter Id="CharacterSet">a-z</Parameter>
+             </Parameters>
+           </Predicate>
+           <Predicate Id="Uppercase" Method="IncludesCharacters">
+             <UserHelpText>an uppercase letter</UserHelpText>
+             <Parameters>
+               <Parameter Id="CharacterSet">A-Z</Parameter>
+             </Parameters>
+           </Predicate>
+           <Predicate Id="Number" Method="IncludesCharacters">
+             <UserHelpText>a digit</UserHelpText>
+             <Parameters>
+               <Parameter Id="CharacterSet">0-9</Parameter>
+             </Parameters>
+           </Predicate>
+           <Predicate Id="Symbol" Method="IncludesCharacters">
+             <UserHelpText>a symbol</UserHelpText>
+             <Parameters>
+               <Parameter Id="CharacterSet">@#$%^&amp;*\-_+=[]{}|\\:',.?/`~"();! </Parameter>
+             </Parameters>
+           </Predicate>
+         </Predicates>
+         <PredicateValidations>
+           <PredicateValidation Id="CustomPassword">
+             <PredicateGroups>
+               <PredicateGroup Id="LengthGroup">
+                 <PredicateReferences MatchAtLeast="1">
+                   <PredicateReference Id="LengthRange" />
+                 </PredicateReferences>
+               </PredicateGroup>
+               <PredicateGroup Id="CharacterClasses">
+                 <UserHelpText>The password must have at least 3 of the following:</UserHelpText>
+                 <PredicateReferences MatchAtLeast="1">
+                   <PredicateReference Id="Lowercase" />
+                   <PredicateReference Id="Uppercase" />
+                   <PredicateReference Id="Number" />
+                   <PredicateReference Id="Symbol" />
+                 </PredicateReferences>
+               </PredicateGroup>
+             </PredicateGroups>
+           </PredicateValidation>
+         </PredicateValidations>
 
         <ClaimsTransformations>
 
@@ -913,7 +962,7 @@
                         <PersistedClaim ClaimTypeReferenceId="email" PartnerClaimType="signInNames.emailAddress"/>
                         <PersistedClaim ClaimTypeReferenceId="newPassword" PartnerClaimType="password"/>
                         <PersistedClaim ClaimTypeReferenceId="displayName" DefaultValue="unknown"/>
-                        <PersistedClaim ClaimTypeReferenceId="passwordPolicies" DefaultValue="DisablePasswordExpiration"/>
+                        <PersistedClaim ClaimTypeReferenceId="passwordPolicies" DefaultValue="DisablePasswordExpiration,DisableStrongPassword"/>
                         <!--PersistedClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber" PartnerClaimType="strongAuthenticationPhoneNumber" /-->
 
                         <!-- Optional claims. -->
@@ -1029,6 +1078,7 @@
                     <PersistedClaims>
                         <PersistedClaim ClaimTypeReferenceId="objectId"/>
                         <PersistedClaim ClaimTypeReferenceId="newPassword" PartnerClaimType="password"/>
+                        <PersistedClaim ClaimTypeReferenceId="passwordPolicies" DefaultValue="DisablePasswordExpiration,DisableStrongPassword"/>
 
                         <!-- If the user stepped up during password reset, their phone number should be persisted for future authentication requests. -->
                         <!--PersistedClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber" PartnerClaimType="strongAuthenticationPhoneNumber" /-->
