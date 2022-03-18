@@ -701,7 +701,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="PhoneFactor-Verify" TechnicalProfileReferenceId="PhoneFactor-EditOrVerify-NoSession"/>
+                        <ClaimsExchange Id="PhoneFactor-Verify" TechnicalProfileReferenceId="PhoneFactor-InputOrVerify-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
