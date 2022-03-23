@@ -1858,7 +1858,7 @@
 
                 <TechnicalProfile Id="TOTPFactor-Register">
                     <Metadata>
-                        <Item Key="language.button_continue">Verify and Signin</Item>
+                        <Item Key="language.button_continue">Verify and Sign in</Item>
                     </Metadata>
                     <IncludeTechnicalProfile ReferenceId="TOTPFactor-Register-NoSession"/>
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
@@ -1886,7 +1886,7 @@
 
                 <TechnicalProfile Id="TOTPFactor-Challenge">
                     <Metadata>
-                        <Item Key="language.button_continue">Verify and Signin</Item>
+                        <Item Key="language.button_continue">Verify and Sign in</Item>
                     </Metadata>
                     <IncludeTechnicalProfile ReferenceId="TOTPFactor-Challenge-NoSession"/>
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>

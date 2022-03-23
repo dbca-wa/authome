@@ -95,7 +95,7 @@
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.totpfactor.verify">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?header=Verify%2520auth%2520app%2520code</LoadUri>
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?header=Verify%2520authenticator%2520code</LoadUri>
             </ContentDefinition>
 
         </ContentDefinitions>

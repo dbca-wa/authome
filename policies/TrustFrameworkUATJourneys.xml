@@ -485,6 +485,11 @@
                             <Value>false</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
+                            <Value>mfaMethod</Value>
+                            <Value>totp</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
                         <ClaimsExchange Id="AUTH2RegenerateTOTPQRCode" TechnicalProfileReferenceId="AUTH2-RegenerateTOTPQRCode-NoSession"/>
