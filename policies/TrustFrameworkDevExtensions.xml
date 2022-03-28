@@ -5,24 +5,24 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_TrustFrameworkUATExtensions"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkUATExtensions">
+ PolicyId="B2C_1A_TrustFrameworkDevExtensions"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkDevExtensions">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkUATJourneys</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkDevJourneys</PolicyId>
     </BasePolicy>
 
     <BuildingBlocks>
 
         <ClaimsSchema>
-            <ClaimType Id="extension_totpRegisteredUAT">
+            <ClaimType Id="extension_totpRegisteredDev">
                 <DisplayName>Totp registered</DisplayName>
                 <DataType>boolean</DataType>
                 <UserInputType>Readonly</UserInputType>
             </ClaimType>
 
-            <ClaimType Id="extension_mfaMethodUAT">
+            <ClaimType Id="extension_mfaMethodDev">
                 <DisplayName>Please select your preferred MFA method</DisplayName>
                 <DataType>string</DataType>
                 <UserInputType>RadioSingleSelect</UserInputType>
@@ -39,63 +39,63 @@
 
             <!-- This content definition is to render an error page that displays unhandled errors. -->
             <ContentDefinition Id="api.error">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/unified.html?title=Error</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/unified.html?title=Error</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.idpselections">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/unified.html?title=Select%2520Identity%2520Provider</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/unified.html?title=Select%2520Identity%2520Provider</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.idpselections.signup">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/unified.html?title=Select%2520Identity%2520Provider</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/unified.html?title=Select%2520Identity%2520Provider</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.signuporsignin">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/b2c_signuporsignin.html?title=Select%2520Identity%2520Provider%26class=unified_container</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/b2c_signuporsignin.html?title=Select%2520Identity%2520Provider%26class=unified_container</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Please%2520fill%2520your%2520details</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/self_asserted.html?title=Please%2520fill%2520your%2520details</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.emailverify">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/b2c_verifyemail.html?title=Please%2520verify%2520your%2520email%26class=self_asserted_container%26header=To%2520sign%2520up%2520with%2520email,%2520please%2520enter%2520your%2520address%2520below.%2520We%2527ll%2520send%2520you%2520a%2520verification%2520code%2520to%2520prove%2520that%2520you%2520own%2520the%2520address.</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/b2c_verifyemail.html?title=Please%2520verify%2520your%2520email%26class=self_asserted_container%26header=To%2520sign%2520up%2520with%2520email,%2520please%2520enter%2520your%2520address%2520below.%2520We%2527ll%2520send%2520you%2520a%2520verification%2520code%2520to%2520prove%2520that%2520you%2520own%2520the%2520address.</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.useremailverify">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/b2c_verifyuseremail.html?title=Please%2520verify%2520your%2520email%26class=self_asserted_container</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/b2c_verifyuseremail.html?title=Please%2520verify%2520your%2520email%26class=self_asserted_container</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.SignUpStep2-UserProperties">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/b2c_signup_userprofile.html?title=Please%2520fill%2520your%2520details%26class=self_asserted_container%26header=Signup%2520form</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/b2c_signup_userprofile.html?title=Please%2520fill%2520your%2520details%26class=self_asserted_container%26header=Signup%2520form</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.selectMfaMethod">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Select%2520multi-factor%2520authentication%2520method</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/self_asserted.html?title=Select%2520multi-factor%2520authentication%2520method</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.profileupdate">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Update%2520your%2520profile</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/self_asserted.html?title=Update%2520your%2520profile</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.localaccountsignup">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Local%2520ccount%2520signup</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/self_asserted.html?title=Local%2520ccount%2520signup</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.localaccountpasswordreset">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Input%2520new%2520password%26header=Set%2520new%2520password</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/self_asserted.html?title=Input%2520new%2520password%26header=Set%2520new%2520password</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.phonefactor">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?title=Multi-factor%2520authentication%2520via%2520phone%26header=Verify%2520your%2520mobile%2520phone</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/self_asserted.html?title=Multi-factor%2520authentication%2520via%2520phone%26header=Verify%2520your%2520mobile%2520phone</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.totpfactor.registration">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/b2c_totp_register.html?class=self_asserted_container%26header=Register%2520auth%2520authenticator%2520app</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/b2c_totp_register.html?class=self_asserted_container%26header=Register%2520auth%2520authenticator%2520app</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.totpfactor.verify">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?header=Verify%2520authenticator%2520code</LoadUri>
+                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/self_asserted.html?header=Verify%2520authenticator%2520code</LoadUri>
             </ContentDefinition>
 
         </ContentDefinitions>
@@ -109,60 +109,60 @@
 
                 <TechnicalProfile Id="AAD-UserReadUsingAlternativeSecurityId-NoSession">
                     <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
-                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
+                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredDev" DefaultValue="false"/>
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" DefaultValue="email"/>
                     </OutputClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AAD-UserReadUsingEmailAddress">
                     <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
-                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
+                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredDev" DefaultValue="false"/>
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" DefaultValue="email"/>
                     </OutputClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AAD-UserReadUsingObjectId-NoSession">
                     <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
-                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
+                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredDev" DefaultValue="false"/>
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" DefaultValue="email"/>
                     </OutputClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AAD-WriteUserTOTPByObjectId-NoSession">
                     <PersistedClaims>
-                        <PersistedClaim  ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="true" AlwaysUseDefaultValue="true"/>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="totp" AlwaysUseDefaultValue="true"/>
+                        <PersistedClaim  ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredDev" DefaultValue="true" AlwaysUseDefaultValue="true"/>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" DefaultValue="totp" AlwaysUseDefaultValue="true"/>
                     </PersistedClaims>
                 </TechnicalProfile>
 
                     
                 <TechnicalProfile Id="AAD-UserWriteUsingAlternativeSecurityId">
                     <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" DefaultValue="email"/>
                     </PersistedClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AAD-UserWriteUsingLogonEmail">
                     <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" DefaultValue="email"/>
                     </PersistedClaims>
                 </TechnicalProfile>
 
                 <!--TechnicalProfile Id="AAD-UserWritePasswordUsingObjectId">
                     <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" DefaultValue="email"/>
                     </PersistedClaims>
                 </TechnicalProfile-->
 
                 <TechnicalProfile Id="AAD-UserWritePhoneNumberUsingObjectId-NoSession">
                     <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" />
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" />
                     </PersistedClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AAD-UserWriteMFAMethodUsingObjectId-NoSession">
                     <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" />
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodDev" />
                     </PersistedClaims>
                 </TechnicalProfile>
 
@@ -174,37 +174,37 @@
             <TechnicalProfiles>
                 <TechnicalProfile Id="AUTH2-SendOtpViaEmail">
                     <Metadata>
-                        <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/verifycode</Item>
+                        <Item Key="ServiceUrl">https://auth2-dev.dbca.wa.gov.au/sso/verifycode</Item>
                     </Metadata>
                     <CryptographicKeys>
-                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2DevSecret"/>
                     </CryptographicKeys>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AUTH2-SendOtpViaUserEmail">
                     <Metadata>
-                        <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/verifycode</Item>
+                        <Item Key="ServiceUrl">https://auth2-dev.dbca.wa.gov.au/sso/verifycode</Item>
                     </Metadata>
                     <CryptographicKeys>
-                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2DevSecret"/>
                     </CryptographicKeys>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AUTH2-GenerateTOTPQRCode-NoSession">
                     <Metadata>
-                        <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/totp/generate</Item>
+                        <Item Key="ServiceUrl">https://auth2-dev.dbca.wa.gov.au/sso/totp/generate</Item>
                     </Metadata>
                     <CryptographicKeys>
-                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2DevSecret"/>
                     </CryptographicKeys>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AUTH2-VerifyTOTPCode">
                     <Metadata>
-                        <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/totp/verify</Item>
+                        <Item Key="ServiceUrl">https://auth2-dev.dbca.wa.gov.au/sso/totp/verify</Item>
                     </Metadata>
                     <CryptographicKeys>
-                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2DevSecret"/>
                     </CryptographicKeys>
                 </TechnicalProfile>
 

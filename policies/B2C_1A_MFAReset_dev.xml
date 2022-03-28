@@ -5,16 +5,19 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_MooringRiaProfileEdit"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_MooringRiaProfileEdit">
+ PolicyId="B2C_1A_MFAReset_dev"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_MFAReset_dev">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkMooringRiaExtensions</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkDevIDPs</PolicyId>
     </BasePolicy>
 
     <RelyingParty>
-        <DefaultUserJourney ReferenceId="ProfileEdit"/>
+        <DefaultUserJourney ReferenceId="MFAReset"/>
+        <UserJourneyBehaviors>
+            <ScriptExecution>Allow</ScriptExecution>
+        </UserJourneyBehaviors>
         <TechnicalProfile Id="PolicyProfile">
             <DisplayName>PolicyProfile</DisplayName>
             <Protocol Name="OpenIdConnect"/>
@@ -25,7 +28,9 @@
                 <OutputClaim ClaimTypeReferenceId="objectId" PartnerClaimType="sub"/>
                 <OutputClaim ClaimTypeReferenceId="identityProvider"/>
                 <OutputClaim ClaimTypeReferenceId="userEmail" PartnerClaimType="upn"/>
-                <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" PartnerClaimType="mfaMethod" DefaultValue="null"/>
+                <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false"/>
+                <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="mfaMethod" DefaultValue=""/>
+
             </OutputClaims>
             <SubjectNamingInfo ClaimType="sub"/>
         </TechnicalProfile>

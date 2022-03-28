@@ -5,11 +5,11 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_TrustFrameworkJourneys"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkJourneys">
+ PolicyId="B2C_1A_TrustFrameworkDevJourneys"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkDevJourneys">
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkSecrets</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkDevSecrets</PolicyId>
     </BasePolicy>
 
     <UserJourneys>
@@ -485,6 +485,11 @@
                             <Value>false</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
+                            <Value>mfaMethod</Value>
+                            <Value>totp</Value>
+                            <Action>SkipThisOrchestrationStep</Action>
+                        </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
                         <ClaimsExchange Id="AUTH2RegenerateTOTPQRCode" TechnicalProfileReferenceId="AUTH2-RegenerateTOTPQRCode-NoSession"/>
@@ -701,7 +706,7 @@
                         </Precondition>
                     </Preconditions>
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="PhoneFactor-Verify" TechnicalProfileReferenceId="PhoneFactor-EditOrVerify-NoSession"/>
+                        <ClaimsExchange Id="PhoneFactor-Verify" TechnicalProfileReferenceId="PhoneFactor-InputOrVerify-NoSession"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
 
