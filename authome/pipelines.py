@@ -34,6 +34,7 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     email = details.get("email")
 
     #reset is_staff and is_superuser property based on user category.
+    usergroups = None
     if email:
         dbcagroup = UserGroup.dbca_group()
         usergroups = UserGroup.find_groups(email)[0]
@@ -56,7 +57,6 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
 
     #get backend logout url
     backend_logout_url = backend.logout_url 
-
     if user and not user.is_active:
         #use is inactive, automatically logout 
         logout(request)
@@ -92,11 +92,18 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     backend.strategy.session_set("idp", idp_obj.idp)
 
     details["last_idp"] = idp_obj
+    if idp_obj.idp == "local":
+        mfa_method = kwargs['response'].get("mfaMethod")
+        if mfa_method:
+            backend.strategy.session_set("mfa_method",mfa_method)
+            logger.debug("MFA Method is '{}'".format(mfa_method))
 
-    timeout = UserGroup.get_session_timeout(usergroups)
-    if timeout:
-        backend.strategy.session_set("session_timeout",timeout)
-        pass
+
+    if usergroups:
+        timeout = UserGroup.get_session_timeout(usergroups)
+        if timeout:
+            backend.strategy.session_set("session_timeout",timeout)
+            pass
 
 
 def user_details(strategy, details, user=None, *args, **kwargs):
@@ -105,7 +112,7 @@ def user_details(strategy, details, user=None, *args, **kwargs):
         return
 
     changed = False  # flag to track changes
-    protected = ('username', 'id', 'pk', 'email') + \
+    protected = ('username', 'id', 'pk', 'email','first_name','last_name') + \
                 tuple(strategy.setting('PROTECTED_USER_FIELDS', []))
 
     # Update user model attributes with the new data sent by the current

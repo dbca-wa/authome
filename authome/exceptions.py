@@ -5,6 +5,9 @@ from django.urls import reverse
 from django.contrib.auth import REDIRECT_FIELD_NAME
 
 #borrow MultiPartParserError to convert a exception to redirect response
+class UserDoesNotExistException(MultiPartParserError): 
+    pass
+
 class HttpResponseException(MultiPartParserError): 
     http_code = None
 

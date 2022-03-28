@@ -486,18 +486,18 @@ class IdentityProviderAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdm
 
 @admin.register(models.CustomizableUserflow)
 class CustomizableUserflowAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
-    list_display = ('domain','fixed','default','profile_edit','mfa_set',"mfa_reset",'password_reset','_modified','_created')
+    list_display = ('domain','fixed','default','mfa_set',"mfa_reset",'password_reset','_modified','_created')
     readonly_fields = ('_modified','_created')
     form = forms.CustomizableUserflowForm
-    fields = ('domain','fixed','default','profile_edit','mfa_set',"mfa_reset",'password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body",'_modified','_created')
+    fields = ('domain','fixed','default','mfa_set',"mfa_reset",'password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body",'_modified','_created')
     ordering = (models.sortkey_c.asc(),)
 
 
 @admin.register(models.UserTOTP)
 class UserTOTPAdmin(DatetimeMixin,admin.ModelAdmin):
-    list_display = ('name','email','idp','issuer','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
-    readonly_fields = ('name','email','idp','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
-    fields = ('name','email','idp','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
+    list_display = ('name','email','issuer','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
+    readonly_fields = ('name','email','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
+    fields = ('name','email','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
     ordering = ('name',)
     search_fields=("email",)
 

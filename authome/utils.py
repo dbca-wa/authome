@@ -7,6 +7,7 @@ import re
 import base64
 import qrcode
 import logging
+from datetime import timedelta
 
 from django.utils import timezone
 from django.contrib.auth import REDIRECT_FIELD_NAME
@@ -198,7 +199,7 @@ def get_digest_function(algorithm):
     return (algorithm name(returned from digest function), related digest function) via digest algorithm 
 
     """
-    algorithm = algorithm.lower()
+    algorithm = algorithm.upper()
     result = digest_map.get(algorithm)
     if result:
         return result
@@ -207,8 +208,8 @@ def get_digest_function(algorithm):
         if not callable(v):
             continue
         try:
-            if v().name.lower() == algorithm:
-                result = (v().name,v)
+            if v().name.upper() == algorithm:
+                result = (v().name.upper(),v)
                 digest_map[algorithm] = result
                 return result
         except:
@@ -217,5 +218,50 @@ def get_digest_function(algorithm):
     raise Exception("Digest algorithm({}) Not Support".format(algorithm))
 
 def format_datetime(dt):
-    return timezone.localtime(dt).strftime("%y-%m-%d %H:%M:%S") if dt else None
+    return timezone.localtime(dt).strftime("%Y-%m-%d %H:%M:%S") if dt else None
+
+def format_timedelta(td,unit="s"):
+    days = 0
+    hours = 0
+    minutes = 0
+    seconds = 0
+    if isinstance(td,timedelta):
+        days = td.days
+        seconds = td.seconds
+        hours = int(seconds / (60 * 60))
+        seconds = minutes % (60 * 60)
+        minutes = int(seconds / 60)
+        seconds = seconds % 60
+    else:
+        if unit == "d":
+            days = "{} day".format(td) if dt <= 1 else "{} days".format(td) 
+        elif unit == "h":
+            days = int(td / 24)
+            hours = td % 24
+            days = "{} day".format(days) if days <= 1 else "{} days".format(days)
+            hours = "" if hours == 0 else ("{} hour".format(hours) if hours == 1 else "{} days".format(hours))
+        elif unit == "m":
+            days = int(td / (24 * 60))
+            minutes = td % (24 * 60)
+            hours = int(minutes / 60)
+            minutes = minutes % 60
+        elif unit == "s":
+            days = int(td / (24 * 60 * 60))
+            seconds = td % (24 * 60 * 60)
+            hours = int(seconds / (60 * 60))
+            seconds = seconds % (60 * 60)
+            minutes = int(seconds / 60)
+            seconds = seconds % 60
+
+
+    days = "" if days == 0 else ("{} day".format(days) if days == 1 else "{} days".format(days))
+    hours = "" if hours == 0 else ("{} hour".format(hours) if hours == 1 else "{} hours".format(hours))
+    minutes = "" if minutes == 0 else ("{} minute".format(minutes) if minutes == 1 else "{} minutes".format(minutes))
+    seconds = "" if seconds == 0 else ("{} second".format(seconds) if seconds == 1 else "{} seconds".format(seconds))
+
+    return " ".join(d for d in [days,hours,minutes,seconds] if d)
+
+
+
+
 

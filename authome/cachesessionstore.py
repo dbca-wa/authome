@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 import string
 
 from django.conf import settings
@@ -73,6 +74,16 @@ class _AbstractSessionStore(SessionBase):
         super().__init__(session_key)
         if session_key and "-" in session_key:
             self._idppk = to_decimal(session_key[0:session_key.index("-")],36)
+
+
+    @property
+    def expireat(self):
+        try:
+            sessioncache = self._get_cache()
+            ttl = sessioncache.ttl(self.cache_key)
+            return timezone.now() + timedelta(seconds=ttl)
+        except:
+            return None
     
 
     @property

@@ -11,23 +11,24 @@
 {% endblock extrajs %}
 
 {% block realcontent %}
-{% include "authome/inc/messages.html"%}
-<form method="post" action="{% url 'auth_local' %}" id="signinform" class="localAccount">
+<form method="post" action="{% url 'auth_local' %}" id="attributeVerification" class="localAccount">
 {% csrf_token %}
 <input type="hidden" id="id_next" name="next" value="{{next}}">
 <input type="hidden" id="id_codeid" name="codeid" value="{{codeid}}">
-<div class="intro">
-   <h2>
-    Sign in with your email address
-   </h2>
+<div >
+    <div style="color:black;font-weight:bold;font-size:medium;text-align:left;margin-top:10px;margin-bottom:10px;white-space:pre-wrap">To sign in with email, please enter your address below. We'll send you a verification code to prove that you own the address.</div>
 </div>
-<div class="entry">
-  <div class="entry-item">
+{% include "authome/inc/messages.html"%}
+<div id="attributeList" class="attr">
+  <ul>
+   <li>
     <input type="email" title="Please enter a valid email address." id="id_email" name="email" pattern="^[a-zA-Z0-9.!#$%&amp;’'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$" placeholder="Email Address" value="{{email}}" aria-label="Email Address" required>
-   </div>
-   <div class="buttons" style="text-align:center">
-      <button id="id_defaultaction" type="submit" name="action" value="sendcode" form="signinform">Send Verification Code</button>
-   </div>
+   </li>
+  </ul>
+</div>
+<div class="buttons" >
+   <button id="id_defaultaction" type="submit" name="action" value="sendcode" form="attributeVerification" >Send Verification Code</button>
+   <button id="cancel" aria-label="Cancel" formnovalidate="" name="action" value="cancel" form="attributeVerification">Cancel</button>
 </div>
 </form>
 {% endblock realcontent %}

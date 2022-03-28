@@ -10,20 +10,20 @@ ul.messagelist li {
     display: block;
     font-weight: 400;
     font-size: 13px;
-    padding: 10px 10px 10px 65px;
+    padding: 10px 10px 10px 30px;
     margin: 0 0 10px 0;
-    background: #dfd url(/sso/static/admin/img/icon-yes.svg) 40px 12px no-repeat;
+    background: #dfd url(/sso/static/admin/img/icon-yes.svg) 10px 12px no-repeat;
     background-size: 16px auto;
     color: #333;
 }
 
 ul.messagelist li.warning {
-    background: #ffc url(/sso/static/admin/img/icon-alert.svg) 40px 14px no-repeat;
+    background: #ffc url(/sso/static/admin/img/icon-alert.svg) 10px 14px no-repeat;
     background-size: 14px auto;
 }
 
 ul.messagelist li.error {
-    background: #ffefef url(/sso/static/admin/img/icon-no.svg) 40px 12px no-repeat;
+    background: #ffefef url(/sso/static/admin/img/icon-no.svg) 10px 12px no-repeat;
     background-size: 16px auto;
 }
 

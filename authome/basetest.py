@@ -57,7 +57,6 @@ class BaseAuthTestCase(TestCase):
                 mfa_set="default_mfa_set",
                 mfa_reset="default_mfa_reset",
                 email="oim@dbca.wa.gov.au",
-                profile_edit="default_profile_edit",
                 password_reset="default_password_reset",
                 verifyemail_from="oim@dbca.wa.gov.au",
                 verifyemail_subject="test"

@@ -1,0 +1,40 @@
+input[type=text]:read-only,input[type=email]:read-only {
+  border:none !important;
+  font-weight:bold !important;
+}
+
+input:disabled {
+  border:none !important;
+  font-weight:bold !important;
+}
+label#setPasswordHeader_label,label#setProfileHeader_label {
+    display:block !important;
+    font-weight:bold !important;
+}
+input#setPasswordHeader,input#setProfileHeader {
+    display:none !important;
+}
+#phoneEntry select,#phoneEntry input {
+  display: block;
+  text-align: left;
+}
+
+#phoneEntry label {
+  display: block;
+  text-align: left;
+  margin-top:10px;
+  margin-bottom:10px;
+}
+#api .working {
+  display:none;
+}
+.unified_container .row .panel-default #api {
+  display:block;
+}
+.unified_container .row .panel-default #api .localAccount .entry .entry-item .password-label #forgotPassword {
+  bottom: 110px;
+}
+
+.unified_container .row .panel-default #api .localAccount .create {
+  margin-top:40px;
+}

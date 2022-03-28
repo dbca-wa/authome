@@ -66,13 +66,6 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
             return self.setting('BASE_URL')
         """
 
-    def get_profile_edit_url(self,next_url,policy='B2C_1_email_profile'):
-        return "{base_url}/oauth2/v2.0/authorize?client_id={client_id}&redirect_uri={next_url}&scope=openid+email&response_type=code".format(
-            base_url=self.setting('BASE_URL').format(policy),
-            client_id=self.setting('KEY'),
-            next_url=urllib.parse.quote(next_url)
-        )
-
     _default_logout_url = None
     @classmethod
     def get_logout_url(cls):

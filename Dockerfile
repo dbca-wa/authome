@@ -20,7 +20,7 @@ FROM builder_base_authome as python_libs_authome
 WORKDIR /app/release
 # Install the project.
 FROM python_libs_authome
-COPY manage.py gunicorn.py performancetest ./
+COPY manage.py gunicorn.py testperformance testrequestheaders ./
 COPY authome ./authome
 COPY templates ./templates
 RUN export IGNORE_LOADING_ERROR=True ; python manage.py collectstatic --noinput --no-post-process

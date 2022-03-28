@@ -389,7 +389,7 @@ class MemoryCache(object):
         else:
             return None
 
-    def set_auth(self,key,response):
+    def set_auth(self,key,response,user):
         """
         cache the auth response content and return the populated http response
         """
@@ -398,16 +398,6 @@ class MemoryCache(object):
 
         self._enforce_maxsize("auth map",self._auth_map,settings.AUTH_CACHE_SIZE)
         self.clean_auth_cache()
-
-    def update_auth(self,key,response):
-        """
-        cache the updated auth response content and return the populated http response
-        """
-        data = self._auth_map.get(key)
-        if data:
-            data[0] = response
-        else:
-            self._auth_map[key] = [response,timezone.now() + settings.AUTH_CACHE_EXPIRETIME]
 
     def delete_auth(self,key):
         try:
@@ -431,36 +421,19 @@ class MemoryCache(object):
             else:
                 #token is not matched, remove the data
                 del self._basic_auth_map[key[0]]
-                return None
+                return (None,None)
         else:
             #not cached token found
-            return None
+            return (None,None)
 
-    def set_basic_auth(self,key,response):
+    def set_basic_auth(self,key,response,user):
         """
         cache the auth token response content and return the populated http response
         """
-        self._basic_auth_map[key[0]] = [response,key[1],timezone.now() + settings.AUTH_BASIC_CACHE_EXPIRETIME]
+        self._basic_auth_map[key[0]] = [(user.id,response),key[1],timezone.now() + settings.AUTH_BASIC_CACHE_EXPIRETIME]
 
         self._enforce_maxsize("token auth map",self._basic_auth_map,settings.BASIC_AUTH_CACHE_SIZE)
         self.clean_auth_cache()
-
-    def update_basic_auth(self,key,response):
-        """
-        cache the updated auth token response content and return the populated http response
-        """
-        data = self._basic_auth_map.get(key[0])
-        if data:
-            if data[1] == key[1] and timezone.now() <= data[2]:
-                #token is matched
-                data[0] = response
-            else:
-                #token is not matched, remove the old one, add a new one
-                del self._basic_auth_map[key[0]]
-                self._basic_auth_map[key[0]] = [response,key[1],timezone.now() + settings.AUTH_BASIC_CACHE_EXPIRETIME]
-        else:
-            #not cached token found
-            self._basic_auth_map[key[0]] = [response,key[1],timezone.now() + settings.AUTH_BASIC_CACHE_EXPIRETIME]
 
     def delete_basic_auth(self,key):
         try:

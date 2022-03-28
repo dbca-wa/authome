@@ -1,0 +1,871 @@
+2022-03-17 13:13:54,900 INFO     django.utils.autoreload Watching for file changes with StatReloader
+2022-03-17 13:13:55,037 DEBUG    authome.cache UserGroup was changed, clean cache usergroupptree and user_requests_map
+2022-03-17 13:13:55,037 DEBUG    authome.models Refresh UserGroup cache
+2022-03-17 13:13:55,049 DEBUG    authome.cache UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map
+2022-03-17 13:13:55,050 DEBUG    authome.models Refresh UserGroupAuthorization cache
+2022-03-17 13:13:55,060 DEBUG    authome.models Refresh idp cache
+2022-03-17 13:13:55,061 DEBUG    authome.models Refresh Customizable Userflow cache
+2022-03-17 13:13:59,315 DEBUG    authome.views sso auth url = /sso/login/azuread-b2c-oauth2
+2022-03-17 13:13:59,316 INFO     django.server "GET / HTTP/1.1" 302 0
+2022-03-17 13:13:59,640 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:13:59,641 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:13:59,643 INFO     authome.cachesessionstore Got process prefix(2m) for session key.
+2022-03-17 13:13:59,644 DEBUG    authome.cachesessionstoredebug Create a new session key am7ngn6wmkwxijdn2mnobj9b564od94om6
+2022-03-17 13:13:59,644 DEBUG    authome.cachesessionstoredebug Save a session(am7ngn6wmkwxijdn2mnobj9b564od94om6) for GUEST into cache
+2022-03-17 13:13:59,644 DEBUG    authome.cachesessionstoredebug Add a new session(am7ngn6wmkwxijdn2mnobj9b564od94om6) for GUEST into cache
+2022-03-17 13:13:59,644 DEBUG    authome.cachesessionstoredebug Save a session(am7ngn6wmkwxijdn2mnobj9b564od94om6) for GUEST into cache
+2022-03-17 13:13:59,645 INFO     django.server "GET /sso/login/azuread-b2c-oauth2 HTTP/1.1" 302 0
+2022-03-17 13:14:03,253 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:14:03,254 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:15:00
+2022-03-17 13:14:03,255 DEBUG    authome.views Initialize user flow page layout; userflow=*, container_class=unified_container
+2022-03-17 13:14:03,267 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 29715
+2022-03-17 13:14:03,599 INFO     django.server "GET /sso/static/images/logo.svg HTTP/1.1" 200 91234
+2022-03-17 13:14:03,610 INFO     django.server "GET /sso/static/images/WW4WA_White_small.png HTTP/1.1" 200 5337
+2022-03-17 13:14:03,611 INFO     django.server "GET /sso/static/images/login_dbca.svg HTTP/1.1" 200 79686
+2022-03-17 13:14:03,612 INFO     django.server "GET /sso/static/images/login_bg.jpg HTTP/1.1" 200 291828
+2022-03-17 13:16:32,014 INFO     django.server "GET /sso/static/images/login_dbca_white.svg HTTP/1.1" 200 79692
+2022-03-17 13:18:11,768 DEBUG    authome.views sso auth url = /sso/login/azuread-b2c-oauth2
+2022-03-17 13:18:11,769 INFO     django.server "GET / HTTP/1.1" 302 0
+2022-03-17 13:18:12,005 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:19:00
+2022-03-17 13:18:12,005 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:18:12,006 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:18:12,006 INFO     django.server "GET /sso/login/azuread-b2c-oauth2 HTTP/1.1" 302 0
+2022-03-17 13:20:05,462 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:20:05,462 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:21:00
+2022-03-17 13:20:05,468 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 29884
+2022-03-17 13:20:05,892 INFO     django.server "GET /sso/static/images/email.png HTTP/1.1" 200 24564
+2022-03-17 13:20:13,598 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:20:13,598 WARNING  django.request Bad request (Unable to parse request body): /sso/complete/azuread-b2c-oauth2
+Traceback (most recent call last):
+  File "/home/rockyc/projects/authome/authome/backends.py", line 94, in process_error
+    super().process_error(data)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 380, in process_error
+    data['error'])
+social_core.exceptions.AuthFailed: Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: b0e35574-a6c8-4d15-8133-2de16cab4684
+Timestamp: 2022-03-17 05:20:13Z
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/base.py", line 181, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/cache.py", line 44, in _wrapped_view_func
+    response = view_func(request, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/csrf.py", line 54, in wrapped_view
+    return view_func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/utils.py", line 49, in wrapper
+    return func(request, backend, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/views.py", line 33, in complete
+    *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/actions.py", line 43, in do_complete
+    user = backend.complete(user=user, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/base.py", line 40, in complete
+    return self.auth_complete(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/utils.py", line 259, in wrapper
+    return func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 387, in auth_complete
+    self.process_error(self.data)
+  File "/home/rockyc/projects/authome/authome/backends.py", line 105, in process_error
+    raise AzureADB2CAuthenticateFailed(self.strategy.request,400,error_code,"Failed to authenticate the user.{}",ex)
+authome.exceptions.AzureADB2CAuthenticateFailed: Failed to authenticate the user.Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: b0e35574-a6c8-4d15-8133-2de16cab4684
+Timestamp: 2022-03-17 05:20:13Z
+
+2022-03-17 13:20:13,627 WARNING  django.server "GET /sso/complete/azuread-b2c-oauth2?error=server_error&error_description=AADB2C%3a+An+exception+has+occurred.%0d%0aCorrelation+ID%3a+b0e35574-a6c8-4d15-8133-2de16cab4684%0d%0aTimestamp%3a+2022-03-17+05%3a20%3a13Z%0d%0a&state=f1zymWC1iQfc5gixwWOUVgstednGfhUC HTTP/1.1" 400 23928
+2022-03-17 13:20:14,056 INFO     django.server "GET /sso/static/admin/js/vendor/jquery/jquery.min.js HTTP/1.1" 200 89476
+2022-03-17 13:20:14,119 INFO     django.server "GET /sso/static/images/WW4WA_White_small.png HTTP/1.1" 200 5337
+2022-03-17 13:20:14,120 INFO     django.server "GET /sso/static/images/logo.svg HTTP/1.1" 200 91234
+2022-03-17 13:20:14,497 INFO     django.server "GET /sso/static/images/login_bg.jpg HTTP/1.1" 200 291828
+2022-03-17 13:21:51,307 DEBUG    authome.views sso auth url = /sso/login/azuread-b2c-oauth2
+2022-03-17 13:21:51,307 INFO     django.server "GET / HTTP/1.1" 302 0
+2022-03-17 13:21:51,546 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:22:00
+2022-03-17 13:21:51,547 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:21:51,547 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:21:51,548 INFO     django.server "GET /sso/login/azuread-b2c-oauth2 HTTP/1.1" 302 0
+2022-03-17 13:21:53,670 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:21:53,676 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 29918
+2022-03-17 13:21:56,285 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:21:56,286 WARNING  django.request Bad request (Unable to parse request body): /sso/complete/azuread-b2c-oauth2
+Traceback (most recent call last):
+  File "/home/rockyc/projects/authome/authome/backends.py", line 94, in process_error
+    super().process_error(data)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 380, in process_error
+    data['error'])
+social_core.exceptions.AuthFailed: Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: 6e86ecdd-7d0b-49e6-9520-3e41839b224a
+Timestamp: 2022-03-17 05:21:56Z
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/base.py", line 181, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/cache.py", line 44, in _wrapped_view_func
+    response = view_func(request, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/csrf.py", line 54, in wrapped_view
+    return view_func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/utils.py", line 49, in wrapper
+    return func(request, backend, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/views.py", line 33, in complete
+    *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/actions.py", line 43, in do_complete
+    user = backend.complete(user=user, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/base.py", line 40, in complete
+    return self.auth_complete(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/utils.py", line 259, in wrapper
+    return func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 387, in auth_complete
+    self.process_error(self.data)
+  File "/home/rockyc/projects/authome/authome/backends.py", line 105, in process_error
+    raise AzureADB2CAuthenticateFailed(self.strategy.request,400,error_code,"Failed to authenticate the user.{}",ex)
+authome.exceptions.AzureADB2CAuthenticateFailed: Failed to authenticate the user.Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: 6e86ecdd-7d0b-49e6-9520-3e41839b224a
+Timestamp: 2022-03-17 05:21:56Z
+
+2022-03-17 13:21:56,289 WARNING  django.server "GET /sso/complete/azuread-b2c-oauth2?error=server_error&error_description=AADB2C%3a+An+exception+has+occurred.%0d%0aCorrelation+ID%3a+6e86ecdd-7d0b-49e6-9520-3e41839b224a%0d%0aTimestamp%3a+2022-03-17+05%3a21%3a56Z%0d%0a&state=f1zymWC1iQfc5gixwWOUVgstednGfhUC HTTP/1.1" 400 23928
+2022-03-17 13:22:04,465 DEBUG    authome.views sso auth url = /sso/login/azuread-b2c-oauth2
+2022-03-17 13:22:04,465 INFO     django.server "GET / HTTP/1.1" 302 0
+2022-03-17 13:22:04,696 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:23:00
+2022-03-17 13:22:04,697 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:22:04,697 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:22:04,698 INFO     django.server "GET /sso/login/azuread-b2c-oauth2 HTTP/1.1" 302 0
+2022-03-17 13:22:05,134 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:22:05,139 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 29918
+2022-03-17 13:22:54,071 INFO     django.utils.autoreload /home/rockyc/projects/authome/authome/views.py changed, reloading.
+Performing system checks...
+
+Worker process(kens-mate-001-2022-03-17 13:13:53.300000-7101) is ready to process request
+System check identified no issues (0 silenced).
+March 17, 2022 - 13:13:55
+Django version 3.1.6, using settings 'authome.settings'
+Starting development server at http://0.0.0.0:8061/
+Quit the server with CONTROL-C.
+2022-03-17 13:22:54,833 INFO     django.utils.autoreload Watching for file changes with StatReloader
+Exception in thread django-main-thread:
+Traceback (most recent call last):
+  File "/home/rockyc/.pyenv/versions/3.7.8/lib/python3.7/threading.py", line 926, in _bootstrap_inner
+    self.run()
+  File "/home/rockyc/.pyenv/versions/3.7.8/lib/python3.7/threading.py", line 870, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/utils/autoreload.py", line 53, in wrapper
+    fn(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/management/commands/runserver.py", line 118, in inner_run
+    self.check(display_num_errors=True)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/management/base.py", line 396, in check
+    databases=databases,
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/checks/registry.py", line 70, in run_checks
+    new_errors = check(app_configs=app_configs, databases=databases)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/checks/urls.py", line 13, in check_url_config
+    return check_resolver(resolver)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/checks/urls.py", line 23, in check_resolver
+    return check_method()
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/urls/resolvers.py", line 408, in check
+    for pattern in self.url_patterns:
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/utils/functional.py", line 48, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/urls/resolvers.py", line 589, in url_patterns
+    patterns = getattr(self.urlconf_module, "urlpatterns", self.urlconf_module)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/utils/functional.py", line 48, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/urls/resolvers.py", line 582, in urlconf_module
+    return import_module(self.urlconf_name)
+  File "/home/rockyc/.pyenv/versions/3.7.8/lib/python3.7/importlib/__init__.py", line 127, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1006, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 983, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 967, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 677, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 728, in exec_module
+  File "<frozen importlib._bootstrap>", line 219, in _call_with_frames_removed
+  File "/home/rockyc/projects/authome/authome/urls.py", line 11, in <module>
+    from . import views
+  File "/home/rockyc/projects/authome/authome/views.py", line 1198
+    ellse:
+         ^
+SyntaxError: invalid syntax
+
+2022-03-17 13:23:16,272 INFO     django.utils.autoreload /home/rockyc/projects/authome/authome/views.py changed, reloading.
+Performing system checks...
+
+2022-03-17 13:23:17,044 INFO     django.utils.autoreload Watching for file changes with StatReloader
+2022-03-17 13:23:17,199 DEBUG    authome.cache UserGroup was changed, clean cache usergroupptree and user_requests_map
+2022-03-17 13:23:17,199 DEBUG    authome.models Refresh UserGroup cache
+2022-03-17 13:23:17,212 DEBUG    authome.cache UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map
+2022-03-17 13:23:17,212 DEBUG    authome.models Refresh UserGroupAuthorization cache
+2022-03-17 13:23:17,223 DEBUG    authome.models Refresh idp cache
+2022-03-17 13:23:17,225 DEBUG    authome.models Refresh Customizable Userflow cache
+2022-03-17 13:23:23,192 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:23:23,192 DEBUG    authome.views Initialize user flow page layout; userflow=*, container_class=unified_container
+2022-03-17 13:23:23,204 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 29942
+2022-03-17 13:23:27,111 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:23:27,111 WARNING  django.request Bad request (Unable to parse request body): /sso/complete/azuread-b2c-oauth2
+Traceback (most recent call last):
+  File "/home/rockyc/projects/authome/authome/backends.py", line 94, in process_error
+    super().process_error(data)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 380, in process_error
+    data['error'])
+social_core.exceptions.AuthFailed: Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: ab787b74-c153-4b9b-a50c-ff6a472f097c
+Timestamp: 2022-03-17 05:23:26Z
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/base.py", line 181, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/cache.py", line 44, in _wrapped_view_func
+    response = view_func(request, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/csrf.py", line 54, in wrapped_view
+    return view_func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/utils.py", line 49, in wrapper
+    return func(request, backend, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/views.py", line 33, in complete
+    *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/actions.py", line 43, in do_complete
+    user = backend.complete(user=user, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/base.py", line 40, in complete
+    return self.auth_complete(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/utils.py", line 259, in wrapper
+    return func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 387, in auth_complete
+    self.process_error(self.data)
+  File "/home/rockyc/projects/authome/authome/backends.py", line 105, in process_error
+    raise AzureADB2CAuthenticateFailed(self.strategy.request,400,error_code,"Failed to authenticate the user.{}",ex)
+authome.exceptions.AzureADB2CAuthenticateFailed: Failed to authenticate the user.Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: ab787b74-c153-4b9b-a50c-ff6a472f097c
+Timestamp: 2022-03-17 05:23:26Z
+
+2022-03-17 13:23:27,116 WARNING  django.server "GET /sso/complete/azuread-b2c-oauth2?error=server_error&error_description=AADB2C%3a+An+exception+has+occurred.%0d%0aCorrelation+ID%3a+ab787b74-c153-4b9b-a50c-ff6a472f097c%0d%0aTimestamp%3a+2022-03-17+05%3a23%3a26Z%0d%0a&state=f1zymWC1iQfc5gixwWOUVgstednGfhUC HTTP/1.1" 400 23928
+2022-03-17 13:23:34,857 DEBUG    authome.views sso auth url = /sso/login/azuread-b2c-oauth2
+2022-03-17 13:23:34,857 INFO     django.server "GET / HTTP/1.1" 302 0
+2022-03-17 13:23:35,094 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:23:35,094 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:23:35,095 INFO     django.server "GET /sso/login/azuread-b2c-oauth2 HTTP/1.1" 302 0
+2022-03-17 13:23:35,574 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:23:35,580 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 29942
+2022-03-17 13:23:43,688 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:23:43,688 WARNING  django.request Bad request (Unable to parse request body): /sso/complete/azuread-b2c-oauth2
+Traceback (most recent call last):
+  File "/home/rockyc/projects/authome/authome/backends.py", line 94, in process_error
+    super().process_error(data)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 380, in process_error
+    data['error'])
+social_core.exceptions.AuthFailed: Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: 0bae7fc1-14bd-4bc6-b34a-05c4e5b7374b
+Timestamp: 2022-03-17 05:23:43Z
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/base.py", line 181, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/cache.py", line 44, in _wrapped_view_func
+    response = view_func(request, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/csrf.py", line 54, in wrapped_view
+    return view_func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/utils.py", line 49, in wrapper
+    return func(request, backend, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/views.py", line 33, in complete
+    *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/actions.py", line 43, in do_complete
+    user = backend.complete(user=user, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/base.py", line 40, in complete
+    return self.auth_complete(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/utils.py", line 259, in wrapper
+    return func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 387, in auth_complete
+    self.process_error(self.data)
+  File "/home/rockyc/projects/authome/authome/backends.py", line 105, in process_error
+    raise AzureADB2CAuthenticateFailed(self.strategy.request,400,error_code,"Failed to authenticate the user.{}",ex)
+authome.exceptions.AzureADB2CAuthenticateFailed: Failed to authenticate the user.Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: 0bae7fc1-14bd-4bc6-b34a-05c4e5b7374b
+Timestamp: 2022-03-17 05:23:43Z
+
+2022-03-17 13:23:43,692 WARNING  django.server "GET /sso/complete/azuread-b2c-oauth2?error=server_error&error_description=AADB2C%3a+An+exception+has+occurred.%0d%0aCorrelation+ID%3a+0bae7fc1-14bd-4bc6-b34a-05c4e5b7374b%0d%0aTimestamp%3a+2022-03-17+05%3a23%3a43Z%0d%0a&state=f1zymWC1iQfc5gixwWOUVgstednGfhUC HTTP/1.1" 400 23928
+2022-03-17 13:24:07,350 DEBUG    authome.views sso auth url = /sso/login/azuread-b2c-oauth2
+2022-03-17 13:24:07,350 INFO     django.server "GET / HTTP/1.1" 302 0
+2022-03-17 13:24:07,644 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:25:00
+2022-03-17 13:24:07,646 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:24:07,646 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:24:07,647 INFO     django.server "GET /sso/login/azuread-b2c-oauth2 HTTP/1.1" 302 0
+2022-03-17 13:24:09,493 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:24:09,499 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 29942
+2022-03-17 13:25:21,370 DEBUG    authome.views sso auth url = /sso/login/azuread-b2c-oauth2
+2022-03-17 13:25:21,371 INFO     django.server "GET / HTTP/1.1" 302 0
+2022-03-17 13:25:21,609 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:26:00
+2022-03-17 13:25:21,610 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:25:21,610 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:25:21,611 INFO     django.server "GET /sso/login/azuread-b2c-oauth2 HTTP/1.1" 302 0
+2022-03-17 13:25:23,469 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:25:23,475 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 29964
+2022-03-17 13:25:28,000 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:25:28,001 WARNING  django.request Bad request (Unable to parse request body): /sso/complete/azuread-b2c-oauth2
+Traceback (most recent call last):
+  File "/home/rockyc/projects/authome/authome/backends.py", line 94, in process_error
+    super().process_error(data)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 380, in process_error
+    data['error'])
+social_core.exceptions.AuthFailed: Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: c91276a2-79e7-4b40-81ec-d89d61a7d8be
+Timestamp: 2022-03-17 05:25:27Z
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/base.py", line 181, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/cache.py", line 44, in _wrapped_view_func
+    response = view_func(request, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/csrf.py", line 54, in wrapped_view
+    return view_func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/utils.py", line 49, in wrapper
+    return func(request, backend, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/views.py", line 33, in complete
+    *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/actions.py", line 43, in do_complete
+    user = backend.complete(user=user, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/base.py", line 40, in complete
+    return self.auth_complete(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/utils.py", line 259, in wrapper
+    return func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 387, in auth_complete
+    self.process_error(self.data)
+  File "/home/rockyc/projects/authome/authome/backends.py", line 105, in process_error
+    raise AzureADB2CAuthenticateFailed(self.strategy.request,400,error_code,"Failed to authenticate the user.{}",ex)
+authome.exceptions.AzureADB2CAuthenticateFailed: Failed to authenticate the user.Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: c91276a2-79e7-4b40-81ec-d89d61a7d8be
+Timestamp: 2022-03-17 05:25:27Z
+
+2022-03-17 13:25:28,004 WARNING  django.server "GET /sso/complete/azuread-b2c-oauth2?error=server_error&error_description=AADB2C%3a+An+exception+has+occurred.%0d%0aCorrelation+ID%3a+c91276a2-79e7-4b40-81ec-d89d61a7d8be%0d%0aTimestamp%3a+2022-03-17+05%3a25%3a27Z%0d%0a&state=f1zymWC1iQfc5gixwWOUVgstednGfhUC HTTP/1.1" 400 23928
+2022-03-17 13:26:24,264 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:27:00
+2022-03-17 13:26:24,264 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:26:24,273 INFO     django.server "GET /sso/auth_local HTTP/1.1" 200 24475
+2022-03-17 13:26:24,634 INFO     django.server "GET /sso/static/css/message.css HTTP/1.1" 200 1239
+2022-03-17 13:26:57,387 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:26:57,393 INFO     django.server "GET /sso/auth_local HTTP/1.1" 200 24474
+2022-03-17 13:27:06,889 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:28:00
+2022-03-17 13:27:06,890 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:27:06,895 INFO     django.server "GET /sso/auth_local HTTP/1.1" 200 24475
+2022-03-17 13:27:47,400 DEBUG    authome.views sso auth url = /sso/login/azuread-b2c-oauth2
+2022-03-17 13:27:47,400 INFO     django.server "GET / HTTP/1.1" 302 0
+2022-03-17 13:27:47,636 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:27:47,636 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:27:47,637 INFO     django.server "GET /sso/login/azuread-b2c-oauth2 HTTP/1.1" 302 0
+2022-03-17 13:27:51,354 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:27:51,359 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 29965
+2022-03-17 13:27:54,734 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:27:54,739 INFO     django.server "GET /sso/auth_local HTTP/1.1" 200 24474
+2022-03-17 13:31:01,193 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:31:01,193 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:32:00
+2022-03-17 13:31:01,199 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 29989
+2022-03-17 13:31:03,985 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:31:03,986 WARNING  django.request Bad request (Unable to parse request body): /sso/complete/azuread-b2c-oauth2
+Traceback (most recent call last):
+  File "/home/rockyc/projects/authome/authome/backends.py", line 94, in process_error
+    super().process_error(data)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 380, in process_error
+    data['error'])
+social_core.exceptions.AuthFailed: Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: 6b9baf0a-0d0c-4860-aceb-0b232b8f6cd1
+Timestamp: 2022-03-17 05:31:03Z
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/base.py", line 181, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/cache.py", line 44, in _wrapped_view_func
+    response = view_func(request, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/csrf.py", line 54, in wrapped_view
+    return view_func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/utils.py", line 49, in wrapper
+    return func(request, backend, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/views.py", line 33, in complete
+    *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/actions.py", line 43, in do_complete
+    user = backend.complete(user=user, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/base.py", line 40, in complete
+    return self.auth_complete(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/utils.py", line 259, in wrapper
+    return func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 387, in auth_complete
+    self.process_error(self.data)
+  File "/home/rockyc/projects/authome/authome/backends.py", line 105, in process_error
+    raise AzureADB2CAuthenticateFailed(self.strategy.request,400,error_code,"Failed to authenticate the user.{}",ex)
+authome.exceptions.AzureADB2CAuthenticateFailed: Failed to authenticate the user.Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: 6b9baf0a-0d0c-4860-aceb-0b232b8f6cd1
+Timestamp: 2022-03-17 05:31:03Z
+
+2022-03-17 13:31:03,989 WARNING  django.server "GET /sso/complete/azuread-b2c-oauth2?error=server_error&error_description=AADB2C%3a+An+exception+has+occurred.%0d%0aCorrelation+ID%3a+6b9baf0a-0d0c-4860-aceb-0b232b8f6cd1%0d%0aTimestamp%3a+2022-03-17+05%3a31%3a03Z%0d%0a&state=f1zymWC1iQfc5gixwWOUVgstednGfhUC HTTP/1.1" 400 23928
+2022-03-17 13:31:07,470 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:31:07,470 WARNING  django.request Bad request (Unable to parse request body): /sso/complete/azuread-b2c-oauth2
+Traceback (most recent call last):
+  File "/home/rockyc/projects/authome/authome/backends.py", line 94, in process_error
+    super().process_error(data)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 380, in process_error
+    data['error'])
+social_core.exceptions.AuthFailed: Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: c91276a2-79e7-4b40-81ec-d89d61a7d8be
+Timestamp: 2022-03-17 05:25:27Z
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/base.py", line 181, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/cache.py", line 44, in _wrapped_view_func
+    response = view_func(request, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/csrf.py", line 54, in wrapped_view
+    return view_func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/utils.py", line 49, in wrapper
+    return func(request, backend, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/views.py", line 33, in complete
+    *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/actions.py", line 43, in do_complete
+    user = backend.complete(user=user, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/base.py", line 40, in complete
+    return self.auth_complete(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/utils.py", line 259, in wrapper
+    return func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 387, in auth_complete
+    self.process_error(self.data)
+  File "/home/rockyc/projects/authome/authome/backends.py", line 105, in process_error
+    raise AzureADB2CAuthenticateFailed(self.strategy.request,400,error_code,"Failed to authenticate the user.{}",ex)
+authome.exceptions.AzureADB2CAuthenticateFailed: Failed to authenticate the user.Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: c91276a2-79e7-4b40-81ec-d89d61a7d8be
+Timestamp: 2022-03-17 05:25:27Z
+
+2022-03-17 13:31:07,474 WARNING  django.server "GET /sso/complete/azuread-b2c-oauth2?error=server_error&error_description=AADB2C%3a+An+exception+has+occurred.%0d%0aCorrelation+ID%3a+c91276a2-79e7-4b40-81ec-d89d61a7d8be%0d%0aTimestamp%3a+2022-03-17+05%3a25%3a27Z%0d%0a&state=f1zymWC1iQfc5gixwWOUVgstednGfhUC HTTP/1.1" 400 23928
+2022-03-17 13:31:14,254 DEBUG    authome.views sso auth url = /sso/login/azuread-b2c-oauth2
+2022-03-17 13:31:14,255 INFO     django.server "GET / HTTP/1.1" 302 0
+2022-03-17 13:31:14,491 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:31:14,492 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:31:14,492 INFO     django.server "GET /sso/login/azuread-b2c-oauth2 HTTP/1.1" 302 0
+2022-03-17 13:31:14,966 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:31:14,972 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 29989
+2022-03-17 13:31:17,911 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:31:17,911 WARNING  django.request Bad request (Unable to parse request body): /sso/complete/azuread-b2c-oauth2
+Traceback (most recent call last):
+  File "/home/rockyc/projects/authome/authome/backends.py", line 94, in process_error
+    super().process_error(data)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 380, in process_error
+    data['error'])
+social_core.exceptions.AuthFailed: Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: 0c1d8985-fb02-429c-9367-f4112807c934
+Timestamp: 2022-03-17 05:31:17Z
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/base.py", line 181, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/cache.py", line 44, in _wrapped_view_func
+    response = view_func(request, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/csrf.py", line 54, in wrapped_view
+    return view_func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/utils.py", line 49, in wrapper
+    return func(request, backend, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/views.py", line 33, in complete
+    *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/actions.py", line 43, in do_complete
+    user = backend.complete(user=user, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/base.py", line 40, in complete
+    return self.auth_complete(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/utils.py", line 259, in wrapper
+    return func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 387, in auth_complete
+    self.process_error(self.data)
+  File "/home/rockyc/projects/authome/authome/backends.py", line 105, in process_error
+    raise AzureADB2CAuthenticateFailed(self.strategy.request,400,error_code,"Failed to authenticate the user.{}",ex)
+authome.exceptions.AzureADB2CAuthenticateFailed: Failed to authenticate the user.Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: 0c1d8985-fb02-429c-9367-f4112807c934
+Timestamp: 2022-03-17 05:31:17Z
+
+2022-03-17 13:31:17,914 WARNING  django.server "GET /sso/complete/azuread-b2c-oauth2?error=server_error&error_description=AADB2C%3a+An+exception+has+occurred.%0d%0aCorrelation+ID%3a+0c1d8985-fb02-429c-9367-f4112807c934%0d%0aTimestamp%3a+2022-03-17+05%3a31%3a17Z%0d%0a&state=f1zymWC1iQfc5gixwWOUVgstednGfhUC HTTP/1.1" 400 23928
+2022-03-17 13:31:23,571 DEBUG    authome.views sso auth url = /sso/login/azuread-b2c-oauth2
+2022-03-17 13:31:23,572 INFO     django.server "GET / HTTP/1.1" 302 0
+2022-03-17 13:31:23,806 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:31:23,807 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:31:23,807 INFO     django.server "GET /sso/login/azuread-b2c-oauth2 HTTP/1.1" 302 0
+2022-03-17 13:31:24,391 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:31:24,399 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 29989
+2022-03-17 13:32:47,950 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:32:47,951 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:33:00
+2022-03-17 13:32:47,956 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 29990
+2022-03-17 13:32:50,397 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:32:50,397 WARNING  django.request Bad request (Unable to parse request body): /sso/complete/azuread-b2c-oauth2
+Traceback (most recent call last):
+  File "/home/rockyc/projects/authome/authome/backends.py", line 94, in process_error
+    super().process_error(data)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 380, in process_error
+    data['error'])
+social_core.exceptions.AuthFailed: Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: 67ccb865-4dc6-444f-aafb-67105d2b61d1
+Timestamp: 2022-03-17 05:32:50Z
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/handlers/base.py", line 181, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/cache.py", line 44, in _wrapped_view_func
+    response = view_func(request, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/views/decorators/csrf.py", line 54, in wrapped_view
+    return view_func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/utils.py", line 49, in wrapper
+    return func(request, backend, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_django/views.py", line 33, in complete
+    *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/actions.py", line 43, in do_complete
+    user = backend.complete(user=user, *args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/base.py", line 40, in complete
+    return self.auth_complete(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/utils.py", line 259, in wrapper
+    return func(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/social_core/backends/oauth.py", line 387, in auth_complete
+    self.process_error(self.data)
+  File "/home/rockyc/projects/authome/authome/backends.py", line 105, in process_error
+    raise AzureADB2CAuthenticateFailed(self.strategy.request,400,error_code,"Failed to authenticate the user.{}",ex)
+authome.exceptions.AzureADB2CAuthenticateFailed: Failed to authenticate the user.Authentication failed: AADB2C: An exception has occurred.
+Correlation ID: 67ccb865-4dc6-444f-aafb-67105d2b61d1
+Timestamp: 2022-03-17 05:32:50Z
+
+2022-03-17 13:32:50,401 WARNING  django.server "GET /sso/complete/azuread-b2c-oauth2?error=server_error&error_description=AADB2C%3a+An+exception+has+occurred.%0d%0aCorrelation+ID%3a+67ccb865-4dc6-444f-aafb-67105d2b61d1%0d%0aTimestamp%3a+2022-03-17+05%3a32%3a50Z%0d%0a&state=f1zymWC1iQfc5gixwWOUVgstednGfhUC HTTP/1.1" 400 23928
+2022-03-17 13:32:58,030 DEBUG    authome.views sso auth url = /sso/login/azuread-b2c-oauth2
+2022-03-17 13:32:58,031 INFO     django.server "GET / HTTP/1.1" 302 0
+2022-03-17 13:32:58,269 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:32:58,269 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:32:58,270 INFO     django.server "GET /sso/login/azuread-b2c-oauth2 HTTP/1.1" 302 0
+2022-03-17 13:32:58,884 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:32:58,890 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 29990
+2022-03-17 13:34:09,704 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:34:09,704 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:35:00
+2022-03-17 13:34:09,711 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 30036
+2022-03-17 13:34:18,369 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:34:18,374 INFO     django.server "GET /sso/auth_local HTTP/1.1" 200 24475
+2022-03-17 13:37:56,347 INFO     django.server "GET / HTTP/1.1" 302 0
+2022-03-17 13:37:56,582 DEBUG    authome.views All paths startswith '/sso' are opened for everyone by default.
+2022-03-17 13:37:56,596 DEBUG    authome.views cache the sso auth data for the user(ashley@ropable.com) with key(5-3yrtqzaaxvpgfus12k7ym3fzxmz9ssx6rz)
+2022-03-17 13:37:56,596 INFO     django.server "GET /sso/auth HTTP/1.1" 200 7
+2022-03-17 13:37:56,614 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:38:00
+2022-03-17 13:37:56,615 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:37:56,622 INFO     django.server "GET /sso/setting HTTP/1.1" 200 27327
+2022-03-17 13:38:18,691 DEBUG    authome.views sso auth url = /sso/login/azuread-b2c-oauth2?next=auth2-dev.dbca.wa.gov.au%2Fadmin%2F
+2022-03-17 13:38:18,692 INFO     django.server "GET /?next=auth2-dev.dbca.wa.gov.au/admin/ HTTP/1.1" 302 0
+2022-03-17 13:38:18,924 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:39:00
+2022-03-17 13:38:18,924 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:38:18,924 DEBUG    authome.backends Prefered idp is 'None', Choosed userflow is 'B2C_1A_Default_dev', request domain is 'auth2-dev.dbca.wa.gov.au' 
+2022-03-17 13:38:18,925 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:38:18,925 DEBUG    authome.backends Prefered idp is 'None', Choosed userflow is 'B2C_1A_Default_dev', request domain is 'auth2-dev.dbca.wa.gov.au' 
+2022-03-17 13:38:18,926 INFO     authome.cachesessionstore Got process prefix(2n) for session key.
+2022-03-17 13:38:18,927 DEBUG    authome.cachesessionstoredebug Create a new session key akc549a9mxadfvad2nrbbrvb9vglsppwkg
+2022-03-17 13:38:18,928 DEBUG    authome.cachesessionstoredebug Save a session(akc549a9mxadfvad2nrbbrvb9vglsppwkg) for GUEST into cache
+2022-03-17 13:38:18,928 DEBUG    authome.cachesessionstoredebug Add a new session(akc549a9mxadfvad2nrbbrvb9vglsppwkg) for GUEST into cache
+2022-03-17 13:38:18,928 DEBUG    authome.cachesessionstoredebug Save a session(akc549a9mxadfvad2nrbbrvb9vglsppwkg) for GUEST into cache
+2022-03-17 13:38:18,928 INFO     django.server "GET /sso/login/azuread-b2c-oauth2?next=auth2-dev.dbca.wa.gov.au%2Fadmin%2F HTTP/1.1" 302 0
+2022-03-17 13:38:22,659 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:38:22,665 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 30036
+2022-03-17 13:38:23,005 INFO     django.server "GET /sso/static/images/logo.svg HTTP/1.1" 200 91234
+2022-03-17 13:38:23,008 INFO     django.server "GET /sso/static/images/login_bg.jpg HTTP/1.1" 200 291828
+2022-03-17 13:38:23,021 INFO     django.server "GET /sso/static/images/email.png HTTP/1.1" 200 24564
+2022-03-17 13:38:23,065 INFO     django.server "GET /sso/static/images/WW4WA_White_small.png HTTP/1.1" 200 5337
+2022-03-17 13:38:23,065 INFO     django.server "GET /sso/static/images/login_dbca.svg HTTP/1.1" 200 79686
+2022-03-17 13:38:38,063 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:38:38,562 DEBUG    authome.views Verification code has been sent to rocky.chen75@gmail.com.
+2022-03-17 13:38:38,570 INFO     django.server "POST /sso/auth_local HTTP/1.1" 200 26002
+2022-03-17 13:38:38,959 INFO     django.server "GET /sso/static/admin/img/icon-yes.svg HTTP/1.1" 200 436
+2022-03-17 13:39:03,132 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:40:00
+2022-03-17 13:39:03,133 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:39:03,165 DEBUG    authome.models Cache the latest data of the user(rocky.chen75@gmail.com<30>) to usercache
+2022-03-17 13:39:03,165 DEBUG    authome.cachesessionstoredebug Create a new session key sbp4tbvqtf3t1cez2nkgky1keql1sbld8n
+2022-03-17 13:39:03,166 DEBUG    authome.cachesessionstoredebug Save a session(sbp4tbvqtf3t1cez2nkgky1keql1sbld8n) for GUEST into cache
+2022-03-17 13:39:03,166 DEBUG    authome.cachesessionstoredebug Add a new session(sbp4tbvqtf3t1cez2nkgky1keql1sbld8n) for GUEST into cache
+2022-03-17 13:39:03,166 DEBUG    authome.cachesessionstoredebug Delete a session(am7ngn6wmkwxijdn2mnobj9b564od94om6) for GUEST from cache
+2022-03-17 13:39:03,171 DEBUG    authome.models Cache the latest data of the user(rocky.chen75@gmail.com<30>) to usercache
+2022-03-17 13:39:03,172 DEBUG    authome.cachesessionstoredebug Save a session(sbp4tbvqtf3t1cez2nkgky1keql1sbld8n) for 30 into cache
+2022-03-17 13:39:03,173 INFO     django.server "POST /sso/auth_local HTTP/1.1" 302 0
+2022-03-17 13:39:03,439 DEBUG    authome.views All paths startswith '/sso' are opened for everyone by default.
+2022-03-17 13:39:03,440 DEBUG    authome.views cache the sso auth data for the user(rocky.chen75@gmail.com) with key(sbp4tbvqtf3t1cez2nkgky1keql1sbld8n)
+2022-03-17 13:39:03,440 INFO     django.server "GET /sso/auth HTTP/1.1" 200 7
+2022-03-17 13:39:03,455 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:39:03,461 INFO     django.server "GET /sso/setting HTTP/1.1" 200 26503
+2022-03-17 13:39:03,785 INFO     django.server "GET /sso/static/admin/img/icon-no.svg HTTP/1.1" 200 560
+2022-03-17 13:40:58,250 INFO     django.server "GET /sso/static/images/login_dbca_white.svg HTTP/1.1" 200 79692
+2022-03-17 13:41:57,286 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:42:00
+2022-03-17 13:41:57,287 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:41:57,289 DEBUG    authome.cachesessionstoredebug Delete a session(sbp4tbvqtf3t1cez2nkgky1keql1sbld8n) for GUEST from cache
+2022-03-17 13:41:57,290 INFO     django.server "GET /sso/auth_logout?next=/sso/setting HTTP/1.1" 302 0
+2022-03-17 13:42:00,761 DEBUG    authome.cache Run task(customizable userflow cache) now, next runtime is 2022-03-17 13:43:00
+2022-03-17 13:42:00,762 DEBUG    authome.cache Find the userflow(*) for domain 'auth2-dev.dbca.wa.gov.au'
+2022-03-17 13:42:00,767 INFO     django.server "GET /sso/signedout?relogin=https://auth2-dev.dbca.wa.gov.au HTTP/1.1" 200 23792
+2022-03-17 13:42:03,703 DEBUG    authome.views sso auth url = /sso/login/azuread-b2c-oauth2
+2022-03-17 13:42:03,704 INFO     django.server "GET / HTTP/1.1" 302 0
+2022-03-17 13:42:03,940 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:42:03,941 DEBUG    authome.backends Use the default userflow(*.B2C_1A_Default_dev) for domain(None)
+2022-03-17 13:42:03,942 DEBUG    authome.cachesessionstoredebug Create a new session key ua5lc0aj3e9suofk2n39rjfio770xpwwb1
+2022-03-17 13:42:03,942 DEBUG    authome.cachesessionstoredebug Save a session(ua5lc0aj3e9suofk2n39rjfio770xpwwb1) for GUEST into cache
+2022-03-17 13:42:03,942 DEBUG    authome.cachesessionstoredebug Add a new session(ua5lc0aj3e9suofk2n39rjfio770xpwwb1) for GUEST into cache
+2022-03-17 13:42:03,942 DEBUG    authome.cachesessionstoredebug Save a session(ua5lc0aj3e9suofk2n39rjfio770xpwwb1) for GUEST into cache
+2022-03-17 13:42:03,943 INFO     django.server "GET /sso/login/azuread-b2c-oauth2 HTTP/1.1" 302 0
+2022-03-17 13:42:05,011 DEBUG    authome.views Request the customized authentication interface for domain(None) and container_class(unified_container)
+2022-03-17 13:42:05,017 INFO     django.server "GET /sso/b2c_signuporsignin.html?title=Select%20Identity%20Provider&class=unified_container HTTP/1.1" 200 30046
+2022-03-17 14:42:37,613 INFO     django.utils.autoreload /home/rockyc/projects/authome/authome/views.py changed, reloading.
+Performing system checks...
+
+Worker process(kens-mate-001-2022-03-17 13:23:15.410000-20524) is ready to process request
+System check identified no issues (0 silenced).
+March 17, 2022 - 13:23:17
+Django version 3.1.6, using settings 'authome.settings'
+Starting development server at http://0.0.0.0:8061/
+Quit the server with CONTROL-C.
+2022-03-17 14:42:38,366 INFO     django.utils.autoreload Watching for file changes with StatReloader
+2022-03-17 14:42:38,560 DEBUG    authome.cache UserGroup was changed, clean cache usergroupptree and user_requests_map
+2022-03-17 14:42:38,560 DEBUG    authome.models Refresh UserGroup cache
+2022-03-17 14:42:38,572 DEBUG    authome.cache UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map
+2022-03-17 14:42:38,573 DEBUG    authome.models Refresh UserGroupAuthorization cache
+2022-03-17 14:42:38,583 DEBUG    authome.models Refresh idp cache
+2022-03-17 14:42:38,584 DEBUG    authome.models Refresh Customizable Userflow cache
+2022-03-17 14:47:14,747 INFO     django.utils.autoreload /home/rockyc/projects/authome/authome/settings.py changed, reloading.
+Performing system checks...
+
+Worker process(kens-mate-001-2022-03-17 14:42:36.770000-7848) is ready to process request
+System check identified no issues (0 silenced).
+March 17, 2022 - 14:42:38
+Django version 3.1.6, using settings 'authome.settings'
+Starting development server at http://0.0.0.0:8061/
+Quit the server with CONTROL-C.
+2022-03-17 14:47:15,486 INFO     django.utils.autoreload Watching for file changes with StatReloader
+2022-03-17 14:47:15,661 DEBUG    authome.cache UserGroup was changed, clean cache usergroupptree and user_requests_map
+2022-03-17 14:47:15,661 DEBUG    authome.models Refresh UserGroup cache
+2022-03-17 14:47:15,675 DEBUG    authome.cache UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map
+2022-03-17 14:47:15,675 DEBUG    authome.models Refresh UserGroupAuthorization cache
+2022-03-17 14:47:15,685 DEBUG    authome.models Refresh idp cache
+2022-03-17 14:47:15,686 DEBUG    authome.models Refresh Customizable Userflow cache
+2022-03-17 14:49:23,256 INFO     django.utils.autoreload /home/rockyc/projects/authome/authome/settings.py changed, reloading.
+Performing system checks...
+
+Worker process(kens-mate-001-2022-03-17 14:47:13.890000-9162) is ready to process request
+System check identified no issues (0 silenced).
+March 17, 2022 - 14:47:15
+Django version 3.1.6, using settings 'authome.settings'
+Starting development server at http://0.0.0.0:8061/
+Quit the server with CONTROL-C.
+2022-03-17 14:49:23,984 INFO     django.utils.autoreload Watching for file changes with StatReloader
+2022-03-17 14:49:24,124 DEBUG    authome.cache UserGroup was changed, clean cache usergroupptree and user_requests_map
+2022-03-17 14:49:24,124 DEBUG    authome.models Refresh UserGroup cache
+2022-03-17 14:49:24,137 DEBUG    authome.cache UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map
+2022-03-17 14:49:24,137 DEBUG    authome.models Refresh UserGroupAuthorization cache
+2022-03-17 14:49:24,147 DEBUG    authome.models Refresh idp cache
+2022-03-17 14:49:24,149 DEBUG    authome.models Refresh Customizable Userflow cache
+2022-03-17 14:49:51,779 INFO     django.utils.autoreload /home/rockyc/projects/authome/authome/views.py changed, reloading.
+Performing system checks...
+
+Worker process(kens-mate-001-2022-03-17 14:49:22.390000-9513) is ready to process request
+System check identified no issues (0 silenced).
+March 17, 2022 - 14:49:24
+Django version 3.1.6, using settings 'authome.settings'
+Starting development server at http://0.0.0.0:8061/
+Quit the server with CONTROL-C.
+2022-03-17 14:49:52,512 INFO     django.utils.autoreload Watching for file changes with StatReloader
+2022-03-17 14:49:52,708 DEBUG    authome.cache UserGroup was changed, clean cache usergroupptree and user_requests_map
+2022-03-17 14:49:52,708 DEBUG    authome.models Refresh UserGroup cache
+2022-03-17 14:49:52,722 DEBUG    authome.cache UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map
+2022-03-17 14:49:52,722 DEBUG    authome.models Refresh UserGroupAuthorization cache
+2022-03-17 14:49:52,732 DEBUG    authome.models Refresh idp cache
+2022-03-17 14:49:52,734 DEBUG    authome.models Refresh Customizable Userflow cache
+2022-03-17 14:55:18,307 INFO     django.utils.autoreload /home/rockyc/projects/authome/authome/views.py changed, reloading.
+Performing system checks...
+
+Worker process(kens-mate-001-2022-03-17 14:49:50.910000-9622) is ready to process request
+System check identified no issues (0 silenced).
+March 17, 2022 - 14:49:52
+Django version 3.1.6, using settings 'authome.settings'
+Starting development server at http://0.0.0.0:8061/
+Quit the server with CONTROL-C.
+2022-03-17 14:55:19,074 INFO     django.utils.autoreload Watching for file changes with StatReloader
+2022-03-17 14:55:19,224 DEBUG    authome.cache UserGroup was changed, clean cache usergroupptree and user_requests_map
+2022-03-17 14:55:19,224 DEBUG    authome.models Refresh UserGroup cache
+2022-03-17 14:55:19,237 DEBUG    authome.cache UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map
+2022-03-17 14:55:19,237 DEBUG    authome.models Refresh UserGroupAuthorization cache
+2022-03-17 14:55:19,247 DEBUG    authome.models Refresh idp cache
+2022-03-17 14:55:19,249 DEBUG    authome.models Refresh Customizable Userflow cache
+2022-03-17 14:55:27,660 INFO     django.utils.autoreload /home/rockyc/projects/authome/authome/views.py changed, reloading.
+Performing system checks...
+
+Worker process(kens-mate-001-2022-03-17 14:55:17.480000-10685) is ready to process request
+System check identified no issues (0 silenced).
+March 17, 2022 - 14:55:19
+Django version 3.1.6, using settings 'authome.settings'
+Starting development server at http://0.0.0.0:8061/
+Quit the server with CONTROL-C.
+2022-03-17 14:55:28,381 INFO     django.utils.autoreload Watching for file changes with StatReloader
+2022-03-17 14:55:28,568 DEBUG    authome.cache UserGroup was changed, clean cache usergroupptree and user_requests_map
+2022-03-17 14:55:28,568 DEBUG    authome.models Refresh UserGroup cache
+2022-03-17 14:55:28,581 DEBUG    authome.cache UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map
+2022-03-17 14:55:28,581 DEBUG    authome.models Refresh UserGroupAuthorization cache
+2022-03-17 14:55:28,591 DEBUG    authome.models Refresh idp cache
+2022-03-17 14:55:28,593 DEBUG    authome.models Refresh Customizable Userflow cache
+2022-03-17 14:56:41,639 INFO     django.utils.autoreload /home/rockyc/projects/authome/authome/views.py changed, reloading.
+Performing system checks...
+
+Worker process(kens-mate-001-2022-03-17 14:55:26.790000-10708) is ready to process request
+System check identified no issues (0 silenced).
+March 17, 2022 - 14:55:28
+Django version 3.1.6, using settings 'authome.settings'
+Starting development server at http://0.0.0.0:8061/
+Quit the server with CONTROL-C.
+2022-03-17 14:56:42,380 INFO     django.utils.autoreload Watching for file changes with StatReloader
+2022-03-17 14:56:42,526 DEBUG    authome.cache UserGroup was changed, clean cache usergroupptree and user_requests_map
+2022-03-17 14:56:42,527 DEBUG    authome.models Refresh UserGroup cache
+2022-03-17 14:56:42,540 DEBUG    authome.cache UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map
+2022-03-17 14:56:42,540 DEBUG    authome.models Refresh UserGroupAuthorization cache
+2022-03-17 14:56:42,550 DEBUG    authome.models Refresh idp cache
+2022-03-17 14:56:42,552 DEBUG    authome.models Refresh Customizable Userflow cache
+2022-03-17 15:00:30,183 INFO     django.utils.autoreload /home/rockyc/projects/authome/authome/settings.py changed, reloading.
+Performing system checks...
+
+Worker process(kens-mate-001-2022-03-17 14:56:40.770000-10950) is ready to process request
+System check identified no issues (0 silenced).
+March 17, 2022 - 14:56:42
+Django version 3.1.6, using settings 'authome.settings'
+Starting development server at http://0.0.0.0:8061/
+Quit the server with CONTROL-C.
+2022-03-17 15:00:30,942 INFO     django.utils.autoreload Watching for file changes with StatReloader
+2022-03-17 15:00:31,116 DEBUG    authome.cache UserGroup was changed, clean cache usergroupptree and user_requests_map
+2022-03-17 15:00:31,117 DEBUG    authome.models Refresh UserGroup cache
+2022-03-17 15:00:31,130 DEBUG    authome.cache UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map
+2022-03-17 15:00:31,130 DEBUG    authome.models Refresh UserGroupAuthorization cache
+2022-03-17 15:00:31,139 DEBUG    authome.models Refresh idp cache
+2022-03-17 15:00:31,141 DEBUG    authome.models Refresh Customizable Userflow cache
+2022-03-17 15:02:45,890 INFO     django.utils.autoreload /home/rockyc/projects/authome/authome/views.py changed, reloading.
+Performing system checks...
+
+Worker process(kens-mate-001-2022-03-17 15:00:29.320000-11807) is ready to process request
+System check identified no issues (0 silenced).
+March 17, 2022 - 15:00:31
+Django version 3.1.6, using settings 'authome.settings'
+Starting development server at http://0.0.0.0:8061/
+Quit the server with CONTROL-C.
+2022-03-17 15:02:46,623 INFO     django.utils.autoreload Watching for file changes with StatReloader
+Exception in thread django-main-thread:
+Traceback (most recent call last):
+  File "/home/rockyc/.pyenv/versions/3.7.8/lib/python3.7/threading.py", line 926, in _bootstrap_inner
+    self.run()
+  File "/home/rockyc/.pyenv/versions/3.7.8/lib/python3.7/threading.py", line 870, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/utils/autoreload.py", line 53, in wrapper
+    fn(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/management/commands/runserver.py", line 118, in inner_run
+    self.check(display_num_errors=True)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/management/base.py", line 396, in check
+    databases=databases,
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/checks/registry.py", line 70, in run_checks
+    new_errors = check(app_configs=app_configs, databases=databases)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/checks/urls.py", line 13, in check_url_config
+    return check_resolver(resolver)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/checks/urls.py", line 23, in check_resolver
+    return check_method()
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/urls/resolvers.py", line 408, in check
+    for pattern in self.url_patterns:
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/utils/functional.py", line 48, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/urls/resolvers.py", line 589, in url_patterns
+    patterns = getattr(self.urlconf_module, "urlpatterns", self.urlconf_module)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/utils/functional.py", line 48, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/urls/resolvers.py", line 582, in urlconf_module
+    return import_module(self.urlconf_name)
+  File "/home/rockyc/.pyenv/versions/3.7.8/lib/python3.7/importlib/__init__.py", line 127, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1006, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 983, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 967, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 677, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 728, in exec_module
+  File "<frozen importlib._bootstrap>", line 219, in _call_with_frames_removed
+  File "/home/rockyc/projects/authome/authome/urls.py", line 11, in <module>
+    from . import views
+  File "/home/rockyc/projects/authome/authome/views.py", line 617
+    else:
+        ^
+IndentationError: unindent does not match any outer indentation level
+
+2022-03-17 15:03:43,403 INFO     django.utils.autoreload /home/rockyc/projects/authome/authome/views.py changed, reloading.
+Performing system checks...
+
+2022-03-17 15:03:44,193 INFO     django.utils.autoreload Watching for file changes with StatReloader
+Exception in thread django-main-thread:
+Traceback (most recent call last):
+  File "/home/rockyc/.pyenv/versions/3.7.8/lib/python3.7/threading.py", line 926, in _bootstrap_inner
+    self.run()
+  File "/home/rockyc/.pyenv/versions/3.7.8/lib/python3.7/threading.py", line 870, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/utils/autoreload.py", line 53, in wrapper
+    fn(*args, **kwargs)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/management/commands/runserver.py", line 118, in inner_run
+    self.check(display_num_errors=True)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/management/base.py", line 396, in check
+    databases=databases,
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/checks/registry.py", line 70, in run_checks
+    new_errors = check(app_configs=app_configs, databases=databases)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/checks/urls.py", line 13, in check_url_config
+    return check_resolver(resolver)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/core/checks/urls.py", line 23, in check_resolver
+    return check_method()
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/urls/resolvers.py", line 408, in check
+    for pattern in self.url_patterns:
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/utils/functional.py", line 48, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/urls/resolvers.py", line 589, in url_patterns
+    patterns = getattr(self.urlconf_module, "urlpatterns", self.urlconf_module)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/utils/functional.py", line 48, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+  File "/home/rockyc/.cache/pypoetry/virtualenvs/authome-GZKWPGhb-py3.7/lib/python3.7/site-packages/django/urls/resolvers.py", line 582, in urlconf_module
+    return import_module(self.urlconf_name)
+  File "/home/rockyc/.pyenv/versions/3.7.8/lib/python3.7/importlib/__init__.py", line 127, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1006, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 983, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 967, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 677, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 728, in exec_module
+  File "<frozen importlib._bootstrap>", line 219, in _call_with_frames_removed
+  File "/home/rockyc/projects/authome/authome/urls.py", line 11, in <module>
+    from . import views
+  File "/home/rockyc/projects/authome/authome/views.py", line 617
+    else:
+        ^
+IndentationError: unindent does not match any outer indentation level
+
+2022-03-17 15:04:23,776 INFO     django.utils.autoreload /home/rockyc/projects/authome/authome/views.py changed, reloading.
+Performing system checks...
+
+2022-03-17 15:04:24,510 INFO     django.utils.autoreload Watching for file changes with StatReloader

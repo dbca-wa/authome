@@ -13,10 +13,44 @@
 
     {% include "authome/inc/idp_icons.html"%}
     {% include "authome/inc/unifiedcss.html"%}
+    <style>
+    {% include "authome/inc/adb2c.css"%}
+    </style>
 
 </head>
 <body>
     {{body | safe}}
+    {% block extra_body %}
+
+    {% block content_header %}
+    <div id="content_header" style="display:none;color:black;font-weight:bold;font-size:medium;text-align:left;margin-top:10px;white-space:pre-wrap">{{header}}</div>
+    {% endblock content_header %}
+
+    {% block content_footer %}
+    <div id="content_footer" style="display:none;color:grey;font-style:italic;font-weight:bold;font-size:small;text-align:left;margin-top:10px;white-space:pre-wrap">{{footer|safe}}</div>
+    {% endblock content_footer %}
+
+    <script>
+        $(document).ready(function () { 
+            if($("#content_header").length && $("#content_header").html().trim()) {
+                $("#content_header").insertBefore("#api")
+                $("#content_header").show()
+            } else {
+                $("#content_header").remove()
+            }
+            if($("#content_footer").length && $("#content_footer").html().trim()) {
+                $("#content_footer").insertAfter("#api")
+                $("#content_footer").show()
+            } else {
+                $("#content_footer").remove()
+            }
+        });
+        {% block extra_js %}
+        {% endblock extra_js %}
+    </script>
+    {% endblock extra_body %}
+
 </body>
 </html>
+
 

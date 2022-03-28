@@ -1,0 +1,13 @@
+{% extends "authome/unified.html" %}
+{% load i18n static %}
+
+{% block extra_js %}
+{% if add_auth2_local_option %}
+$(document).ready(function () {
+    if ($("#GoogleExchange").length || $("#FacebookExchange").length)  {
+        $('<div><button class="accountButton" id="PasswordlessSignIn" onclick="event.stopPropagation();document.location=\'https://{{domain}}/sso/auth_local\';">Sign in with Passcode</button></div>').appendTo("#api .options")
+    }
+})
+{% endif %}
+
+{% endblock extra_js %}

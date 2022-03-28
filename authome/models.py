@@ -253,7 +253,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     IdentityProvider 'local' means local account
     IdentityProvider 'local_passwordless' means autenticating user without password
     """
-    AUTH_EMAIL_VERIFY = ("auth_email_verify","Auth2 Email Verify")
+    AUTH_EMAIL_VERIFY = ("auth_email_verify","Sign in with Passcodey")
     MANUALLY_LOGOUT = 1
     AUTO_LOGOUT = 2
     AUTO_LOGOUT_WITH_POPUP_WINDOW = 3
@@ -458,14 +458,13 @@ Email: enquiries@dbca.wa.gov.au
 </body>
 </html>"""
 
-    _editable_columns = ("default","mfa_set","mfa_reset","profile_edit","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body","sortkey")
+    _editable_columns = ("default","mfa_set","mfa_reset","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body","sortkey")
 
     domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
     fixed = models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
     default = models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
     mfa_set = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa set user flow")
     mfa_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa reset user flow")
-    profile_edit = models.CharField(max_length=64,null=True,blank=True,help_text="The user profile edit user flow")
     password_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The user password reset user flow")
 
     extracss = models.TextField(null=True,blank=True)
@@ -521,7 +520,7 @@ Email: enquiries@dbca.wa.gov.au
 
             #check the required fields
             invalid_columns = []
-            for name in ("default","mfa_set","mfa_reset","profile_edit","password_reset","page_layout","verifyemail_from","verifyemail_subject","verifyemail_body"):
+            for name in ("default","mfa_set","mfa_reset","password_reset","page_layout","verifyemail_from","verifyemail_subject","verifyemail_body"):
                 if not getattr(self,name):
                     invalid_columns.append(name)
             if len(invalid_columns) == 1:
@@ -571,7 +570,7 @@ Email: enquiries@dbca.wa.gov.au
         for o in userflows:
             if o != defaultuserflow:
                 o.defaultuserflow = defaultuserflow
-                for name in ("fixed","default","mfa_set","mfa_reset","profile_edit","password_reset"):
+                for name in ("fixed","default","mfa_set","mfa_reset","password_reset"):
                     if not getattr(o,name):
                         setattr(o,name,getattr(defaultuserflow,name))
 
@@ -746,7 +745,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
         elif self.parent_group:
             return self.parent_group.sessiontimeout
         else:
-            return None
+            return 0
 
 
     @classmethod
@@ -1686,13 +1685,16 @@ class UserToken(models.Model):
             self.expired = self.created.date() + timedelta(days=token_lifetime)
         self.token = hashlib.sha256('{}|{}|{}|{}|{}|{}|{}|{}'.format(self.user.email.lower(),self.user.is_superuser,self.user.is_staff,self.user.is_active,self.created.timestamp(),self.expired.isoformat() if self.expired else "2099-12-31",settings.SECRET_KEY,self.generate_user_secret()).encode('utf-8')).hexdigest()
 
+    def save(self,*args,**kwargs):
+        with transaction.atomic():
+            super().save(*args,**kwargs)
+
     class Meta:
         verbose_name_plural = "       User Access Tokens"
 
 class UserTOTP(models.Model):
-    email = models.CharField(max_length=64,null=False,editable=False)
-    idp = models.CharField(max_length=256,null=False,editable=False)
-    secret_key = models.CharField(max_length=128,null=False,editable=False)
+    email = models.CharField(max_length=64,null=False,editable=False,unique=True)
+    secret_key = models.CharField(max_length=512,null=False,editable=False)
     timestep = models.PositiveSmallIntegerField(null=False,editable=False)
     prefix = models.CharField(max_length=64,null=False,editable=False)
     issuer = models.CharField(max_length=64,null=False,editable=False)
@@ -1702,9 +1704,6 @@ class UserTOTP(models.Model):
     last_verified_code = models.CharField(max_length=16,null=True,editable=False)
     last_verified = models.DateTimeField(null=True,editable=False)
     created = models.DateTimeField(null=False,editable=False)
-
-    class Meta:
-        unique_together = [["email","idp"]]
 
 class UserListener(object):
     @staticmethod
@@ -1720,7 +1719,7 @@ class UserListener(object):
     def post_save_user(sender,instance,created,**kwargs):
         if not created:
             usercache = get_usercache(instance.id)
-            if usercache.get(settings.GET_USER_KEY(instance.id)):
+            if usercache and usercache.get(settings.GET_USER_KEY(instance.id)):
                 usercache.set(settings.GET_USER_KEY(instance.id),instance,settings.STAFF_CACHE_TIMEOUT if instance.is_staff else settings.USER_CACHE_TIMEOUT)
                 logger.debug("Cache the latest data of the user({1}<{0}>) to usercache".format(instance.id,instance.email))
 
@@ -1728,7 +1727,25 @@ class UserListener(object):
     @receiver(post_delete, sender=User)
     def post_delete_user(sender,instance,**kwargs):
         usercache = get_usercache(instance.id)
-        usercache.delete(settings.GET_USER_KEY(instance.id))
+        if usercache:
+            usercache.delete(settings.GET_USER_KEY(instance.id))
+
+class UserTokenListener(object):
+    @staticmethod
+    @receiver(post_save, sender=UserToken)
+    def post_save_usertoken(sender,instance,created,**kwargs):
+        if not created:
+            usercache = get_usercache(instance.user_id)
+            if usercache and usercache.get(settings.GET_USERTOKEN_KEY(instance.user_id)):
+                usercache.set(settings.GET_USERTOKEN_KEY(instance.user_id),instance,settings.STAFF_CACHE_TIMEOUT if instance.user.is_staff else settings.USER_CACHE_TIMEOUT)
+                logger.debug("Cache the latest data of the user token({0}) to usercache".format(instance.user_id))
+
+    @staticmethod
+    @receiver(post_delete, sender=UserToken)
+    def post_delete_usertoken(sender,instance,**kwargs):
+        usercache = get_usercache(instance.user_id)
+        if usercache:
+            usercache.delete(settings.GET_USERTOKEN_KEY(instance.user_id))
 
 class UserGroupListener(object):
     @receiver(pre_delete, sender=UserGroup)

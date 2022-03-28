@@ -47,9 +47,9 @@ EMAIL_PORT = env('EMAIL_PORT', 25)
 
 AUTH2_DOMAIN = env("AUTH2_DOMAIN",default="auth2.dbca.wa.gov.au")
 
-TOTP_SECRET_KEY_LENGTH = env("TOTP_SECRET_KEY_LENGTH",default=50)
+TOTP_SECRET_KEY_LENGTH = env("TOTP_SECRET_KEY_LENGTH",default=128)
 TOTP_ISSUER = env("TOTP_ISSUER",default="DBCA")
-TOTP_PREFIX = env("TOTP_PREFIX",default="auth2")
+TOTP_PREFIX = env("TOTP_PREFIX",default="DBCA")
 TOTP_TIMESTEP = env("TOTP_TIMESTEP",default=30)
 TOTP_VALIDWINDOW = env("TOTP_VALIDWINDOW",default=0)
 TOTP_CHECK_LAST_CODE = env("TOTP_CHECK_LAST_CODE",default=True)
@@ -196,7 +196,7 @@ else:
     AUTH_BASIC_CACHE_EXPIRETIME = timedelta(seconds=3600)
 
 #check whether the user token is valid per request
-CHECK_AUTH_BASIC_PER_REQUEST=env("CHECK_AUTH_BASIC_PER_REQUEST",default=False)
+CHECK_AUTH_BASIC_PER_REQUEST=env("CHECK_AUTH_BASIC_PER_REQUEST",default=True)
 
 AUTH_CACHE_EXPIRETIME=env('AUTH_CACHE_EXPIRETIME',default=3600) #user access token life time in seconds
 if AUTH_CACHE_EXPIRETIME > 0:
@@ -242,13 +242,14 @@ AUTH_CHECKING_THRESHOLD_TIME=env('AUTH_CHECKING_THRESHOLD_TIME',default=50) * 10
 
 SWITCH_TO_AUTH_LOCAL=env('SWITCH_TO_AUTH_LOCAL',default=False) #Switch to magic auth to login in user if azure ad b2c does not work.
 
-
-VERIFY_CODE_LENGTH=env('VERIFY_CODE_LENGTH',default=6) 
-VERIFY_CODE_AGE=env('VERIFY_CODE_AGE',default=300) #the age of verify code, in seconds
+PASSCODE_DAILY_LIMIT = env("PASSCODE_DAILY_LIMIT",100)
+PASSCODE_TRY_TIMES = env("PASSCODE_TRY_TIMES",3)
+PASSCODE_LENGTH=env('PASSCODE_LENGTH',default=6) 
+PASSCODE_AGE=env('PASSCODE_AGE',default=300) #the age of verify code, in seconds
 SIGNUP_TOKEN_LENGTH=env('SIGNUP_TOKEN_LENGTH',default=64) 
 SIGNUP_TOKEN_AGE=env('SIGNUP_TOKEN_AGE',default=3600) #the age of signup token, in seconds
 
-VERIFY_CODE_DIGITAL=env('VERIFY_CODE_DIGITAL',default=True)
+PASSCODE_DIGITAL=env('PASSCODE_DIGITAL',default=True)
 
 # Logging settings - log to stdout/stderr
 LOGGING = {
@@ -307,6 +308,9 @@ def GET_CACHE_CONF(server,options={}):
             "OPTIONS": options
         }
 
+ENABLE_B2C_JS_EXTENSION = env("ENABLE_B2C_JS_EXTENSION",default=True)
+ADD_AUTH2_LOCAL_OPTION = env("ADD_AUTH2_LOCAL_OPTION",default=True)
+
 SYNC_MODE = env("SYNC_MODE",True)
 CACHE_SERVER = env("CACHE_SERVER")
 CACHE_SERVER_OPTIONS = env("CACHE_SERVER_OPTIONS",default={})
@@ -317,6 +321,7 @@ CACHE_USER_SERVER_OPTIONS = env("CACHE_USER_SERVER_OPTIONS",default={})
 USER_CACHE_ALIAS = None
 GET_CACHE_KEY = lambda key:key
 GET_USER_KEY = lambda userid:str(userid)
+GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
 SESSION_CACHES = 0
 USER_CACHES = 0
 if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
@@ -359,15 +364,21 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
             USER_CACHE_ALIAS = lambda userid:"user{}".format(abs(userid) % USER_CACHES)
         if CACHE_KEY_PREFIX:
             user_key_pattern = "{}:{{}}".format(CACHE_KEY_PREFIX)
+            usertoken_key_pattern = "{}:T{{}}".format(CACHE_KEY_PREFIX)
             GET_USER_KEY = lambda userid:user_key_pattern.format(userid)
+            GET_USERTOKEN_KEY = lambda userid:usertoken_key_pattern.format(userid)
         else:
             GET_USER_KEY = lambda userid:str(userid)
+            GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
     elif CACHE_SERVER:
         if CACHE_KEY_PREFIX:
             user_key_pattern = "{}:user:{{}}".format(CACHE_KEY_PREFIX)
+            usertoken_key_pattern = "{}:token:{{}}".format(CACHE_KEY_PREFIX)
         else:
             user_key_pattern = "user:{}"
+            usertoken_key_pattern = "token:{}"
         GET_USER_KEY = lambda userid:user_key_pattern.format(userid)
+        GET_USERTOKEN_KEY = lambda userid:usertoken_key_pattern.format(userid)
         USER_CACHE_ALIAS = "default"
         USER_CACHES = 1
 

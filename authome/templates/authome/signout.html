@@ -1,0 +1,57 @@
+{% extends "authome/default.html" %}
+{% load i18n static %}
+
+{% block extrapagecss %}
+    <style>
+        .button {
+          border: none;
+          color: white;
+          padding: 15px 32px;
+          text-align: center;
+          text-decoration: none;
+          display: inline-block;
+          font-size: 16px;
+          margin: 4px 2px;
+          cursor: pointer;
+          background-color: #4CAF50
+        }
+
+    </style>
+{% endblock extrapagecss %}
+
+{% block extrajs %}
+    <script type="text/javascript">
+        countdown_task = null
+        countdown_seconds = {{auto_signout_delay_seconds}}
+        function countdown_signout() {
+            if (countdown_seconds <= 0) {
+                clearInterval(countdown_task)
+                return
+            }
+            
+            countdown_seconds -= 1
+            document.getElementById("seconds").textContent = countdown_seconds
+            if (countdown_seconds == 0) {
+                clearInterval(countdown_task)
+                //document.location = '{{logout_url}}'
+            }
+        }
+
+        function countdown() {
+            countdown_task = setInterval(countdown_signout,1000)
+        }
+
+        window.onload = countdown()
+
+    </script>
+{% endblock extrajs %}
+
+
+{% block realcontent %}
+      <table style="width:100%;height:300px"> 
+          <tr><td style="text-align:center;vertical-align:middle">
+              <h3>{{message}}</h3>
+              <button type="button" class="button" onclick="document.location='{{logout_url}}'" style="font-size:20px">{{btn_signout_name}}<span id="seconds" style="margin-left:5px">{{auto_signout_delay_seconds}}</span></button>
+          <td/></tr>
+      </table>
+{% endblock realcontent %}
