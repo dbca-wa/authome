@@ -25,19 +25,20 @@ usercache = get_usercache()
 help_text_users = """
 List all possible user emails in this group separated by new line character.
 The following lists all valid options in the checking order
-    1. All emails    : *
-    2. Domain emails : starts with '@', followed by email domain. For example@dbca.wa.gov.au
-    3. Email pattern : '*' represents any strings. For example test_*@dbca.wa.gov.au
-    4. User email    : represent a single user email, For example test_user01@dbca.wa.gov.au
+    1. All Emails    : *
+    2. Domain Email  : Starts with '@', followed by email domain. For example@dbca.wa.gov.au
+    3. Email Pattern : A email pattern,'*' represents any strings. For example test_*@dbca.wa.gov.au
+    4. User Email    : A single user email, For example test_user01@dbca.wa.gov.au
 """
 
 help_text_domain = """
 A domain or domain pattern
 The following lists all valid options in the checking order
-    1. Single Domain : Represent a single domain. For example oim.dbca.wa.gov.au.
-    2. Regex Domain  : '*" represents any strings. For example  pbs*dbca.wa.gov.au
-    3. Suffix Domain : Starts with '.' followed by a domain. For example .dbca.wa.gov.au
-    4. All Domain    : '*'
+    1. Single Domain  : Represent a single domain. For example oim.dbca.wa.gov.au.
+    2. Domain Pattern : A domain pattern, '*" represents any strings. For example  pbs*dbca.wa.gov.au
+    3. Domain Regex   : A regex string starts with '^'. For example  ^pbs[^\.]*\.dbca\.wa\.gov\.au$
+    4. Suffix Domain  : A string Starts with '.' followed by a domain. For example .dbca.wa.gov.au
+    5. All Domain     : '*'
 """
 
 help_text_paths = """
@@ -205,7 +206,10 @@ class RegexRequestDomain(RequestDomain):
     def __init__(self,domain):
         super().__init__(domain)
         try:
-            self._re = re.compile("^{}$".format(domain.replace(".","\.").replace("*","[a-zA-Z0-9\._\-]*")))
+            if domain.startswith("^") :
+                self._re = re.compile(domain)
+            else:
+                self._re = re.compile("^{}$".format(domain.replace(".","\.").replace("*","[a-zA-Z0-9\._\-]*")))
         except Exception as ex:
             raise ValidationError("The regex domain config({}) is invalid.{}".format(domain,str(ex)))
 
@@ -785,6 +789,18 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
         if not self.parent_group and not self.is_public_group:
             self.parent_group = self.public_group()
+
+        #check whether the parent group  is the group itself or is the descendant of itself
+        if self.id:
+            pgroup = self.parent_group
+            while pgroup:
+                if pgroup.id == self.id:
+                    if pgroup.id == self.parent_group.id:
+                        raise ValidationError("The parent group of the group ({0}) can't be itself".format(self.name))
+                    else:
+                        raise ValidationError("The parent group({1}) of the group ({0}) can't be descendant of the group({0})".format(self.name,self.parent_group.name))
+                pgroup = pgroup.parent_group
+
         #check whether excluded_users is contained by users
         for excluded_useremail in self.excluded_useremails:
             contained = False
@@ -1363,11 +1379,70 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
                 else:
                     checkgroup = checkgroup.parent_group
 
-        #can't find the matched object
+        return matched_authorizations
+
+    @staticmethod
+    def find_all_authorizations(email,domain):
+        """
+        email should be in lower case
+        domain should be in lower case
+        return   a list of tuple (usergroup, authorizationgroup,authorization)
+        """
+
+        #try to find the matched usergroupauthorization
+        matched_authorizations = []
+        usergroups = UserGroup.find_groups(email)[0]
+
+        matched = False
+        for usergroup in usergroups:
+            checkgroup = usergroup
+            while checkgroup:
+                authorizations = UserGroupAuthorization.get_authorizations(checkgroup)
+                matched = False
+                if authorizations:
+                    for authorization in authorizations:
+                        if authorization.request_domain.match(domain):
+                            matched_authorizations.append((usergroup,checkgroup,authorization))
+                            matched = True
+                            break
+                if matched:
+                    break
+                else:
+                    if not checkgroup.parent_group:
+                        matched_authorizations.append((usergroup,checkgroup,None))
+                        break
+                    else:
+                        checkgroup = checkgroup.parent_group
+
         return matched_authorizations
 
     class Meta:
         abstract = True
+
+def check_authorization(email,domain,path):
+    """
+    Return True if the user(email) can access domain/path; otherwise return False
+    """
+    email = email.lower()
+    domain = domain.lower()
+    authorizations = AuthorizationMixin.find_all_authorizations(email,domain)
+    if authorizations:
+        result = []
+        allow = False
+        for o in authorizations:
+            if path.startswith("/sso/"):
+                result.append((o[0],o[1],True))
+                allow = True
+            elif not o[2]:
+                result.append((o[0],o[1],False))
+            elif o[2].allow(path):
+                result.append((o[0],o[1],True))
+                allow = True
+            else:
+                result.append((o[0],o[1],False))
+        return (allow,result)
+    else:
+        return (False,[])
 
 def _can_access(email,domain,path):
     """

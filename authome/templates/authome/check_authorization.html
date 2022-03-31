@@ -1,0 +1,114 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block title %}Check User's authorization{% endblock %}
+
+{% block extrahead %}{{ block.super }}
+<script src="{% url 'admin:jsi18n' %}"></script>
+<script src="{% static "admin/js/vendor/jquery/jquery.min.js" %}"></script>
+<script src="{% static "admin/js/jquery.init.js" %}"></script>
+{% endblock %}
+
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" type="text/css" href="{% static "admin/css/forms.css" %}">{% endblock %}
+
+{% block coltype %}colM{% endblock %}
+
+
+{% block breadcrumbs %}
+{% if opts %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+&rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <fieldset class="module aligned ">
+    <div class="form-row field-name">
+        <div>
+            <label class="required" for="id_users">Users:</label>
+            <input type="text" name="name" class="vTextField" maxlength="256" required="" id="id_users" style="width:70%;" value="{{ users }}">
+        </div>
+    </div>
+    <div class="form-row field-name">
+        <div>
+            <label class="required" for="id_url">URL:</label>
+            <input type="text" name="url" class="vTextField" maxlength="256" required="" id="id_url" style="width:70%;"><button type="button" onclick="check_authorization()" style="margin-left:10px">Check</button>
+        </div>
+    </div>
+    <table style="border:none;width:100%">
+    <thead>
+    <tr class="form-row field-name">
+        <th colspan=3 style="text-align:left;text-transform:none" >
+            <span>Original URL:</span><span id="id_url_original" style="margin-left:10px;color:blue"></span>
+            <span style="margin-left:20px">Checked URL:</span><span id="id_url_checked" style="margin-left:10px;color:blue"></span>
+        </th>
+    </tr>
+    <tr class="form-row field-name">
+        <th>User</label></th>
+        <th  style="text-align:center;width:40px">Allow?</th>
+        <th  style="white-space:nowrap">Details</th>
+    </tr>
+    </thead>
+    <tbody id="id_checkresult">
+    </tbody>
+    </table>
+    </fieldset>
+</div>
+<script type="text/javascript">
+    var requestdata = {"user":null,"details":true,"flaturl":true};
+    function check_authorization(){
+        users = django.jQuery("#id_users").val().trim()
+        if (!users) {
+            alert("Please input the users to check.")
+            return
+        }
+        url = django.jQuery("#id_url").val().trim()
+        if (!url) {
+            alert("Please input a url to check.")
+            return
+        }
+        if (url.indexOf(",") >= 0) {
+            alert("Doesn't support multiple urls.")
+            return
+        }
+        django.jQuery("#id_url_original").html(url)
+        requestdata["user"] = users;
+        requestdata["url"] = url;
+        django.jQuery.ajax({
+            method:"POST",
+            url:"/sso/checkauthorization",
+            data:requestdata,
+            dataType:"json",
+            xhrFields:{
+                withCredentials:true
+            }
+        }).fail(function(xhr,textStatus,error){
+            alert(error + " " + textStatus + "; " + xhr.responseText)
+        }).done(function(data,textStatus,xhr){
+            var html_str = ""
+            var checked_url = ""
+            django.jQuery.each(data,function(index,userauthorization){
+                html_str += '<tr class="form-row field-name"><td><label class="required"  style="white-space: nowrap;padding-right:5px">' + userauthorization[0] + '</label></td><td  style="text-align:center;width:40px">' + (userauthorization[3][0]?"<img src='{% static "admin/img/icon-yes.svg" %}'>":"<img src='{% static "admin/img/icon-no.svg" %}'>") + '</td><td  style="white-space:nowrap">'
+
+                django.jQuery.each(userauthorization[3][1],function(index,data){
+                    html_str += "<span style='padding-left:10px;padding-right:5px'>" + data[0] + "</span>" + (data[2]?"<img src='{% static "admin/img/icon-yes.svg" %}'>":"<img src='{% static "admin/img/icon-no.svg" %}'>")
+                    if (data[0] != data[1]) {
+                        html_str += "<span style='font-style: italic;'>(via " + data[1] + ")</span>"
+                    }
+                })
+                
+
+                html_str += "</td></tr>"
+
+                django.jQuery("#id_checkresult").html(html_str)
+                checked_url = userauthorization[2]
+            })
+            django.jQuery("#id_url_checked").html(checked_url)
+        })
+    }
+</script>
+{% endblock %}

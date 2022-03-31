@@ -40,6 +40,7 @@ AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
     'authome.backends.AzureADB2COAuth2',
 )
+IGNORE_LOADING_ERROR = env('IGNORE_LOADING_ERROR',False)
 
 EMAIL_HOST = env('EMAIL_HOST', default="")
 EMAIL_PORT = env('EMAIL_PORT', 25)

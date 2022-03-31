@@ -1,10 +1,12 @@
 import logging
+import traceback
 
 from django.urls import include, path
 from django.contrib import admin
 from django.conf import settings
 from django.template.response import TemplateResponse
 from django.views.generic.base import RedirectView
+from django.views.decorators.csrf import csrf_exempt
 
 from . import views
 from .cache import cache
@@ -42,8 +44,10 @@ urlpatterns = [
     path('sso/totp/generate',views.totp_generate,name="totp_generate"),
     path('sso/totp/verify',views.totp_verify,name="totp_verify"),
 
-    path('sso/healthcheck',views.healthcheck,name="healthcheck"),
-    path('sso/status',views.status,name="status"),
+    path('sso/checkauthorization',csrf_exempt(views.checkauthorization),name="checkauthorization"),
+
+    path('healthcheck',views.healthcheck,name="healthcheck"),
+    path('status',views.status,name="status"),
 
     path('sso/', include('social_django.urls', namespace='social')),
     path('admin/', admin.site.urls),
@@ -62,18 +66,18 @@ handler400 = views.handler400
 try:
     cache.refresh_authorization_cache(True)
 except:
-    import traceback
-    logger.error("Failed to load UserGroup and UserGroupAuthorization cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
+    if not settings.IGNORE_LOADING_ERROR:
+        raise Exception("Failed to load UserGroup and UserGroupAuthorization cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
     
 try:
     cache.refresh_idp_cache(True)
 except:
-    import traceback
-    logger.error("Failed to load IdentityProvider cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
+    if not settings.IGNORE_LOADING_ERROR:
+        raise Exception("Failed to load IdentityProvider cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
     
 try:
     cache.refresh_userflow_cache(True)
 except:
-    import traceback
-    logger.error("Failed to load CustomizableUserflow cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
+    if not settings.IGNORE_LOADING_ERROR:
+        raise Exception("Failed to load CustomizableUserflow cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
     

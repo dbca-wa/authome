@@ -8,7 +8,7 @@ from django.conf import settings
 
 import base64
 
-from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access,UserToken,User
+from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access,UserToken,User,CustomizableUserflow
 from .cache import cache
 groupid = 0
 class BaseAuthTestCase(TestCase):
@@ -50,6 +50,20 @@ class BaseAuthTestCase(TestCase):
             public_group = UserGroup(name="Public User",groupid="PUBLIC",users=["*"])
             public_group.clean()
             public_group.save()
+        if not CustomizableUserflow.objects.filter(domain="*").exists():
+            default_flow = CustomizableUserflow(
+                domain='*',
+                default='default',
+                mfa_set="default_mfa_set",
+                mfa_reset="default_mfa_reset",
+                email="oim@dbca.wa.gov.au",
+                profile_edit="default_profile_edit",
+                password_reset="default_password_reset",
+                verifyemail_from="oim@dbca.wa.gov.au",
+                verifyemail_subject="test"
+            )
+            default_flow.clean()
+            default_flow.save()
 
         cache.clean_auth_cache(True)
         cache.refresh_authorization_cache(True)
