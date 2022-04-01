@@ -17,11 +17,11 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
 
     def test_auth_cache_size(self):
         self.test_users = [
-            ("staff_1","staff_1@gunfire.com",True),
-            ("staff_2","staff_2@gunfire.com",True),
-            ("staff_3","staff_3@gunfire.com",True),
-            ("staff_4","staff_4@gunfire.com",True),
-            ("staff_5","staff_5@gunfire.com",True)
+            ("staff_1@gunfire.com","staff_1@gunfire.com",True),
+            ("staff_2@gunfire.com","staff_2@gunfire.com",True),
+            ("staff_3@gunfire.com","staff_3@gunfire.com",True),
+            ("staff_4@gunfire.com","staff_4@gunfire.com",True),
+            ("staff_5@gunfire.com","staff_5@gunfire.com",True)
         ]
         self.test_usergroups = [
             ("all_user",["*@*.*"],None,None)
@@ -66,11 +66,11 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
 
     def test_auth_basic_cache_size(self):
         self.test_users = [
-            ("staff_1","staff_1@gunfire.com",True),
-            ("staff_2","staff_2@gunfire.com",True),
-            ("staff_3","staff_3@gunfire.com",True),
-            ("staff_4","staff_4@gunfire.com",True),
-            ("staff_5","staff_5@gunfire.com",True)
+            ("staff_1@gunfire.com","staff_1@gunfire.com",True),
+            ("staff_2@gunfire.com","staff_2@gunfire.com",True),
+            ("staff_3@gunfire.com","staff_3@gunfire.com",True),
+            ("staff_4@gunfire.com","staff_4@gunfire.com",True),
+            ("staff_5@gunfire.com","staff_5@gunfire.com",True)
         ]
         self.test_usergroups = [
             ("all_user",["*@*.*"],None,None)
@@ -121,7 +121,7 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
 
     def test_auth_cache_expire(self):
         self.test_users = [
-            ("staff_1","staff_1@gunfire.com",True)
+            ("staff_1@gunfire.com","staff_1@gunfire.com",True)
         ]
         self.test_usergroups = [
             ("all_user",["*@*.*"],None,None)
@@ -133,7 +133,7 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
 
         #test sso_auth without authentication   
         clients = []
-        user = self.test_users["staff_1"]
+        user = self.test_users["staff_1@gunfire.com"]
         self.client.force_login(user)
         res = self.client.get(self.auth_url)
         self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
@@ -160,7 +160,7 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
 
     def test_auth_basic_cache_expire(self):
         self.test_users = [
-            ("staff_1","staff_1@gunfire.com",True)
+            ("staff_1@gunfire.com","staff_1@gunfire.com",True)
         ]
         self.test_usergroups = [
             ("all_user",["*@*.*"],None,None)
@@ -172,7 +172,7 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
 
         #test sso_auth without authentication   
         clients = []
-        user = self.test_users["staff_1"]
+        user = self.test_users["staff_1@gunfire.com"]
         username = user.username
         token = user.token.token
         res = self.client.get(self.auth_basic_url,HTTP_AUTHORIZATION=self.basic_auth(username,token))
@@ -200,7 +200,7 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
 
     def test_auth_basic_negative(self):
         self.test_users = [
-            ("staff_1","staff_1@gunfire.com",True)
+            ("staff_1@gunfire.com","staff_1@gunfire.com",True)
         ]
         self.test_usergroups = [
             ("all_user",["*@*.*"],None,None)
@@ -211,8 +211,8 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
         self.populate_testdata()
 
         #test sso token auth
-        user=self.test_users["staff_1"]
-        for username,usertoken in ((user.username,user.token),(user.email,user.token)):
+        user=self.test_users["staff_1@gunfire.com"]
+        for username,usertoken in ((user.username,user.token),):
             token = usertoken.token
             res = self.client.get(self.auth_basic_url,HTTP_AUTHORIZATION=self.basic_auth(username,token))
             self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
@@ -245,7 +245,7 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
             self.assertEqual(res.status_code,200,msg="Should return 200 response because user's token was enabled")
             self.assertEqual(res.get('X-auth-cache-hit'),'success',msg="Already authenticated, should hit the cache")
 
-            usertoken.expired = timezone.now() - timedelta(days=1)
+            usertoken.expired = timezone.localdate() - timedelta(days=1)
             usertoken.save()
 
             res = self.client.get(self.auth_basic_url,HTTP_AUTHORIZATION=self.basic_auth(username,token))
@@ -258,7 +258,7 @@ class AuthCacheTestCase(BaseAuthCacheTestCase):
             self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
             self.assertEqual(res.status_code,401,msg="Should return 401 response because user's token was expired")
 
-            usertoken.expired = timezone.now() + timedelta(days=1)
+            usertoken.expired = timezone.localdate() + timedelta(days=1)
             usertoken.save()
             res = self.client.get(self.auth_basic_url,HTTP_AUTHORIZATION=self.basic_auth(username,token))
             self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
