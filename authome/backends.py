@@ -22,9 +22,14 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
     JWKS_URL = '{base_url}/discovery/v2.0/keys'
     LOGOUT_URL = '{base_url}/oauth2/v2.0/logout?post_logout_redirect_uri={{}}'
 
-    def  __init__(self,*args,**kwargs):
+    def  __init__(self,strategy=None,redirect_uri=None,*args,**kwargs):
+        if redirect_uri and not redirect_uri.startswith("https"):
+            if redirect_uri.startswith("/"):
+                redirect_uri = "https://{}{}".format(settings.AUTH2_DOMAIN,redirect_uri)
+            else:
+                redirect_uri = "https://{}/{}".format(settings.AUTH2_DOMAIN,redirect_uri)
         self.switch_auth_url()
-        super().__init__(*args,**kwargs)
+        super().__init__(strategy=strategy,redirect_uri=redirect_uri,*args,**kwargs)
 
     @property
     def policy(self):

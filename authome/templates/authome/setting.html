@@ -37,18 +37,21 @@ pre {
       <button type="button" class="btn btn-primary" onclick="document.location='{% url 'profile_edit' %}?next={% url 'user_setting' %}'" style="width:45px;margin-top:-4px">Edit</button>
     </div>
   </div>
+  {% if is_staff %}
   <div class="form-group">
     <label for="groups" class="col-sm-4 control-label">Groups</label>
     <div class="col-sm-8">
       <input type="text" class="form-control" id="groups"  value="{{groups}}" readonly style="width:300px">
     </div>
   </div>
+  {% endif %}
   <div class="form-group">
     <label for="groups" class="col-sm-4 control-label">Active</label>
     <div class="col-sm-8" >
       <img alt="true" {% if is_active%} src="/sso/static/admin/img/icon-yes.svg" {% else %}src="/sso/static/admin/img/icon-no.svg"{% endif %} style="text-align:left;height:20px;margin-left:0px">
     </div>
   </div>
+  {% if is_staff %}
   <div class="form-group">
     <label for="groups" class="col-sm-4 control-label">Staff</label>
     <div class="col-sm-8" >
@@ -67,6 +70,7 @@ pre {
       <input type="text" class="form-control" id="idp"  value="{{idp}}" readonly style="width:300px">
     </div>
   </div>
+  {% endif %}
   {% if mfa_enabled %}
   <div class="form-group">
     <label for="mfa_method" class="col-sm-4 control-label">Multi-Factor Authentication</label>
@@ -77,6 +81,7 @@ pre {
     </div>
   </div>
   {% endif %}
+  {% if is_staff %}
   {% if session_timeout %}
   <div class="form-group">
     <label for="session_timeout" class="col-sm-4 control-label">Session Timeout</label>
@@ -107,6 +112,7 @@ pre {
       <input type="text" class="form-control" id="client_ip"  value="{{client_logon_ip}}" readonly style="width:300px">
     </div>
   </div>
+  {% endif %}
   {% if password_reset_enabled %}
   <div class="form-group">
     <div class="col-sm-offset-1 col-sm-10">

@@ -76,6 +76,34 @@ NOT_AUTHORIZED_RESPONSE = HttpResponseForbidden()
 
 basic_auth_re = re.compile('^Basic\s+([a-zA-Z0-9+/=]+)$')
 
+def _get_next_url(request):
+    """
+    Get the next url 
+    1. If request has parameter 'next', use the value of parameter 'next' as next url, then go to step 5
+    2. if request has header 'x-upstream-request-uri', use request's host and the value of the header 'x-upstream-request-uri' to populate next url, then go to step  5
+    3. if session has proeprty 'next', use the value of the session property 'next' as next url. then go to step 5
+    4. use request host and url '/sso/setting' to populate next url
+    5. get the domain from next url, if failed, use request host, and then use this domain to build a absoulute next  url
+    """
+    next_url = request.GET.get(REDIRECT_FIELD_NAME)
+    if not next_url and request.headers.get("x-upstream-request-uri"):
+            next_url = "https://{}{}".format(get_host(request),request.headers.get("x-upstream-request-uri"))
+
+    if not next_url:
+        next_url = request.session.get(REDIRECT_FIELD_NAME)
+
+    if next_url:
+        domain = utils.get_domain(next_url) or get_host(request)
+        next_url = get_absolute_url(next_url,domain)
+        logger.debug("Found next url '{}'".format(next_url))
+    else:
+        domain = get_host(request)
+        next_url = "https://{}/sso/setting".format(domain)
+        logger.debug("No next url provided,set the next url to '{}'".format(next_url))
+
+    return next_url
+
+
 def _get_host(request):
     global get_host
     if request.headers.get("x-upstream-request-uri"):
@@ -493,20 +521,7 @@ get_codeid = lambda :"{}.{}".format(timezone.now().timestamp(),get_random_string
 
 def auth_local(request):
     if request.method == "GET":
-        next_url = request.GET.get(REDIRECT_FIELD_NAME)
-        if next_url:
-            if not next_url.startswith("https://") and not next_url.startswith("http://"):
-                if next_url.startswith("/"):
-                    next_url = "https://{}{}".format(settings.AUTH2_DOMAIN,next_url)
-                else:
-                    next_url = "https://{}".format(next_url)
-        elif request.headers.get("x-upstream-request-uri"):
-            next_url = "https://{}{}".format(get_host(request),request.headers.get("x-upstream-request-uri"))
-        else:
-            next_url = request.session.get(REDIRECT_FIELD_NAME)
-            if next_url:
-                if not next_url.startswith("https://") and not next_url.startswith("http://"):
-                    next_url = "https://{}".format(next_url)
+        next_url = _get_next_url(request)
     else:
         next_url = request.POST.get("next","")
 
@@ -906,8 +921,10 @@ def home(request):
             host = get_host(request)
             if host == settings.AUTH2_DOMAIN:
                 next_url = "https://{}/sso/setting".format(host)
+                logger.debug("Use the default auth2 next url '{}'".format(next_url))
             else:
                 next_url = "https://{}".format(host)
+                logger.debug("Use the default client app next url '{}'".format(next_url))
         elif any(next_path.endswith(p) for p in ["/sso/auth_logout","/sso/signedout"]):
             #if have relogin parameter, try to use relogin url as next_url
             relogin_url = None
@@ -920,14 +937,21 @@ def home(request):
 
             if relogin_url:
                 next_url = relogin_url
+                logger.debug("Use the relogin url({}) as  next url ".format(next_url))
             else:
                 host = utils.get_domain(next_url) or get_host(request)
                 if host == settings.AUTH2_DOMAIN:
                     next_url = "https://{}/sso/setting".format(host)
+                    logger.debug("Can't find the relogin url, use the default auth2 next url '{}'".format(next_url))
                 else:
                     next_url = "https://{}".format(host)
+                    logger.debug("Can't find the relogin url, use the default client app next url '{}'".format(next_url))
         elif not next_url.startswith("http"):
+            logger.debug("Get the next url '{}'".format(next_url))
             next_url = 'https://{}'.format(next_url)
+        else:
+            logger.debug("Get the next url '{}'".format(next_url))
+            pass
 
         #has next_url, redirect to that url
         next_url_domain = utils.get_domain(next_url)
@@ -1248,10 +1272,7 @@ def domain_related_page(request,template,domain,title,container_class=None,heade
     extracss = userflow.inited_extracss
 
     context = {"body":page_layout,"extracss":extracss,"title":title,"enable_b2c_js_extension":settings.ENABLE_B2C_JS_EXTENSION,"header":header or "","footer":footer or "","add_auth2_local_option":settings.ADD_AUTH2_LOCAL_OPTION}
-    if domain:
-        context["domain"] = domain
-    else:
-        context["domain"] = settings.AUTH2_DOMAIN
+    context["domain"] = settings.AUTH2_DOMAIN
 
     return TemplateResponse(request,"authome/{}.html".format(template),context=context)
 
@@ -1291,20 +1312,7 @@ def profile_edit(request):
 
 
     if request.method == "GET":
-        next_url = request.GET.get(REDIRECT_FIELD_NAME)
-        if next_url:
-            if not next_url.startswith("https://") and not next_url.startswith("http://"):
-                if next_url.startswith("/"):
-                    next_url = "https://{}{}".format(settings.AUTH2_DOMAIN,next_url)
-                else:
-                    next_url = "https://{}".format(next_url)
-        else:
-            next_url = request.session.get(REDIRECT_FIELD_NAME)
-            if next_url:
-                if not next_url.startswith("https://") and not next_url.startswith("http://"):
-                    next_url = "https://{}".format(next_url)
-            else:
-                next_url = "https://{}{}".format(get_host(request))
+        next_url = _get_next_url(request)
 
         if "/sso/profile" in next_url:
             next_url = "https://{}/sso/setting".format(utils.get_domain(next_url))
@@ -1350,18 +1358,8 @@ def profile_edit_b2c(request,backend):
     Start a profile edit user flow
     called after user authentication
     """
-    next_url = request.GET.get(REDIRECT_FIELD_NAME)
-    if not next_url:
-        next_url = request.session.get(REDIRECT_FIELD_NAME)
-
-    if next_url:
-        domain = utils.get_domain(next_url) or get_host(request)
-        next_url = get_absolute_url(next_url,domain)
-        logger.debug("Found next url '{}'".format(next_url))
-    else:
-        domain = get_host(request)
-        next_url = "https://{}/sso/setting".format(domain)
-        logger.debug("No next url provided,set the next url to '{}'".format(next_url))
+    next_url = _get_next_url(request)
+    domain = utils.get_domain(next_url) 
 
     request.session[REDIRECT_FIELD_NAME] = next_url
     request.policy = models.CustomizableUserflow.get_userflow(domain).profile_edit
@@ -1398,18 +1396,8 @@ def password_reset(request,backend):
     Start a password reset user flow
     Triggered by hyperlink 'Forgot your password' in idp selection page
     """
-    next_url = request.GET.get(REDIRECT_FIELD_NAME)
-    if not next_url:
-        next_url = request.session.get(REDIRECT_FIELD_NAME)
-
-    if next_url:
-        domain = utils.get_domain(next_url) or get_host(request)
-        next_url = get_absolute_url(next_url,domain)
-        logger.debug("Found next url '{}'".format(next_url))
-    else:
-        domain = get_host(request)
-        next_url = "https://{}/sso/setting".format(domain)
-        logger.debug("No next url provided,set the next url to '{}'".format(next_url))
+    next_url = _get_next_url(request)
+    domain = utils.get_domain(next_url) 
 
     request.session[REDIRECT_FIELD_NAME] = next_url
     request.policy = models.CustomizableUserflow.get_userflow(domain).password_reset
@@ -1440,18 +1428,8 @@ def mfa_set(request,backend):
     Start a user mfa set user flow
     called after user authentication
     """
-    next_url = request.GET.get(REDIRECT_FIELD_NAME)
-    if not next_url:
-        next_url = request.session.get(REDIRECT_FIELD_NAME)
-
-    if next_url:
-        domain = utils.get_domain(next_url) or get_host(request)
-        next_url = get_absolute_url(next_url,domain)
-        logger.debug("Found next url '{}'".format(next_url))
-    else:
-        domain = get_host(request)
-        next_url = "https://{}/sso/setting".format(domain)
-        logger.debug("No next url provided,set the next url to '{}'".format(next_url))
+    next_url = _get_next_url(request)
+    domain = utils.get_domain(next_url) 
 
     request.session[REDIRECT_FIELD_NAME] = next_url
     request.policy = models.CustomizableUserflow.get_userflow(domain).mfa_set
@@ -1482,18 +1460,8 @@ def mfa_reset(request,backend):
     Start a user mfa set user flow
     called after user authentication
     """
-    next_url = request.GET.get(REDIRECT_FIELD_NAME)
-    if not next_url:
-        next_url = request.session.get(REDIRECT_FIELD_NAME)
-
-    if next_url:
-        domain = utils.get_domain(next_url) or get_host(request)
-        next_url = get_absolute_url(next_url,domain)
-        logger.debug("Found next url '{}'".format(next_url))
-    else:
-        domain = get_host(request)
-        next_url = "https://{}/sso/setting".format(domain)
-        logger.debug("No next url provided,set the next url to '{}'".format(next_url))
+    next_url = _get_next_url(request)
+    domain = utils.get_domain(next_url) 
 
     request.session[REDIRECT_FIELD_NAME] = next_url
     request.policy = models.CustomizableUserflow.get_userflow(domain).mfa_reset
