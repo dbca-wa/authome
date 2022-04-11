@@ -10,7 +10,7 @@
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkUATExtensions</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkUATIDPs</PolicyId>
     </BasePolicy>
 
     <BuildingBlocks>
@@ -82,72 +82,6 @@
     </BuildingBlocks>
 
     <ClaimsProviders>
-
-        <ClaimsProvider>
-            <DisplayName>Azure Active Directory</DisplayName>
-            <TechnicalProfiles>
-
-                <TechnicalProfile Id="AAD-UserReadUsingAlternativeSecurityId-NoSession">
-                    <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
-                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
-                    </OutputClaims>
-                </TechnicalProfile>
-
-                <TechnicalProfile Id="AAD-UserReadUsingEmailAddress">
-                    <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
-                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
-                    </OutputClaims>
-                </TechnicalProfile>
-
-                <TechnicalProfile Id="AAD-UserReadUsingObjectId-NoSession">
-                    <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
-                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
-                    </OutputClaims>
-                </TechnicalProfile>
-
-                <TechnicalProfile Id="AAD-WriteUserTOTPByObjectId-NoSession">
-                    <PersistedClaims>
-                        <PersistedClaim  ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="true" AlwaysUseDefaultValue="true"/>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="totp" AlwaysUseDefaultValue="true"/>
-                    </PersistedClaims>
-                </TechnicalProfile>
-
-                    
-                <TechnicalProfile Id="AAD-UserWriteUsingAlternativeSecurityId">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
-                    </PersistedClaims>
-                </TechnicalProfile>
-
-                <TechnicalProfile Id="AAD-UserWriteUsingLogonEmail">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
-                    </PersistedClaims>
-                </TechnicalProfile>
-
-                <!--TechnicalProfile Id="AAD-UserWritePasswordUsingObjectId">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
-                    </PersistedClaims>
-                </TechnicalProfile-->
-
-                <TechnicalProfile Id="AAD-UserWritePhoneNumberUsingObjectId-NoSession">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" />
-                    </PersistedClaims>
-                </TechnicalProfile>
-
-                <TechnicalProfile Id="AAD-UserWriteMFAMethodUsingObjectId-NoSession">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" />
-                    </PersistedClaims>
-                </TechnicalProfile>
-
-            </TechnicalProfiles>
-        </ClaimsProvider>
 
         <ClaimsProvider>
             <DisplayName>Verify Email Sending Provider</DisplayName>
