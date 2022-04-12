@@ -5,24 +5,24 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_TrustFrameworkParkstayBetaExtensions"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkParkstayBetaExtensions">
+ PolicyId="B2C_1A_TrustFrameworkUATParkstayExtensions"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkUATParkstayExtensions">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkBetaExternalIDPs</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkUATExternalIDPs</PolicyId>
     </BasePolicy>
 
     <BuildingBlocks>
 
         <ClaimsSchema>
-            <ClaimType Id="extension_totpRegisteredBeta">
+            <ClaimType Id="extension_totpRegisteredUAT">
                 <DisplayName>Totp registered</DisplayName>
                 <DataType>boolean</DataType>
                 <UserInputType>Readonly</UserInputType>
             </ClaimType>
 
-            <ClaimType Id="extension_mfaMethodBeta">
+            <ClaimType Id="extension_mfaMethodUAT">
                 <DisplayName>Please select your preferred MFA method</DisplayName>
                 <DataType>string</DataType>
                 <UserInputType>RadioSingleSelect</UserInputType>
@@ -111,7 +111,7 @@
                         <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/verifycode?domain=parkstay.dbca.wa.gov.au</Item>
                     </Metadata>
                     <CryptographicKeys>
-                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2BetaSecret"/>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
                     </CryptographicKeys>
                 </TechnicalProfile>
 
@@ -120,7 +120,7 @@
                         <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/verifycode?domain=parkstay.dbca.wa.gov.au</Item>
                     </Metadata>
                     <CryptographicKeys>
-                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2BetaSecret"/>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
                     </CryptographicKeys>
                 </TechnicalProfile>
 
@@ -129,7 +129,7 @@
                         <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/totp/generate</Item>
                     </Metadata>
                     <CryptographicKeys>
-                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2BetaSecret"/>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
                     </CryptographicKeys>
                 </TechnicalProfile>
 
@@ -138,7 +138,7 @@
                         <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/totp/verify</Item>
                     </Metadata>
                     <CryptographicKeys>
-                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2BetaSecret"/>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
                     </CryptographicKeys>
                 </TechnicalProfile>
 
