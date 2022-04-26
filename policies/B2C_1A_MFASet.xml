@@ -10,7 +10,7 @@
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkProdIDPs</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkIDPs</PolicyId>
     </BasePolicy>
 
     <RelyingParty>
@@ -29,7 +29,7 @@
                 <OutputClaim ClaimTypeReferenceId="identityProvider"/>
                 <OutputClaim ClaimTypeReferenceId="userEmail" PartnerClaimType="upn"/>
                 <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false"/>
-                <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="mfaMethod" DefaultValue=""/>
+                <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" PartnerClaimType="mfaMethod" DefaultValue=""/>
 
             </OutputClaims>
             <SubjectNamingInfo ClaimType="sub"/>

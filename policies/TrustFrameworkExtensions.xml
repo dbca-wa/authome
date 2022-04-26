@@ -5,8 +5,8 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_TrustFrameworkProdExtensions"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkProdExtensions">
+ PolicyId="B2C_1A_TrustFrameworkExtensions"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkExtensions">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
@@ -19,18 +19,6 @@
                 <DisplayName>Totp registered</DisplayName>
                 <DataType>boolean</DataType>
                 <UserInputType>Readonly</UserInputType>
-            </ClaimType>
-
-            <ClaimType Id="extension_mfaMethod">
-                <DisplayName>Please select your preferred MFA method</DisplayName>
-                <DataType>string</DataType>
-                <UserInputType>RadioSingleSelect</UserInputType>
-                <Restriction>
-                    <Enumeration Text="Totp Token" Value="totp" SelectByDefault="true"/>
-                    <Enumeration Text="Phone" Value="phone" SelectByDefault="false"/>
-                    <Enumeration Text="Email" Value="email" SelectByDefault="false"/>
-                    <!--Enumeration Text="None " Value="none" SelectByDefault="false"/-->
-                </Restriction>
             </ClaimType>
         </ClaimsSchema>
 
@@ -54,14 +42,6 @@
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted">
-                <LoadUri>https://auth2.dbca.wa.gov.au/sso/self_asserted.html?title=Please%2520fill%2520your%2520details</LoadUri>
-            </ContentDefinition>
-
-            <ContentDefinition Id="api.selfasserted.SignUpStep1-EmailVerify">
-                <LoadUri>https://auth2.dbca.wa.gov.au/sso/self_asserted.html?title=Please%2520verify%2520your%2520email</LoadUri>
-            </ContentDefinition>
-
-            <ContentDefinition Id="api.selfasserted.SignUpStep2-UserProperties">
                 <LoadUri>https://auth2.dbca.wa.gov.au/sso/self_asserted.html?title=Please%2520fill%2520your%2520details</LoadUri>
             </ContentDefinition>
 
@@ -105,59 +85,24 @@
                 <TechnicalProfile Id="AAD-UserReadUsingAlternativeSecurityId-NoSession">
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredProd" DefaultValue="false"/>
-                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethod" DefaultValue="email"/>
                     </OutputClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AAD-UserReadUsingEmailAddress">
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredProd" DefaultValue="false"/>
-                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethod" DefaultValue="email"/>
                     </OutputClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AAD-UserReadUsingObjectId-NoSession">
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredProd" DefaultValue="false"/>
-                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethod" DefaultValue="email"/>
                     </OutputClaims>
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="AAD-WriteUserTOTPByObjectId-NoSession">
                     <PersistedClaims>
-                        <PersistedClaim  ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredProd" DefaultValue="true" AlwaysUseDefaultValue="true"/>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethod" DefaultValue="totp" AlwaysUseDefaultValue="true"/>
-                    </PersistedClaims>
-                </TechnicalProfile>
-
-                    
-                <TechnicalProfile Id="AAD-UserWriteUsingAlternativeSecurityId">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethod" DefaultValue="email"/>
-                    </PersistedClaims>
-                </TechnicalProfile>
-
-                <TechnicalProfile Id="AAD-UserWriteUsingLogonEmail">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethod" DefaultValue="email"/>
-                    </PersistedClaims>
-                </TechnicalProfile>
-
-                <!--TechnicalProfile Id="AAD-UserWritePasswordUsingObjectId">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethod" DefaultValue="email"/>
-                    </PersistedClaims>
-                </TechnicalProfile-->
-
-                <TechnicalProfile Id="AAD-UserWritePhoneNumberUsingObjectId-NoSession">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethod" />
-                    </PersistedClaims>
-                </TechnicalProfile>
-
-                <TechnicalProfile Id="AAD-UserWriteMFAMethodUsingObjectId-NoSession">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethod" />
+                        <PersistedClaim ClaimTypeReferenceId="extension_totpRegisteredProd" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                     </PersistedClaims>
                 </TechnicalProfile>
 
@@ -173,7 +118,7 @@
                         <Item Key="ServiceUrl">https://auth2.dbca.wa.gov.au/sso/verifycode</Item>
                     </Metadata>
                     <CryptographicKeys>
-                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2Secret"/>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
                     </CryptographicKeys>
                 </TechnicalProfile>
 
@@ -182,7 +127,7 @@
                         <Item Key="ServiceUrl">https://auth2.dbca.wa.gov.au/sso/verifycode</Item>
                     </Metadata>
                     <CryptographicKeys>
-                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2Secret"/>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
                     </CryptographicKeys>
                 </TechnicalProfile>
 
@@ -191,7 +136,7 @@
                         <Item Key="ServiceUrl">https://auth2.dbca.wa.gov.au/sso/totp/generate</Item>
                     </Metadata>
                     <CryptographicKeys>
-                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2Secret"/>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
                     </CryptographicKeys>
                 </TechnicalProfile>
 
@@ -200,7 +145,7 @@
                         <Item Key="ServiceUrl">https://auth2.dbca.wa.gov.au/sso/totp/verify</Item>
                     </Metadata>
                     <CryptographicKeys>
-                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2Secret"/>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
                     </CryptographicKeys>
                 </TechnicalProfile>
 

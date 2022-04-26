@@ -5,12 +5,12 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_TrustFrameworkProdIDPs"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkProdIDPs">
+ PolicyId="B2C_1A_TrustFrameworkExternalIDPs"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkExternalIDPs">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkProdExtensions</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkExtensions</PolicyId>
     </BasePolicy>
 
     <UserJourneys>
@@ -19,8 +19,7 @@
             <OrchestrationSteps>
                 <OrchestrationStep Order="1" Type="CombinedSignInAndSignUp" ContentDefinitionReferenceId="api.signuporsignin">
                     <ClaimsProviderSelections>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/>
@@ -37,8 +36,7 @@
             <OrchestrationSteps>
                 <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
                     <ClaimsProviderSelections>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/>
@@ -52,7 +50,6 @@
             <OrchestrationSteps>
                 <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
                     <ClaimsProviderSelections>
-                        <!--ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
@@ -67,7 +64,6 @@
             <OrchestrationSteps>
                 <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
                     <ClaimsProviderSelections>
-                        <!--ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->

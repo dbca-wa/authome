@@ -142,7 +142,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -161,7 +161,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -184,7 +184,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>email</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -208,7 +208,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>email</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -237,7 +237,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -261,7 +261,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -284,7 +284,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -307,7 +307,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -330,12 +330,12 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -448,7 +448,7 @@
                         </Precondition>
                         <!--Sample: If the preferred MFA method is not 'phone' skip this orchestration step-->
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -467,7 +467,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -500,7 +500,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -519,7 +519,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -538,12 +538,12 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -695,7 +695,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -714,7 +714,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -733,7 +733,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>email</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -752,7 +752,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -776,7 +776,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -799,7 +799,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -822,7 +822,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -845,7 +845,7 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
@@ -868,12 +868,12 @@
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>phone</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
-                            <Value>mfaMethod</Value>
+                            <Value>extension_mfaMethod</Value>
                             <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
