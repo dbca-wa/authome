@@ -2119,7 +2119,7 @@
             <DisplayName>Microsoft Account</DisplayName>
             <TechnicalProfiles>
                 <TechnicalProfile Id="MSA-MicrosoftAccount-OpenIdConnect">
-                    <DisplayName>Microsoft Account</DisplayName>
+                    <DisplayName>Microsoft</DisplayName>
                     <Protocol Name="OpenIdConnect"/>
                     <Metadata>
                         <Item Key="ProviderName">https://login.live.com</Item>

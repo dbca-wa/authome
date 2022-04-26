@@ -48,21 +48,21 @@
             </SupportedLanguages>
             <LocalizedResources Id="api.signuporsignin.en">
                 <LocalizedStrings>
-                    <LocalizedString ElementType="UxElement" StringId="social_intro">Sign in with your social media account</LocalizedString>
-                    <LocalizedString ElementType="UxElement" StringId="local_intro_email">Sign in with your existing account</LocalizedString>
+                    <LocalizedString ElementType="UxElement" StringId="social_intro">Sign in</LocalizedString>
+                    <LocalizedString ElementType="UxElement" StringId="local_intro_email">----------------------or----------------------</LocalizedString>
                 </LocalizedStrings>
             </LocalizedResources>
 
             <LocalizedResources Id="api.selfasserted.emailverify.en">
                 <LocalizedStrings>
-                    <LocalizedString ElementType="DisplayControl" ElementId="emailVerificationControl" StringId="success_send_code_msg">Please enter the verification code sent to your email address</LocalizedString>
+                    <LocalizedString ElementType="DisplayControl" ElementId="emailVerificationControl" StringId="success_send_code_msg">Please enter the verification code sent to your email address. The code is only valid for 10 minutes.</LocalizedString>
                     <LocalizedString ElementType="DisplayControl" ElementId="emailVerificationControl" StringId="but_change_claims">Change your email</LocalizedString>
                 </LocalizedStrings>
             </LocalizedResources>
 
             <LocalizedResources Id="api.selfasserted.useremailverify.en">
                 <LocalizedStrings>
-                    <LocalizedString ElementType="DisplayControl" ElementId="userEmailVerificationControl" StringId="success_send_code_msg">Please enter the verification code sent to your email address</LocalizedString>
+                    <LocalizedString ElementType="DisplayControl" ElementId="userEmailVerificationControl" StringId="success_send_code_msg">Please enter the verification code sent to your email address. The code is only valid for 10 minutes.</LocalizedString>
                     <LocalizedString ElementType="DisplayControl" ElementId="userEmailVerificationControl" StringId="but_change_claims">Change your email</LocalizedString>
                 </LocalizedStrings>
             </LocalizedResources>

@@ -2116,7 +2116,7 @@
 
         <ClaimsProvider>
             <Domain>live.com</Domain>
-            <DisplayName>Microsoft Account</DisplayName>
+            <DisplayName>Microsoft</DisplayName>
             <TechnicalProfiles>
                 <TechnicalProfile Id="MSA-MicrosoftAccount-OpenIdConnect">
                     <DisplayName>Microsoft Account</DisplayName>
