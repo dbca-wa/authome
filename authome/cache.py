@@ -42,7 +42,7 @@ class IntervalTaskRunable(TaskRunable):
     def __init__(self,name,interval):
         self._name = name
         self._interval = interval
-        self._next_time = None
+        self._next_runtime = None
 
     _seconds_4_nextrun = staticmethod(lambda seconds_in_day,interval: seconds_in_day + (interval - seconds_in_day % interval))
     def can_run(self,dt=None):
@@ -51,28 +51,28 @@ class IntervalTaskRunable(TaskRunable):
         else:
             dt = timezone.localtime()
 
-        if not self._next_time:
+        if not self._next_runtime:
             #not run before, don't run before the next scheduled runtime.
             today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo)
-            self._next_time = today + timedelta(seconds = self._seconds_4_nextrun((dt - today).seconds,self._interval))
-            #logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            self._next_runtime = today + timedelta(seconds = self._seconds_4_nextrun((dt - today).seconds,self._interval))
+            #logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_runtime.strftime("%Y-%m-%d %H:%M:%S")))
             return False
-        elif self._next_time > dt:
+        elif self._next_runtime > dt:
             #Don't run before the next scheduled runtime
-            #logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            #logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_runtime.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         else:
             #Run now, and set the next scheudled runtime.
             today = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo)
-            self._next_time = today + timedelta(seconds = self._seconds_4_nextrun((dt - today).seconds,self._interval))
-            logger.debug("Run task({}) now, next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            self._next_runtime = today + timedelta(seconds = self._seconds_4_nextrun((dt - today).seconds,self._interval))
+            logger.debug("Run task({}) now, next runtime is {}".format(self._name,self._next_runtime.strftime("%Y-%m-%d %H:%M:%S")))
             return True
 
     @property
     def next_runtime(self):
-        if not self._next_time:
+        if not self._next_runtime:
             self.can_run()
-        return self._next_time
+        return self._next_runtime
 
 
 class HourListTaskRunable(TaskRunable):
@@ -83,7 +83,7 @@ class HourListTaskRunable(TaskRunable):
     """
     def __init__(self,name,hours):
         self._name = name
-        self._next_time = None
+        self._next_runtime = None
         self._index = None
         self._hours = hours
         if len(self._hours) == 1:
@@ -94,7 +94,7 @@ class HourListTaskRunable(TaskRunable):
             i = 0
             while i < len(self._hours):
                 if i == 0:
-                    self._timediffs.append(timedelta(hours=24 + self._hours[i] - self._hours[-1]))
+                    self._timediffs.append(timedelta(hours=24 - self._hours[-1] + self._hours[0]))
                 else:
                     self._timediffs.append(timedelta(hours=self._hours[i] - self._hours[i-1]))
                 i += 1
@@ -105,38 +105,38 @@ class HourListTaskRunable(TaskRunable):
         else:
             dt = timezone.localtime()
 
-        if not self._next_time:
+        if not self._next_runtime:
             #not run before, don' run before the next scheduled time
             self._index = 0
-            self._next_time = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo) + timedelta(hours=self._hours[0])
-            while self._next_time <= dt:
+            self._next_runtime = datetime(dt.year,dt.month,dt.day,tzinfo=dt.tzinfo) + timedelta(hours=self._hours[0])
+            while self._next_runtime <= dt:
                 if self._index == len(self._hours) - 1:
                     self._index = 0
                 else:
                     self._index += 1
-                self._next_time += self._timediffs[self._index]
-            #logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+                self._next_runtime += self._timediffs[self._index]
+            #logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_runtime.strftime("%Y-%m-%d %H:%M:%S")))
             return False
-        elif self._next_time > dt:
+        elif self._next_runtime > dt:
             #don't run before the next sheduled time
-            #logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            #logger.debug("No need to run task({}), next runtime is {}".format(self._name,self._next_runtime.strftime("%Y-%m-%d %H:%M:%S")))
             return False
         else:
             #run and set the next scheduled time
-            while self._next_time <= dt:
+            while self._next_runtime <= dt:
                 if self._index == len(self._hours) - 1:
                     self._index = 0
                 else:
                     self._index += 1
-                self._next_time += self._timediffs[self._index]
-            logger.debug("Run task({}) now, next runtime is {}".format(self._name,self._next_time.strftime("%Y-%m-%d %H:%M:%S")))
+                self._next_runtime += self._timediffs[self._index]
+            logger.debug("Run task({}) now, next runtime is {}".format(self._name,self._next_runtime.strftime("%Y-%m-%d %H:%M:%S")))
             return True
 
     @property
     def next_runtime(self):
-        if not self._next_time:
+        if not self._next_runtime:
             self.can_run()
-        return self._next_time
+        return self._next_runtime
 
 
 class MemoryCache(object):
@@ -183,10 +183,10 @@ class MemoryCache(object):
     
         #user authentication cache
         self._auth_map = OrderedDict() 
-        self._auth_map_ts = None
+        self._staff_auth_map = OrderedDict() 
         #user basic authentication cache
         self._basic_auth_map = OrderedDict() 
-        self._basic_auth_map_ts = None
+        self._auth_cache_ts = None
 
         #the map between email and groups
         self._groupskey_map = {}
@@ -372,39 +372,36 @@ class MemoryCache(object):
 
         return self._groups_map.get(groupskey)
 
-    def get_auth_key(self,email,session_key):
-        return session_key
-
-    def get_auth(self,key,last_modified=None):
+    def get_auth(self,user,key,last_modified=None):
         """
         Return the populated http reponse
         """
-        data = self._auth_map.get(key)
+        data = self._staff_auth_map.get(key) if user.is_staff else self._auth_map.get(key)
         if data:
             if timezone.now() <= data[2] and (not last_modified or data[1] >= last_modified):
                 return data[0]
+            elif user.is_staff:
+                del self._staff_auth_map[key]
+                return None
             else:
                 del self._auth_map[key]
                 return None
         else:
             return None
 
-    def set_auth(self,key,response,user):
+    def set_auth(self,user,key,response):
         """
         cache the auth response content and return the populated http response
         """
         now = timezone.now()
-        self._auth_map[key] = [response,now,now + settings.AUTH_CACHE_EXPIRETIME]
+        if user.is_staff:
+            self._staff_auth_map[key] = [response,now,now + settings.STAFF_AUTH_CACHE_EXPIRETIME ]
+            self._enforce_maxsize("staff auth map",self._staff_auth_map,settings.STAFF_AUTH_CACHE_SIZE)
+        else:
+            self._auth_map[key] = [response,now,now + settings.AUTH_CACHE_EXPIRETIME]
+            self._enforce_maxsize("auth map",self._auth_map,settings.AUTH_CACHE_SIZE)
 
-        self._enforce_maxsize("auth map",self._auth_map,settings.AUTH_CACHE_SIZE)
         self.clean_auth_cache()
-
-    def delete_auth(self,key):
-        try:
-            del self._auth_map[key]
-        except:
-            #not found
-            pass
 
     def get_basic_auth_key(self,name_or_email,token):
         return (name_or_email,token)
@@ -426,7 +423,7 @@ class MemoryCache(object):
             #not cached token found
             return (None,None)
 
-    def set_basic_auth(self,key,response,user):
+    def set_basic_auth(self,user,key,response):
         """
         cache the auth token response content and return the populated http response
         """
@@ -477,10 +474,9 @@ class MemoryCache(object):
     def clean_auth_cache(self,force=False):
         if self._auth_cache_clean_time.can_run() or force:
             self._auth_map.clear()
-            self._auth_map_ts = timezone.now()
-
             self._basic_auth_map.clear()
-            self._basic_auth_map_ts = timezone.now()
+
+            self._auth_cache_ts = timezone.now()
 
     def refresh_usergroups(self,force=False):
         from .models import UserGroupChange,UserGroup
@@ -492,9 +488,7 @@ class MemoryCache(object):
             self._public_email_groups_map.clear()
             self._groups_map.clear()
             self._emailgroups_ts = timezone.now()
-            if len(self._groupskey_map) >= 2000:
-                #groupskey map is too big, clear it.
-                self._groupskey_map.clear()
+            self._groupskey_map.clear()
             #reload group trees
             UserGroup.refresh_cache()
 
@@ -551,8 +545,8 @@ class MemoryCache(object):
     def status(self):
         result = {}
         result["UserGroup"] = {
-            "grouptree_size":None if self.usergrouptree is None else len(self.usergrouptree),
-            "groupsize":None if self.usergroups is None else len(self.usergroups),
+            "grouptree_cache_size":None if self.usergrouptree is None else len(self.usergrouptree),
+            "group_cache_size":None if self.usergroups is None else len(self.usergroups),
             "dbcagroup":str(self.dbca_group),
             "publicgroup":str(self.public_group),
             "latest_refresh_time":format_datetime(self._usergrouptree_ts),
@@ -560,53 +554,62 @@ class MemoryCache(object):
         }
     
         result["UserGroupAuthorization"] = {
-            "usergroupauthorization_size":None if self.usergroupauthorization is None else len(self.usergroupauthorization),
+            "cache_size":None if self.usergroupauthorization is None else len(self.usergroupauthorization),
             "latest_refresh_time":format_datetime(self._usergroupauthorization_ts),
             "next_check_time":format_datetime(self._authorization_cache_check_time.next_runtime)
         }
     
         result["CustomizableUserflow"] = {
-            "userflow_size":None if self.userflows is None else len(self.userflows),
-            "userflowmap_size":None if self._userflows_map is None else len(self._userflows_map),
+            "userflow_cache_size":None if self.userflows is None else len(self.userflows),
             "defaultuserflow":str(self._defaultuserflow),
+            "domain2userflow_cache_size":None if self._userflows_map is None else len(self._userflows_map),
             "latest_refresh_time":format_datetime(self._userflows_ts),
             "next_check_time":format_datetime(self._userflow_cache_check_time.next_runtime)
         }
     
     
         result["IdentityProvider"] = {
-            "identityprovider_size":None if self.idps is None else len(self.idps),
+            "cache_size":None if self.idps is None else len(self.idps),
             "latest_refresh_time":format_datetime(self._idps_ts),
             "next_check_time":format_datetime(self._idp_cache_check_time.next_runtime)
         }
     
-        result["userauthorizationmap"] = {
-            "authorizationmap_size":None if self._user_authorization_map is None else len(self._user_authorization_map),
-            "authorizationmap_maxsize":settings.AUTHORIZATION_CACHE_SIZE,
+        result["userauthorizations"] = {
+            "cache_size":None if self._user_authorization_map is None else len(self._user_authorization_map),
+            "cache_maxsize":settings.AUTHORIZATION_CACHE_SIZE,
             "latest_clean_time":format_datetime(self._user_authorization_map_ts),
             "next_check_time":format_datetime(self._authorization_cache_check_time.next_runtime)
         }
+
+        auth_responses = {}
+        result["auth_responses"] = auth_responses
     
-        result["userauthenticationmap"] = {
-            "authenticationmap_size":None if self._auth_map is None else len(self._auth_map),
-            "authenticationmap_maxsize":settings.AUTH_CACHE_SIZE,
-            "latest_clean_time":format_datetime(self._auth_map_ts),
+        auth_responses["external_user"] = {
+            "cache_size":None if self._auth_map is None else len(self._auth_map),
+            "cache_maxsize":settings.AUTH_CACHE_SIZE,
+            "latest_clean_time":format_datetime(self._auth_cache_ts),
+            "next_clean_time":format_datetime(self._auth_cache_clean_time.next_runtime)
+        }
+        auth_responses["staff"] = {
+            "cache_size":None if self._staff_auth_map is None else len(self._staff_auth_map),
+            "cache_maxsize":settings.STAFF_AUTH_CACHE_SIZE,
+            "latest_clean_time":format_datetime(self._auth_cache_ts),
             "next_clean_time":format_datetime(self._auth_cache_clean_time.next_runtime)
         }
     
-        result["basicauthmap"] = {
-            "basicauthmap_size":None if self._basic_auth_map is None else len(self._basic_auth_map),
-            "basicauthmap_maxsize":settings.BASIC_AUTH_CACHE_SIZE,
-            "latest_clean_time":format_datetime(self._basic_auth_map_ts),
+        auth_responses["basic_auth"] = {
+            "cache_size":None if self._basic_auth_map is None else len(self._basic_auth_map),
+            "cache_maxsize":settings.BASIC_AUTH_CACHE_SIZE,
+            "latest_clean_time":format_datetime(self._auth_cache_ts),
             "next_clean_time":format_datetime(self._auth_cache_clean_time.next_runtime)
         }
     
-        result["usergrouplist"] = {
-            "groupskey_size":None if self._groupskey_map is None else len(self._groupskey_map),
-            "usergroupsmap_size":None if self._email_groups_map is None else len(self._email_groups_map),
-            "usergroupsmap_maxsize":settings.EMAIL_GROUPS_CACHE_SIZE,
-            "publicusergroupsmap_size":None if self._public_email_groups_map is None else len(self._public_email_groups_map),
-            "publicusergroupsmap_maxsize":settings.PUBLIC_EMAIL_GROUPS_CACHE_SIZE,
+        result["usergroups"] = {
+            "groupskey_cache_size":None if self._groupskey_map is None else len(self._groupskey_map),
+            "usergroups_cache_size":None if self._email_groups_map is None else len(self._email_groups_map),
+            "usergroups_cache_maxsize":settings.EMAIL_GROUPS_CACHE_SIZE,
+            "publicusergroups_cache_size":None if self._public_email_groups_map is None else len(self._public_email_groups_map),
+            "publicusergroups_cache_maxsize":settings.PUBLIC_EMAIL_GROUPS_CACHE_SIZE,
             "groupsmap_size":None if self._groups_map is None else len(self._groups_map),
             "latest_clean_time":format_datetime(self._emailgroups_ts),
             "next_check_time":format_datetime(self._authorization_cache_check_time.next_runtime)
@@ -616,66 +619,73 @@ class MemoryCache(object):
 
     @property
     def healthy(self):
+        msgs = []
         if not self.usergrouptree :
-            return (False,"The UserGroup tree cache is empty")
+            msgs.append("The UserGroup tree cache is empty")
 
         if not self.usergroups:
-            return (False,"The UserGroup cache is empty")
+            msgs.append("The UserGroup cache is empty")
 
         if not self.dbca_group:
-            return (False,"The cached dbca user group is None")
+            msgs.append("The cached dbca user group is None")
 
         if not self.public_group:
-            return (False,"The cached public user group is None")
+            msgs.append("The cached public user group is None")
 
         if not self.usergroupauthorization:
-            return (False,"The UserGroupAuthorization cache is empty.")
+            msgs.append("The UserGroupAuthorization cache is empty.")
 
         if not self.userflows:
-            return (False,"The CustomizableUserflow cache is empty")
+            msgs.append("The CustomizableUserflow cache is empty")
 
         if not self._defaultuserflow:
-            return (False,"The cached default userflow is None")
+            msgs.append("The cached default userflow is None")
 
         if not self.idps:
-            return (False,"The IdentityProvider cache is empty")
+            msgs.append("The IdentityProvider cache is empty")
 
         if self._user_authorization_map is None :
-            return (False,"The user authorization cache is None")
+            msgs.append("The user authorization cache is None")
             
         if len(self._user_authorization_map) > (settings.AUTHORIZATION_CACHE_SIZE + 100) :
-            return (False,"The size({}) of the user authorization cache exceed the maximum cache size({})".format(len(self._user_authorization_map), settings.AUTHORIZATION_CACHE_SIZE))
+            msgs.append("The size({}) of the user authorization cache exceed the maximum cache size({})".format(len(self._user_authorization_map), settings.AUTHORIZATION_CACHE_SIZE))
             
         if self._auth_map is None  :
-            return (False,"The user authentication cache is None")
+            msgs.append("The external user auth responses cache is None")
     
         if len(self._auth_map) > settings.AUTH_CACHE_SIZE + 100 :
-            return (False,"The size({}) of the user authentication cache exceed the maximum cache size({})".format(len(self._auth_map), settings.AUTH_CACHE_SIZE))
+            msgs.append("The size({}) of the external user auth responses cache exceed the maximum cache size({})".format(len(self._auth_map), settings.AUTH_CACHE_SIZE))
+    
+        if self._staff_auth_map is None  :
+            msgs.append("The staff auth responses cache is None")
+    
+        if len(self._staff_auth_map) > settings.STAFF_AUTH_CACHE_SIZE + 100 :
+            msgs.append("The size({}) of the staff auth responses cache exceed the maximum cache size({})".format(len(self._staff_auth_map), settings.STAFF_AUTH_CACHE_SIZE))
     
         if self._basic_auth_map is None :
-            return (False,"The basic authentication cache is None")
+            msgs.append("The basic auth response cache is None")
     
         if len(self._basic_auth_map) > settings.BASIC_AUTH_CACHE_SIZE + 100 :
-            return (False,"The size({}) of the basic authentication cache exceed the maximum cache size({})".format(len(self._basic_auth_map), settings.BASIC_AUTH_CACHE_SIZE))
+            msgs.append("The size({}) of the basic auth response cache exceed the maximum cache size({})".format(len(self._basic_auth_map), settings.BASIC_AUTH_CACHE_SIZE))
     
         if self._groupskey_map is None :
-            return (False,"The groups key map cache is None")
+            msgs.append("The groups key map cache is None")
     
         if self._email_groups_map is None:
-            return (False,"The email groups map cache is None")
+            msgs.append("The email groups map cache is None")
     
         if len(self._email_groups_map) > settings.EMAIL_GROUPS_CACHE_SIZE + 100:
-            return (False,"The size({}) of the user groups map cache exceed the maximum cache size({})".format(len(self._email_groups_map), settings.EMAIL_GROUPS_CACHE_SIZE))
+            msgs.append("The size({}) of the user groups map cache exceed the maximum cache size({})".format(len(self._email_groups_map), settings.EMAIL_GROUPS_CACHE_SIZE))
     
         if self._public_email_groups_map is None:
-            return (False,"The public user groups map cache is None")
+            msgs.append("The public user groups map cache is None")
     
         if len(self._public_email_groups_map) > settings.PUBLIC_EMAIL_GROUPS_CACHE_SIZE + 100:
-            return (False,"The size({}) of the public user groups map cache exceed the maximum cache size({})".format(len(self._public_email_groups_map), settings.PUBLIC_EMAIL_GROUPS_CACHE_SIZE))
+            msgs.append("The size({}) of the public user groups map cache exceed the maximum cache size({})".format(len(self._public_email_groups_map), settings.PUBLIC_EMAIL_GROUPS_CACHE_SIZE))
     
         if self._groups_map is None:
-            return (False,"The groups map cache is None")
+            msgs.append("The groups map cache is None")
     
-        return (True,"ok")
+        return (False,msgs) if msgs else (True,["ok"])
 
 cache = MemoryCache()

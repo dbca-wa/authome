@@ -61,9 +61,9 @@ urlpatterns = [
     path("favicon.ico",RedirectView.as_view(url="{}images/favicon.ico".format(settings.STATIC_URL)))
 ]
 if settings.DEBUG:
-    import debug_toolbar
+    #import debug_toolbar
     from authome import performance
-    urlpatterns.append(path('__debug__/', include(debug_toolbar.urls)))
+    #urlpatterns.append(path('__debug__/', include(debug_toolbar.urls)))
     urlpatterns.append(path('sso/authperformance', performance.performancetester_wrapper(views.auth), name='authperformance'))
     urlpatterns.append(path('sso/auth_basicperformance', performance.performancetester_wrapper(views.auth_basic), name='auth_basicperformance'))
     urlpatterns.append(path('echo',views.echo,name="echo"))

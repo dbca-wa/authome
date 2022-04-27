@@ -29,6 +29,7 @@ if settings.USER_CACHE_ALIAS:
         """
         user = None
         try:
+            #try to get user data from user cache
             userkey = settings.GET_USER_KEY(userid)
             usercache = get_usercache(userid)
             
@@ -40,13 +41,14 @@ if settings.USER_CACHE_ALIAS:
                 pass
 
             if not user:
+                #Can't find the user in user cache, retrieve it from database
                 performance.start_processingstep("fetch_user_from_db")
                 try:
                     user = User.objects.get(pk = userid)
                 finally:
                     performance.end_processingstep("fetch_user_from_db")
                     pass
-
+                #cache the user object into user cache
                 performance.start_processingstep("set_user_to_cache")
                 try:
                     usercache.set(userkey,user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
@@ -57,17 +59,22 @@ if settings.USER_CACHE_ALIAS:
         except KeyError:
             pass
         except ObjectDoesNotExist as ex:
+            #user does not exist.
+            #if the current request is auth2_auth, return AUTH_REQUIRED_RESPONSE
+            #if the current request is auth2_optional, return AUTH_NOT_REQUIRED_RESPONSE
+            #otherwise. logout the user
             raise UserDoesNotExistException()
 
         return user or anonymoususer
 
     def load_usertoken(user):
         """
-        Return the user model instance associated with the given request session.
-        If no user is retrieved, return an instance of `AnonymousUser`.
+        Return user's access token
+        Return None if user has not access token
         """
         usertoken = None
         try:
+            #Try to find the access token from user cache, user and user's access token should be cached at the same redis server
             usertokenkey = settings.GET_USERTOKEN_KEY(user.id)
             usercache = get_usercache(user.id)
             
@@ -79,6 +86,7 @@ if settings.USER_CACHE_ALIAS:
                 pass
 
             if not usertoken:
+                #Access token not found in the user cache, retrieve it from database
                 performance.start_processingstep("fetch_usertoken_from_db")
                 try:
                     usertoken = UserToken.objects.get(user = user)
@@ -86,6 +94,7 @@ if settings.USER_CACHE_ALIAS:
                     performance.end_processingstep("fetch_usertoken_from_db")
                     pass
 
+                #cache the access token in the user cache
                 performance.start_processingstep("set_usertoken_to_cache")
                 try:
                     usercache.set(usertokenkey,usertoken,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
@@ -117,14 +126,18 @@ else:
         except KeyError:
             pass
         except ObjectDoesNotExist as ex:
+            #user does not exist.
+            #if the current request is auth2_auth, return AUTH_REQUIRED_RESPONSE
+            #if the current request is auth2_optional, return AUTH_NOT_REQUIRED_RESPONSE
+            #otherwise. logout the user
             raise UserDoesNotExistException()
 
         return user or anonymoususer
 
     def load_usertoken(userid):
         """
-        Return the user model instance associated with the given request session.
-        If no user is retrieved, return an instance of `AnonymousUser`.
+        Return user's access token
+        Return None if user has not access token
         """
         usertoken = None
         try:
@@ -142,6 +155,10 @@ else:
         return usertoken
 
 def _get_user(request):
+    """
+    Return the user associated to the request session;
+    Return anonymoususer if no user is associated
+    """
     try:
         userid = auth._get_user_session_key(request)
     except:

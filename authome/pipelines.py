@@ -10,7 +10,7 @@ from django.http import HttpResponseForbidden,HttpResponseRedirect
 from django.contrib.auth import REDIRECT_FIELD_NAME
 
 from .models import IdentityProvider,UserGroup
-from .views import signout, get_post_b2c_logout_url
+from .views import signout
 from .cache import get_usercache
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,8 @@ def email_lowercase(backend,details, user=None,*args, **kwargs):
     A pipeline to turn the email address to lowercase
     """
     email = details.get("email")
-    details['email'] = email.strip().lower() if email else None
+    if email:
+        details['email'] = email.strip().lower()
 
     return {"details":details}
 
@@ -48,6 +49,10 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
 
     if hasattr(request,"policy"):
         #not a sign in request
+        mfa_method = kwargs['response'].get("mfaMethod")
+        if mfa_method and request.session.get("mfa_method") and request.session.get("mfa_method") != mfa_method:
+            #mfa was changed, update the user session 
+            request.session["mfa_method"] = mfa_method
         return
 
     #get the identityprovider from b2c response
@@ -56,13 +61,10 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     logger.debug("authenticate the user({}) with identity provider({}={})".format(email,idp_obj.idp,idp))
 
     #get backend logout url
-    backend_logout_url = backend.logout_url 
     if user and not user.is_active:
         #use is inactive, automatically logout 
-        logout(request)
-        logout_url = backend_logout_url.format(get_post_b2c_logout_url(request,idp_obj))
-        logger.debug("Redirect to '{}' to logout from identity provider".format(logout_url))
-        response = signout(request,logout_url=logout_url,message="Your account was disabled.")
+        logger.debug("User({}) is inactive, automatically logout ".format(email))
+        response = signout(request,idp=idp_obj,message="Your account is disabled.")
         return response
 
     #check whether identity provider is the same as the configured identity provider
@@ -70,11 +72,8 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
         configed_idp_obj = UserGroup.get_identity_provider(email)
         if configed_idp_obj and configed_idp_obj != idp_obj:
             #The idp used for user authentication is not the idp configured in UserGroup, automatically logou
-            logger.debug("The user({}) shoule authenticate with '{}' instead of '{}'".format(email,configed_idp_obj,idp_obj))
-            logout(request)
-            logout_url = backend_logout_url.format(get_post_b2c_logout_url(request,idp_obj))
-            logger.debug("Redirect to '{}' to logout from identity provider".format(logout_url))
-            response = signout(request,logout_url=logout_url,message="You can only sign in through identity provider '{}'".format(configed_idp_obj))
+            logger.debug("The user({}) must authenticate with '{}' instead of '{}', automatically logout".format(email,configed_idp_obj,idp_obj))
+            response = signout(request,idp=idp_obj,message="You can only sign in with social media '{}'".format(configed_idp_obj))
 
             #set the prefer IdentityProvider
             response.set_cookie(
@@ -85,8 +84,6 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
                 max_age=_max_age,
                 samesite=None
             )
-            #clear the session
-            request.session.flush()
             return response
 
     backend.strategy.session_set("idp", idp_obj.idp)

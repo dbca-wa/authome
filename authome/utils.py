@@ -6,8 +6,10 @@ import urllib.parse
 import re
 import base64
 import qrcode
+import socket
+import psutil
 import logging
-from datetime import timedelta
+from datetime import timedelta,datetime
 
 from django.utils import timezone
 from django.contrib.auth import REDIRECT_FIELD_NAME
@@ -16,30 +18,40 @@ __version__ = '1.0.0'
 
 logger = logging.getLogger(__name__)
 
-_serverid = None
-def get_serverid():
-    global _serverid
-    if not _serverid:
-        from django.conf import settings
-        _serverid = "{0}-{1}-{2}".format(settings.SERVER_TYPE,socket.gethostname(),os.getpid())
-    return _serverid
+_processid = None
+def get_processid():
+    global _processid
+    if not _processid:
+        processcreatetime = timezone.make_aware(datetime.fromtimestamp(psutil.Process(os.getpid()).create_time())).strftime("%Y-%m-%d %H:%M:%S.%f")
+        _processid = "{}-{}-{}".format(socket.gethostname(),processcreatetime,os.getpid())
+    return _processid
 
 def _convert(key,value, default=None, required=False, value_type=None,subvalue_type=None):
+    """
+    Convert the env variable to required data type
+    """
     if value_type is None:
+        #value type is not specified, use default value's type
         if default is not None:
             value_type = default.__class__
     if subvalue_type is None:
+        #sub value type is not specified, if default value is list type, use the first member's type
         if default and isinstance(default,(list,tuple)):
             subvalue_type = default[0].__class__
 
     if value_type is None:
+        #Can't find the value type, return value directly
         return value
     elif isinstance(value, value_type):
+        #if value's type is the same as required type, return value directly
         return value
     elif issubclass(value_type, list):
+        #required value type is list
         if isinstance(value, tuple):
+            #value's type is tuple, create a list and return
             return list(value)
         else:
+            #treat value as a comma separated string, get rid of the heading and tail space
             value = str(value).strip()
             if not value:
                 return []
@@ -75,6 +87,7 @@ def _convert(key,value, default=None, required=False, value_type=None,subvalue_t
                     result.append(_convert(key,subvalue,required=True,value_type=subvalue_type))
                 return tuple(result)
     elif issubclass(value_type,dict):
+        #required value type is dict, treat value is a comma separated key=value string.
         result = dict([ ( d.strip()  for d in item.split("=",1))  for item in value.split(",") if item and item.strip() ])
         for k,v in result.items():
             if default and default.get(k) is not None:
@@ -123,7 +136,7 @@ def env(key, default=None, required=False, value_type=None,subvalue_type=None):
     return _convert(key,value,default=default,required=required,value_type=value_type,subvalue_type=subvalue_type)
 
 
-url_re = re.compile("^((http(s)?://)?(?P<domain>[^:/\?]+)(:(?P<port>[0-9]+))?)?(?P<path>/[^\?]*)?(\?(?P<parameters>.*))?$",re.IGNORECASE)
+url_re = re.compile("^((https?://)?(?P<domain>[^:/\?]+)(:(?P<port>[0-9]+))?)?(?P<path>/[^\?]*)?(\?(?P<parameters>.*))?$",re.IGNORECASE)
 def parse_url(url):
     """
     Return domain from url
@@ -143,7 +156,7 @@ def parse_url(url):
     else:
         raise Exception("Url is empty")
 
-domain_url_re = re.compile("^(http(s)?://)?(?P<domain>[^:/\?]+)",re.IGNORECASE)
+domain_url_re = re.compile("^(https?://)?(?P<domain>[^:/\?]+)",re.IGNORECASE)
 def get_domain(url):
     """
     Return domain from url
@@ -156,14 +169,6 @@ def get_domain(url):
             return None
     else:
         return None
-
-def get_redirect_domain(request):
-    """
-    Return domain from session property 'next'; if not found return None
-    """
-    next_url = request.session.get(REDIRECT_FIELD_NAME)
-    return get_domain(next_url)
-
 
 def get_totpurl(secret, name, issuer, timestep, prefix=None,algorithm="SHA1",digits=6):
     """
@@ -229,17 +234,15 @@ def format_timedelta(td,unit="s"):
         days = td.days
         seconds = td.seconds
         hours = int(seconds / (60 * 60))
-        seconds = minutes % (60 * 60)
+        seconds = seconds % (60 * 60)
         minutes = int(seconds / 60)
         seconds = seconds % 60
     else:
         if unit == "d":
-            days = "{} day".format(td) if dt <= 1 else "{} days".format(td) 
+            days = td
         elif unit == "h":
             days = int(td / 24)
             hours = td % 24
-            days = "{} day".format(days) if days <= 1 else "{} days".format(days)
-            hours = "" if hours == 0 else ("{} hour".format(hours) if hours == 1 else "{} days".format(hours))
         elif unit == "m":
             days = int(td / (24 * 60))
             minutes = td % (24 * 60)
@@ -261,6 +264,36 @@ def format_timedelta(td,unit="s"):
 
     return " ".join(d for d in [days,hours,minutes,seconds] if d)
 
+
+def _get_host(request):
+    """
+    Get non-null remote host from request
+    """
+    global get_host
+    if request.headers.get("x-upstream-request-uri"):
+        if request.headers.get("x-upstream-server-name"):
+            #header 'x-upstream-server-name' is used, get the remote host from header 'x-upstream-server-name' first, if not found, get it from request host
+            get_host = _get_host1
+        else:
+            #header 'x-upstream-server-name' is not used, get the remote host from request host directly
+            get_host = _get_host2
+        return get_host(request)
+    else:
+        return request.get_host()
+
+def _get_host1(request):
+    """
+    get the remote host from header 'x-upstream-server-name' first, if not found, get it from request host
+    """
+    return request.headers.get("x-upstream-server-name") or request.get_host()
+
+def _get_host2(request):
+    """
+    get the remote host from request host directly
+    """
+    return request.get_host()
+
+get_host = _get_host
 
 
 

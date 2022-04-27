@@ -40,9 +40,10 @@
             {% block welcome-msg %}
                 {% trans 'Welcome,' %}
                 <strong>{% firstof user.get_short_name user.get_username %}({{user.email}})</strong>
+                <img src="{% static "images/settings.svg" %}" onclick="document.location='/sso/setting?back=/admin'" style="width:13px;height:13px;cursor:pointer">
             {% endblock %}
             {% block userlinks %}
-            <span style="padding-left:30px">
+            <span style="padding-left:10px">
                 {% if logout_url %}
                     <a href="{{ logout_url }}">{% trans 'Logout' %}</a>
                 {% else %}

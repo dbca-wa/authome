@@ -4,6 +4,7 @@ from .utils import env, get_digest_function
 from datetime import timedelta
 import dj_database_url
 
+DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEBUG = env('DEBUG', False)
@@ -51,17 +52,13 @@ TOTP_SECRET_KEY_LENGTH = env("TOTP_SECRET_KEY_LENGTH",default=128)
 TOTP_ISSUER = env("TOTP_ISSUER",default="DBCA")
 TOTP_PREFIX = env("TOTP_PREFIX",default="DBCA")
 TOTP_TIMESTEP = env("TOTP_TIMESTEP",default=30)
-TOTP_VALIDWINDOW = env("TOTP_VALIDWINDOW",default=0)
+TOTP_VALIDWINDOW = env("TOTP_VALIDWINDOW",default=1)
 TOTP_CHECK_LAST_CODE = env("TOTP_CHECK_LAST_CODE",default=True)
 TOTP_DIGITS = env("TOTP_DIGITS",default=6)
 TOTP_ALGORITHM = env("TOTP_ALGORITHM",default="SHA1")
 TOTP_DIGEST = None
 
 TOTP_ALGORITHM,TOTP_DIGEST = get_digest_function(TOTP_ALGORITHM)
-
-# Azure AD settings
-AZUREAD_AUTHORITY = env('AZUREAD_AUTHORITY', 'https://login.microsoftonline.com')
-AZUREAD_RESOURCE = env('AZUREAD_RESOURCE', '00000002-0000-0000-c000-000000000000')
 
 SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_BASE_URL = env('AZUREAD_B2C_BASE_URL', 'baseurl')
 SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_KEY = env('AZUREAD_B2C_CLIENTID', 'clientid')
@@ -100,9 +97,12 @@ else:
         SESSION_COOKIE_NAME = (SESSION_COOKIE_DOMAIN + ".sessionid").replace(".", "_")
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SESSION_COOKIE_HTTPONLY = env('SESSION_COOKIE_HTTPONLY', False)
-SESSION_COOKIE_SECURE = env('SESSION_COOKIE_SECURE', False)
-CSRF_COOKIE_SECURE = env('CSRF_COOKIE_SECURE', False)
+SESSION_COOKIE_HTTPONLY = env('SESSION_COOKIE_HTTPONLY', True)
+SESSION_COOKIE_SECURE = env('SESSION_COOKIE_SECURE', True)
+CSRF_COOKIE_SECURE = env('CSRF_COOKIE_SECURE', True)
+SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE","Lax") or None
+if SESSION_COOKIE_SAMESITE and SESSION_COOKIE_SAMESITE.lower() in ("none","null") :
+    SESSION_COOKIE_SAMESITE = None
 
 GUEST_SESSION_AGE=env('GUEST_SESSION_AGE',default=3600) #login session timeout in seconds
 SESSION_AGE=env('SESSION_AGE',default=1209600)
@@ -168,9 +168,13 @@ DATABASES['default']["CONN_MAX_AGE"] = 3600
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/sso/static/'
 #STATICFILES_DIRS = (os.path.join(BASE_DIR, 'itassets', 'static'),)
-AUTH_CACHE_SIZE=env("AUTH_CACHE_SIZE",default=2000)
+STAFF_AUTH_CACHE_SIZE=env("STAFF_AUTH_CACHE_SIZE",default=2000)
+if STAFF_AUTH_CACHE_SIZE <= 0:
+    STAFF_AUTH_CACHE_SIZE = 2000
+
+AUTH_CACHE_SIZE=env("AUTH_CACHE_SIZE",default=500)
 if AUTH_CACHE_SIZE <= 0:
-    AUTH_CACHE_SIZE = 2000
+    AUTH_CACHE_SIZE = 500
 
 EMAIL_GROUPS_CACHE_SIZE=env("EMAIL_GROUPS_CACHE_SIZE",default=2000)
 if EMAIL_GROUPS_CACHE_SIZE <= 0:
@@ -188,7 +192,6 @@ AUTHORIZATION_CACHE_SIZE=env("AUTHORIZATION_CACHE_SIZE",default=2000)
 if AUTHORIZATION_CACHE_SIZE <= 0:
     AUTHORIZATION_CACHE_SIZE = 2000
 
-
 AUTH_BASIC_CACHE_EXPIRETIME=env('AUTH_BASIC_CACHE_EXPIRETIME',default=3600) #user access token life time in seconds
 if AUTH_BASIC_CACHE_EXPIRETIME > 0:
     AUTH_BASIC_CACHE_EXPIRETIME = timedelta(seconds=AUTH_BASIC_CACHE_EXPIRETIME)
@@ -197,6 +200,12 @@ else:
 
 #check whether the user token is valid per request
 CHECK_AUTH_BASIC_PER_REQUEST=env("CHECK_AUTH_BASIC_PER_REQUEST",default=True)
+
+STAFF_AUTH_CACHE_EXPIRETIME=env('STAFF_AUTH_CACHE_EXPIRETIME',default=36000) #user access token life time in seconds
+if STAFF_AUTH_CACHE_EXPIRETIME > 0:
+    STAFF_AUTH_CACHE_EXPIRETIME = timedelta(seconds=STAFF_AUTH_CACHE_EXPIRETIME)
+else:
+    STAFF_AUTH_CACHE_EXPIRETIME = timedelta(seconds=36000)
 
 AUTH_CACHE_EXPIRETIME=env('AUTH_CACHE_EXPIRETIME',default=3600) #user access token life time in seconds
 if AUTH_CACHE_EXPIRETIME > 0:
@@ -282,16 +291,6 @@ LOGGING = {
         },
     }
 }
-
-if DEBUG:
-    def show_toolbar(req):
-        return req.path.startswith("/admin/") or req.path.startswith("/__debug__/") or req.path.startswith("/sso/loginstatus")
-
-    INSTALLED_APPS.append('debug_toolbar')
-    MIDDLEWARE.insert(0,'debug_toolbar.middleware.DebugToolbarMiddleware')
-    DEBUG_TOOLBAR_CONFIG = {
-        'SHOW_TOOLBAR_CALLBACK':show_toolbar
-    }
 
 def GET_CACHE_CONF(server,options={}):
     if server.lower().startswith('redis'):

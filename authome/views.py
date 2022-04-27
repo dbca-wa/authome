@@ -21,7 +21,6 @@ from django_redis import get_redis_connection
 from social_django.utils import psa
 from social_core.actions import do_auth, do_complete
 
-from urllib.parse import unquote 
 from importlib import import_module
 from ipware.ip import get_client_ip
 import json
@@ -74,11 +73,9 @@ BASIC_AUTH_REQUIRED_RESPONSE.content = "Basic auth required"
 #pre created not authorised response,status = 403
 NOT_AUTHORIZED_RESPONSE = HttpResponseForbidden()
 
-basic_auth_re = re.compile('^Basic\s+([a-zA-Z0-9+/=]+)$')
-
 def _get_next_url(request):
     """
-    Get the next url 
+    Get the non-null absolute next url .
     1. If request has parameter 'next', use the value of parameter 'next' as next url, then go to step 5
     2. if request has header 'x-upstream-request-uri', use request's host and the value of the header 'x-upstream-request-uri' to populate next url, then go to step  5
     3. if session has proeprty 'next', use the value of the session property 'next' as next url. then go to step 5
@@ -86,46 +83,39 @@ def _get_next_url(request):
     5. get the domain from next url, if failed, use request host, and then use this domain to build a absoulute next  url
     """
     next_url = request.GET.get(REDIRECT_FIELD_NAME)
+    #try to get next url from request
     if not next_url and request.headers.get("x-upstream-request-uri"):
-            next_url = "https://{}{}".format(get_host(request),request.headers.get("x-upstream-request-uri"))
+        next_url = "https://{}{}".format(utils.get_host(request),request.headers.get("x-upstream-request-uri"))
 
     if not next_url:
+        #get next url from session
         next_url = request.session.get(REDIRECT_FIELD_NAME)
 
     if next_url:
-        domain = utils.get_domain(next_url) or get_host(request)
-        next_url = get_absolute_url(next_url,domain)
+        #found next url, build its absolute url
+        domain = utils.get_domain(next_url) 
+        if not domain:
+            domain = utils.get_host(request)
+            next_url = get_absolute_url(next_url,domain)
         logger.debug("Found next url '{}'".format(next_url))
     else:
-        domain = get_host(request)
-        next_url = "https://{}/sso/setting".format(domain)
+        #next url is not found, use default next url
+        domain = utils.get_host(request)
+        if domain == settings.AUTH2_DOMAIN:
+            next_url = "https://{}/sso/setting".format(domain)
+        else:
+            next_url = "https://{}".format(domain)
+
         logger.debug("No next url provided,set the next url to '{}'".format(next_url))
 
     return next_url
 
 
-def _get_host(request):
-    global get_host
-    if request.headers.get("x-upstream-request-uri"):
-        if request.headers.get("x-upstream-server-name"):
-            get_host = _get_host1
-        else:
-            get_host = _get_host2
-        return get_host(request)
-    else:
-        return request.get_host()
-
-def _get_host1(request):
-    return request.headers.get("x-upstream-server-name") or request.get_host()
-
-def _get_host2(request):
-    return request.get_host()
-
-get_host = _get_host
-
+basic_auth_re = re.compile('^Basic\s+([a-zA-Z0-9+/=]+)$')
 def _parse_basic(basic_auth):
     """
     Parse the basic header to a tuple(username,password)
+    Throw excepton if can't find the basic auth data
     """
     if not basic_auth:
         raise Exception('Missing user credential')
@@ -144,16 +134,23 @@ def check_authorization(request,useremail,domain=None,path=None):
     """
     #get the real request domain and request path from request header set in nginx if have;otherwise use the domain and path from http request
     if not domain:
-        domain = get_host(request)
+        domain = utils.get_host(request)
     if not path:
-        path = request.headers.get("x-upstream-request-uri") or request.path
-        try:
-            path = path[:path.index("?")]
-        except:
-            pass
+        path = request.headers.get("x-upstream-request-uri")
+        if path:
+            #get the original request path
+            #remove the query string
+            try:
+                path = path[:path.index("?")]
+            except:
+                pass
+        else:
+            #can't get the original path, use request path directly
+            path = request.path
+
 
     if path.startswith("/sso/"):
-        logger.debug("All paths startswith '/sso' are opened for everyone by default.")
+        logger.debug("All paths startswith '/sso' are accessible for everyone by default.")
         return None
     elif models.can_access(useremail,domain,path):
         logger.debug("User({}) can access https://{}{}".format(useremail,domain,path))
@@ -176,7 +173,43 @@ def get_absolute_url(url,domain):
         #absoulte url without protocol
         return "https://{}".format(url)
 
-def get_post_b2c_logout_url(request,idp=None,encode=True):
+def _get_relogin_url(request):
+    """
+    Get non-null absolute relogin url from request or session; 
+    if can't found, return default url
+    """
+    #try to get relogin url from request url parameters
+    relogin_url = request.GET.get("relogin")
+    request_host = utils.get_host(request)
+    if not relogin_url:
+        #not found in request url parameters, try to use the property 'next' from session as relogin url
+        relogin_url = request.session.get("next")
+        if not relogin_url:
+            #still can't get the relogin url, use the home page of the domain as relogin url
+            if request_host == settings.AUTH2_DOMAIN:
+                return "https://{}/sso/setting".format(request_host)
+            else:
+                return "https://{}".format(request_host)
+    
+    host = utils.get_domain(relogin_url)
+    if not host:
+        host = request_host
+        relogin_url = get_absolute_url(relogin_url,host)
+    elif request_host != settings.AUTH2_DOMAIN and host != request_host:
+        #request's domain is not the domain of the relogin url, change the relogin url to home url of request's domain
+        return "https://{}".format(request_host)
+
+    #reset relogin url to default url if relogin url is signed out url
+    if any(relogin_url.endswith(p) for p in ["/sso/auth_logout","/sso/signedout"]):
+        if host == settings.AUTH2_DOMAIN:
+            return "https://{}/sso/setting".format(host)
+        else:
+            return "https://{}".format(host)
+
+    return relogin_url
+
+
+def get_post_b2c_logout_url(request,encode=True,message=None):
     """
     Get post b2c logout url which will be redirect to by dbcab2c after log out from dbca b2c.
     The logout url is based on idp's logout method.
@@ -193,51 +226,33 @@ def get_post_b2c_logout_url(request,idp=None,encode=True):
         encode: encode the url if True;
     Return 	quoted post logout url
     """
+    if not message:
+        message = request.GET.get("message")
     #get the idp and idepid
-    if idp:
-        idpid = idp.idp
+    idpid = None
+    idp = None
+    idppk = request.GET.get("idp")
+    if idppk:
+        idp = models.IdentityProvider.get_idp(int(idppk))
+        if idp:
+            idpid = idp.idp
     else:
+        #get idp from session
         idpid = request.session.idpid
         if idpid:
             idp = models.IdentityProvider.get_idp(idpid)
+            if not idp:
+                #can't find the IdentityProvider with idpid,reset idpid to None
+                idpid = None
+            else:
+                idppk = idp.id
 
-    #try to get relogin url from request url parameters
-    relogin_url = request.GET.get("relogin")
-    if not relogin_url:
-        #not found in request url parameters, try to use the property 'next' from session as relogin url
-        relogin_url = request.session.get("next")
-        request_host = get_host(request)
-        if relogin_url and request_host != settings.AUTH2_DOMAIN:
-            #the request is not sent from auth2 
-            relogin_domain = utils.get_domain(relogin_url)
-            if relogin_domain and relogin_domain != request_host:
-                #request's domain is not the domain of the relogin url, change the relogin url to home url of request's domain
-                relogin_url = "https://{}".format(request_host)
 
-    host = None
-    if relogin_url:
-        host = utils.get_domain(relogin_url)
-    if not host:
-        host = get_host(request)
-
-    if not relogin_url:
-        #still can't get the relogin url, use the home page of the domain as relogin url
-        relogin_url = "https://{}".format(host)
-
-    relogin_url = get_absolute_url(relogin_url,host)
-
-    if any(relogin_url.endswith(p) for p in ["/sso/auth_logout","/sso/signedout"]):
-        if host == settings.AUTH2_DOMAIN:
-            relogin_url = "https://{}/sso/setting".format(host)
-        else:
-            relogin_url = "https://{}".format(host)
+    relogin_url = _get_relogin_url(request)
+    domain = utils.get_domain(relogin_url)
 
     #get the absolute signedout url
-    post_b2c_logout_url = "https://{}/sso/signedout".format(host)
-
-    if idpid:
-        #if idpid is not None, encode it.
-        idpid = urllib.parse.quote(idpid)
+    post_b2c_logout_url = "https://{}/sso/signedout".format(domain)
 
     if relogin_url:
         #if relogin_url is not None, encode it
@@ -250,9 +265,15 @@ def get_post_b2c_logout_url(request,idp=None,encode=True):
 
     if idpid:
         if params:
-            params = "{}&idp={}".format(params,idpid)
+            params = "{}&idp={}".format(params,idppk)
         else:
-            params = "idp={}".format(idpid)
+            params = "idp={}".format(idppk)
+
+    if message:
+        if params:
+            params = "{}&message={}".format(params,urllib.parse.quote(message))
+        else:
+            params = "message={}".format(urllib.parse.quote(message))
 
 
     if params:
@@ -297,7 +318,7 @@ def _populate_response(request,f_cache,cache_key,user,session_key=None):
     response["remote-user"] = user.email
     cached_response["remote-user"] = user.email
     # cache the response
-    f_cache(cache_key,cached_response,user)
+    f_cache(user,cache_key,cached_response)
     logger.debug("cache the sso auth data for the user({}) with key({})".format(user.email,cache_key))
 
     return response
@@ -342,8 +363,8 @@ def _auth(request):
             #authorized
             #get the reponse from cache
             user = request.user
-            auth_key = cache.get_auth_key(user.email,request.session.session_key)
-            response = cache.get_auth(auth_key,user.modified)
+            auth_key = request.session.session_key
+            response = cache.get_auth(user,auth_key,user.modified)
     
             if response and models.UserGroup.find_groups(user.email)[1] == response["X-groups"]:
                 #response cached
@@ -368,6 +389,7 @@ def auth(request):
         401 response: not authenticated
         403 reponse: authenticated,but not authorized
     """
+    request.session.modified = False
     res = _auth(request)
     if res:
         #authenticated, but can be authorized or not authorized
@@ -385,6 +407,7 @@ def auth_optional(request):
         204 response: not authenticated
         403 reponse: authenticated,but not authorized
     """
+    request.session.modified = False
     res = _auth(request)
     if res:
         #authenticated, but can be authorized or not authorized
@@ -409,7 +432,7 @@ def auth_basic(request):
     #get the basic auth header
     auth_basic = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else ''
     if not auth_basic:
-        #no basic auth data
+        #basic auth data not found
         #check whether session is already authenticated or not.
         res = _auth(request)
         if res:
@@ -420,7 +443,12 @@ def auth_basic(request):
             return BASIC_AUTH_REQUIRED_RESPONSE
 
     #get the user name and user toke by parsing the basic auth data
-    useremail, token = _parse_basic(auth_basic)
+    try:
+        useremail, token = _parse_basic(auth_basic)
+    except:
+        #failed to parse the basic auth data from request
+        return BASIC_AUTH_REQUIRED_RESPONSE
+
 
     #try to get the reponse from cache with useremail and token
     auth_basic_key = cache.get_basic_auth_key(useremail,token)
@@ -437,7 +465,11 @@ def auth_basic(request):
                 if user == anonymoususer or user.email != useremail:
                     raise Exception("User was changed, check again.")
 
-                if not user.is_active or not is_usertoken_valid(user,token):
+                if not user.is_active :
+                    logger.debug("The user({}) is inactive.".format(useremail))
+                    cache.delete_basic_auth(auth_basic_key)
+                    return BASIC_AUTH_REQUIRED_RESPONSE
+                elif not is_usertoken_valid(user,token):
                     #token is invalid, remove the cached response
                     cache.delete_basic_auth(auth_basic_key)
                     #fallback to session authentication
@@ -493,6 +525,9 @@ def auth_basic(request):
             else:
                 #authorized
                 return response
+        elif not user.is_active :
+            logger.debug("The user({}) is inactive.".format(useremail))
+            return BASIC_AUTH_REQUIRED_RESPONSE
         else:
             #user token is invalid; fallback to user session authentication
             res = _auth(request)
@@ -528,44 +563,56 @@ def auth_local(request):
     if not next_url:
         next_url = "https://{}/sso/setting".format(settings.AUTH2_DOMAIN)
 
-    domain = utils.get_domain(next_url)
+    next_url_domain = utils.get_domain(next_url)
 
     if request.user.is_authenticated:
         #already authenticated
-        next_url_domain = utils.get_domain(next_url)
         if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
+            #The domain of next url is the same as session cookie domain, redirect to next url directly
             return HttpResponseRedirect(next_url)
         else:
+            #The domain of next url is not the session cookie domain, login to domain first
             return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
 
     container_class = "self_asserted_container"
-    userflow = models.CustomizableUserflow.get_userflow(domain)
+    userflow = models.CustomizableUserflow.get_userflow(next_url_domain)
     _init_userflow_pagelayout(request,userflow,container_class)
 
     page_layout = getattr(userflow,container_class)
     extracss = userflow.inited_extracss
 
-    context = {"body":page_layout,"extracss":extracss,"domain":domain,"next":next_url}
+    context = {"body":page_layout,"extracss":extracss,"domain":next_url_domain,"next":next_url,"expiretime":utils.format_timedelta(settings.PASSCODE_AGE,unit='s')}
+
+    if not defaultcache:
+        context["messages"] = [("error","Auth_local is disabled because the default cache is not configured.")]
+        return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
 
     if request.method == "GET":
-        context["codeid"] = get_codeid()
-        return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+        if utils.get_host(request).endswith(settings.SESSION_COOKIE_DOMAIN):
+            #request is sent from session cookie domain, show the page to input email 
+            return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
+        else:
+            #request is sent from other domain, redirect to auth2 to let user login to session cookie domain first.
+            return HttpResponseRedirect("https://{}/sso/auth_local?next={}".format(settings.AUTH2_DOMAIN,urllib.parse.quote(next_url)))
     elif request.method == "POST":
+        if not utils.get_host(request).endswith(settings.SESSION_COOKIE_DOMAIN):
+            #post request is sent from other domain, invalid, redirect to auth2 to let user login to session cookie domain first
+            return HttpResponseRedirect("https://{}/sso/auth_local?next={}".format(settings.AUTH2_DOMAIN,urllib.parse.quote(next_url)))
+
+        #all post auth_local request should come from session cookie domain
         action = request.POST.get("action")
         email = request.POST.get("email","").strip().lower()
         context["email"] = email
         if not action:
             context["messages"] = [("error","Action is missing")]
-            context["codeid"] = request.POST.get("codeid") or get_codeid()
+            context["codeid"] = request.POST.get("codeid")
             return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
         elif action == "cancel":
             return HttpResponseRedirect(next_url)
         elif action == "changeemail":
-            context["codeid"] = request.POST.get("codeid") or get_codeid()
+            context["codeid"] = request.POST.get("codeid") 
             return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
         elif action in ( "sendcode","resendcode"):
-            codeid = request.POST.get("codeid" if action == "sendcode" else "newcodeid") or get_codeid()
-            context["codeid"] = codeid
             if not email:
                 context["messages"] = [("error","Email is required")]
                 return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
@@ -573,27 +620,37 @@ def auth_local(request):
                 context["messages"] = [("error","Email is invalid")]
                 return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
 
+            codeid = request.POST.get("codeid") if action == "sendcode" else None
+            code = None
             codekey = get_verifycode_key(email)
             verifycode_number_key = get_verifycode_number_key(email)
-            verifycode_number = int(defaultcache.get(verifycode_number_key) or 0)
-            if verifycode_number >= settings.PASSCODE_TRY_TIMES:
-                code = None
-            else:
-                code = defaultcache.get(codekey)
-
-            if code and code.startswith(codeid + "="):
-                context["messages"] = [("info","Verification code has already been sent to {}; Please entery the verification code.".format(email))]
-                logger.debug("Verification code has already been sent to {}, no need to send again".format(context["email"]))
-            else:
+            if codeid:
+                verifycode_number = int(defaultcache.get(verifycode_number_key) or 0)
+                if verifycode_number >= settings.PASSCODE_TRY_TIMES:
+                    #The limits of verifying the current code was reached, generate a new one.
+                    code = None
+                    codeid = None
+                else:
+                    code = defaultcache.get(codekey)
+                    if code and code.startswith(codeid + "="):
+                        context["messages"] = [("info","Verification code has already been sent to {}; Please entery the verification code.".format(email))]
+                        logger.debug("Verification code has already been sent to {}, no need to send again".format(context["email"]))
+                    else:
+                        #code is outdated
+                        code = None
+                        codeid = None
+            if not codeid:
                 sendcode_number_key = get_sendcode_number_key(email)
                 sendcode_number = int(defaultcache.get(sendcode_number_key) or 0)
-                if sendcode_number == settings.PASSCODE_DAILY_LIMIT:
+                if sendcode_number >= settings.PASSCODE_DAILY_LIMIT:
+                    #The daily limits of sending veriy code was reached.
                     context["messages"] = [("error","You reached the daily limit of sending verification code.")]
                     return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
-                else:
-                    now = timezone.now()
-                    seconds = now.hour * 60 * 60 + now.minute * 60 + now.second
-                    defaultcache.set(sendcode_number_key,sendcode_number + 1,timeout=86400 - seconds)
+
+                codeid = get_codeid()
+                now = timezone.now()
+                seconds = now.hour * 60 * 60 + now.minute * 60 + now.second
+                defaultcache.set(sendcode_number_key,sendcode_number + 1,timeout=86400 - seconds)
 
                 code = get_random_string(settings.PASSCODE_LENGTH,VALID_CODE_CHARS)
                 defaultcache.set(codekey,"{}={}".format(codeid,code),timeout=settings.PASSCODE_AGE)
@@ -612,14 +669,12 @@ def auth_local(request):
                 emails.send_email(userflow.verifyemail_from,context["email"],userflow.verifyemail_subject,verifyemail_body)
                 context["messages"] = [("info","Verification code has been sent to {}; Please enter the verification code.".format(email))]
                 logger.debug("Verification code has been sent to {}.".format(context["email"])) 
-            context["newcodeid"] = get_codeid()
+            context["codeid"] = codeid
             return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
         elif action == "verifycode":
             codeid = request.POST.get("codeid")
             if not codeid:
                 context["messages"] = [("error","Codeid is missing.")]
-                codeid = get_codeid()
-                context["codeid"] = codeid
                 return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
             context["codeid"] = codeid
 
@@ -630,8 +685,6 @@ def auth_local(request):
                 context["messages"] = [("error","Email is invalid")]
                 return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
 
-            context["newcodeid"] = request.POST.get("newcodeid") or get_codeid()
-
             inputcode = request.POST.get("code","").strip().upper()
             if not inputcode:
                 context["messages"] = [("error","Please input the code to verify.")]
@@ -639,27 +692,28 @@ def auth_local(request):
 
             context["code"] = inputcode
 
-
             verifycode_number_key = get_verifycode_number_key(email)
-            verifycode_number = int(defaultcache.get(verifycode_number_key) or 0)
-            if verifycode_number == settings.PASSCODE_TRY_TIMES:
-                context["messages"] = [("error","You already tried {} times, please resend code and verify again.".format(settings.PASSCODE_TRY_TIMES))]
-                return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
-            else:
-                defaultcache.set(verifycode_number_key,verifycode_number + 1,timeout=settings.PASSCODE_AGE)
             
             codekey = get_verifycode_key(email)
             code = defaultcache.get(codekey)
             if not code:
                 context["messages"] = [("error","The code is expired, Please resend code.")]
                 return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
-
             elif not code.startswith(codeid + "="):
                 context["messages"] = [("error","The verfication code was sent by other device,please resend the code again.")]
                 return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
-            elif code[len(codeid) + 1:] != inputcode:
-                context["messages"] = [("error","The input code is invalid, please check the email and verify again.")]
-                return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
+            else:
+                verifycode_number = int(defaultcache.get(verifycode_number_key) or 0)
+                if verifycode_number >= settings.PASSCODE_TRY_TIMES:
+                    #The limits of verifying the current code was reached,.
+                    context["messages"] = [("error","You already tried {} times, please resend code and verify again.".format(settings.PASSCODE_TRY_TIMES))]
+                    return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
+                elif code[len(codeid) + 1:] != inputcode:
+                    #code is invalid.
+                    #increase the failed verifing times.
+                    defaultcache.set(verifycode_number_key,verifycode_number + 1,timeout=settings.PASSCODE_AGE)
+                    context["messages"] = [("error","The input code is invalid, please check the email and verify again.")]
+                    return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
                 
             #verify successfully
             user = models.User.objects.filter(email=email).first()
@@ -669,23 +723,23 @@ def auth_local(request):
                 user.last_login = timezone.now()
                 user.save(update_fields=["last_idp","last_login"])
                 if user.is_active:
+                    request.session["idp"] = idp.idp
                     login(request,user,'django.contrib.auth.backends.ModelBackend')
 
+                    request.session["idp"] = idp.idp
                     usergroups = models.UserGroup.find_groups(email)[0]
-
                     timeout = models.UserGroup.get_session_timeout(usergroups)
                     if timeout:
                         request.session["session_timeout"] = timeout
-                    request.session["idp"] = idp.idp
+
                     defaultcache.delete(codekey)
                     defaultcache.delete(verifycode_number_key)
-                    next_url_domain = utils.get_domain(next_url)
                     if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                         return HttpResponseRedirect(next_url)
                     else:
                         return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
                 else:
-                    return signout(request,logout_url=next_url,btn_signout_name="Click me to sign in",message="Your account was disabled.")
+                    return signout(request,relogin_url=next_url,message="Your account is disabled.",localauth=True)
             else:
                 #Userr does not exist, signup
                 token = get_random_string(settings.SIGNUP_TOKEN_LENGTH,VALID_TOKEN_CHARS)
@@ -702,8 +756,8 @@ def auth_local(request):
                 context["codeid"] = get_codeid()
                 context["messages"] = [("error","Email address is invalid")]
                 return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
-            inputtoken = request.POST.get("token","").strip()
-            if not inputtoken:
+            signuptoken = request.POST.get("token","").strip()
+            if not signuptoken:
                 context["codeid"] = get_codeid()
                 context["messages"] = [("error","Signup token is missing")]
                 return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
@@ -714,7 +768,7 @@ def auth_local(request):
                 context["codeid"] = get_codeid()
                 context["messages"] = [("error","The signup token is expired, please signin again.")]
                 return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
-            elif token != inputtoken:
+            elif token != signuptoken:
                 context["codeid"] = get_codeid()
                 context["messages"] = [("error","The signup token is invalid, please signin again")]
                 return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
@@ -743,14 +797,17 @@ def auth_local(request):
 
             idp,created = models.IdentityProvider.objects.get_or_create(idp=models.IdentityProvider.AUTH_EMAIL_VERIFY[0],defaults={"name":models.IdentityProvider.AUTH_EMAIL_VERIFY[1]})
             user,created = models.User.objects.update_or_create(email=email,username=email,defaults={"is_staff":is_staff,"last_idp":idp,"last_login":timezone.now(),"first_name":firstname,"last_name":lastname})
+
+            request.session["idp"] = idp.idp
             login(request,user,'django.contrib.auth.backends.ModelBackend')
+
+            request.session["idp"] = idp.idp
             timeout = models.UserGroup.get_session_timeout(usergroups)
             if timeout:
                 request.session["session_timeout"] = timeout
-            request.session["idp"] = idp.idp
+
             defaultcache.delete(tokenkey)
         
-            next_url_domain = utils.get_domain(next_url)
             if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                 return HttpResponseRedirect(next_url)
             else:
@@ -762,37 +819,21 @@ def auth_local(request):
     else:
         return  HttpResponseNotAllowed(["GET","POST"])
 
+
 def logout_view(request):
     """
     View method for path '/sso/auth_logout'
     """
     from .backends import AzureADB2COAuth2
-    host = get_host(request)
+    host = utils.get_host(request)
     if not host.endswith(settings.SESSION_COOKIE_DOMAIN):
         #request's domain is not a subdomain of session cookie; only need to delete to cookie ; and redirect to auth2.dbca to finish the logout procedure.
-        relogin_url = request.GET.get("relogin")
-        if not relogin_url:
-            #not found in request url parameters, try to use the property 'next' from session as relogin url
-            relogin_url = request.session.get("next")
-            if relogin_url and host != settings.AUTH2_DOMAIN:
-                #the request is not sent from auth2 
-                relogin_domain = utils.get_domain(relogin_url)
-                if relogin_domain and relogin_domain != host:
-                    #request's domain is not the domain of the relogin url, change the relogin url to home url of request's domain
-                    relogin_url = "https://{}".format(host)
-
-        if not relogin_url:
-            relogin_url = "https://{}".format(host)
-
-        if any(relogin_url.endswith(p) for p in ["/sso/auth_logout","/sso/signedout"]):
-            host = utils.get_domain(relogin_url)
-            if host == settings.AUTH2_DOMAIN:
-                relogin_url = "https://{}/sso/setting".format(host)
-            else:
-                relogin_url = "https://{}".format(host)
-
+        relogin_url = _get_relogin_url(request)
         #delete the cookie 
-        url = "https://{}/sso/auth_logout?relogin={}".format(settings.AUTH2_DOMAIN,relogin_url)
+        parameters = dict(request.GET.items())
+        parameters["relogin"] = relogin_url
+        querystring = "&".join( "{}={}".format(k,(urllib.parse.quote(v) if isinstance(v,str) else v)) for k,v in parameters.items())
+        url = "https://{}/sso/auth_logout?{}".format(settings.AUTH2_DOMAIN,querystring)
         res = HttpResponseRedirect(url)
         res.delete_cookie(
             settings.SESSION_COOKIE_NAME,
@@ -801,19 +842,42 @@ def logout_view(request):
             samesite=settings.SESSION_COOKIE_SAMESITE,
         )
         return res
-
-
-    #get backend logout url
-    backend_logout_url = AzureADB2COAuth2.get_logout_url() #request.session.get("backend_logout_url")
     #get post logout url
     post_logout_url = get_post_b2c_logout_url(request,encode=False)
-    #logout the django user session
-    logout(request)
-    #redirect to backend to logout backend
-    if backend_logout_url:
-        return HttpResponseRedirect(backend_logout_url.format(urllib.parse.quote(post_logout_url)))
+    if "localauth" in request.GET:
+        logout_url = post_logout_url
     else:
-        return HttpResponseRedirect(post_logout_url)
+        #get backend logout url
+        backend_logout_url = AzureADB2COAuth2.get_logout_url() #request.session.get("backend_logout_url")
+        logout_url = backend_logout_url.format(urllib.parse.quote(post_logout_url))
+
+    logout(request)
+    return HttpResponseRedirect(logout_url)
+    """
+    message = request.GET.get("message")
+    if message:
+        #has error message, return a page to show the message and let the user trigger the logout flow
+        relogin_url = _get_relogin_url(request)
+        domain = utils.get_domain(relogin_url) or utils.get_host(request)
+        container_class = "self_asserted_container"
+        userflow = models.CustomizableUserflow.get_userflow(domain)
+        _init_userflow_pagelayout(request,userflow,container_class)
+
+        page_layout = getattr(userflow,container_class)
+        extracss = userflow.inited_extracss
+ 
+        context = {
+            "body":page_layout,
+            "extracss":extracss,
+            "logout_url":None if "localauth" in request.GET else logout_url,
+            "relogin_url":relogin_url,
+            "message":message
+        }
+        context["auto_signout_delay_seconds"] = settings.AUTO_SIGNOUT_DELAY_SECONDS
+        return TemplateResponse(request,"authome/signout.html",context=context)
+    else:
+        return HttpResponseRedirect(logout_url)
+    """
 
 SessionEngine = import_module(settings.SESSION_ENGINE)
 SessionStore = SessionEngine.SessionStore
@@ -866,27 +930,43 @@ def home(request):
     Trigger authentication user flow if not authenticated
     """
     next_url = request.GET.get('next', None)
+    if next_url:
+        #build an absolute url 
+        if not next_url.startswith("http"):
+            if next_url[0] == "/":
+                host = utils.get_host(request)
+                next_url = "https://{}{}".format(host,next_url)
+            else:
+                next_url = "https://{}".format(next_url)
+
     if next_url and "?" in next_url:
         next_path = next_url[0:next_url.index('?')]
     else:
         next_path = next_url
     #check whether rquest is authenticated and authorized
-    if not request.user.is_authenticated or (request.user.is_authenticated and not request.user.is_active):
+    if not request.user.is_authenticated or not request.user.is_active:
         if next_path and any(next_path.endswith(p) for p in ["/sso/auth_logout","/sso/signedout"]):
+            #next path is signout url
             #if have relogin parameter, try to use relogin url as next_url
             relogin_url = None
             if "?" in next_url:
                 parameters = dict([ (p.split("=",1) if "=" in p else (p,"")) for p in next_url[next_url.index("?") + 1:].split("&") if p.strip()])
                 if parameters.get("relogin"):
-                    relogin_url = unquote(parameters.get("relogin"))
+                    relogin_url = urllib.parse.unquote(parameters.get("relogin"))
                     if not relogin_url.startswith("http"):
-                        relogin_url = "https://{}{}".format(utils.get_domain(next_url) or get_host(request),relogin_url)
+                        relogin_url = "https://{}{}".format(utils.get_domain(next_url) or utils.get_host(request),relogin_url)
 
             if relogin_url:
                 next_url = relogin_url
+                if not next_url.startswith("http"):
+                    if next_url[0] == "/":
+                        host = utils.get_domain(next_path)
+                        next_url = "https://{}{}".format(host,next_url)
+                    else:
+                        next_url = "https://{}".format(next_url)
             else:
                 #can't find next_url, use default next_url
-                host = utils.get_domain(next_url) or get_host(request)
+                host = utils.get_domain(next_path)
                 if host == settings.AUTH2_DOMAIN:
                     next_url = "https://{}/sso/setting".format(host)
                 else:
@@ -900,8 +980,7 @@ def home(request):
             request.session["next"]=next_url
             return logout_view(request)
         else:
-            #not authenticated
-            #get authenticatation url
+            #not authenticated, authenticate user via azure b2c
             url = reverse('social:begin', args=['azuread-b2c-oauth2'])
             if next_url:
                 #has next_url, add next url to authentication url as url parameter
@@ -916,9 +995,9 @@ def home(request):
             #redirect to authentiocaion url to start authentication user flow
             return HttpResponseRedirect(url)
     else:
-        #authenticated and authorized
+        #authenticated , redirect to the original request
         if not next_url:
-            host = get_host(request)
+            host = utils.get_host(request)
             if host == settings.AUTH2_DOMAIN:
                 next_url = "https://{}/sso/setting".format(host)
                 logger.debug("Use the default auth2 next url '{}'".format(next_url))
@@ -926,29 +1005,32 @@ def home(request):
                 next_url = "https://{}".format(host)
                 logger.debug("Use the default client app next url '{}'".format(next_url))
         elif any(next_path.endswith(p) for p in ["/sso/auth_logout","/sso/signedout"]):
-            #if have relogin parameter, try to use relogin url as next_url
+            #next url is a signout url, try to get the next url from signout url
             relogin_url = None
             if "?" in next_url:
                 parameters = dict([ (p.split("=",1) if "=" in p else (p,"")) for p in next_url[next_url.index("?") + 1:].split("&") if p.strip()])
                 if parameters.get("relogin"):
-                    relogin_url = unquote(parameters.get("relogin"))
+                    relogin_url = urllib.parse.unquote(parameters.get("relogin"))
                     if not relogin_url.startswith("http"):
-                        relogin_url = "https://{}{}".format(utils.get_domain(next_url) or get_host(request),relogin_url)
+                        relogin_url = "https://{}{}".format(utils.get_domain(next_url) or utils.get_host(request),relogin_url)
 
             if relogin_url:
                 next_url = relogin_url
+                if not next_url.startswith("http"):
+                    if next_url[0] == "/":
+                        host = utils.get_domain(next_path)
+                        next_url = "https://{}{}".format(host,next_url)
+                    else:
+                        next_url = "https://{}".format(next_url)
                 logger.debug("Use the relogin url({}) as  next url ".format(next_url))
             else:
-                host = utils.get_domain(next_url) or get_host(request)
+                host = utils.get_domain(next_path)
                 if host == settings.AUTH2_DOMAIN:
                     next_url = "https://{}/sso/setting".format(host)
                     logger.debug("Can't find the relogin url, use the default auth2 next url '{}'".format(next_url))
                 else:
                     next_url = "https://{}".format(host)
                     logger.debug("Can't find the relogin url, use the default client app next url '{}'".format(next_url))
-        elif not next_url.startswith("http"):
-            logger.debug("Get the next url '{}'".format(next_url))
-            next_url = 'https://{}'.format(next_url)
         else:
             logger.debug("Get the next url '{}'".format(next_url))
             pass
@@ -956,9 +1038,10 @@ def home(request):
         #has next_url, redirect to that url
         next_url_domain = utils.get_domain(next_url)
         if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
+            #in the same session domain, redirect to the orignal url directly
             return HttpResponseRedirect(next_url) 
         else:
-            #other domain
+            #other domain, login to that before redirecting to the original url
             return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
 
 def loginstatus(request):
@@ -968,8 +1051,19 @@ def loginstatus(request):
     """
     res = _auth(request)
 
-    return TemplateResponse(request,"authome/loginstatus.html",context={"message":"You {} logged in".format("are" if res else "aren't")})
+    domain = utils.get_host(request)
+    container_class = "self_asserted_container"
+    userflow = models.CustomizableUserflow.get_userflow(domain)
+    _init_userflow_pagelayout(request,userflow,container_class)
 
+    page_layout = getattr(userflow,container_class)
+    extracss = userflow.inited_extracss
+
+    context = {"body":page_layout,"extracss":extracss,"message":"You {} signed in".format("have already" if res else "haven't"),"title":"Login Status","domain":domain}
+
+    return TemplateResponse(request,"authome/message.html",context=context)
+ 
+ 
 
 def profile(request):
     """
@@ -979,14 +1073,17 @@ def profile(request):
     """
     #get the auth response
     user = request.user
-    auth_key = cache.get_auth_key(user.email,request.session.session_key)
-    response = cache.get_auth(auth_key,user.modified)
+    if not user.is_authenticated:
+        #not authenticated
+        return {"authenticated":False}
+    auth_key = request.session.session_key
+    response = cache.get_auth(user,auth_key,user.modified)
 
     if not response:
         response = _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
 
     #populte the profile from response headers
-    content = {}
+    content = {"authenticated":True}
     for key,value in response.items():
         if key.startswith("X-"):
             key = key[2:].replace("-","_")
@@ -1031,8 +1128,34 @@ MFA_METHOD_MAPPING = {
 def user_setting(request):
     #get the auth response
     user = request.user
-    auth_key = cache.get_auth_key(user.email,request.session.session_key)
-    response = cache.get_auth(auth_key,user.modified)
+    auth_key = request.session.session_key
+    response = cache.get_auth(user,auth_key,user.modified)
+    back_url = request.GET.get("back") or request.POST.get("back")
+    logout_url = request.GET.get("logout") or request.POST.get("logout")
+    domain = utils.get_host(request)
+    next_url = "https://{}/sso/setting".format(domain)
+    parameters = None
+    if not back_url:
+        if domain != settings.AUTH2_DOMAIN:
+            back_url = "https://{}".format(domain)
+    else:
+        back_url = get_absolute_url(back_url,domain)
+        parameters = "back={}".format(urllib.parse.quote(back_url))
+
+    if not logout_url:
+        logout_url = "https://{}/sso/auth_logout".format(domain)
+    else:
+        logout_url = get_absolute_url(logout_url,domain)
+        if parameters: 
+            parameters = "{}&logout={}".format(parameters,urllib.parse.quote(logout_url))
+        else:
+            parameters = "logout={}".format(urllib.parse.quote(logout_url))
+
+    if parameters:
+        next_url = "https://{}/sso/setting?{}".format(domain,parameters)
+    else:
+        next_url = "https://{}/sso/setting".format(domain)
+    next_url = urllib.parse.quote(next_url)
 
     if not response:
         response = _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
@@ -1043,6 +1166,10 @@ def user_setting(request):
         if key.startswith("X-"):
             key = key[2:].replace("-","_")
             context[key] = value
+
+    context["back_url"] = back_url
+    context["logout_url"] = logout_url
+    context["next_url"] = next_url
 
     current_ip,routable = get_client_ip(request)
     context['client_logon_ip'] = current_ip
@@ -1077,7 +1204,7 @@ def user_setting(request):
     context["is_superuser"] = request.user.is_superuser
 
  
-    domain = get_host(request)
+    domain = utils.get_host(request)
     container_class = "self_asserted_container"
     userflow = models.CustomizableUserflow.get_userflow(domain)
     _init_userflow_pagelayout(request,userflow,container_class)
@@ -1111,26 +1238,15 @@ def signedout(request):
         #still authenticated, sigout first
         return logout_view(request)
 
-    domain = get_host(request)
-
-    #get the relogin_url from request url parameters
-    relogin_url = request.GET.get("relogin")
-    if not relogin_url:
-        #can't the the relogin url, use the domain's home page as relogin url
-        if domain == settings.AUTH2_DOMAIN:
-            relogin_url = "https://{}/sso/setting".format(domain)
-        else:
-            relogin_url = "https://{}".format(domain)
-    elif any(relogin_url.endswith(p) for p in ["/sso/auth_logout","/sso/signedout"]):
-        host = utils.get_domain(relogin_url)
-        if host == settings.AUTH2_DOMAIN:
-            relogin_url = "https://{}/sso/setting".format(host)
-        else:
-            relogin_url = "https://{}".format(host)
+    relogin_url = _get_relogin_url(request)
+    domain = utils.get_domain(relogin_url)
 
     #get idp to trigger a backend logout flow
-    idpid = request.GET.get("idp")
-    idp = models.IdentityProvider.get_idp(idpid)
+    idppk = request.GET.get("idp")
+    if idppk:
+        idp = models.IdentityProvider.get_idp(int(idppk))
+    else:
+        idp  = None
 
     container_class = "self_asserted_container"
     userflow = models.CustomizableUserflow.get_userflow(domain)
@@ -1139,39 +1255,47 @@ def signedout(request):
     page_layout = getattr(userflow,container_class)
     extracss = userflow.inited_extracss
 
-    context = {"body":page_layout,"extracss":extracss,"relogin":relogin_url,"auto_logout": False}
+    context = {
+        "body":page_layout,
+        "extracss":extracss,
+        "relogin":relogin_url,
+        "auto_logout": False,
+        "domain":domain,
+        "message":request.GET.get("message") 
+    }
     if idp and idp.logout_url:
         context["idp_name"] = idp.name
         context["idp_logout_url"] = idp.logout_url
         context["auto_logout"] = True if idp.logout_method == models.IdentityProvider.AUTO_LOGOUT_WITH_POPUP_WINDOW else False
 
-    if domain:
-        context["domain"] = domain
-
     return TemplateResponse(request,"authome/signedout.html",context=context)
 
-def signout(request,**kwargs):
+def signout(request,relogin_url=None,message=None,idp=None,localauth=False):
     """
     Called by pipeline to automatically logout the user beceause some errors occured druing authentication.
     """
-    if kwargs.get("message"):
-        #has error message, return a page to show the message and let the user trigger the logout flow
-        domain = get_host(request)
-        container_class = "self_asserted_container"
-        userflow = models.CustomizableUserflow.get_userflow(domain)
-        _init_userflow_pagelayout(request,userflow,container_class)
-
-        page_layout = getattr(userflow,container_class)
-        extracss = userflow.inited_extracss
-
-        context = {"body":page_layout,"extracss":extracss}
-        context.update(kwargs)
-        context["btn_signout_name"] = context.get("btn_signout_name","Click me to sign out")
-        context["auto_signout_delay_seconds"] = settings.AUTO_SIGNOUT_DELAY_SECONDS
-        return TemplateResponse(request,"authome/signout.html",context=context)
+    parameters = {}
+    if not relogin_url:
+        relogin_url =_get_relogin_url(request)
+    parameters["relogin"] = relogin_url
+    if idp:
+        parameters["idp"] = idp.id
     else:
-        #no error message,automatically trigger the logout flow
-        return HttpResponseRedirect(kwargs["logout_url"])
+        idpid = request.session.get("idp")
+        if idpid:
+            idp = models.IdentityProvider.get_idp(idp)
+            if idp:
+                parameters["idp"] = idp.id
+
+    if message:
+        parameters["message"] = message
+
+    if localauth:
+        parameters["localauth"] = ""
+    logout(request)
+    querystring = "&".join("{}={}".format(k,urllib.parse.quote(v) if isinstance(v,str) else v) for k,v in parameters.items())
+    return HttpResponseRedirect("https://{}/sso/auth_logout?{}".format(utils.get_host(request),querystring))
+
 
 def _init_userflow_pagelayout(request,userflow,container_class):
     """
@@ -1271,8 +1395,16 @@ def domain_related_page(request,template,domain,title,container_class=None,heade
     page_layout = getattr(userflow,container_class)
     extracss = userflow.inited_extracss
 
-    context = {"body":page_layout,"extracss":extracss,"title":title,"enable_b2c_js_extension":settings.ENABLE_B2C_JS_EXTENSION,"header":header or "","footer":footer or "","add_auth2_local_option":settings.ADD_AUTH2_LOCAL_OPTION}
-    context["domain"] = settings.AUTH2_DOMAIN
+    context = {
+        "body":page_layout,
+        "extracss":extracss,
+        "title":title,
+        "enable_b2c_js_extension":settings.ENABLE_B2C_JS_EXTENSION,
+        "header":header or "",
+        "footer":footer or "",
+        "add_auth2_local_option":settings.ADD_AUTH2_LOCAL_OPTION,
+        "domain" : settings.AUTH2_DOMAIN
+    }
 
     return TemplateResponse(request,"authome/{}.html".format(template),context=context)
 
@@ -1281,7 +1413,7 @@ def forbidden(request):
     View method for path '/sso/forbidden'
     Provide a consistent,customized forbidden page.
     """
-    domain = get_host(request)
+    domain = utils.get_host(request)
     path = request.headers.get("x-upstream-request-uri") or request.path
 
     container_class = "self_asserted_container"
@@ -1314,8 +1446,12 @@ def profile_edit(request):
     if request.method == "GET":
         next_url = _get_next_url(request)
 
-        if "/sso/profile" in next_url:
-            next_url = "https://{}/sso/setting".format(utils.get_domain(next_url))
+        next_url_parsed = utils.parse_url(next_url)
+        if next_url_parsed["path"] == "/sso/profile":
+            if next_url_parsed["parameters"]:
+                next_url = "https://{}/sso/setting?{}".format(next_url_parsed["domain"],next_url_parsed["parameters"])
+            else:
+                next_url = "https://{}/sso/setting".format(next_url_parsed["domain"])
 
         context = _get_context(next_url)
 
@@ -1323,7 +1459,7 @@ def profile_edit(request):
     else:
         next_url = request.POST.get("next")
         if not next_url:
-            next_url = "https://{}{}".format(get_host(request))
+            next_url = "https://{}{}".format(utils.get_host(request))
 
 
         action = request.POST.get("action")
@@ -1344,8 +1480,13 @@ def profile_edit(request):
                 request.user.last_name = last_name
                 request.user.save(update_fields=["first_name","last_name","modified"])
 
-        if "/sso/profile" in next_url:
-            next_url = "https://{}/sso/setting".format(utils.get_domain(next_url))
+        next_url_parsed = utils.parse_url(next_url)
+        if next_url_parsed["path"] == "/sso/profile":
+            if next_url_parsed["parameters"]:
+                next_url = "https://{}/sso/setting?{}".format(next_url_parsed["domain"],next_url_parsed["parameters"])
+            else:
+                next_url = "https://{}/sso/setting".format(next_url_parsed["domain"])
+
 
         return HttpResponseRedirect(next_url)
 
@@ -1379,7 +1520,7 @@ def profile_edit_complete(request,backend,*args,**kwargs):
     View method for path '/sso/profile/edit/complete'
     Callback url from b2c to complete a user profile editing request
     """
-    domain = utils.get_redirect_domain(request)
+    domain = utils.get_domain(request.session.get(utils.REDIRECT_FIELD_NAME))
     request.policy = models.CustomizableUserflow.get_userflow(domain).profile_edit
     request.http_error_code = 417
     request.http_error_message = "Failed to edit user profile.{}"
@@ -1411,7 +1552,7 @@ def password_reset_complete(request,backend,*args,**kwargs):
     View method for path '/sso/password/reset/complete'
     Callback url from b2c to complete a user password reset request
     """
-    domain = utils.get_redirect_domain(request)
+    domain = utils.get_domain(request.session.get(utils.REDIRECT_FIELD_NAME))
     request.policy = models.CustomizableUserflow.get_userflow(domain).password_reset
     request.http_error_code = 417
     request.http_error_message = "Failed to reset password.{}"
@@ -1443,7 +1584,7 @@ def mfa_set_complete(request,backend,*args,**kwargs):
     View method for path '/sso/mfa/set/complete'
     Callback url from b2c to complete a user mfa set request
     """
-    domain = utils.get_redirect_domain(request)
+    domain = utils.get_domain(request.session.get(utils.REDIRECT_FIELD_NAME))
     request.policy = models.CustomizableUserflow.get_userflow(domain).mfa_set
     request.http_error_code = 417
     request.http_error_message = "Failed to set mfa method.{}"
@@ -1475,7 +1616,7 @@ def mfa_reset_complete(request,backend,*args,**kwargs):
     View method for path '/sso/mfa/set/complete'
     Callback url from b2c to complete a user mfa set request
     """
-    domain = utils.get_redirect_domain(request)
+    domain = utils.get_domain(request.session.get(utils.REDIRECT_FIELD_NAME))
     request.policy = models.CustomizableUserflow.get_userflow(domain).mfa_reset
     request.http_error_code = 417
     request.http_error_message = "Failed to set mfa method.{}"
@@ -1676,7 +1817,7 @@ def handler400(request,exception,**kwargs):
         if res:
             return res
 
-    domain = request.headers.get("x-upstream-server-name") or utils.get_redirect_domain(request) or request.get_host()
+    domain = request.headers.get("x-upstream-server-name") or utils.get_domain(request.session.get(utils.REDIRECT_FIELD_NAME)) or request.get_host()
     container_class = "self_asserted_container"
     userflow = models.CustomizableUserflow.get_userflow(domain)
     _init_userflow_pagelayout(request,userflow,container_class)
@@ -1687,7 +1828,7 @@ def handler400(request,exception,**kwargs):
     context = {"body":page_layout,"extracss":extracss,"message":str(exception),"title":"Authentication failed." if request.path.startswith("/sso/") else "Error","domain":domain}
 
     code = exception.http_code if (hasattr(exception,"http_code") and exception.http_code) else 400
-    return TemplateResponse(request,"authome/error.html",context=context,status=code)
+    return TemplateResponse(request,"authome/message.html",context=context,status=code)
  
 def get_active_redis_connections(cachename):
     r = get_redis_connection(cachename) 
@@ -1697,7 +1838,11 @@ def get_active_redis_connections(cachename):
 def status(request):
     content = OrderedDict()
 
-    content["healthy"] = cache.healthy
+    content["serverid"] = utils.get_processid()
+    content["healthy"],msgs = cache.healthy
+    if not content["healthy"] :
+        content["warning"] = msgs
+
     content["memory"] = "{}MB".format(round(psutil.Process().memory_info().rss / (1024 * 1024),2))
     redis_servers = OrderedDict()
     content["redis server"] = redis_servers
@@ -1744,18 +1889,18 @@ def status(request):
     return HttpResponse(content=content,content_type="application/json")
 
 def healthcheck(request):
-    healthy,msg = cache.healthy
+    healthy,msgs = cache.healthy
     if healthy:
         return HttpResponse("ok")
     else:
-        return HttpResponse(status=503,content=msg)
+        return HttpResponse(status=503,content="\n".join(msgs))
 
 def checkauthorization(request):
     if request.method == "GET":
         return TemplateResponse(request, "authome/check_authorization.html", {"users":"","opts":None})
 
     try:
-        default_domain = get_host(request)
+        default_domain = utils.get_host(request)
         urls = request.POST["url"]
         users = request.POST["user"]
         details = request.POST.get("details","false").lower() == "true"
@@ -1821,7 +1966,7 @@ def checkauthorization(request):
 
 def echo(request):
     data = OrderedDict()
-    data["url"] = "https://{}{}".format(_get_host(request),request.get_full_path())
+    data["url"] = "https://{}{}".format(utils.get_host(request),request.get_full_path())
     data["method"] = request.method
     
     keys = [k for k in request.GET.keys()]

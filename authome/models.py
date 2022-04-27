@@ -113,6 +113,19 @@ class RequestDomain(object):
     #two digit values(10 - 99), high value has low priority
     base_sort_key = 99
 
+    _all_base_sort_keys = None
+
+    @staticmethod
+    def all_base_sort_keys():
+        if not RequestDomain._all_base_sort_keys:
+            RequestDomain._all_base_sort_keys = [c.base_sort_key for c in RequestDomain.__subclasses__()]
+
+        return RequestDomain._all_base_sort_keys
+
+    @staticmethod
+    def is_base_sort_key(key):
+        return key in RequestDomain.all_base_sort_keys()
+
     #match all domains if True.
     match_all = False
     def __init__(self,config):
@@ -122,7 +135,7 @@ class RequestDomain(object):
         self.sort_key = self.get_sort_key(config)
 
     def get_sort_key(self,config):
-        return "{}:{}".format(self.base_sort_key,config)
+        return "{:0>2}:{}".format(self.base_sort_key,config)
 
     @classmethod
     def get_instance(cls,domain):
@@ -212,7 +225,7 @@ class RegexRequestDomain(RequestDomain):
             raise ValidationError("The regex domain config({}) is invalid.{}".format(domain,str(ex)))
 
     def get_sort_key(self,config):
-        return "{}:{}".format(self.base_sort_key,config.replace("*","~"))
+        return "{:0>2}:{}".format(self.base_sort_key,config.replace("*","~"))
 
     def match(self,domain):
         if not domain:
@@ -315,7 +328,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     @classmethod
     def get_idp(cls,idpid):
         """
-        Return idp from cache
+        Return idp from cache via idp.idp or idp.id
         """
         return cache.idps.get(idpid) if idpid else None
 
@@ -474,7 +487,7 @@ Email: enquiries@dbca.wa.gov.au
     verifyemail_subject = models.CharField(max_length=512,null=True,blank=True)
     verifyemail_body = models.TextField(null=True,blank=True)
 
-    sortkey = models.CharField(max_length=128,editable=False)
+    sortkey = models.CharField(max_length=128,editable=True,help_text="A sorting string consisted with a 2 digitals and string separated by ':', the sorting string is auto generated if the digitals is in {}".format(RequestDomain.all_base_sort_keys()))
 
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
@@ -507,7 +520,21 @@ Email: enquiries@dbca.wa.gov.au
         if not request_domain:
             raise ValidationError("Please configure domain.")
         self.domain = request_domain.config
-        self.sortkey = request_domain.sort_key
+        try:
+            if not self.sortkey or RequestDomain.is_base_sort_key(int(self.sortkey.split(":",1)[0])):
+                self.sortkey = request_domain.sort_key
+            else:
+                basekey,key = self.sortkey.split(":",1)
+                basekey = int(basekey)
+                if basekey > 99 or basekey < 0:
+                    #basekey should between 0 99
+                    self.sortkey = request_domain.sort_key
+                else:
+                    self.sortkey = "{:0>2}:{}".format(basekey,key)
+        except:
+            #A wrong sort key
+            self.sortkey = request_domain.sort_key
+
 
         if self.domain == "*":
             #default userflow
@@ -1476,11 +1503,13 @@ def can_access(email,domain,path):
     domain = domain.lower()
     groupskey = cache.get_email_groupskey(email)
     if not groupskey:
+        #this method will find email's groups and cache in memory via two maps(email to gorupskey, groupskey to groups)
         usergroups = UserGroup.find_groups(email)[0]
         if not usergroups:
             #Not in any user group. can't access
             return False
 
+        #groupskey is already set by find_groups
         groupskey = cache.get_email_groupskey(email)
 
     authorizations = cache.get_authorizations(groupskey,domain)
@@ -1737,6 +1766,7 @@ class UserTokenListener(object):
         if not created:
             usercache = get_usercache(instance.user_id)
             if usercache and usercache.get(settings.GET_USERTOKEN_KEY(instance.user_id)):
+                #Only cache the user token only if it is already cached
                 usercache.set(settings.GET_USERTOKEN_KEY(instance.user_id),instance,settings.STAFF_CACHE_TIMEOUT if instance.user.is_staff else settings.USER_CACHE_TIMEOUT)
                 logger.debug("Cache the latest data of the user token({0}) to usercache".format(instance.user_id))
 
@@ -1745,6 +1775,7 @@ class UserTokenListener(object):
     def post_delete_usertoken(sender,instance,**kwargs):
         usercache = get_usercache(instance.user_id)
         if usercache:
+            #delete the deleted user token from cache
             usercache.delete(settings.GET_USERTOKEN_KEY(instance.user_id))
 
 class UserGroupListener(object):

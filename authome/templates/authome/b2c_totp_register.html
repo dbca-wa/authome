@@ -46,10 +46,9 @@
 
        $( "<img src='" + qrcode + "' style='width:300px;height:300px' id='qrcode'/>" ).insertAfter( qrcodeElement);
        if (totpUrl) {
-           $( "<input type='hidden' value='" + accountName + "' id='accountName'/>" ).insertAfter( qrcodeElement);
            $( "<input type='hidden' value='" + parameters["secret"] + "' id='totpSecret'/>" ).insertAfter( qrcodeElement);
 
-           $( "<div style='text-align:left;white-space:pre-wrap'><div style='margin-bottom:5px'>Can't scan image? Enter the following into your app:</div><div style='font-weight:bold;width:150px;text-align:right;display:inline'>Account Name : </div>" + accountName + "<img src='https://{{domain}}{% static "images/copy.svg" %}' onclick='copy(\"accountName\")' style='width:24px;height:24px;padding-left:5px;cursor: pointer;'><br><div style='font-weight:bold;width:150px;text-align:right;display:inline'>Secret Key : </div><button type='button' class='btn btn-primary' onclick='copy(\"totpSecret\")' style='margin-left:10px;padding-top:3px;padding-bottom:3px'>Copy Secret</button>" ).insertAfter($("#qrcode"));
+           $( "<div style='text-align:left;white-space:pre-wrap'><div style='margin-bottom:5px'>Can't scan image? Enter the following into your app:</div><div style='font-weight:bold;width:150px;text-align:right;display:inline'>Secret Key : </div><button type='button' class='btn btn-primary' onclick='copy(\"totpSecret\")' style='margin-left:10px;padding-top:3px;padding-bottom:3px'>Copy Secret</button>" ).insertAfter($("#qrcode"));
        }
        qrcodeElement.remove()
     });

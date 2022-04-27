@@ -73,11 +73,15 @@ class _AbstractSessionStore(SessionBase):
     def __init__(self, session_key=None):
         super().__init__(session_key)
         if session_key and "-" in session_key:
+            #authenticated session, get the idp pk from session key
             self._idppk = to_decimal(session_key[0:session_key.index("-")],36)
 
 
     @property
     def expireat(self):
+        """
+        Return expire time; return None if never expired.
+        """
         try:
             sessioncache = self._get_cache()
             ttl = sessioncache.ttl(self.cache_key)
@@ -88,6 +92,10 @@ class _AbstractSessionStore(SessionBase):
 
     @property
     def idpid(self):
+        """
+        Return idp id, get idp from session, if failed , try to get it from session key;
+        Return None if not found
+        """
         idpid = self.get("idp") 
         if idpid:
             return idpid
@@ -103,6 +111,9 @@ class _AbstractSessionStore(SessionBase):
         super().flush()
 
     def is_empty(self):
+        """
+        prevent django from deleting the expired session cookie which can be used to automatically signout.
+        """
         if self.expired_session_key:
             return False
         else:
@@ -117,12 +128,21 @@ class _AbstractSessionStore(SessionBase):
 
 
     def get_session_cookie_age(self):
+        """
+        Return different session cookie age for authenticated session and anonymous session
+        """
         if self.get(USER_SESSION_KEY):
             return settings.SESSION_COOKIE_AGE
         else:
             return settings.GUEST_SESSION_AGE
 
     def get_session_age(self):
+        """
+        Get the session age 
+        1. if session has timeout, use timeout as session age
+        2. for authenticated session, use setting 'SESSION_AGE'
+        3. for anonymous session, use setting 'GUEST_SESSION_AGE'
+        """
         try:
             timeout = self._session_cache.get("session_timeout")
             if timeout:
@@ -136,6 +156,9 @@ class _AbstractSessionStore(SessionBase):
             return settings.GUEST_SESSION_AGE
 
     def get_expiry_age(self, **kwargs):
+        """
+        Return sesson cookie age
+        """
         return self.get_session_cookie_age()
 
     def get_cache_key(self,session_key=None):
@@ -145,6 +168,9 @@ class _AbstractSessionStore(SessionBase):
 
 
     def load(self):
+        """
+        Load the session from cache; and reset expire time if cache is redis and session has property 'session_timeout'
+        """
         try:
             sessioncache = self._get_cache()
             cachekey = self.cache_key
@@ -163,7 +189,7 @@ class _AbstractSessionStore(SessionBase):
             return session_data
 
         if self._session_key and "-" in self._session_key:
-            #this is a authenticated session key
+            #this is a authenticated session key, keep it for logout feature
             self.expired_session_key = self._session_key
         self._session_key = None
         return {}

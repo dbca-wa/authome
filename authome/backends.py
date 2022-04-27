@@ -9,7 +9,7 @@ from social_core.backends import azuread_b2c
 from social_core.exceptions import AuthException
 
 from .models import IdentityProvider, CustomizableUserflow
-from .utils import get_redirect_domain
+from . import utils
 from .exceptions import AzureADB2CAuthenticateFailed
 
 logger = logging.getLogger(__name__)
@@ -24,10 +24,13 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
 
     def  __init__(self,strategy=None,redirect_uri=None,*args,**kwargs):
         if redirect_uri and not redirect_uri.startswith("https"):
+            #because auth2 backend is running with client domain instead of auth2 domain, but only auth2 is registered in azure b2c
+            #we should manually build the redirect_uri with auth2_domain
             if redirect_uri.startswith("/"):
                 redirect_uri = "https://{}{}".format(settings.AUTH2_DOMAIN,redirect_uri)
             else:
                 redirect_uri = "https://{}/{}".format(settings.AUTH2_DOMAIN,redirect_uri)
+        #Switch auth_local between azure b2c and auth_local
         self.switch_auth_url()
         super().__init__(strategy=strategy,redirect_uri=redirect_uri,*args,**kwargs)
 
@@ -35,25 +38,34 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
     def policy(self):
         request = self.strategy.request
         if request and hasattr(request,"policy"):
+            #if request has a property policy, use that policy directly,
+            #The features(mfa set, mfa reset, and password reset) use this proerty 'policy' to specific the customized policy
             policy = request.policy
         else:
-            domain = get_redirect_domain(request) if request else None
-            userflow = CustomizableUserflow.get_userflow(domain)
-            if userflow.fixed:
-                logger.debug("Use the fixed userflow({1}.{2}) for domain({0})".format(domain,userflow.domain,userflow.fixed))
-                policy = userflow.fixed
-            elif not domain:
+            domain = (utils.get_domain(request.session.get(utils.REDIRECT_FIELD_NAME)) or utils.get_host(request)) if request else None
+            if not domain or domain == settings.AUTH2_DOMAIN:
+                #Domain is None or dmain is auth2, use the user flow's default policy
+                userflow = CustomizableUserflow.get_userflow(None)
                 logger.debug("Use the default userflow({1}.{2}) for domain({0})".format(domain,userflow.domain,userflow.default))
                 policy = userflow.default
             else:
-                idpid = request.COOKIES.get(settings.PREFERED_IDP_COOKIE_NAME,None) if request else None
-                idp = IdentityProvider.get_idp(idpid) if idpid else None
-                if idp and idp.userflow:
-                    policy = idp.userflow
+                userflow = CustomizableUserflow.get_userflow(domain)
+                if userflow.fixed:
+                    #A fixed policy is configured for the domain related userflow, use it directly
+                    logger.debug("Use the fixed userflow({1}.{2}) for domain({0})".format(domain,userflow.domain,userflow.fixed))
+                    policy = userflow.fixed
                 else:
-                    policy = userflow.default
+                    #if the cookie 'PREFERED_IDP_COOKIE' exists, and try to get the policy from the latest used idp
+                    idpid = request.COOKIES.get(settings.PREFERED_IDP_COOKIE_NAME,None) if request else None
+                    idp = IdentityProvider.get_idp(idpid) if idpid else None
+                    if idp and idp.userflow:
+                        #Found the latest used idp, and that idp has a configued user flow, use the user flow directly
+                        policy = idp.userflow
+                    else:
+                        #Can't find the latest used idp, user the domain related userflow's default policy
+                        policy = userflow.default
 
-                logger.debug("Prefered idp is '{}', Choosed userflow is '{}', request domain is '{}' ".format(idp,policy,domain))
+                    logger.debug("Prefered idp is '{}', Choosed userflow is '{}', request domain is '{}' ".format(idp,policy,domain))
 
         if not policy or not policy.lower().startswith('b2c_'):
             raise AuthException('SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_POLICY is '
@@ -84,15 +96,6 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
     def logout_url(self):
         return self.LOGOUT_URL.format(base_url=self.base_url)
 
-    def auth_extra_arguments(self):
-        """
-        Return extra arguments needed on auth process.
-
-        The defaults can be overridden by GET parameters.
-        """
-        extra_arguments = super(AzureADB2COAuth2, self).auth_extra_arguments()
-        return extra_arguments
-
     error_re = re.compile("^\s*(?P<code>[A-Z0-9]+)\s*:")
     def process_error(self, data):
         try:
@@ -111,9 +114,15 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
 
     _auth_local_url = reverse("auth_local")
     def auth_local_url(self):
+        """
+        Return url of auth_local
+        """
         return self._auth_local_url
 
     def switch_auth_url(self):
+        """
+        swith authentication between azure b2c and auth_local based on setting 'SWITCH_TO_AUTH_LOCAL'
+        """
         if settings.SWITCH_TO_AUTH_LOCAL:
             self.auth_url = self.auth_local_url
         else:

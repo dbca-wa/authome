@@ -2,24 +2,10 @@
 {% load i18n static %}
 
 {% block extrapagecss %}
-    <style>
-        .button {
-          border: none;
-          color: white;
-          padding: 15px 32px;
-          text-align: center;
-          text-decoration: none;
-          display: inline-block;
-          font-size: 16px;
-          margin: 4px 2px;
-          cursor: pointer;
-          background-color: #4CAF50
-        }
-
-    </style>
 {% endblock extrapagecss %}
 
 {% block extrajs %}
+{% if logout_url %}
     <script type="text/javascript">
         countdown_task = null
         countdown_seconds = {{auto_signout_delay_seconds}}
@@ -30,10 +16,12 @@
             }
             
             countdown_seconds -= 1
-            document.getElementById("seconds").textContent = countdown_seconds
             if (countdown_seconds == 0) {
+                document.getElementById("seconds").textContent = ""
                 clearInterval(countdown_task)
-                //document.location = '{{logout_url}}'
+                document.location = '{{logout_url}}'
+            } else {
+                document.getElementById("seconds").textContent = countdown_seconds
             }
         }
 
@@ -44,14 +32,18 @@
         window.onload = countdown()
 
     </script>
+{% endif %}
 {% endblock extrajs %}
 
 
 {% block realcontent %}
-      <table style="width:100%;height:300px"> 
+      <table style="width:100%;height:150px"> 
           <tr><td style="text-align:center;vertical-align:middle">
-              <h3>{{message}}</h3>
-              <button type="button" class="button" onclick="document.location='{{logout_url}}'" style="font-size:20px">{{btn_signout_name}}<span id="seconds" style="margin-left:5px">{{auto_signout_delay_seconds}}</span></button>
+              <h3>{{message}}   
+              <br><span style="font-size:16px">If you want to log in again, please click <A href="{{relogin_url}}" >here</A></h3></span>
+              {% if logout_url %}
+              <button type="button" class="btn btn-danger" onclick="document.location='{{logout_url}}'" style="font-size:20px">Click me to sign out<span id="seconds" style="margin-left:5px">{{auto_signout_delay_seconds}}</span></button>
+              {% endif %}
           <td/></tr>
       </table>
 {% endblock realcontent %}
