@@ -34,7 +34,7 @@
             </ClaimType>
 
             <ClaimType Id="setProfileHeader">
-                <DisplayName>Please let us know what to call you</DisplayName>
+                <DisplayName>Please provide your name details</DisplayName>
                 <DataType>string</DataType>
                 <UserInputType>Readonly</UserInputType>
             </ClaimType>
@@ -2116,7 +2116,7 @@
 
         <ClaimsProvider>
             <Domain>live.com</Domain>
-            <DisplayName>Microsoft Account</DisplayName>
+            <DisplayName>Microsoft</DisplayName>
             <TechnicalProfiles>
                 <TechnicalProfile Id="MSA-MicrosoftAccount-OpenIdConnect">
                     <DisplayName>Microsoft Account</DisplayName>

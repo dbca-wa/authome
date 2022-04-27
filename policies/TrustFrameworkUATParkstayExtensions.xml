@@ -5,8 +5,8 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_TrustFrameworkParkstayUATExtensions"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkParkstayUATExtensions">
+ PolicyId="B2C_1A_TrustFrameworkUATParkstayExtensions"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkUATParkstayExtensions">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
@@ -91,7 +91,7 @@
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.totpfactor.registration">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/b2c_totp_register.html?domain=parkstay.dbca.wa.gov.au%26class=self_asserted_container%26header=Register%2520auth%2520authenticator%2520app</LoadUri>
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/b2c_totp_register.html?domain=parkstay.dbca.wa.gov.au%26class=self_asserted_container%26header=Register%2520with%2520your%2520authenticator%2520app</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.totpfactor.verify">
@@ -102,72 +102,6 @@
     </BuildingBlocks>
 
     <ClaimsProviders>
-
-        <ClaimsProvider>
-            <DisplayName>Azure Active Directory</DisplayName>
-            <TechnicalProfiles>
-
-                <TechnicalProfile Id="AAD-UserReadUsingAlternativeSecurityId-NoSession">
-                    <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
-                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
-                    </OutputClaims>
-                </TechnicalProfile>
-
-                <TechnicalProfile Id="AAD-UserReadUsingEmailAddress">
-                    <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
-                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
-                    </OutputClaims>
-                </TechnicalProfile>
-
-                <TechnicalProfile Id="AAD-UserReadUsingObjectId-NoSession">
-                    <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="false"/>
-                        <OutputClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
-                    </OutputClaims>
-                </TechnicalProfile>
-
-                <TechnicalProfile Id="AAD-WriteUserTOTPByObjectId-NoSession">
-                    <PersistedClaims>
-                        <PersistedClaim  ClaimTypeReferenceId="totpRegistered" PartnerClaimType="extension_totpRegisteredUAT" DefaultValue="true" AlwaysUseDefaultValue="true"/>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="totp" AlwaysUseDefaultValue="true"/>
-                    </PersistedClaims>
-                </TechnicalProfile>
-
-                    
-                <TechnicalProfile Id="AAD-UserWriteUsingAlternativeSecurityId">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
-                    </PersistedClaims>
-                </TechnicalProfile>
-
-                <TechnicalProfile Id="AAD-UserWriteUsingLogonEmail">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
-                    </PersistedClaims>
-                </TechnicalProfile>
-
-                <!--TechnicalProfile Id="AAD-UserWritePasswordUsingObjectId">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" DefaultValue="email"/>
-                    </PersistedClaims>
-                </TechnicalProfile-->
-
-                <TechnicalProfile Id="AAD-UserWritePhoneNumberUsingObjectId-NoSession">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" />
-                    </PersistedClaims>
-                </TechnicalProfile>
-
-                <TechnicalProfile Id="AAD-UserWriteMFAMethodUsingObjectId-NoSession">
-                    <PersistedClaims>
-                        <PersistedClaim ClaimTypeReferenceId="mfaMethod" PartnerClaimType="extension_mfaMethodUAT" />
-                    </PersistedClaims>
-                </TechnicalProfile>
-
-            </TechnicalProfiles>
-        </ClaimsProvider>
 
         <ClaimsProvider>
             <DisplayName>Verify Email Sending Provider</DisplayName>

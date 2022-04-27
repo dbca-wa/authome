@@ -5,16 +5,16 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_MooringRiaMFAReset"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_MooringRiaMFAReset">
+ PolicyId="B2C_1A_ParkstayMFASet_beta"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_ParkstayMFASet_beta">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkMooringRiaExtensions</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkBetaParkstayExtensions</PolicyId>
     </BasePolicy>
 
     <RelyingParty>
-        <DefaultUserJourney ReferenceId="MFAReset"/>
+        <DefaultUserJourney ReferenceId="MFASet"/>
         <UserJourneyBehaviors>
             <ScriptExecution>Allow</ScriptExecution>
         </UserJourneyBehaviors>

@@ -5,8 +5,8 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_TrustFrameworkBase"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkBase">
+ PolicyId="B2C_1A_TrustFrameworkBetaBase"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkBetaBase">
 
     <BuildingBlocks>
         <ClaimsSchema>
@@ -27,6 +27,18 @@
             <!-- SECTION I: Claims required for user journeys to work properly -->
 
             <!-- The claim socialIdpUserId has been renamed to issuerUserId -->
+            <ClaimType Id="setPasswordHeader">
+                <DisplayName>Please choose a password (minimum 16 characters)</DisplayName>
+                <DataType>string</DataType>
+                <UserInputType>Readonly</UserInputType>
+            </ClaimType>
+
+            <ClaimType Id="setProfileHeader">
+                <DisplayName>Please provide your name details</DisplayName>
+                <DataType>string</DataType>
+                <UserInputType>Readonly</UserInputType>
+            </ClaimType>
+
             <ClaimType Id="issuerUserId">
                 <DisplayName>Username</DisplayName>
                 <DataType>string</DataType>
@@ -96,9 +108,7 @@
                 <DataType>string</DataType>
                 <UserHelpText>Enter new password</UserHelpText>
                 <UserInputType>Password</UserInputType>
-                <Restriction>
-                    <Pattern RegularExpression="^((?=.*[a-z])(?=.*[A-Z])(?=.*\d)|(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9])|(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])|(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]))([A-Za-z\d@#$%^&amp;*\-_+=[\]{}|\\:',?/`~&quot;();!]|\.(?!@)){8,16}$" HelpText="8-16 characters, containing 3 out of 4 of the following: Lowercase characters, uppercase characters, digits (0-9), and one or more of the following symbols: @ # $ % ^ &amp; * - _ + = [ ] { } | \ : ' , ? / ` ~ &quot; ( ) ; ."/>
-                </Restriction>
+                <PredicateValidationReference Id="CustomPassword" />
             </ClaimType>
             <!-- The password regular expression above is constructed for AAD passwords based on restrictions at https://msdn.microsoft.com/en-us/library/azure/jj943764.aspx
 
@@ -120,9 +130,7 @@
                 <DataType>string</DataType>
                 <UserHelpText>Confirm new password</UserHelpText>
                 <UserInputType>Password</UserInputType>
-                <Restriction>
-                    <Pattern RegularExpression="^((?=.*[a-z])(?=.*[A-Z])(?=.*\d)|(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9])|(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])|(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]))([A-Za-z\d@#$%^&amp;*\-_+=[\]{}|\\:',?/`~&quot;();!]|\.(?!@)){8,16}$" HelpText=" "/>
-                </Restriction>
+                <PredicateValidationReference Id="CustomPassword" />
             </ClaimType>
 
             <ClaimType Id="passwordPolicies">
@@ -198,7 +206,7 @@
                 <UserHelpText>Email address that can be used to contact you.</UserHelpText>
                 <UserInputType>TextBox</UserInputType>
                 <Restriction>
-                    <Pattern RegularExpression="^[a-zA-Z0-9.!#$%&amp;'^_`{}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$" HelpText="Please enter a valid email address."/>
+                    <Pattern RegularExpression="^[a-zA-Z0-9.!#$%&amp;’'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$" HelpText="Please enter a valid email address."/>
                 </Restriction>
             </ClaimType>
 
@@ -302,7 +310,7 @@
             </ClaimType>
 
             <ClaimType Id="Otp">
-                <DisplayName>Enter Secondary One-time password</DisplayName>
+                <DisplayName>Secondary One-time password</DisplayName>
                 <DataType>string</DataType>
             </ClaimType>
             <ClaimType Id="emailRequestBody">
@@ -312,7 +320,7 @@
 
 
             <ClaimType Id="VerificationCode">
-                <DisplayName>Enter Email Verification Code</DisplayName>
+                <DisplayName>Email Verification Code</DisplayName>
                 <DataType>string</DataType>
                 <UserHelpText>Enter your email verification code</UserHelpText>
                 <UserInputType>TextBox</UserInputType>
@@ -340,14 +348,14 @@
                 <DataType>boolean</DataType>
             </ClaimType>
 
-            <ClaimType Id="extension_mfaMethod">
-                <DisplayName>Please select your preferred MFA method</DisplayName>
+            <ClaimType Id="mfaMethod">
+                <DisplayName>To help keep your account secure, please choose a multi-factor authentication method.</DisplayName>
                 <DataType>string</DataType>
                 <UserInputType>RadioSingleSelect</UserInputType>
                 <Restriction>
-                    <Enumeration Text="Totp Token" Value="totp" SelectByDefault="true"/>
-                    <Enumeration Text="Phone" Value="phone" SelectByDefault="false"/>
-                    <Enumeration Text="Email" Value="email" SelectByDefault="false"/>
+                    <Enumeration Text="Authenticator application (e.g. Google Authenticator)" Value="totp" SelectByDefault="true"/>
+                    <Enumeration Text="Phone Call or Passcode sent via SMS" Value="phone" SelectByDefault="false"/>
+                    <Enumeration Text="Passcode sent via email" Value="email" SelectByDefault="false"/>
                     <!--Enumeration Text="None " Value="none" SelectByDefault="false"/-->
                 </Restriction>
             </ClaimType>
@@ -378,21 +386,21 @@
 
             <!-- The app code user provided-->
             <ClaimType Id="totpCode">
-                <DisplayName>Enter Auth App Verification Code</DisplayName>
+                <DisplayName>Enter one-time passcode from authenticator app</DisplayName>
                 <DataType>string</DataType>
                 <UserInputType>TextBox</UserInputType>
             </ClaimType>
 
             <!-- the QR code for app registrations-->
             <ClaimType Id="totpQRCodeBitmap">
-                <DisplayName>Scan the follwoing QR code to register</DisplayName>
+                <DisplayName>Scan the following QR code to register</DisplayName>
                 <DataType>string</DataType>
                 <UserInputType>Readonly</UserInputType>
             </ClaimType>
 
             <!-- Store the flag which indicate whethter totp is registered by user-->
             <ClaimType Id="totpRegistered">
-                <DisplayName>Totp registered</DisplayName>
+                <DisplayName>Auth app code registered</DisplayName>
                 <DataType>boolean</DataType>
                 <UserInputType>Readonly</UserInputType>
             </ClaimType>
@@ -409,6 +417,59 @@
 
 
         </ClaimsSchema>
+        <Predicates>
+           <Predicate Id="LengthRange" Method="IsLengthRange">
+             <UserHelpText>The password must be between 16 and 64 characters.</UserHelpText>
+             <Parameters>
+               <Parameter Id="Minimum">16</Parameter>
+               <Parameter Id="Maximum">64</Parameter>
+             </Parameters>
+           </Predicate>
+           <Predicate Id="Lowercase" Method="IncludesCharacters">
+             <UserHelpText>a lowercase letter</UserHelpText>
+             <Parameters>
+               <Parameter Id="CharacterSet">a-z</Parameter>
+             </Parameters>
+           </Predicate>
+           <Predicate Id="Uppercase" Method="IncludesCharacters">
+             <UserHelpText>an uppercase letter</UserHelpText>
+             <Parameters>
+               <Parameter Id="CharacterSet">A-Z</Parameter>
+             </Parameters>
+           </Predicate>
+           <Predicate Id="Number" Method="IncludesCharacters">
+             <UserHelpText>a digit</UserHelpText>
+             <Parameters>
+               <Parameter Id="CharacterSet">0-9</Parameter>
+             </Parameters>
+           </Predicate>
+           <Predicate Id="Symbol" Method="IncludesCharacters">
+             <UserHelpText>a symbol</UserHelpText>
+             <Parameters>
+               <Parameter Id="CharacterSet">@#$%^&amp;*\-_+=[]{}|\\:',.?/`~"();! </Parameter>
+             </Parameters>
+           </Predicate>
+         </Predicates>
+         <PredicateValidations>
+           <PredicateValidation Id="CustomPassword">
+             <PredicateGroups>
+               <PredicateGroup Id="LengthGroup">
+                 <PredicateReferences MatchAtLeast="1">
+                   <PredicateReference Id="LengthRange" />
+                 </PredicateReferences>
+               </PredicateGroup>
+               <PredicateGroup Id="CharacterClasses">
+                 <UserHelpText>The password must have at least 3 of the following:</UserHelpText>
+                 <PredicateReferences MatchAtLeast="1">
+                   <PredicateReference Id="Lowercase" />
+                   <PredicateReference Id="Uppercase" />
+                   <PredicateReference Id="Number" />
+                   <PredicateReference Id="Symbol" />
+                 </PredicateReferences>
+               </PredicateGroup>
+             </PredicateGroups>
+           </PredicateValidation>
+         </PredicateValidations>
 
         <ClaimsTransformations>
 
@@ -631,12 +692,39 @@
                 </Metadata>
             </ContentDefinition>
 
-            <ContentDefinition Id="api.selfasserted.selectMfaMethod">
+            <ContentDefinition Id="api.selfasserted.emailverify">
+                <LoadUri>~/tenant/templates/AzureBlue/selfAsserted.cshtml</LoadUri>
+                <RecoveryUri>~/common/default_page_error.html</RecoveryUri>
+                <DataUri>urn:com:microsoft:aad:b2c:elements:contract:selfasserted:2.1.0</DataUri>
+                <Metadata>
+                    <Item Key="DisplayName">Verify user email</Item>
+                </Metadata>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.useremailverify">
+                <LoadUri>~/tenant/templates/AzureBlue/selfAsserted.cshtml</LoadUri>
+                <RecoveryUri>~/common/default_page_error.html</RecoveryUri>
+                <DataUri>urn:com:microsoft:aad:b2c:elements:contract:selfasserted:2.1.0</DataUri>
+                <Metadata>
+                    <Item Key="DisplayName">Verify user email</Item>
+                </Metadata>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.SignUpStep2-UserProperties">
                 <LoadUri>~/tenant/templates/AzureBlue/selfAsserted.cshtml</LoadUri>
                 <RecoveryUri>~/common/default_page_error.html</RecoveryUri>
                 <DataUri>urn:com:microsoft:aad:b2c:elements:contract:selfasserted:2.1.0</DataUri>
                 <Metadata>
                     <Item Key="DisplayName">Collect information from user page</Item>
+                </Metadata>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.selectMfaMethod">
+                <LoadUri>~/tenant/templates/AzureBlue/selfAsserted.cshtml</LoadUri>
+                <RecoveryUri>~/common/default_page_error.html</RecoveryUri>
+                <DataUri>urn:com:microsoft:aad:b2c:elements:contract:selfasserted:2.1.0</DataUri>
+                <Metadata>
+                    <Item Key="DisplayName">Choose MFA method</Item>
                 </Metadata>
             </ContentDefinition>
 
@@ -658,15 +746,6 @@
                 </Metadata>
             </ContentDefinition>
 
-            <ContentDefinition Id="api.localaccountpasswordreset.verifyemail">
-                <LoadUri>~/tenant/templates/AzureBlue/selfAsserted.cshtml</LoadUri>
-                <RecoveryUri>~/common/default_page_error.html</RecoveryUri>
-                <DataUri>urn:com:microsoft:aad:b2c:elements:contract:selfasserted:2.1.0</DataUri>
-                <Metadata>
-                    <Item Key="DisplayName">Local account change password page</Item>
-                </Metadata>
-            </ContentDefinition>
-
             <ContentDefinition Id="api.localaccountpasswordreset">
                 <LoadUri>~/tenant/templates/AzureBlue/selfAsserted.cshtml</LoadUri>
                 <RecoveryUri>~/common/default_page_error.html</RecoveryUri>
@@ -684,7 +763,16 @@
                 <RecoveryUri>~/common/default_page_error.html</RecoveryUri>
                 <DataUri>urn:com:microsoft:aad:b2c:elements:contract:selfasserted:2.1.0</DataUri>
                 <Metadata>
-                    <Item Key="DisplayName">App Factor</Item>
+                    <Item Key="DisplayName">Auth app code registeration</Item>
+                </Metadata>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.totpfactor.verify">
+                <LoadUri>~/tenant/templates/AzureBlue/selfAsserted.cshtml</LoadUri>
+                <RecoveryUri>~/common/default_page_error.html</RecoveryUri>
+                <DataUri>urn:com:microsoft:aad:b2c:elements:contract:selfasserted:2.1.0</DataUri>
+                <Metadata>
+                    <Item Key="DisplayName">App code verification</Item>
                 </Metadata>
             </ContentDefinition>
 
@@ -701,27 +789,6 @@
 
 
         <DisplayControls>
-            <DisplayControl Id="emailControl" UserInterfaceControlType="VerificationControl">
-                <InputClaims/>
-                <DisplayClaims>
-                    <DisplayClaim ClaimTypeReferenceId="email" Required="true"/>
-                    <DisplayClaim ClaimTypeReferenceId="verificationCode" ControlClaimType="VerificationCode" Required="true"/>
-                </DisplayClaims>
-                <OutputClaims/>
-                <Actions>
-                    <Action Id="SendCode">
-                        <ValidationClaimsExchange>
-                            <ValidationClaimsExchangeTechnicalProfile TechnicalProfileReferenceId="AadSspr-SendCode"/>
-                        </ValidationClaimsExchange>
-                    </Action>
-                    <Action Id="VerifyCode">
-                        <ValidationClaimsExchange>
-                            <ValidationClaimsExchangeTechnicalProfile TechnicalProfileReferenceId="AadSspr-VerifyCode"/>
-                        </ValidationClaimsExchange>
-                    </Action>
-                </Actions>
-            </DisplayControl>
-
             <DisplayControl Id="emailVerificationControl" UserInterfaceControlType="VerificationControl">
                 <DisplayClaims>
                     <DisplayClaim ClaimTypeReferenceId="email" Required="true"/>
@@ -813,7 +880,6 @@
                         <PersistedClaim ClaimTypeReferenceId="userPrincipalName"/>
                         <PersistedClaim ClaimTypeReferenceId="mailNickName" DefaultValue="unknown"/>
                         <PersistedClaim ClaimTypeReferenceId="displayName" DefaultValue="unknown"/>
-                        <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
 
                         <!-- Optional claims -->
                         <PersistedClaim ClaimTypeReferenceId="givenName"/>
@@ -826,7 +892,7 @@
                  OutputClaims, and if this is absent, Self-Asserted provider will prompt the user for otherMails. -->
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
 
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" DefaultValue="email" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
 
@@ -861,7 +927,6 @@
                         <OutputClaim ClaimTypeReferenceId="surname"/>
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
 
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
                         <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
 
                     </OutputClaims>
@@ -906,8 +971,7 @@
                         <PersistedClaim ClaimTypeReferenceId="email" PartnerClaimType="signInNames.emailAddress"/>
                         <PersistedClaim ClaimTypeReferenceId="newPassword" PartnerClaimType="password"/>
                         <PersistedClaim ClaimTypeReferenceId="displayName" DefaultValue="unknown"/>
-                        <PersistedClaim ClaimTypeReferenceId="passwordPolicies" DefaultValue="DisablePasswordExpiration"/>
-                        <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
+                        <PersistedClaim ClaimTypeReferenceId="passwordPolicies" DefaultValue="DisablePasswordExpiration,DisableStrongPassword"/>
                         <!--PersistedClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber" PartnerClaimType="strongAuthenticationPhoneNumber" /-->
 
                         <!-- Optional claims. -->
@@ -925,9 +989,9 @@
 
                         <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication"/>
                         <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="true" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" DefaultValue="email" AlwaysUseDefaultValue="true"/>
 
                     </OutputClaims>
                     <OutputClaimsTransformations>
@@ -965,7 +1029,6 @@
                         <OutputClaim ClaimTypeReferenceId="surname"/>
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
 
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
                         <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication"  AlwaysUseDefaultValue="true"/>
 
@@ -997,7 +1060,6 @@
                         <OutputClaim ClaimTypeReferenceId="surname"/>
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
 
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
                         <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
                     <OutputClaimsTransformations>
@@ -1025,10 +1087,10 @@
                     <PersistedClaims>
                         <PersistedClaim ClaimTypeReferenceId="objectId"/>
                         <PersistedClaim ClaimTypeReferenceId="newPassword" PartnerClaimType="password"/>
+                        <PersistedClaim ClaimTypeReferenceId="passwordPolicies" DefaultValue="DisablePasswordExpiration,DisableStrongPassword"/>
 
                         <!-- If the user stepped up during password reset, their phone number should be persisted for future authentication requests. -->
                         <!--PersistedClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber" PartnerClaimType="strongAuthenticationPhoneNumber" /-->
-                        <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod"/>
                     </PersistedClaims>
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
                 </TechnicalProfile>
@@ -1073,7 +1135,6 @@
                     <PersistedClaims>
                         <PersistedClaim ClaimTypeReferenceId="objectId"/>
                         <PersistedClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber" PartnerClaimType="strongAuthenticationPhoneNumber"/>
-                        <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod"/>
                     </PersistedClaims>
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
                 </TechnicalProfile>
@@ -1096,7 +1157,6 @@
                     </InputClaims>
                     <PersistedClaims>
                         <PersistedClaim ClaimTypeReferenceId="objectId"/>
-                        <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod"/>
                     </PersistedClaims>
                     <IncludeTechnicalProfile ReferenceId="AAD-Common"/>
                 </TechnicalProfile>
@@ -1118,7 +1178,6 @@
                     </InputClaims>
                     <PersistedClaims>
                         <PersistedClaim ClaimTypeReferenceId="objectId"/>
-                        <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="totp" AlwaysUseDefaultValue="true"/>
                     </PersistedClaims>
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="totpRegistered" DefaultValue="true" AlwaysUseDefaultValue="true"/>
@@ -1143,8 +1202,8 @@
                     <DisplayName>Email Address Verification For Local Account</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
-                        <Item Key="ContentDefinitionReferenceId">api.selfasserted</Item>
-                        <Item Key="language.button_continue">Continue</Item>
+                        <Item Key="ContentDefinitionReferenceId">api.selfasserted.emailverify</Item>
+                        <Item Key="language.button_continue">Signup</Item>
                     </Metadata>
                     <InputClaims>
                         <InputClaim ClaimTypeReferenceId="email"/>
@@ -1165,8 +1224,8 @@
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
                         <Item Key="IpAddressClaimReferenceId">IpAddress</Item>
-                        <Item Key="ContentDefinitionReferenceId">api.localaccountsignup</Item>
-                        <Item Key="language.button_continue">Create</Item>
+                        <Item Key="ContentDefinitionReferenceId">api.selfasserted.SignUpStep2-UserProperties</Item>
+                        <Item Key="language.button_continue">Continue</Item>
                         <Item Key="EnforceEmailVerification">False</Item>
                     </Metadata>
                     <InputClaimsTransformations>
@@ -1178,69 +1237,27 @@
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="objectId"/>
                         <OutputClaim ClaimTypeReferenceId="readonlyEmail" Required="true"/>
+
+                        <OutputClaim ClaimTypeReferenceId="setPasswordHeader" />
                         <OutputClaim ClaimTypeReferenceId="newPassword" Required="true"/>
                         <OutputClaim ClaimTypeReferenceId="reenterPassword" Required="true"/>
                         <OutputClaim ClaimTypeReferenceId="executed-SelfAsserted-Input" DefaultValue="true"/>
 
+                        <OutputClaim ClaimTypeReferenceId="setProfileHeader"/>
                         <OutputClaim ClaimTypeReferenceId="givenName"/>
                         <OutputClaim ClaimTypeReferenceId="surName"/>
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
 
                         <OutputClaim ClaimTypeReferenceId="authenticationSource" />
                         <OutputClaim ClaimTypeReferenceId="newUser" />
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" />
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" DefaultValue="email"/>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" />
-                        <OutputClaim ClaimTypeReferenceId="enableMFA" />
+                        <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true"/>
                     </OutputClaims>
                     <OutputClaimsTransformations>
                         <OutputClaimsTransformation ReferenceId="CopyEmailToUserEmail"/>
                     </OutputClaimsTransformations>
 
-
-                    <ValidationTechnicalProfiles>
-                        <ValidationTechnicalProfile ReferenceId="AAD-UserWriteUsingLogonEmail"/>
-                    </ValidationTechnicalProfiles>
-                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
-                </TechnicalProfile>
-
-                <!-- Verify email. Collect the user properties, create the user account and output user data for local account signup (not used in journeys)-->
-                <TechnicalProfile Id="SelfAsserted-LocalAccountSignUp">
-                    <DisplayName>Email signup</DisplayName>
-                    <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
-                    <Metadata>
-                        <Item Key="IpAddressClaimReferenceId">IpAddress</Item>
-                        <Item Key="ContentDefinitionReferenceId">api.localaccountsignup</Item>
-                        <Item Key="language.button_continue">Create</Item>
-                    </Metadata>
-                    <InputClaims>
-                        <InputClaim ClaimTypeReferenceId="email"/>
-                    </InputClaims>
-                    <DisplayClaims>
-                        <DisplayClaim DisplayControlReferenceId="emailVerificationControl"/>
-                        <DisplayClaim ClaimTypeReferenceId="newPassword" Required="true"/>
-                        <DisplayClaim ClaimTypeReferenceId="reenterPassword" Required="true"/>
-
-                        <!-- Optional claims, to be collected from the user -->
-                        <DisplayClaim ClaimTypeReferenceId="givenName"/>
-                        <DisplayClaim ClaimTypeReferenceId="surName"/>
-                    </DisplayClaims>
-                    <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="objectId"/>
-                        <OutputClaim ClaimTypeReferenceId="email" PartnerClaimType="Verified.Email" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="newPassword" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="reenterPassword" Required="true"/>
-                        <OutputClaim ClaimTypeReferenceId="executed-SelfAsserted-Input" DefaultValue="true"/>
-
-                        <OutputClaim ClaimTypeReferenceId="givenName"/>
-                        <OutputClaim ClaimTypeReferenceId="surName"/>
-                        <OutputClaim ClaimTypeReferenceId="otherMails"/>
-
-                        <OutputClaim ClaimTypeReferenceId="authenticationSource"/>
-                        <OutputClaim ClaimTypeReferenceId="newUser"/>
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod"/>
-                        <OutputClaim ClaimTypeReferenceId="identityProvider"/>
-                        <OutputClaim ClaimTypeReferenceId="enableMFA"/>
-                    </OutputClaims>
 
                     <ValidationTechnicalProfiles>
                         <ValidationTechnicalProfile ReferenceId="AAD-UserWriteUsingLogonEmail"/>
@@ -1270,7 +1287,7 @@
                         <OutputClaim ClaimTypeReferenceId="newUser" />
                         <OutputClaim ClaimTypeReferenceId="identityProvider" />
                         <OutputClaim ClaimTypeReferenceId="enableMFA" />
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" />
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" />
 
                     </OutputClaims>
                     <ValidationTechnicalProfiles>
@@ -1363,10 +1380,10 @@
                         <Item Key="ContentDefinitionReferenceId">api.selfasserted.selectMfaMethod</Item>
                     </Metadata>
                     <InputClaims>
-                        <InputClaim ClaimTypeReferenceId="extension_mfaMethod"/>
+                        <InputClaim ClaimTypeReferenceId="mfaMethod"/>
                     </InputClaims>
                     <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" Required="true"/>
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" Required="true"/>
                     </OutputClaims>
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/>
                 </TechnicalProfile>
@@ -1381,7 +1398,7 @@
                     <DisplayName>MFA verification via email</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
-                        <Item Key="ContentDefinitionReferenceId">api.selfasserted</Item>
+                        <Item Key="ContentDefinitionReferenceId">api.selfasserted.useremailverify</Item>
                     </Metadata>
                     <InputClaims>
                         <InputClaim ClaimTypeReferenceId="userEmail"/>
@@ -1397,6 +1414,10 @@
                 </TechnicalProfile>
                 
                 <TechnicalProfile Id="SelfAsserted-EmailVerify">
+                    <Metadata>
+                        <Item Key="ContentDefinitionReferenceId">api.selfasserted.useremailverify</Item>
+                        <Item Key="language.button_continue">Signin</Item>
+                    </Metadata>
                     <IncludeTechnicalProfile ReferenceId="SelfAsserted-EmailVerify-NoSession"/>
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
@@ -1407,7 +1428,7 @@
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
                         <Item Key="IpAddressClaimReferenceId">IpAddress</Item>
-                        <Item Key="ContentDefinitionReferenceId">api.localaccountpasswordreset.verifyemail</Item>
+                        <Item Key="ContentDefinitionReferenceId">api.selfasserted.emailverify</Item>
                         <Item Key="UserMessageIfClaimsTransformationBooleanValueIsNotEqual">Your account has been locked. Contact your support person to unlock it, then try again.</Item>
                     </Metadata>
                     <IncludeInSso>false</IncludeInSso>
@@ -1425,7 +1446,7 @@
                         <OutputClaim ClaimTypeReferenceId="otherMails"/>
                         <OutputClaim ClaimTypeReferenceId="strongAuthenticationPhoneNumber"/>
 
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" />
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" />
                         <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="false" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="newUser"/>
                         <OutputClaim ClaimTypeReferenceId="authenticationSource"/>
@@ -1450,6 +1471,7 @@
 
                     </InputClaims>
                     <OutputClaims>
+                        <OutputClaim ClaimTypeReferenceId="setPasswordHeader" />
                         <OutputClaim ClaimTypeReferenceId="newPassword" Required="true"/>
                         <OutputClaim ClaimTypeReferenceId="reenterPassword" Required="true"/>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local"/>
@@ -1501,7 +1523,7 @@
                         <PersistedClaim ClaimTypeReferenceId="newUser" />
                         <PersistedClaim ClaimTypeReferenceId="executed-SelfAsserted-Input"/>
                         <PersistedClaim ClaimTypeReferenceId="enableMFA"/>
-                        <PersistedClaim ClaimTypeReferenceId="extension_mfaMethod"/>
+                        <PersistedClaim ClaimTypeReferenceId="mfaMethod"/>
                         <PersistedClaim ClaimTypeReferenceId="totpRegistered"/>
                     </PersistedClaims>
                     <OutputClaims>
@@ -1673,7 +1695,7 @@
             <DisplayName>PhoneFactor</DisplayName>
             <!-- Verified the user through phone; if a new phone is inputed, output the new phone number through output 'newPhoneNumberEntered'   -->
             <TechnicalProfiles>
-                <TechnicalProfile Id="PhoneFactor-InputOrVerify">
+                <TechnicalProfile Id="PhoneFactor-InputOrVerify-NoSession">
                     <DisplayName>PhoneFactor</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.PhoneFactorProtocolProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
@@ -1691,6 +1713,10 @@
                         <OutputClaim ClaimTypeReferenceId="Verified.strongAuthenticationPhoneNumber" PartnerClaimType="Verified.OfficePhone"/>
                         <OutputClaim ClaimTypeReferenceId="newPhoneNumberEntered" PartnerClaimType="newPhoneNumberEntered"/>
                     </OutputClaims>
+                    <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop"/>
+                </TechnicalProfile>
+                <TechnicalProfile Id="PhoneFactor-InputOrVerify">
+                    <IncludeTechnicalProfile ReferenceId="PhoneFactor-InputOrVerify-NoSession"/>
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
 
@@ -1814,14 +1840,15 @@
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
                         <Item Key="ContentDefinitionReferenceId">api.selfasserted.totpfactor.registration</Item>
+                        <Item Key="language.button_continue">Verify and Set</Item>
                     </Metadata>
                     <InputClaims>
                         <InputClaim ClaimTypeReferenceId="email"/>
                         <InputClaim ClaimTypeReferenceId="totpQRCodeBitmap"/>
                     </InputClaims>
                     <OutputClaims>
-                        <OutputClaim ClaimTypeReferenceId="totpCode" Required="true"/>
                         <OutputClaim ClaimTypeReferenceId="totpQRCodeBitmap"/>
+                        <OutputClaim ClaimTypeReferenceId="totpCode" Required="true"/>
                     </OutputClaims>
                     <ValidationTechnicalProfiles>
                         <ValidationTechnicalProfile ReferenceId="AUTH2-VerifyTOTPCode"/>
@@ -1830,6 +1857,9 @@
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="TOTPFactor-Register">
+                    <Metadata>
+                        <Item Key="language.button_continue">Verify and Sign in</Item>
+                    </Metadata>
                     <IncludeTechnicalProfile ReferenceId="TOTPFactor-Register-NoSession"/>
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
@@ -1839,7 +1869,8 @@
                     <DisplayName>App Factor</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
-                        <Item Key="ContentDefinitionReferenceId">api.selfasserted</Item>
+                        <Item Key="ContentDefinitionReferenceId">api.selfasserted.totpfactor.verify</Item>
+                        <Item Key="language.button_continue">Verify and Set</Item>
                     </Metadata>
                     <InputClaims>
                         <InputClaim ClaimTypeReferenceId="email"/>
@@ -1854,6 +1885,9 @@
                 </TechnicalProfile>
 
                 <TechnicalProfile Id="TOTPFactor-Challenge">
+                    <Metadata>
+                        <Item Key="language.button_continue">Verify and Sign in</Item>
+                    </Metadata>
                     <IncludeTechnicalProfile ReferenceId="TOTPFactor-Challenge-NoSession"/>
                     <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD"/>
                 </TechnicalProfile>
@@ -1901,7 +1935,7 @@
 
                         <OutputClaim ClaimTypeReferenceId="newUser" DefaultValue="false" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication" AlwaysUseDefaultValue="true"/>
-                        <OutputClaim ClaimTypeReferenceId="extension_mfaMethod" DefaultValue="email"/>
+                        <OutputClaim ClaimTypeReferenceId="mfaMethod" DefaultValue="email"/>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local" AlwaysUseDefaultValue="true"/>
                         <OutputClaim ClaimTypeReferenceId="enableMFA" DefaultValue="true" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
@@ -2085,7 +2119,7 @@
             <DisplayName>Microsoft Account</DisplayName>
             <TechnicalProfiles>
                 <TechnicalProfile Id="MSA-MicrosoftAccount-OpenIdConnect">
-                    <DisplayName>Microsoft Account</DisplayName>
+                    <DisplayName>Microsoft</DisplayName>
                     <Protocol Name="OpenIdConnect"/>
                     <Metadata>
                         <Item Key="ProviderName">https://login.live.com</Item>

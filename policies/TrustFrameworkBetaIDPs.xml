@@ -5,12 +5,12 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_TrustFrameworkProdIDPs"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkProdIDPs">
+ PolicyId="B2C_1A_TrustFrameworkBetaIDPs"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkBetaIDPs">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkProdExtensions</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkBetaExtensions</PolicyId>
     </BasePolicy>
 
     <UserJourneys>
@@ -20,10 +20,11 @@
                 <OrchestrationStep Order="1" Type="CombinedSignInAndSignUp" ContentDefinitionReferenceId="api.signuporsignin">
                     <ClaimsProviderSelections>
                         <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
-                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
+                        <ClaimsProviderSelection TargetClaimsExchangeId="MicrosoftAccountExchange"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/-->
                         <ClaimsProviderSelection ValidationClaimsExchangeId="LocalAccountSigninEmailExchange"/>
                     </ClaimsProviderSelections>
                     <ClaimsExchanges>
@@ -38,10 +39,11 @@
                 <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
                     <ClaimsProviderSelections>
                         <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
+                        <ClaimsProviderSelection TargetClaimsExchangeId="MicrosoftAccountExchange"/>
                         <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange"/>
                     </ClaimsProviderSelections>
                 </OrchestrationStep>
@@ -79,6 +81,5 @@
         </UserJourney>
 
     </UserJourneys>
-
 
 </TrustFrameworkPolicy>

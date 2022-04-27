@@ -91,7 +91,7 @@
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.totpfactor.registration">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/b2c_totp_register.html?class=self_asserted_container%26header=Register%2520auth%2520authenticator%2520app</LoadUri>
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/b2c_totp_register.html?class=self_asserted_container%26header=Register%2520with%2520your%2520authenticator%2520app</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.totpfactor.verify">

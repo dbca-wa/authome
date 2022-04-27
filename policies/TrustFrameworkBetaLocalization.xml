@@ -5,12 +5,12 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_TrustFrameworkDevLocalization"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkDevLocalization">
+ PolicyId="B2C_1A_TrustFrameworkBetaLocalization"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkBetaLocalization">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkDevBase</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkBetaBase</PolicyId>
     </BasePolicy>
 
     <BuildingBlocks>

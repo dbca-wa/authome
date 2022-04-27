@@ -5,12 +5,12 @@
  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
  PolicySchemaVersion="0.3.0.0"
  TenantId="dbcab2c.onmicrosoft.com"
- PolicyId="B2C_1A_MooringPvsMFASet"
- PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_MooringPvsMFASet">
+ PolicyId="B2C_1A_MooringRiaMFASet_uat"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_MooringRiaMFASet_uat">
 
     <BasePolicy>
         <TenantId>dbcab2c.onmicrosoft.com</TenantId>
-        <PolicyId>B2C_1A_TrustFrameworkMooringPvsExtensions</PolicyId>
+        <PolicyId>B2C_1A_TrustFrameworkUATMooringRiaExtensions</PolicyId>
     </BasePolicy>
 
     <RelyingParty>
