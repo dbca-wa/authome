@@ -164,6 +164,7 @@ def get_absolute_url(url,domain):
     Get a absolute http url
     """
     if url.startswith("http"):
+        #url is already an absolute url
         return url
 
     if url.startswith("/"):
@@ -325,9 +326,7 @@ def _populate_response(request,f_cache,cache_key,user,session_key=None):
 
 def _auth(request):
     """
-    has minimum logs, used in prod mode
     Authenticate and authorization the request;
-    If succeed,get the response from cache; if failed, populate one and cache it.
     Return
         None: not authenticated
         200 Response: authenticated and authorized
@@ -370,7 +369,7 @@ def _auth(request):
                 #response cached
                 return response
             else:
-                #reponse not cached, populate one and cache it.
+                #reponse not cached or outdated, populate one and cache it.
                 return _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
         finally:
             performance.end_processingstep("create_response")
@@ -430,7 +429,7 @@ def auth_basic(request):
     First authenticate with useremail and user token; if failed,fall back to session authentication
     """
     #get the basic auth header
-    auth_basic = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else ''
+    auth_basic = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else None
     if not auth_basic:
         #basic auth data not found
         #check whether session is already authenticated or not.
@@ -555,13 +554,20 @@ get_verifycode_number_key = lambda email:settings.GET_CACHE_KEY("verifycodenumbe
 get_codeid = lambda :"{}.{}".format(timezone.now().timestamp(),get_random_string(10,VALID_TOKEN_CHARS))
 
 def auth_local(request):
+    """
+    auth_local feature can be triggered from any domain, but if the request's domain is not the subdomain of the session cookie domain, auth2 will redirect the request to auth2 domain 
+    and sigin in to auth2 domain first and then signin to other domain via login_domain.
+    """
     if request.method == "GET":
         next_url = _get_next_url(request)
     else:
         next_url = request.POST.get("next","")
-
-    if not next_url:
-        next_url = "https://{}/sso/setting".format(settings.AUTH2_DOMAIN)
+        if not next_url:
+            domain = utils.get_host(request)
+            if domain == settings.AUTH2_DOMAIN:
+                next_url = "https://{}/sso/setting".format(domain)
+            else:
+                next_url = "https://{}".format(domain)
 
     next_url_domain = utils.get_domain(next_url)
 
@@ -574,12 +580,7 @@ def auth_local(request):
             #The domain of next url is not the session cookie domain, login to domain first
             return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
 
-    container_class = "self_asserted_container"
-    userflow = models.CustomizableUserflow.get_userflow(next_url_domain)
-    _init_userflow_pagelayout(request,userflow,container_class)
-
-    page_layout = getattr(userflow,container_class)
-    extracss = userflow.inited_extracss
+    page_layout,extracss = _get_userflow_pagelayout(request,next_url_domain)
 
     context = {"body":page_layout,"extracss":extracss,"domain":next_url_domain,"next":next_url,"expiretime":utils.format_timedelta(settings.PASSCODE_AGE,unit='s')}
 
@@ -625,6 +626,7 @@ def auth_local(request):
             codekey = get_verifycode_key(email)
             verifycode_number_key = get_verifycode_number_key(email)
             if codeid:
+                #a verifycode has already been sent before. reuse it if possible.
                 verifycode_number = int(defaultcache.get(verifycode_number_key) or 0)
                 if verifycode_number >= settings.PASSCODE_TRY_TIMES:
                     #The limits of verifying the current code was reached, generate a new one.
@@ -633,10 +635,11 @@ def auth_local(request):
                 else:
                     code = defaultcache.get(codekey)
                     if code and code.startswith(codeid + "="):
+                        #codeid is matched, reuse the existing code
                         context["messages"] = [("info","Verification code has already been sent to {}; Please entery the verification code.".format(email))]
                         logger.debug("Verification code has already been sent to {}, no need to send again".format(context["email"]))
                     else:
-                        #code is outdated
+                        #code is outdated, generate a new one
                         code = None
                         codeid = None
             if not codeid:
@@ -658,7 +661,7 @@ def auth_local(request):
                 context["otp"] = code
 
                 #initialized the userflow if required
-                _init_userflow_verifyemail(request,userflow)
+                userflow = _get_userflow_verifyemail(request,next_url_domain)
 
                 #get the verificatio email body
                 verifyemail_body = userflow.verifyemail_body_template.render(
@@ -853,31 +856,6 @@ def logout_view(request):
 
     logout(request)
     return HttpResponseRedirect(logout_url)
-    """
-    message = request.GET.get("message")
-    if message:
-        #has error message, return a page to show the message and let the user trigger the logout flow
-        relogin_url = _get_relogin_url(request)
-        domain = utils.get_domain(relogin_url) or utils.get_host(request)
-        container_class = "self_asserted_container"
-        userflow = models.CustomizableUserflow.get_userflow(domain)
-        _init_userflow_pagelayout(request,userflow,container_class)
-
-        page_layout = getattr(userflow,container_class)
-        extracss = userflow.inited_extracss
- 
-        context = {
-            "body":page_layout,
-            "extracss":extracss,
-            "logout_url":None if "localauth" in request.GET else logout_url,
-            "relogin_url":relogin_url,
-            "message":message
-        }
-        context["auto_signout_delay_seconds"] = settings.AUTO_SIGNOUT_DELAY_SECONDS
-        return TemplateResponse(request,"authome/signout.html",context=context)
-    else:
-        return HttpResponseRedirect(logout_url)
-    """
 
 SessionEngine = import_module(settings.SESSION_ENGINE)
 SessionStore = SessionEngine.SessionStore
@@ -1052,12 +1030,7 @@ def loginstatus(request):
     res = _auth(request)
 
     domain = utils.get_host(request)
-    container_class = "self_asserted_container"
-    userflow = models.CustomizableUserflow.get_userflow(domain)
-    _init_userflow_pagelayout(request,userflow,container_class)
-
-    page_layout = getattr(userflow,container_class)
-    extracss = userflow.inited_extracss
+    page_layout,extracss = _get_userflow_pagelayout(request,domain)
 
     context = {"body":page_layout,"extracss":extracss,"message":"You {} signed in".format("have already" if res else "haven't"),"title":"Login Status","domain":domain}
 
@@ -1075,7 +1048,7 @@ def profile(request):
     user = request.user
     if not user.is_authenticated:
         #not authenticated
-        return {"authenticated":False}
+        return HttpResponse(content=json.dumps({"authenticated":False}),content_type="application/json")
     auth_key = request.session.session_key
     response = cache.get_auth(user,auth_key,user.modified)
 
@@ -1205,12 +1178,8 @@ def user_setting(request):
 
  
     domain = utils.get_host(request)
-    container_class = "self_asserted_container"
-    userflow = models.CustomizableUserflow.get_userflow(domain)
-    _init_userflow_pagelayout(request,userflow,container_class)
+    page_layout,extracss = _get_userflow_pagelayout(request,domain)
 
-    page_layout = getattr(userflow,container_class)
-    extracss = userflow.inited_extracss
     groups = models.UserGroup.find_groups(context["email"])[0]
     context["groups"] = " , ".join(g.name for g in groups)
     session_timeout = models.UserGroup.get_session_timeout(groups)
@@ -1248,12 +1217,7 @@ def signedout(request):
     else:
         idp  = None
 
-    container_class = "self_asserted_container"
-    userflow = models.CustomizableUserflow.get_userflow(domain)
-    _init_userflow_pagelayout(request,userflow,container_class)
-
-    page_layout = getattr(userflow,container_class)
-    extracss = userflow.inited_extracss
+    page_layout,extracss = _get_userflow_pagelayout(request,domain)
 
     context = {
         "body":page_layout,
@@ -1331,6 +1295,11 @@ def _init_userflow_pagelayout(request,userflow,container_class):
                 context=context,
                 request=request
             )
+def _get_userflow_pagelayout(request,domain,container_class="self_asserted_container"):
+    userflow = models.CustomizableUserflow.get_userflow(domain)
+    _init_userflow_pagelayout(request,userflow,container_class)
+
+    return (getattr(userflow,container_class),userflow.inited_extracss)
 
 
 def _init_userflow_verifyemail(request,userflow):
@@ -1360,6 +1329,11 @@ def _init_userflow_verifyemail(request,userflow):
         _init_userflow_verifyemail(request,userflow.defaultuserflow)
         userflow.verifyemail_body_template = userflow.defaultuserflow.verifyemail_body_template
 
+def _get_userflow_verifyemail(request,domain):
+    userflow = models.CustomizableUserflow.get_userflow(domain)
+    _init_userflow_verifyemail(request,userflow)
+    return userflow
+
 def adb2c_view(request,template,**kwargs):
     """
     View method for path '/sso/xxx.html'
@@ -1388,12 +1362,8 @@ def domain_related_page(request,template,domain,title,container_class=None,heade
     if not container_class:
         container_class = "{}_container".format(template)
     logger.debug("Request the customized authentication interface for domain({}) and container_class({})".format(domain,container_class))
-    userflow = models.CustomizableUserflow.get_userflow(domain)
 
-    _init_userflow_pagelayout(request,userflow,container_class)
-
-    page_layout = getattr(userflow,container_class)
-    extracss = userflow.inited_extracss
+    page_layout,extracss = _get_userflow_pagelayout(request,domain,container_class=container_class)
 
     context = {
         "body":page_layout,
@@ -1416,12 +1386,7 @@ def forbidden(request):
     domain = utils.get_host(request)
     path = request.headers.get("x-upstream-request-uri") or request.path
 
-    container_class = "self_asserted_container"
-    userflow = models.CustomizableUserflow.get_userflow(domain)
-    _init_userflow_pagelayout(request,userflow,container_class)
-
-    page_layout = getattr(userflow,container_class)
-    extracss = userflow.inited_extracss
+    page_layout,extracss = _get_userflow_pagelayout(request,domain)
 
     context = {"body":page_layout,"extracss":extracss,"path":path,"url":"https://{}{}".format(domain,path),"domain":domain}
 
@@ -1433,12 +1398,7 @@ def profile_edit(request):
     """
     def _get_context(next_url):
         domain = utils.get_domain(next_url)
-        container_class = "self_asserted_container"
-        userflow = models.CustomizableUserflow.get_userflow(domain)
-        _init_userflow_pagelayout(request,userflow,container_class)
-
-        page_layout = getattr(userflow,container_class)
-        extracss = userflow.inited_extracss
+        page_layout,extracss = _get_userflow_pagelayout(request,domain)
 
         return {"body":page_layout,"extracss":extracss,"domain":domain,"next":next_url,"user":request.user}
 
@@ -1656,10 +1616,7 @@ def verify_code_via_email(request):
 
     #get the domain from request url parameters
     domain = request.GET.get('domain', None)
-    #get domain related userflow
-    userflow = models.CustomizableUserflow.get_userflow(domain)
-    #initialized the userflow if required
-    _init_userflow_verifyemail(request,userflow)
+    userflow = _get_userflow_verifyemail(request,domain)
 
     data = json.loads(request.body.decode())
     data["email"] = data.get("email","userEmail")
@@ -1818,12 +1775,7 @@ def handler400(request,exception,**kwargs):
             return res
 
     domain = request.headers.get("x-upstream-server-name") or utils.get_domain(request.session.get(utils.REDIRECT_FIELD_NAME)) or request.get_host()
-    container_class = "self_asserted_container"
-    userflow = models.CustomizableUserflow.get_userflow(domain)
-    _init_userflow_pagelayout(request,userflow,container_class)
-
-    page_layout = getattr(userflow,container_class)
-    extracss = userflow.inited_extracss
+    page_layout,extracss = _get_userflow_pagelayout(request,domain)
 
     context = {"body":page_layout,"extracss":extracss,"message":str(exception),"title":"Authentication failed." if request.path.startswith("/sso/") else "Error","domain":domain}
 

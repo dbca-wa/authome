@@ -48,6 +48,7 @@ class RequestHeaderTestCase(TestCase):
         for k,v in cls.sso_headers.items():
             cls.user_sso_headers[k] = res[v]
 
+
         cls.testuser = models.User(id=cls.TESTUSERID,email=res["email"],first_name=res["first_name"],last_name=res["last_name"])
         cls.testusertoken = models.UserToken(user=cls.testuser,token=res["access_token"])
 
