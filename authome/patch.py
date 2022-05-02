@@ -36,6 +36,8 @@ if settings.USER_CACHE_ALIAS:
             performance.start_processingstep("get_user_from_cache")
             try:
                 user = usercache.get(userkey)
+            except:
+                pass
             finally:
                 performance.end_processingstep("get_user_from_cache")
                 pass
@@ -52,6 +54,8 @@ if settings.USER_CACHE_ALIAS:
                 performance.start_processingstep("set_user_to_cache")
                 try:
                     usercache.set(userkey,user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
+                except:
+                    pass
                 finally:
                     performance.end_processingstep("set_user_to_cache")
                     pass
@@ -81,6 +85,8 @@ if settings.USER_CACHE_ALIAS:
             performance.start_processingstep("get_usertoken_from_cache")
             try:
                 usertoken = usercache.get(usertokenkey)
+            except:
+                pass
             finally:
                 performance.end_processingstep("get_usertoken_from_cache")
                 pass
@@ -98,6 +104,8 @@ if settings.USER_CACHE_ALIAS:
                 performance.start_processingstep("set_usertoken_to_cache")
                 try:
                     usercache.set(usertokenkey,usertoken,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
+                except:
+                    pass
                 finally:
                     performance.end_processingstep("set_usertoken_to_cache")
                     pass
