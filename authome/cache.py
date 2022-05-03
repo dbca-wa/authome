@@ -153,13 +153,6 @@ class MemoryCache(object):
         self._usergrouptree_size = None
         self._usergrouptree_ts = None
 
-        """
-        #model UserAuthorization cache
-        self._userauthorization = None
-        self._userauthorization_size = None
-        self._userauthorization_ts = None
-        """
-
         #model UserGroupAuthorization cache
         self._usergroupauthorization = None
         self._usergroupauthorization_size = None
@@ -172,15 +165,11 @@ class MemoryCache(object):
         self._userflows_size = None
         self._userflows_ts = None
 
-        #IdentityProvider cache
+        #model IdentityProvider cache
         self._idps = None
         self._idps_size = None
         self._idps_ts = None
 
-        #user authorization cache
-        self._user_authorization_map = OrderedDict() 
-        self._user_authorization_map_ts = None
-    
         #user authentication cache
         self._auth_map = OrderedDict() 
         self._staff_auth_map = OrderedDict() 
@@ -188,13 +177,21 @@ class MemoryCache(object):
         self._basic_auth_map = OrderedDict() 
         self._auth_cache_ts = None
 
-        #the map between email and groups
+        #the map between groups key and groups key
+        #the purpose of this map is to use the same tuple instance of same groups keys
         self._groupskey_map = {}
+        #the map between email and groups key
         self._email_groups_map = OrderedDict()
+        #the map between public email and groups key
         self._public_email_groups_map = OrderedDict()
+        #the map between groups key and groups
         self._groups_map = {}
         self._emailgroups_ts = None
 
+        #the map between (groups,domain) and  authorization
+        self._groups_authorization_map = OrderedDict() 
+        self._groups_authorization_map_ts = None
+    
         #The runable task to clean authenticaton map and basic authenticaton map
         self._auth_cache_clean_time = HourListTaskRunable("authentication cache",settings.AUTH_CACHE_CLEAN_HOURS)
 
@@ -240,19 +237,6 @@ class MemoryCache(object):
         else:
             self._usergrouptree,self._usergroups,self._public_group,self._dbca_group,self._usergrouptree_size,self._usergrouptree_ts = None,None,None,None,None,None
 
-    """
-    @property
-    def userauthorization(self):
-        return self._userauthorization
-
-    @userauthorization.setter
-    def userauthorization(self,value):
-        if value:
-            self._userauthorization,self._userauthorization_size,self._userauthorization_ts = value
-        else:
-            self._userauthorization,self._userauthorization_size,self._userauthorization_ts = None,None,None
-    """
-
     @property
     def usergroupauthorization(self):
         if not self._usergroupauthorization:
@@ -274,11 +258,11 @@ class MemoryCache(object):
         So only call method 'refresh_authorization_cache' in this method and ignore in other methods 'userauthrizations','usergrouptree' and 'usergroupauthorization'.
         """
         self.refresh_authorization_cache()
-        return self._user_authorization_map.get((groupskey,domain))
+        return self._groups_authorization_map.get((groupskey,domain))
 
     def set_authorizations(self,groupskey,domain,authorizations):
-        self._user_authorization_map[(groupskey,domain)] = authorizations
-        self._enforce_maxsize("groups authorization map",self._user_authorization_map,settings.AUTHORIZATION_CACHE_SIZE)
+        self._groups_authorization_map[(groupskey,domain)] = authorizations
+        self._enforce_maxsize("groups authorization map",self._groups_authorization_map,settings.GROUPS_AUTHORIZATION_CACHE_SIZE)
 
     @property
     def idps(self):
@@ -334,12 +318,11 @@ class MemoryCache(object):
         key = list(g.id for g in groups)
         key.sort()
         key = tuple(key)
-        groupskey = self._groupskey_map.get(key)
-        if not groupskey:
+        try:
+            return self._groupskey_map[key]
+        except:
             self._groupskey_map[key] = key
             return key
-        else:
-            return groupskey
 
     def get_email_groupskey(self,email):
         return self._email_groups_map.get(email) or self._public_email_groups_map.get(email)
@@ -482,8 +465,8 @@ class MemoryCache(object):
         from .models import UserGroupChange,UserGroup
         if (force or not self._usergrouptree or UserGroupChange.is_changed()):
             logger.debug("UserGroup was changed, clean cache usergroupptree and user_requests_map")
-            self._user_authorization_map.clear()
-            self._user_authorization_map_ts = timezone.now()
+            self._groups_authorization_map.clear()
+            self._groups_authorization_map_ts = timezone.now()
             self._email_groups_map.clear()
             self._public_email_groups_map.clear()
             self._groups_map.clear()
@@ -492,24 +475,12 @@ class MemoryCache(object):
             #reload group trees
             UserGroup.refresh_cache()
 
-
-    """
-    def refresh_userauthorization(self,force=False):
-        from .models import UserAuthorizationChange,UserAuthorization
-        if (force or self._userauthorization is None or UserAuthorizationChange.is_changed()):
-            logger.debug("UserAuthorization was changed, clean cache userauthorization and user_requests_map")
-            self._user_authorization_map.clear()
-            self._user_authorization_map_ts = timezone.now()
-            #reload user requests
-            UserAuthorization.refresh_cache()
-    """
-
     def refresh_usergroupauthorization(self,force=False):
         from .models import UserGroupAuthorizationChange,UserGroupAuthorization
         if (force or not self._usergroupauthorization or UserGroupAuthorizationChange.is_changed()):
             logger.debug("UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map")
-            self._user_authorization_map.clear()
-            self._user_authorization_map_ts = timezone.now()
+            self._groups_authorization_map.clear()
+            self._groups_authorization_map_ts = timezone.now()
             #reload user group requests
             UserGroupAuthorization.refresh_cache()
 
@@ -574,10 +545,10 @@ class MemoryCache(object):
             "next_check_time":format_datetime(self._idp_cache_check_time.next_runtime)
         }
     
-        result["userauthorizations"] = {
-            "cache_size":None if self._user_authorization_map is None else len(self._user_authorization_map),
-            "cache_maxsize":settings.AUTHORIZATION_CACHE_SIZE,
-            "latest_clean_time":format_datetime(self._user_authorization_map_ts),
+        result["groupsauthorization"] = {
+            "cache_size":None if self._groups_authorization_map is None else len(self._groups_authorization_map),
+            "cache_maxsize":settings.GROUPS_AUTHORIZATION_CACHE_SIZE,
+            "latest_clean_time":format_datetime(self._groups_authorization_map_ts),
             "next_check_time":format_datetime(self._authorization_cache_check_time.next_runtime)
         }
 
@@ -605,7 +576,6 @@ class MemoryCache(object):
         }
     
         result["usergroups"] = {
-            "groupskey_cache_size":None if self._groupskey_map is None else len(self._groupskey_map),
             "usergroups_cache_size":None if self._email_groups_map is None else len(self._email_groups_map),
             "usergroups_cache_maxsize":settings.EMAIL_GROUPS_CACHE_SIZE,
             "publicusergroups_cache_size":None if self._public_email_groups_map is None else len(self._public_email_groups_map),
@@ -644,11 +614,11 @@ class MemoryCache(object):
         if not self.idps:
             msgs.append("The IdentityProvider cache is empty")
 
-        if self._user_authorization_map is None :
-            msgs.append("The user authorization cache is None")
+        if self._groups_authorization_map is None :
+            msgs.append("The groups authorization cache is None")
             
-        if len(self._user_authorization_map) > (settings.AUTHORIZATION_CACHE_SIZE + 100) :
-            msgs.append("The size({}) of the user authorization cache exceed the maximum cache size({})".format(len(self._user_authorization_map), settings.AUTHORIZATION_CACHE_SIZE))
+        if len(self._groups_authorization_map) > (settings.GROUPS_AUTHORIZATION_CACHE_SIZE + 100) :
+            msgs.append("The size({}) of the groups authorization cache exceed the maximum cache size({})".format(len(self._groups_authorization_map), settings.GROUPS_AUTHORIZATION_CACHE_SIZE))
             
         if self._auth_map is None  :
             msgs.append("The external user auth responses cache is None")
@@ -667,9 +637,6 @@ class MemoryCache(object):
     
         if len(self._basic_auth_map) > settings.BASIC_AUTH_CACHE_SIZE + 100 :
             msgs.append("The size({}) of the basic auth response cache exceed the maximum cache size({})".format(len(self._basic_auth_map), settings.BASIC_AUTH_CACHE_SIZE))
-    
-        if self._groupskey_map is None :
-            msgs.append("The groups key map cache is None")
     
         if self._email_groups_map is None:
             msgs.append("The email groups map cache is None")
