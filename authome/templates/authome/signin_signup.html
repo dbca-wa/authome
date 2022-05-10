@@ -1,7 +1,7 @@
 {% extends "authome/default.html" %}
 {% load i18n static %}
 
-{% block title %}Signup {% endblock title %}
+{% block title %}User profile{% endblock title %}
 
 {% block extrapagecss %}
 <link rel="stylesheet" type="text/css" href="/sso/static/css/message.css">1
@@ -14,13 +14,12 @@
 <input type="hidden" id="id_token" name="token" value="{{token}}">
 <input type="hidden" id="id_next" name="next" value="{{next}}">
 <div >
-    <div style="color:black;font-weight:bold;font-size:medium;text-align:left;margin-top:10px;white-space:pre-wrap">Please let us know what to call you</div>
+    <div style="color:black;font-weight:bold;font-size:medium;text-align:left;margin-top:10px;white-space:pre-wrap">Your real name. You may be required to provide proof of identity for some products and services</div>
 </div>
 {% include "authome/inc/messages.html"%}
 <div id="attributeList" class="attr">
   <ul>
    <li>
-       <label id="email_label" for="email">Email Address</label>
        <input type="email" title="Please enter a valid email address." id="id_email" name="email" value="{{email}}" aria-label="Email Address" readonly style="border:none;font-weight:bold;padding-left:0px">
    </li>
    <li>
@@ -32,7 +31,7 @@
   </ul>
 </div>
 <div class="buttons" >
-   <button id="id_signup" type="submit" name="action" value="signup" form="attributeVerification" style="width:305px;">Sign up</button>
+   <button id="id_signup" type="submit" name="action" value="signup" form="attributeVerification" style="width:305px;">Save</button>
    <button id="cancel" aria-label="Cancel" formnovalidate="" name="action" value="cancel" form="attributeVerification">Cancel</button>
 </div>
 </form>
