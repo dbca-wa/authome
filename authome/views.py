@@ -1405,22 +1405,10 @@ def profile_edit(request):
 
     if request.method == "GET":
         next_url = _get_next_url(request)
-
-        next_url_parsed = utils.parse_url(next_url)
-        if next_url_parsed["path"] == "/sso/profile":
-            if next_url_parsed["parameters"]:
-                next_url = "https://{}/sso/setting?{}".format(next_url_parsed["domain"],next_url_parsed["parameters"])
-            else:
-                next_url = "https://{}/sso/setting".format(next_url_parsed["domain"])
-
         context = _get_context(next_url)
-
         return TemplateResponse(request,"authome/profile_edit.html",context=context)
     else:
         next_url = request.POST.get("next")
-        if not next_url:
-            next_url = "https://{}{}".format(utils.get_host(request))
-
 
         action = request.POST.get("action")
         if action == "change":
@@ -1441,12 +1429,17 @@ def profile_edit(request):
                 request.user.save(update_fields=["first_name","last_name","modified"])
 
         next_url_parsed = utils.parse_url(next_url)
-        if next_url_parsed["path"] == "/sso/profile":
-            if next_url_parsed["parameters"]:
-                next_url = "https://{}/sso/setting?{}".format(next_url_parsed["domain"],next_url_parsed["parameters"])
+        if next_url_parsed["path"].startswith("/sso/profile"):
+            if next_url_parsed["domain"]:
+                if next_url_parsed["parameters"]:
+                    next_url = "https://{}/sso/setting?{}".format(next_url_parsed["domain"],next_url_parsed["parameters"])
+                else:
+                    next_url = "https://{}/sso/setting".format(next_url_parsed["domain"])
             else:
-                next_url = "https://{}/sso/setting".format(next_url_parsed["domain"])
-
+                if next_url_parsed["parameters"]:
+                    next_url = "/sso/setting?{}".format(next_url_parsed["parameters"])
+                else:
+                    next_url = "/sso/setting"
 
         return HttpResponseRedirect(next_url)
 

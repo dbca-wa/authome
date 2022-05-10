@@ -136,7 +136,7 @@ def env(key, default=None, required=False, value_type=None,subvalue_type=None):
     return _convert(key,value,default=default,required=required,value_type=value_type,subvalue_type=subvalue_type)
 
 
-url_re = re.compile("^((https?://)?(?P<domain>[^:/\?]+)(:(?P<port>[0-9]+))?)?(?P<path>/[^\?]*)?(\?(?P<parameters>.*))?$",re.IGNORECASE)
+url_re = re.compile("^((https?://)?(?P<domain>[^:/\?]+)?(:(?P<port>[0-9]+))?)?(?P<path>/[^\?]*)?(\?(?P<parameters>.*))?$",re.IGNORECASE)
 def parse_url(url):
     """
     Return domain from url

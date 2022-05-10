@@ -12,6 +12,7 @@ from django.contrib.auth import REDIRECT_FIELD_NAME
 from .models import IdentityProvider,UserGroup
 from .views import signout
 from .cache import get_usercache
+from . import utils
 
 logger = logging.getLogger(__name__)
 
@@ -130,9 +131,11 @@ def user_details(strategy, details, user=None, *args, **kwargs):
         setattr(user, name, value)
 
     if not user.first_name or not user.last_name:
-        nexturl = strategy.request.session[REDIRECT_FIELD_NAME]
+        nexturl = strategy.request.session.get(REDIRECT_FIELD_NAME)
         if nexturl:
-            nexturl = "/sso/profile/edit?{}={}".format(REDIRECT_FIELD_NAME,urllib.parse.quote(nexturl))
+            nexturl_parsed = utils.parse_url(nexturl)
+            if nexturl_parsed["path"] != "/sso/profile/edit":
+                nexturl = "/sso/profile/edit?{}={}".format(REDIRECT_FIELD_NAME,urllib.parse.quote(nexturl))
         else:
             nexturl = "/sso/profile/edit"
         strategy.request.session[REDIRECT_FIELD_NAME] = nexturl
