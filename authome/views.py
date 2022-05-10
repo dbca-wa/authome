@@ -647,7 +647,7 @@ def auth_local(request):
                 sendcode_number = int(defaultcache.get(sendcode_number_key) or 0)
                 if sendcode_number >= settings.PASSCODE_DAILY_LIMIT:
                     #The daily limits of sending veriy code was reached.
-                    context["messages"] = [("error","You reached the daily limit of sending verification code.")]
+                    context["messages"] = [("error","You have exceeded the number of code generation attempts allowed.")]
                     return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
 
                 codeid = get_codeid()
@@ -700,7 +700,7 @@ def auth_local(request):
             codekey = get_verifycode_key(email)
             code = defaultcache.get(codekey)
             if not code:
-                context["messages"] = [("error","The code is expired, Please resend code.")]
+                context["messages"] = [("error","The verification code has expired. Send a new code")]
                 return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
             elif not code.startswith(codeid + "="):
                 context["messages"] = [("error","The verfication code was sent by other device,please resend the code again.")]
@@ -709,7 +709,7 @@ def auth_local(request):
                 verifycode_number = int(defaultcache.get(verifycode_number_key) or 0)
                 if verifycode_number >= settings.PASSCODE_TRY_TIMES:
                     #The limits of verifying the current code was reached,.
-                    context["messages"] = [("error","You already tried {} times, please resend code and verify again.".format(settings.PASSCODE_TRY_TIMES))]
+                    context["messages"] = [("error","You have exceeded the number({}) of retries allowed.".format(settings.PASSCODE_TRY_TIMES))]
                     return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
                 elif code[len(codeid) + 1:] != inputcode:
                     #code is invalid.
@@ -1597,6 +1597,7 @@ def _auth_bearer(request):
     if m:
         token = m.group('token')
     if token != settings.SECRET_KEY:
+        logger.debug("Access token is outdated.")
         return False
     return True
 
