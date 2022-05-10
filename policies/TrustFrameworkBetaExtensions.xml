@@ -43,31 +43,31 @@
             </ContentDefinition>
 
             <ContentDefinition Id="api.idpselections">
-                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/unified.html?title=Select%2520Identity%2520Provider</LoadUri>
+                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/unified.html?title=Sign%2520in%2520to%2520DBCA</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.idpselections.signup">
-                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/unified.html?title=Select%2520Identity%2520Provider</LoadUri>
+                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/unified.html?title=Sign%2520in%2520to%2520DBCA</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.signuporsignin">
-                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/b2c_signuporsignin.html?title=Select%2520Identity%2520Provider%26class=unified_container</LoadUri>
+                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/b2c_signuporsignin.html?title=Sign%2520in%2520to%2520DBCA%26class=unified_container</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted">
-                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/self_asserted.html?title=Please%2520fill%2520your%2520details</LoadUri>
+                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/self_asserted.html?title=User%2520profile</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.emailverify">
-                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/b2c_verifyemail.html?title=Please%2520verify%2520your%2520email%26class=self_asserted_container%26header=To%2520sign%2520up%2520with%2520email,%2520please%2520enter%2520your%2520address%2520below.%2520We%2527ll%2520send%2520you%2520a%2520verification%2520code%2520to%2520prove%2520that%2520you%2520own%2520the%2520address.</LoadUri>
+                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/b2c_verifyemail.html?title=Verify%2520email%26class=self_asserted_container%26header=Sign%2520in%2520to%2520your%2520Department%2520of%2520Biodiversity,%2520Conservation%2520and%2520Attractions%2520account%2520with%2520a%2520verification%2520code%2520sent%2520to%2520your%2520account%2520email%2520address.</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.useremailverify">
-                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/b2c_verifyuseremail.html?title=Please%2520verify%2520your%2520email%26class=self_asserted_container</LoadUri>
+                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/b2c_verifyuseremail.html?title=Verify%2520email%26class=self_asserted_container</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.SignUpStep2-UserProperties">
-                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/b2c_signup_userprofile.html?title=Please%2520fill%2520your%2520details%26class=self_asserted_container%26header=Signup%2520form</LoadUri>
+                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/b2c_signup_userprofile.html?title=User%2520profile%26class=self_asserted_container</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.selectMfaMethod">
@@ -83,7 +83,7 @@
             </ContentDefinition>
 
             <ContentDefinition Id="api.localaccountpasswordreset">
-                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/self_asserted.html?title=Input%2520new%2520password%26header=Set%2520new%2520password</LoadUri>
+                <LoadUri>https://auth2-beta.dbca.wa.gov.au/sso/self_asserted.html?title=Set%2520password</LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.phonefactor">

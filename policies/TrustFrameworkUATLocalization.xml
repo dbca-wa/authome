@@ -27,6 +27,12 @@
                 </LocalizedResourcesReferences>
             </ContentDefinition>
 
+            <ContentDefinition Id="api.selfasserted.SignUpStep2-UserProperties">
+                <LocalizedResourcesReferences MergeBehavior="ReplaceAll">
+                    <LocalizedResourcesReference Language="en" LocalizedResourcesReferenceId="api.signuporsignin.en"/>
+                </LocalizedResourcesReferences>
+            </ContentDefinition>
+
             <ContentDefinition Id="api.selfasserted.emailverify">
                 <LocalizedResourcesReferences MergeBehavior="ReplaceAll">
                     <LocalizedResourcesReference Language="en" LocalizedResourcesReferenceId="api.selfasserted.emailverify.en"/>
@@ -35,7 +41,7 @@
 
             <ContentDefinition Id="api.selfasserted.useremailverify">
                 <LocalizedResourcesReferences MergeBehavior="ReplaceAll">
-                    <LocalizedResourcesReference Language="en" LocalizedResourcesReferenceId="api.selfasserted.useremailverify.en"/>
+                    <LocalizedResourcesReference Language="en" LocalizedResourcesReferenceId="api.selfasserted.emailverify.en"/>
                 </LocalizedResourcesReferences>
             </ContentDefinition>
 
@@ -50,6 +56,7 @@
                 <LocalizedStrings>
                     <LocalizedString ElementType="UxElement" StringId="social_intro">Sign in</LocalizedString>
                     <LocalizedString ElementType="UxElement" StringId="local_intro_email">----------------------or----------------------</LocalizedString>
+                    <LocalizedString ElementType="ErrorMessage" StringId="UserMessageIfClaimsPrincipalAlreadyExists">An account already exists for this email address. Go back to sign in.</LocalizedString>
                 </LocalizedStrings>
             </LocalizedResources>
 
@@ -57,13 +64,7 @@
                 <LocalizedStrings>
                     <LocalizedString ElementType="DisplayControl" ElementId="emailVerificationControl" StringId="success_send_code_msg">Please enter the verification code sent to your email address. The code is only valid for 10 minutes.</LocalizedString>
                     <LocalizedString ElementType="DisplayControl" ElementId="emailVerificationControl" StringId="but_change_claims">Change your email</LocalizedString>
-                </LocalizedStrings>
-            </LocalizedResources>
-
-            <LocalizedResources Id="api.selfasserted.useremailverify.en">
-                <LocalizedStrings>
-                    <LocalizedString ElementType="DisplayControl" ElementId="userEmailVerificationControl" StringId="success_send_code_msg">Please enter the verification code sent to your email address. The code is only valid for 10 minutes.</LocalizedString>
-                    <LocalizedString ElementType="DisplayControl" ElementId="userEmailVerificationControl" StringId="but_change_claims">Change your email</LocalizedString>
+                    <LocalizedString ElementType="ErrorMessage" StringId="UserMessageIfSessionDoesNotExist">The verification code has expired. Send a new code.</LocalizedString>
                 </LocalizedStrings>
             </LocalizedResources>
 
