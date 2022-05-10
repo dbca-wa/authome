@@ -34,7 +34,7 @@
             </ClaimType>
 
             <ClaimType Id="setProfileHeader">
-                <DisplayName>Please provide your name details</DisplayName>
+                <DisplayName>Please provide your name</DisplayName>
                 <DataType>string</DataType>
                 <UserInputType>Readonly</UserInputType>
             </ClaimType>
@@ -2119,7 +2119,7 @@
             <DisplayName>Microsoft</DisplayName>
             <TechnicalProfiles>
                 <TechnicalProfile Id="MSA-MicrosoftAccount-OpenIdConnect">
-                    <DisplayName>Microsoft Account</DisplayName>
+                    <DisplayName>Microsoft</DisplayName>
                     <Protocol Name="OpenIdConnect"/>
                     <Metadata>
                         <Item Key="ProviderName">https://login.live.com</Item>
