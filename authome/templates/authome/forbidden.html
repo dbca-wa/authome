@@ -1,0 +1,21 @@
+{% extends "authome/default.html" %}
+{% load i18n static %}
+
+<title>Access denied</title>
+
+{% block extrapagecss %}
+<style>
+.self_asserted_container .col-lg-6 {
+    max-width:800px;
+    width:auto;
+    text-align:left;
+}
+.self_asserted_container .row .panel-default .panel-body {
+    max-width:none;
+}
+</style>
+{% endblock extrapagecss %}
+
+{% block realcontent %}
+<h4>You are not allowed to access this page</h4>
+{% endblock realcontent %}

@@ -1,5 +1,37 @@
 {% extends "authome/default.html" %}
+{% load i18n static %}
 
+{% block title %}User Profile {% endblock title %}
 
-{% block title%}Edit user profile{% endblock title%}
+{% block extrapagecss %}
+<link rel="stylesheet" type="text/css" href="/sso/static/css/message.css">
+{% endblock extrapagecss %}
 
+{% block realcontent %}
+
+<form method="post" action="{% url 'profile_edit' %}" id="attributeVerification" class="localAccount">
+{% csrf_token %}
+<input type="hidden" id="id_next" name="next" value="{{next}}">
+<div >
+    <div style="color:black;font-weight:bold;font-size:medium;text-align:left;margin-top:10px;white-space:pre-wrap">Your real name. You may be required to provide proof of identity for some products and services</div>
+</div>
+{% include "authome/inc/messages.html"%}
+<div id="attributeList" class="attr">
+  <ul>
+   <li>
+       <input type="email" title="Please enter a valid email address." id="id_email" name="email" value="{{user.email}}" aria-label="Email Address" readonly style="border:none;font-weight:bold;padding-left:0px">
+   </li>
+   <li>
+       <input type="text" title="Please input the First name" id="id_firstname" name="first_name" placeholder="First Name" value="{{user.first_name}}" aria-label="First Name" required>
+   </li>
+   <li>
+       <input type="text" title="Please input the Last name" id="id_lastname" name="last_name" placeholder="Last Name" value="{{user.last_name}}" aria-label="Last Name" required>
+   </li>
+  </ul>
+</div>
+<div class="buttons" >
+   <button id="id_defaultaction" type="submit" name="action" value="change" form="attributeVerification" >Save</button>
+   <button id="cancel" aria-label="Cancel" formnovalidate="" name="action" value="cancel" form="attributeVerification">Cancel</button>
+</div>
+</form>
+{% endblock realcontent %}

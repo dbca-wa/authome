@@ -1,0 +1,13 @@
+<html>
+  <head>
+  </head>
+  <body>
+    <form action="https://{{domain}}/sso/login_domain" method="post" id="loginform">
+       <input type="hidden" name="session" value="{{session_key}}">
+       <input type="hidden" name="next_url" value="{{next_url}}">
+    </form>
+    <script type="text/javascript" >
+        document.getElementById("loginform").submit()
+    </script>
+  </body>
+</html>

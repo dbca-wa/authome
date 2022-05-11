@@ -20,7 +20,7 @@ FROM builder_base_authome as python_libs_authome
 WORKDIR /app/release
 # Install the project.
 FROM python_libs_authome
-COPY manage.py gunicorn.py ./
+COPY manage.py gunicorn.py testperformance testrequestheaders ./
 COPY authome ./authome
 COPY templates ./templates
 RUN export IGNORE_LOADING_ERROR=True ; python manage.py collectstatic --noinput --no-post-process
@@ -29,15 +29,18 @@ RUN cp -rf /app/release /app/dev
 
 #comment out logger.debug to improve perfornace in production environment.
 RUN find ./ -type f -iname '*.py' -exec sed -i 's/logger.debug/#logger.debug/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -i 's/from . import performance/#from . import performance/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -i 's/performance.start_processingstep/#performance.start_processingstep/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -i 's/performance.end_processingstep/#performance.end_processingstep/g' "{}" +;
 
 WORKDIR /app
 RUN echo "#!/bin/bash \n\
 if [[ \"\$DEBUG\" == \"True\" || -n \"\${LOGLEVEL}\" ]]; then \n\
     echo \"Running in dev mode\" \n\
-    cd /app/dev && gunicorn authome.wsgi --config=gunicorn.py \n\
+    cd /app/dev && gunicorn authome.wsgi --bind=:8080 --config=gunicorn.py \n\
 else \n\
     echo \"Running in release mode\" \n\
-    cd /app/release && gunicorn authome.wsgi --config=gunicorn.py \n\
+    cd /app/release && gunicorn authome.wsgi --bind=:8080 --config=gunicorn.py \n\
 fi \n\
 " > start_app
 

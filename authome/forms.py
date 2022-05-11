@@ -84,13 +84,14 @@ class UserAuthorizationForm(AuthorizationForm):
 
 
 class IdentityProviderForm(forms.ModelForm):
-    logout_url = forms.CharField(required=True,widget=forms.TextInput(attrs={"style":"width:80%"}))
+    logout_url = forms.CharField(required=False,widget=forms.TextInput(attrs={"style":"width:80%"}))
     class Meta:
         model = IdentityProvider
         fields = "__all__"
 
 class CustomizableUserflowForm(forms.ModelForm):
     domain = forms.CharField(required=True,widget=forms.TextInput(),help_text=get_help_text(CustomizableUserflow,"domain"))
+    sortkey = forms.CharField(required=False,widget=forms.TextInput(),help_text=get_help_text(CustomizableUserflow,"sortkey"))
     class Meta:
         model = CustomizableUserflow
         fields = "__all__"

@@ -128,14 +128,14 @@ class UserAuthorizationCheckMixin(object):
 class UserAdmin(UserAuthorizationCheckMixin,UserGroupsMixin,DatetimeMixin,auth.admin.UserAdmin):
     list_display = ('username', 'email', 'first_name', 'last_name','is_active', 'is_staff','last_idp','_last_login')
     list_filter = ( 'is_superuser',)
-    readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","_email","_usergroups")
+    readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","_email","_usergroups","last_idp")
     fieldsets = (
         (None, {'fields': ('_email', )}),
         ('Personal info', {'fields': ('username','first_name', 'last_name',"_usergroups")}),
         ('Permissions', {
             'fields': ('is_active', 'is_staff', 'is_superuser', ),
         }),
-        ('Important dates', {'fields': ('_last_login', '_date_joined')}),
+        ('Important dates', {'fields': ('last_idp','_last_login', '_date_joined')}),
     )
 
     change_form_template = 'admin/change_form.html'
@@ -205,11 +205,22 @@ class SystemUserAdmin(UserGroupsMixin,DatetimeMixin,auth.admin.UserAdmin):
 
 @admin.register(models.UserGroup)
 class UserGroupAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
-    list_display = ('name','groupid','parent_group','users','excluded_users','identity_provider','_modified','_created')
+    list_display = ('name','groupid','parent_group','users','excluded_users','identity_provider','_session_timeout','_modified','_created')
     readonly_fields = ('_modified',)
-    fields = ('name','groupid','parent_group','users','excluded_users','identity_provider','_modified')
+    fields = ('name','groupid','parent_group','users','excluded_users','identity_provider','session_timeout','_modified')
     ordering = ('parent_group','name',)
     form = forms.UserGroupForm
+
+    def _session_timeout(self,obj):
+        if not obj :
+            return ""
+        else:
+            result = obj.sessiontimeout
+            if result == 0:
+                return ""
+            else:
+                return result
+    _session_timeout.short_description = "Session Timeout"
 
 
 @admin.register(models.UserGroupAuthorization)
@@ -475,18 +486,18 @@ class IdentityProviderAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdm
 
 @admin.register(models.CustomizableUserflow)
 class CustomizableUserflowAdmin(CacheableListTitleMixin,DatetimeMixin,admin.ModelAdmin):
-    list_display = ('domain','fixed','default','profile_edit','mfa_set',"mfa_reset",'password_reset','_modified','_created')
+    list_display = ('domain','fixed','default','mfa_set',"mfa_reset",'password_reset','_modified','_created')
     readonly_fields = ('_modified','_created')
     form = forms.CustomizableUserflowForm
-    fields = ('domain','fixed','default','profile_edit','mfa_set',"mfa_reset",'password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body",'_modified','_created')
+    fields = ('domain','fixed','default','mfa_set',"mfa_reset",'password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body","sortkey",'_modified','_created')
     ordering = (models.sortkey_c.asc(),)
 
 
 @admin.register(models.UserTOTP)
 class UserTOTPAdmin(DatetimeMixin,admin.ModelAdmin):
-    list_display = ('name','email','idp','issuer','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
-    readonly_fields = ('name','email','idp','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
-    fields = ('name','email','idp','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
+    list_display = ('name','email','issuer','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
+    readonly_fields = ('name','email','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
+    fields = ('name','email','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
     ordering = ('name',)
     search_fields=("email",)
 

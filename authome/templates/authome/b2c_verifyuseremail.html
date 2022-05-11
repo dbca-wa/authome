@@ -1,0 +1,11 @@
+{% extends "authome/self_asserted.html" %}
+{% load i18n static %}
+
+{% block extra_js %}
+{% if enable_b2c_js_extension %}
+    {% include "authome/inc/emailverification.js"%}
+    var btn_prefix = "userEmailVerificationControl"
+    var email_readonly = true
+    var emailid = "userEmail"
+{% endif %}
+{% endblock extra_js %}

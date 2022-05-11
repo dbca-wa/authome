@@ -17,9 +17,11 @@ logger = logging.getLogger(__name__)
 
 urlpatterns = [
     path('sso/auth_logout', views.logout_view, name='logout'),
+    path('sso/auth_local', views.auth_local, name='auth_local'),
     path('sso/auth', views.auth, name='auth'),
     path('sso/auth_optional', views.auth_optional, name='auth_optional'),
     path('sso/auth_basic', views.auth_basic, name='auth_basic'),
+    path('sso/login_domain', csrf_exempt(views.login_domain), name='login_domain'),
     path('sso/profile', views.profile, name='profile'),
     path('sso/signedout', views.signedout, name='signedout'),
     path('sso/forbidden', views.forbidden, name='forbidden'),
@@ -29,8 +31,9 @@ urlpatterns = [
 
     path('sso/<slug:template>.html', views.adb2c_view, name='adb2c_view'),
 
-    path('sso/profile/edit', views.profile_edit,{"backend":"azuread-b2c-oauth2"},name='profile_edit'),
-    path('sso/profile/edit/complete', views.profile_edit_complete,{"backend":"azuread-b2c-oauth2"},name='profile_edit_complete'),
+    #path('sso/profile/edit', views.profile_edit,{"backend":"azuread-b2c-oauth2"},name='profile_edit'),
+    #path('sso/profile/edit/complete', views.profile_edit_complete,{"backend":"azuread-b2c-oauth2"},name='profile_edit_complete'),
+    path('sso/profile/edit', views.profile_edit,name='profile_edit'),
 
     path('sso/password/reset', views.password_reset,{"backend":"azuread-b2c-oauth2"},name='password_reset'),
     path('sso/password/reset/complete', views.password_reset_complete,{"backend":"azuread-b2c-oauth2"},name='password_reset_complete'),
@@ -44,6 +47,8 @@ urlpatterns = [
     path('sso/totp/generate',views.totp_generate,name="totp_generate"),
     path('sso/totp/verify',views.totp_verify,name="totp_verify"),
 
+    path('sso/setting',views.user_setting,name="user_setting"),
+
     path('sso/checkauthorization',csrf_exempt(views.checkauthorization),name="checkauthorization"),
 
     path('healthcheck',views.healthcheck,name="healthcheck"),
@@ -55,10 +60,16 @@ urlpatterns = [
 
     path("favicon.ico",RedirectView.as_view(url="{}images/favicon.ico".format(settings.STATIC_URL)))
 ]
-
 if settings.DEBUG:
-    import debug_toolbar
-    urlpatterns.append(path('__debug__/', include(debug_toolbar.urls)))
+    #import debug_toolbar
+    from authome import performance
+    #urlpatterns.append(path('__debug__/', include(debug_toolbar.urls)))
+    urlpatterns.append(path('sso/authperformance', performance.performancetester_wrapper(views.auth), name='authperformance'))
+    urlpatterns.append(path('sso/auth_basicperformance', performance.performancetester_wrapper(views.auth_basic), name='auth_basicperformance'))
+    urlpatterns.append(path('echo',views.echo,name="echo"))
+    urlpatterns.append(path('echo/auth',views.echo,name="echo_auth"))
+    urlpatterns.append(path('echo/auth_basic',views.echo,name="echo_auth_basic"))
+    urlpatterns.append(path('echo/auth_optional',views.echo,name="echo_auth_optional"))
 
 handler400 = views.handler400
 

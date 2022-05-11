@@ -10,19 +10,20 @@ from django.http import HttpResponseForbidden,HttpResponseRedirect
 from django.contrib.auth import REDIRECT_FIELD_NAME
 
 from .models import IdentityProvider,UserGroup
-from .views import signout, get_post_b2c_logout_url
-from .utils import get_usercache
+from .views import signout
+from .cache import get_usercache
+from . import utils
 
 logger = logging.getLogger(__name__)
 
-usercache = get_usercache()
 
 def email_lowercase(backend,details, user=None,*args, **kwargs):
     """
     A pipeline to turn the email address to lowercase
     """
     email = details.get("email")
-    details['email'] = email.strip().lower() if email else None
+    if email:
+        details['email'] = email.strip().lower()
 
     return {"details":details}
 
@@ -35,6 +36,7 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     email = details.get("email")
 
     #reset is_staff and is_superuser property based on user category.
+    usergroups = None
     if email:
         dbcagroup = UserGroup.dbca_group()
         usergroups = UserGroup.find_groups(email)[0]
@@ -48,6 +50,10 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
 
     if hasattr(request,"policy"):
         #not a sign in request
+        mfa_method = kwargs['response'].get("mfaMethod")
+        if mfa_method and request.session.get("mfa_method") and request.session.get("mfa_method") != mfa_method:
+            #mfa was changed, update the user session 
+            request.session["mfa_method"] = mfa_method
         return
 
     #get the identityprovider from b2c response
@@ -56,14 +62,10 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
     logger.debug("authenticate the user({}) with identity provider({}={})".format(email,idp_obj.idp,idp))
 
     #get backend logout url
-    backend_logout_url = backend.logout_url if hasattr(backend,"logout_url") else settings.BACKEND_LOGOUT_URL
-
     if user and not user.is_active:
         #use is inactive, automatically logout 
-        logout(request)
-        logout_url = backend_logout_url.format(get_post_b2c_logout_url(request,idp_obj))
-        logger.debug("Redirect to '{}' to logout from identity provider".format(logout_url))
-        response = signout(request,logout_url=logout_url,message="Your account was disabled.")
+        logger.debug("User({}) is inactive, automatically logout ".format(email))
+        response = signout(request,idp=idp_obj,message="Your account is disabled.")
         return response
 
     #check whether identity provider is the same as the configured identity provider
@@ -71,11 +73,8 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
         configed_idp_obj = UserGroup.get_identity_provider(email)
         if configed_idp_obj and configed_idp_obj != idp_obj:
             #The idp used for user authentication is not the idp configured in UserGroup, automatically logou
-            logger.debug("The user({}) shoule authenticate with '{}' instead of '{}'".format(email,configed_idp_obj,idp_obj))
-            logout(request)
-            logout_url = backend_logout_url.format(get_post_b2c_logout_url(request,idp_obj))
-            logger.debug("Redirect to '{}' to logout from identity provider".format(logout_url))
-            response = signout(request,logout_url=logout_url,message="You can only sign in through identity provider '{}'".format(configed_idp_obj))
+            logger.debug("The user({}) must authenticate with '{}' instead of '{}', automatically logout".format(email,configed_idp_obj,idp_obj))
+            response = signout(request,idp=idp_obj,message="You can only sign in with social media '{}'".format(configed_idp_obj))
 
             #set the prefer IdentityProvider
             response.set_cookie(
@@ -86,16 +85,23 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
                 max_age=_max_age,
                 samesite=None
             )
-            #clear the session
-            request.session.flush()
             return response
 
     backend.strategy.session_set("idp", idp_obj.idp)
 
     details["last_idp"] = idp_obj
+    if idp_obj.idp == "local":
+        mfa_method = kwargs['response'].get("mfaMethod")
+        if mfa_method:
+            backend.strategy.session_set("mfa_method",mfa_method)
+            logger.debug("MFA Method is '{}'".format(mfa_method))
 
-    logger.debug("set backend logout url to {}".format(backend_logout_url))
-    backend.strategy.session_set("backend_logout_url",backend_logout_url)
+
+    if usergroups:
+        timeout = UserGroup.get_session_timeout(usergroups)
+        if timeout:
+            backend.strategy.session_set("session_timeout",timeout)
+            pass
 
 
 def user_details(strategy, details, user=None, *args, **kwargs):
@@ -104,7 +110,7 @@ def user_details(strategy, details, user=None, *args, **kwargs):
         return
 
     changed = False  # flag to track changes
-    protected = ('username', 'id', 'pk', 'email') + \
+    protected = ('username', 'id', 'pk', 'email','first_name','last_name') + \
                 tuple(strategy.setting('PROTECTED_USER_FIELDS', []))
 
     # Update user model attributes with the new data sent by the current
@@ -125,15 +131,18 @@ def user_details(strategy, details, user=None, *args, **kwargs):
         setattr(user, name, value)
 
     if not user.first_name or not user.last_name:
-        nexturl = strategy.request.session[REDIRECT_FIELD_NAME]
+        nexturl = strategy.request.session.get(REDIRECT_FIELD_NAME)
         if nexturl:
-            nexturl = "/sso/profile/edit?{}={}".format(REDIRECT_FIELD_NAME,urllib.parse.quote(nexturl))
+            nexturl_parsed = utils.parse_url(nexturl)
+            if nexturl_parsed["path"] != "/sso/profile/edit":
+                nexturl = "/sso/profile/edit?{}={}".format(REDIRECT_FIELD_NAME,urllib.parse.quote(nexturl))
         else:
             nexturl = "/sso/profile/edit"
         strategy.request.session[REDIRECT_FIELD_NAME] = nexturl
 
     if changed:
         strategy.storage.user.changed(user)
+        usercache = get_usercache(user.id)
         if usercache:
-            usercache.set(settings.GET_USER_KEY(user.id),user,settings.USER_CACHE_TIMEOUT)
+            usercache.set(settings.GET_USER_KEY(user.id),user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
             logger.debug("Cache the user({}) data to usercache".format(user.email))

@@ -14,13 +14,11 @@ from django.contrib.auth.models import AbstractUser
 
 import hashlib
 
-from .cache import cache
-from .utils import get_defaultcache, get_usercache
+from .cache import cache,get_defaultcache,get_usercache
 
 logger = logging.getLogger(__name__)
 
 defaultcache = get_defaultcache()
-usercache = get_usercache()
 
 help_text_users = """
 List all possible user emails in this group separated by new line character.
@@ -115,6 +113,19 @@ class RequestDomain(object):
     #two digit values(10 - 99), high value has low priority
     base_sort_key = 99
 
+    _all_base_sort_keys = None
+
+    @staticmethod
+    def all_base_sort_keys():
+        if not RequestDomain._all_base_sort_keys:
+            RequestDomain._all_base_sort_keys = [c.base_sort_key for c in RequestDomain.__subclasses__()]
+
+        return RequestDomain._all_base_sort_keys
+
+    @staticmethod
+    def is_base_sort_key(key):
+        return key in RequestDomain.all_base_sort_keys()
+
     #match all domains if True.
     match_all = False
     def __init__(self,config):
@@ -124,7 +135,7 @@ class RequestDomain(object):
         self.sort_key = self.get_sort_key(config)
 
     def get_sort_key(self,config):
-        return "{}:{}".format(self.base_sort_key,config)
+        return "{:0>2}:{}".format(self.base_sort_key,config)
 
     @classmethod
     def get_instance(cls,domain):
@@ -214,7 +225,7 @@ class RegexRequestDomain(RequestDomain):
             raise ValidationError("The regex domain config({}) is invalid.{}".format(domain,str(ex)))
 
     def get_sort_key(self,config):
-        return "{}:{}".format(self.base_sort_key,config.replace("*","~"))
+        return "{:0>2}:{}".format(self.base_sort_key,config.replace("*","~"))
 
     def match(self,domain):
         if not domain:
@@ -255,6 +266,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     IdentityProvider 'local' means local account
     IdentityProvider 'local_passwordless' means autenticating user without password
     """
+    AUTH_EMAIL_VERIFY = ("auth_email_verify","Sign in with Passcode")
     MANUALLY_LOGOUT = 1
     AUTO_LOGOUT = 2
     AUTO_LOGOUT_WITH_POPUP_WINDOW = 3
@@ -306,6 +318,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
         for obj in cls.objects.all():
             size += 1
             idps[obj.idp] = obj
+            idps[obj.id] = obj
             if not modified:
                 modified = obj.modified
             elif modified < obj.modified:
@@ -315,7 +328,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     @classmethod
     def get_idp(cls,idpid):
         """
-        Return idp from cache
+        Return idp from cache via idp.idp or idp.id
         """
         return cache.idps.get(idpid) if idpid else None
 
@@ -458,16 +471,13 @@ Email: enquiries@dbca.wa.gov.au
 </body>
 </html>"""
 
-    _editable_columns = ("default","mfa_set","mfa_reset","email","profile_edit","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body","sortkey")
+    _editable_columns = ("default","mfa_set","mfa_reset","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body","sortkey")
 
     domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
     fixed = models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
     default = models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
     mfa_set = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa set user flow")
     mfa_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa reset user flow")
-    #is not used in current logic
-    email = models.CharField(max_length=64,null=True,blank=True,help_text="The email signup and signin user flow")
-    profile_edit = models.CharField(max_length=64,null=True,blank=True,help_text="The user profile edit user flow")
     password_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The user password reset user flow")
 
     extracss = models.TextField(null=True,blank=True)
@@ -477,7 +487,7 @@ Email: enquiries@dbca.wa.gov.au
     verifyemail_subject = models.CharField(max_length=512,null=True,blank=True)
     verifyemail_body = models.TextField(null=True,blank=True)
 
-    sortkey = models.CharField(max_length=128,editable=False)
+    sortkey = models.CharField(max_length=128,editable=True,help_text="A sorting string consisted with a 2 digitals and string separated by ':', the sorting string is auto generated if the digitals is in {}".format(RequestDomain.all_base_sort_keys()))
 
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
@@ -510,7 +520,21 @@ Email: enquiries@dbca.wa.gov.au
         if not request_domain:
             raise ValidationError("Please configure domain.")
         self.domain = request_domain.config
-        self.sortkey = request_domain.sort_key
+        try:
+            if not self.sortkey or RequestDomain.is_base_sort_key(int(self.sortkey.split(":",1)[0])):
+                self.sortkey = request_domain.sort_key
+            else:
+                basekey,key = self.sortkey.split(":",1)
+                basekey = int(basekey)
+                if basekey > 99 or basekey < 0:
+                    #basekey should between 0 99
+                    self.sortkey = request_domain.sort_key
+                else:
+                    self.sortkey = "{:0>2}:{}".format(basekey,key)
+        except:
+            #A wrong sort key
+            self.sortkey = request_domain.sort_key
+
 
         if self.domain == "*":
             #default userflow
@@ -523,7 +547,7 @@ Email: enquiries@dbca.wa.gov.au
 
             #check the required fields
             invalid_columns = []
-            for name in ("default","mfa_set","mfa_reset","profile_edit","password_reset","page_layout","verifyemail_from","verifyemail_subject","verifyemail_body"):
+            for name in ("default","mfa_set","mfa_reset","password_reset","page_layout","verifyemail_from","verifyemail_subject","verifyemail_body"):
                 if not getattr(self,name):
                     invalid_columns.append(name)
             if len(invalid_columns) == 1:
@@ -573,7 +597,7 @@ Email: enquiries@dbca.wa.gov.au
         for o in userflows:
             if o != defaultuserflow:
                 o.defaultuserflow = defaultuserflow
-                for name in ("fixed","default","mfa_set","mfa_reset","email","profile_edit","password_reset"):
+                for name in ("fixed","default","mfa_set","mfa_reset","password_reset"):
                     if not getattr(o,name):
                         setattr(o,name,getattr(defaultuserflow,name))
 
@@ -728,7 +752,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     _useremails = None
     _excluded_useremails = None
 
-    _editable_columns = ("users","parent_group","excluded_users","identity_provider","groupid")
+    _editable_columns = ("users","parent_group","excluded_users","identity_provider","groupid","session_timeout")
 
     name = models.CharField(max_length=32,unique=True,null=False)
     groupid = models.SlugField(max_length=32,null=False)
@@ -736,12 +760,39 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     users = _ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
     excluded_users = _ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
     identity_provider = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,null=True,blank=True)
+    session_timeout = models.PositiveSmallIntegerField(null=True,editable=True,blank=True,help_text="Session timeout in seconds, 0 means never timeout")
     modified = models.DateTimeField(editable=False,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
+
+
+    @property
+    def sessiontimeout(self):
+        if self.session_timeout is not None:
+            return self.session_timeout
+        elif self.parent_group:
+            return self.parent_group.sessiontimeout
+        else:
+            return 0
+
 
     @classmethod
     def get_model_change_cls(self):
         return UserGroupChange
+
+    @classmethod
+    def get_session_timeout(cls,usergroups):
+        """
+        Return the session timeout from groups.
+        """
+        timeout = 0
+        for group in usergroups:
+            t = group.sessiontimeout
+            if not t:
+                return t
+            if timeout < t:
+                timeout = t
+
+        return timeout
 
     @classmethod
     def get_groupnames(cls,usergroups):
@@ -1444,7 +1495,7 @@ def check_authorization(email,domain,path):
     else:
         return (False,[])
 
-def _can_access(email,domain,path):
+def can_access(email,domain,path):
     """
     Return True if the user(email) can access domain/path; otherwise return False
     """
@@ -1452,11 +1503,13 @@ def _can_access(email,domain,path):
     domain = domain.lower()
     groupskey = cache.get_email_groupskey(email)
     if not groupskey:
+        #this method will find email's groups and cache in memory via two maps(email to gorupskey, groupskey to groups)
         usergroups = UserGroup.find_groups(email)[0]
         if not usergroups:
             #Not in any user group. can't access
             return False
 
+        #groupskey is already set by find_groups
         groupskey = cache.get_email_groupskey(email)
 
     authorizations = cache.get_authorizations(groupskey,domain)
@@ -1467,43 +1520,6 @@ def _can_access(email,domain,path):
         return any(obj.allow(path) for obj in authorizations)
     else:
         return False
-
-def _can_access_debug(email,domain,path):
-    """
-    Return True if the user(email) can access domain/path; otherwise return False
-    """
-    email = email.lower()
-    domain = domain.lower()
-    start = datetime.now()
-    authorizations = None
-    try:
-        groupskey = cache.get_email_groupskey(email)
-        if not groupskey:
-            usergroups = UserGroup.find_groups(email)[0]
-            if not usergroups:
-                #Not in any user group. can't access
-                return False
-
-            groupskey = cache.get_email_groupskey(email)
-
-        authorizations = cache.get_authorizations(groupskey,domain)
-        if authorizations is None:
-            authorizations = AuthorizationMixin.find_authorizations(email,domain)
-            cache.set_authorizations(groupskey,domain,authorizations)
-        if authorizations:
-            return any(obj.allow(path) for obj in authorizations)
-        else:
-            return False
-    finally:
-        diff = datetime.now() - start
-        if diff.seconds > 0 or diff.microseconds > settings.AUTH_CHECKING_THRESHOLD_TIME:
-            logger.warning("spend {0} milliseconds to check the authroization.user={1}, http request=https://{2}{3}".format(round((diff.seconds * 1000000 + diff.microseconds)/1000),email,domain,path))
-            pass
-        else:
-            logger.debug("spend {0} milliseconds to check the authroization.user={1}, http request=https://{2}{3}, authorization object=\r\n\t{4})".format(round((diff.seconds * 1000000 + diff.microseconds)/1000),email,domain,path,"\r\n\t".join("{}({},domain={},paths={},excluded_paths={})".format(authorization.__class__.__name__,authorization,authorization.domain,authorization.paths,authorization.excluded_paths) for authorization in authorizations) if authorizations else "None"))
-            pass
-
-can_access = _can_access if settings.RELEASE else _can_access_debug
 
 class UserAuthorization(CacheableMixin,AuthorizationMixin):
     user = models.EmailField(max_length=64)
@@ -1698,13 +1714,16 @@ class UserToken(models.Model):
             self.expired = self.created.date() + timedelta(days=token_lifetime)
         self.token = hashlib.sha256('{}|{}|{}|{}|{}|{}|{}|{}'.format(self.user.email.lower(),self.user.is_superuser,self.user.is_staff,self.user.is_active,self.created.timestamp(),self.expired.isoformat() if self.expired else "2099-12-31",settings.SECRET_KEY,self.generate_user_secret()).encode('utf-8')).hexdigest()
 
+    def save(self,*args,**kwargs):
+        with transaction.atomic():
+            super().save(*args,**kwargs)
+
     class Meta:
         verbose_name_plural = "       User Access Tokens"
 
 class UserTOTP(models.Model):
-    email = models.CharField(max_length=64,null=False,editable=False)
-    idp = models.CharField(max_length=256,null=False,editable=False)
-    secret_key = models.CharField(max_length=128,null=False,editable=False)
+    email = models.CharField(max_length=64,null=False,editable=False,unique=True)
+    secret_key = models.CharField(max_length=512,null=False,editable=False)
     timestep = models.PositiveSmallIntegerField(null=False,editable=False)
     prefix = models.CharField(max_length=64,null=False,editable=False)
     issuer = models.CharField(max_length=64,null=False,editable=False)
@@ -1714,9 +1733,6 @@ class UserTOTP(models.Model):
     last_verified_code = models.CharField(max_length=16,null=True,editable=False)
     last_verified = models.DateTimeField(null=True,editable=False)
     created = models.DateTimeField(null=False,editable=False)
-
-    class Meta:
-        unique_together = [["email","idp"]]
 
 class UserListener(object):
     @staticmethod
@@ -1731,14 +1747,36 @@ class UserListener(object):
     @receiver(post_save, sender=User)
     def post_save_user(sender,instance,created,**kwargs):
         if not created:
-            if usercache.get(settings.GET_USER_KEY(instance.id)):
-                usercache.set(settings.GET_USER_KEY(instance.id),instance,settings.USER_CACHE_TIMEOUT)
+            usercache = get_usercache(instance.id)
+            if usercache and usercache.get(settings.GET_USER_KEY(instance.id)):
+                usercache.set(settings.GET_USER_KEY(instance.id),instance,settings.STAFF_CACHE_TIMEOUT if instance.is_staff else settings.USER_CACHE_TIMEOUT)
                 logger.debug("Cache the latest data of the user({1}<{0}>) to usercache".format(instance.id,instance.email))
 
     @staticmethod
     @receiver(post_delete, sender=User)
     def post_delete_user(sender,instance,**kwargs):
-        usercache.delete(settings.GET_USER_KEY(instance.id))
+        usercache = get_usercache(instance.id)
+        if usercache:
+            usercache.delete(settings.GET_USER_KEY(instance.id))
+
+class UserTokenListener(object):
+    @staticmethod
+    @receiver(post_save, sender=UserToken)
+    def post_save_usertoken(sender,instance,created,**kwargs):
+        if not created:
+            usercache = get_usercache(instance.user_id)
+            if usercache and usercache.get(settings.GET_USERTOKEN_KEY(instance.user_id)):
+                #Only cache the user token only if it is already cached
+                usercache.set(settings.GET_USERTOKEN_KEY(instance.user_id),instance,settings.STAFF_CACHE_TIMEOUT if instance.user.is_staff else settings.USER_CACHE_TIMEOUT)
+                logger.debug("Cache the latest data of the user token({0}) to usercache".format(instance.user_id))
+
+    @staticmethod
+    @receiver(post_delete, sender=UserToken)
+    def post_delete_usertoken(sender,instance,**kwargs):
+        usercache = get_usercache(instance.user_id)
+        if usercache:
+            #delete the deleted user token from cache
+            usercache.delete(settings.GET_USERTOKEN_KEY(instance.user_id))
 
 class UserGroupListener(object):
     @receiver(pre_delete, sender=UserGroup)
@@ -1756,8 +1794,8 @@ if defaultcache:
     class ModelChange(object):
         key = None
         @classmethod
-        def change(cls):
-            defaultcache.set(cls.key,timezone.now())
+        def change(cls,timeout=None):
+            defaultcache.set(cls.key,timezone.now(),timeout=timeout)
 
         @classmethod
         def get_cachetime(cls):
@@ -1775,7 +1813,7 @@ if defaultcache:
         def is_changed(cls):
             last_modified = defaultcache.get(cls.key)
             if not last_modified:
-                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+                #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
             elif not cls.get_cachetime():
                 logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
@@ -1784,12 +1822,12 @@ if defaultcache:
                 logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
                 return True
             else:
-                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+                #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
 
 
     class IdentityProviderChange(ModelChange):
-        key = "idp_last_modified"
+        key = settings.GET_CACHE_KEY("idp_last_modified")
 
         @classmethod
         def get_cachetime(cls):
@@ -1818,7 +1856,7 @@ if defaultcache:
             IdentityProviderChange.change()
 
     class CustomizableUserflowChange(ModelChange):
-        key = "customizableuserflow_last_modified"
+        key = settings.GET_CACHE_KEY("customizableuserflow_last_modified")
 
         @classmethod
         def get_cachetime(cls):
@@ -1847,7 +1885,7 @@ if defaultcache:
             CustomizableUserflowChange.change()
 
     class UserGroupChange(ModelChange):
-        key = "usergroup_last_modified"
+        key = settings.GET_CACHE_KEY("usergroup_last_modified")
 
         @classmethod
         def get_cachetime(cls):
@@ -1877,7 +1915,7 @@ if defaultcache:
             UserGroupChange.change()
 
     class UserAuthorizationChange(ModelChange):
-        key = "userauthorization_last_modified"
+        key = settings.GET_CACHE_KEY("userauthorization_last_modified")
 
         @classmethod
         def get_cachetime(cls):
@@ -1907,7 +1945,7 @@ if defaultcache:
             UserAuthorizationChange.change()
 
     class UserGroupAuthorizationChange(ModelChange):
-        key = "usergroupauthorization_last_modified"
+        key = settings.GET_CACHE_KEY("usergroupauthorization_last_modified")
 
         @classmethod
         def get_cachetime(cls):
@@ -1957,7 +1995,7 @@ else:
                 logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
                 return True
             else:
-                logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+                #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
 
     class IdentityProviderChange(ModelChange):

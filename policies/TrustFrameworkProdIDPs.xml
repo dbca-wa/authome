@@ -20,10 +20,12 @@
                 <OrchestrationStep Order="1" Type="CombinedSignInAndSignUp" ContentDefinitionReferenceId="api.signuporsignin">
                     <ClaimsProviderSelections>
                         <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
+                        <ClaimsProviderSelection TargetClaimsExchangeId="MicrosoftAccountExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
+                        <ClaimsProviderSelection TargetClaimsExchangeId="AppleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/-->
                         <ClaimsProviderSelection ValidationClaimsExchangeId="LocalAccountSigninEmailExchange"/>
                     </ClaimsProviderSelections>
                     <ClaimsExchanges>
@@ -38,10 +40,12 @@
                 <OrchestrationStep Order="1" Type="ClaimsProviderSelection" ContentDefinitionReferenceId="api.idpselections">
                     <ClaimsProviderSelections>
                         <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
+                        <ClaimsProviderSelection TargetClaimsExchangeId="MicrosoftAccountExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
+                        <ClaimsProviderSelection TargetClaimsExchangeId="AppleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
-                        <ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/>
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange"/>
                     </ClaimsProviderSelections>
                 </OrchestrationStep>
@@ -55,6 +59,7 @@
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/-->
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="AppleExchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange"/>
@@ -70,6 +75,7 @@
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/-->
+                        <!--ClaimsProviderSelection TargetClaimsExchangeId="AppleExchange"/-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="PasswordlessSignIn"/-->
                         <ClaimsProviderSelection TargetClaimsExchangeId="LocalAccountSigninEmailExchange"/>
@@ -79,6 +85,5 @@
         </UserJourney>
 
     </UserJourneys>
-
 
 </TrustFrameworkPolicy>

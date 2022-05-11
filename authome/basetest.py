@@ -34,6 +34,7 @@ class BaseAuthTestCase(TestCase):
         settings.BASIC_AUTH_CACHE_SIZE=1000
         settings.AUTH_BASIC_CACHE_EXPIRETIME=timedelta(seconds=3600)
         settings.AUTH_CACHE_EXPIRETIME=timedelta(seconds=3600)
+        settings.STAFF_AUTH_CACHE_EXPIRETIME=settings.AUTH_CACHE_EXPIRETIME
         settings.AUTH_CACHE_CLEAN_HOURS = [0]
         settings.AUTHORIZATION_CACHE_CHECK_HOURS = [0,12]
 
@@ -57,7 +58,6 @@ class BaseAuthTestCase(TestCase):
                 mfa_set="default_mfa_set",
                 mfa_reset="default_mfa_reset",
                 email="oim@dbca.wa.gov.au",
-                profile_edit="default_profile_edit",
                 password_reset="default_password_reset",
                 verifyemail_from="oim@dbca.wa.gov.au",
                 verifyemail_subject="test"
@@ -120,6 +120,7 @@ class BaseAuthCacheTestCase(BaseAuthTestCase):
         settings.BASIC_AUTH_CACHE_SIZE=3
         settings.AUTH_BASIC_CACHE_EXPIRETIME=timedelta(seconds=5)
         settings.AUTH_CACHE_EXPIRETIME=timedelta(seconds=5)
+        settings.STAFF_AUTH_CACHE_EXPIRETIME=settings.AUTH_CACHE_EXPIRETIME
         settings.AUTH_CACHE_CLEAN_HOURS = [i for i in range(0,24)]
         settings.AUTHORIZATION_CACHE_CHECK_HOURS = [i for i in range(0,24)]
 

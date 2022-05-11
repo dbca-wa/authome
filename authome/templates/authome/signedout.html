@@ -1,0 +1,63 @@
+{% extends "authome/default.html" %}
+{% load i18n static %}
+
+<title>You have been signed out.</title>
+
+{% block extrapagecss %}
+<style>
+.self_asserted_container .col-lg-6 {
+    max-width:800px;
+    width:auto;
+    text-align:left;
+}
+.self_asserted_container .row .panel-default .panel-body {
+    max-width:none;
+}
+</style>
+{% endblock extrapagecss %}
+
+{% block realcontent %}
+{% if auto_logout %}
+    <div id="signedout_content" >
+    </div>
+    <script type="text/javascript">
+        var logout_window = window.open('{{idp_logout_url}}',"DBCA SSO Auth Logout","location=no,menubar=no,resizable=no,scrollbars=no,status=no,titlebar=no,toolbar=no,width=1,height=1,top=1,left=1")
+        if (logout_window) {
+            logout_window.blur()
+            window.focus()
+            document.getElementById("signedout_content").innerHTML="<h4>Please wait to sign out from social media '{{idp_name}}'... </h4>"
+            setTimeout(function(){
+                logout_window.close();
+                document.getElementById("signedout_content").innerHTML=`
+<h4>{% if message %}{{message}}<br>{% endif %}You have signed out from Department of Biodiversity, Conservation and Attractions.
+{% if relogin %} 
+<br><br>If you want to log in again, please click <a href="{{relogin}}">here</a>.
+{% endif %}
+</h4>
+`
+            },3000)
+        } else {
+                document.getElementById("signedout_content").innerHTML=`
+<h4>{% if message %}{{message}}<br>{% endif %}You have signed out from Department of Biodiversity, Conservation and Attractions.
+<br><br>Failed to logout from the social media '{{idp_name}}' because popup window was blocked.
+<br><br>Please click <a href="{{idp_logout_url}}">here</a> to log out from {{idp_name}} if required.
+{% if relogin %} 
+<br><br>If you want to log in again, please click <a href="{{relogin}}">here</a>.
+{% endif %}
+</h4>
+`
+        }
+
+    </script>
+{% else %}
+    <h4>{% if message %}{{message}}<br>{% endif %}You have signed out from Department of Biodiversity, Conservation and Attractions.
+    {% if idp_logout_url %} 
+        <br><br>You are still logged into the social media '{{idp_name}}'.
+        <br><br>Please click <a href="{{idp_logout_url}}">here</A> to log out from {{idp_name}} if you want.
+    {% endif %}
+    {% if relogin %} 
+    <br><br>If you want to log in again, please click <a href="{{relogin}}">here</A>.
+    {% endif %}
+   </h4>
+{% endif %}
+{% endblock realcontent %}

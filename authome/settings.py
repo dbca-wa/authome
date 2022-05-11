@@ -1,9 +1,10 @@
 import os
 
-from authome.utils import env, get_digest_function
+from .utils import env, get_digest_function
 from datetime import timedelta
 import dj_database_url
 
+DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEBUG = env('DEBUG', False)
@@ -45,24 +46,19 @@ IGNORE_LOADING_ERROR = env('IGNORE_LOADING_ERROR',False)
 EMAIL_HOST = env('EMAIL_HOST', default="")
 EMAIL_PORT = env('EMAIL_PORT', 25)
 
-TOTP_SECRET_KEY_LENGTH = env("TOTP_SECRET_KEY_LENGTH",default=50)
+AUTH2_DOMAIN = env("AUTH2_DOMAIN",default="auth2.dbca.wa.gov.au")
+
+TOTP_SECRET_KEY_LENGTH = env("TOTP_SECRET_KEY_LENGTH",default=128)
 TOTP_ISSUER = env("TOTP_ISSUER",default="DBCA")
-TOTP_PREFIX = env("TOTP_PREFIX",default="auth2")
+TOTP_PREFIX = env("TOTP_PREFIX",default="DBCA")
 TOTP_TIMESTEP = env("TOTP_TIMESTEP",default=30)
-TOTP_VALIDWINDOW = env("TOTP_VALIDWINDOW",default=0)
+TOTP_VALIDWINDOW = env("TOTP_VALIDWINDOW",default=1)
 TOTP_CHECK_LAST_CODE = env("TOTP_CHECK_LAST_CODE",default=True)
 TOTP_DIGITS = env("TOTP_DIGITS",default=6)
 TOTP_ALGORITHM = env("TOTP_ALGORITHM",default="SHA1")
 TOTP_DIGEST = None
 
 TOTP_ALGORITHM,TOTP_DIGEST = get_digest_function(TOTP_ALGORITHM)
-
-# Azure AD settings
-AZUREAD_AUTHORITY = env('AZUREAD_AUTHORITY', 'https://login.microsoftonline.com')
-AZUREAD_RESOURCE = env('AZUREAD_RESOURCE', '00000002-0000-0000-c000-000000000000')
-
-SOCIAL_AUTH_AZUREAD_OAUTH2_KEY = env('AZUREAD_CLIENTID', 'clientid')
-SOCIAL_AUTH_AZUREAD_OAUTH2_SECRET = env('AZUREAD_SECRETKEY', 'secret')
 
 SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_BASE_URL = env('AZUREAD_B2C_BASE_URL', 'baseurl')
 SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_KEY = env('AZUREAD_B2C_CLIENTID', 'clientid')
@@ -101,9 +97,29 @@ else:
         SESSION_COOKIE_NAME = (SESSION_COOKIE_DOMAIN + ".sessionid").replace(".", "_")
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SESSION_COOKIE_HTTPONLY = env('SESSION_COOKIE_HTTPONLY', False)
-SESSION_COOKIE_SECURE = env('SESSION_COOKIE_SECURE', False)
-CSRF_COOKIE_SECURE = env('CSRF_COOKIE_SECURE', False)
+SESSION_COOKIE_HTTPONLY = env('SESSION_COOKIE_HTTPONLY', True)
+SESSION_COOKIE_SECURE = env('SESSION_COOKIE_SECURE', True)
+CSRF_COOKIE_SECURE = env('CSRF_COOKIE_SECURE', True)
+SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE","Lax") or None
+if SESSION_COOKIE_SAMESITE and SESSION_COOKIE_SAMESITE.lower() in ("none","null") :
+    SESSION_COOKIE_SAMESITE = None
+
+GUEST_SESSION_AGE=env('GUEST_SESSION_AGE',default=3600) #login session timeout in seconds
+SESSION_AGE=env('SESSION_AGE',default=1209600)
+SESSION_COOKIE_AGE=SESSION_AGE * 2
+
+SESSION_COOKIE_DOMAINS=env("SESSION_COOKIE_DOMAINS",default={})
+
+def GET_SESSION_COOKIE_DOMAIN(domain):
+    if domain.endswith(SESSION_COOKIE_DOMAIN):
+        return  SESSION_COOKIE_DOMAIN
+    else:
+        for k,v in SESSION_COOKIE_DOMAINS.items():
+            if domain.endswith(k):
+                return v
+
+        return None
+        
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -146,13 +162,19 @@ DATABASES = {
     'default': dj_database_url.config(),
 }
 
+DATABASES['default']["CONN_MAX_AGE"] = 3600
+
 # Static files configuration
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/sso/static/'
 #STATICFILES_DIRS = (os.path.join(BASE_DIR, 'itassets', 'static'),)
-AUTH_CACHE_SIZE=env("AUTH_CACHE_SIZE",default=2000)
+STAFF_AUTH_CACHE_SIZE=env("STAFF_AUTH_CACHE_SIZE",default=2000)
+if STAFF_AUTH_CACHE_SIZE <= 0:
+    STAFF_AUTH_CACHE_SIZE = 2000
+
+AUTH_CACHE_SIZE=env("AUTH_CACHE_SIZE",default=500)
 if AUTH_CACHE_SIZE <= 0:
-    AUTH_CACHE_SIZE = 2000
+    AUTH_CACHE_SIZE = 500
 
 EMAIL_GROUPS_CACHE_SIZE=env("EMAIL_GROUPS_CACHE_SIZE",default=2000)
 if EMAIL_GROUPS_CACHE_SIZE <= 0:
@@ -166,10 +188,9 @@ BASIC_AUTH_CACHE_SIZE=env("BASIC_AUTH_CACHE_SIZE",default=1000)
 if BASIC_AUTH_CACHE_SIZE <= 0:
     BASIC_AUTH_CACHE_SIZE = 1000
 
-AUTHORIZATION_CACHE_SIZE=env("AUTHORIZATION_CACHE_SIZE",default=2000)
-if AUTHORIZATION_CACHE_SIZE <= 0:
-    AUTHORIZATION_CACHE_SIZE = 2000
-
+GROUPS_AUTHORIZATION_CACHE_SIZE=env("GROUPS_AUTHORIZATION_CACHE_SIZE",default=2000)
+if GROUPS_AUTHORIZATION_CACHE_SIZE <= 0:
+    GROUPS_AUTHORIZATION_CACHE_SIZE = 2000
 
 AUTH_BASIC_CACHE_EXPIRETIME=env('AUTH_BASIC_CACHE_EXPIRETIME',default=3600) #user access token life time in seconds
 if AUTH_BASIC_CACHE_EXPIRETIME > 0:
@@ -178,7 +199,13 @@ else:
     AUTH_BASIC_CACHE_EXPIRETIME = timedelta(seconds=3600)
 
 #check whether the user token is valid per request
-CHECK_AUTH_BASIC_PER_REQUEST=env("CHECK_AUTH_BASIC_PER_REQUEST",default=False)
+CHECK_AUTH_BASIC_PER_REQUEST=env("CHECK_AUTH_BASIC_PER_REQUEST",default=True)
+
+STAFF_AUTH_CACHE_EXPIRETIME=env('STAFF_AUTH_CACHE_EXPIRETIME',default=36000) #user access token life time in seconds
+if STAFF_AUTH_CACHE_EXPIRETIME > 0:
+    STAFF_AUTH_CACHE_EXPIRETIME = timedelta(seconds=STAFF_AUTH_CACHE_EXPIRETIME)
+else:
+    STAFF_AUTH_CACHE_EXPIRETIME = timedelta(seconds=36000)
 
 AUTH_CACHE_EXPIRETIME=env('AUTH_CACHE_EXPIRETIME',default=3600) #user access token life time in seconds
 if AUTH_CACHE_EXPIRETIME > 0:
@@ -213,7 +240,7 @@ if USERFLOW_CACHE_CHECK_INTERVAL < 0:
     USERFLOW_CACHE_CHECK_INTERVAL = 0
 
 PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
-BACKEND_LOGOUT_URL=env('BACKEND_LOGOUT_URL')
+CACHE_KEY_PREFIX=env('CACHE_KEY_PREFIX',default="")
 
 DBCA_STAFF_GROUPID=env('DBCA_STAFF_GROUPID',default="DBCA") # The emails belongs to group 'dbca staff' are allowed to self sign up (no pre-registration required).
 
@@ -221,6 +248,17 @@ AUTO_SIGNOUT_DELAY_SECONDS=env('AUTO_SIGNOUT_DELAY_SECONDS',default=10)
 
 
 AUTH_CHECKING_THRESHOLD_TIME=env('AUTH_CHECKING_THRESHOLD_TIME',default=50) * 1000 #in milliseconds, should be less than 1000
+
+SWITCH_TO_AUTH_LOCAL=env('SWITCH_TO_AUTH_LOCAL',default=False) #Switch to magic auth to login in user if azure ad b2c does not work.
+
+PASSCODE_DAILY_LIMIT = env("PASSCODE_DAILY_LIMIT",100)
+PASSCODE_TRY_TIMES = env("PASSCODE_TRY_TIMES",3)
+PASSCODE_LENGTH=env('PASSCODE_LENGTH',default=6) 
+PASSCODE_AGE=env('PASSCODE_AGE',default=300) #the age of verify code, in seconds
+SIGNUP_TOKEN_LENGTH=env('SIGNUP_TOKEN_LENGTH',default=64) 
+SIGNUP_TOKEN_AGE=env('SIGNUP_TOKEN_AGE',default=3600) #the age of signup token, in seconds
+
+PASSCODE_DIGITAL=env('PASSCODE_DIGITAL',default=True)
 
 # Logging settings - log to stdout/stderr
 LOGGING = {
@@ -254,54 +292,100 @@ LOGGING = {
     }
 }
 
-if DEBUG:
-    def show_toolbar(req):
-        return req.path.startswith("/admin/") or req.path.startswith("/__debug__/") or req.path.startswith("/sso/loginstatus")
-
-    INSTALLED_APPS.append('debug_toolbar')
-    MIDDLEWARE.insert(0,'debug_toolbar.middleware.DebugToolbarMiddleware')
-    DEBUG_TOOLBAR_CONFIG = {
-        'SHOW_TOOLBAR_CALLBACK':show_toolbar
-    }
-
-def get_cache(server):
-    if server.lower().startswith('redis://'):
+def GET_CACHE_CONF(server,options={}):
+    if server.lower().startswith('redis'):
+        options["CLIENT_CLASS"] = "django_redis.client.DefaultClient"
         return {
             "BACKEND": "django_redis.cache.RedisCache",
             "LOCATION": server,
-            "OPTIONS": {
-                "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            }
+            "OPTIONS": options
         }
     else:
         return {
             'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
             'LOCATION': server,
+            "OPTIONS": options
         }
 
+ENABLE_B2C_JS_EXTENSION = env("ENABLE_B2C_JS_EXTENSION",default=True)
+ADD_AUTH2_LOCAL_OPTION = env("ADD_AUTH2_LOCAL_OPTION",default=True)
+
+SYNC_MODE = env("SYNC_MODE",True)
 CACHE_SERVER = env("CACHE_SERVER")
+CACHE_SERVER_OPTIONS = env("CACHE_SERVER_OPTIONS",default={})
 CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
+CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
 CACHE_USER_SERVER = env("CACHE_USER_SERVER")
+CACHE_USER_SERVER_OPTIONS = env("CACHE_USER_SERVER_OPTIONS",default={})
 USER_CACHE_ALIAS = None
+GET_CACHE_KEY = lambda key:key
+GET_USER_KEY = lambda userid:str(userid)
+GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
+SESSION_CACHES = 0
+USER_CACHES = 0
 if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     CACHES = {}
     if CACHE_SERVER:
-        CACHES['default'] = get_cache(CACHE_SERVER)
+        CACHES['default'] = GET_CACHE_CONF(CACHE_SERVER,CACHE_SERVER_OPTIONS)
+        if CACHE_KEY_PREFIX:
+            default_key_pattern = "{}:{{}}".format(CACHE_KEY_PREFIX)
+            GET_CACHE_KEY = lambda key:default_key_pattern.format(key)
+        else:
+            GET_CACHE_KEY = lambda key:key
 
     if CACHE_SESSION_SERVER:
-        CACHES["session"] = get_cache(CACHE_SESSION_SERVER)
-        SESSION_ENGINE = "authome.session" if LOGLEVEL in ["DEBUG"] else  "django.contrib.sessions.backends.cache"
-        SESSION_CACHE_ALIAS = "session"
+        CACHE_SESSION_SERVER = [s.strip() for s in CACHE_SESSION_SERVER.split(",") if s and s.strip()]
+        SESSION_CACHES = len(CACHE_SESSION_SERVER)
+        if SESSION_CACHES == 1:
+            CACHES["session"] = GET_CACHE_CONF(CACHE_SESSION_SERVER[0],CACHE_SESSION_SERVER_OPTIONS)
+            SESSION_CACHE_ALIAS = "session"
+        else:
+            for i in range(0,SESSION_CACHES) :
+                CACHES["session{}".format(i)] = GET_CACHE_CONF(CACHE_SESSION_SERVER[i],CACHE_USER_SERVER_OPTIONS)
+
+            SESSION_CACHE_ALIAS = lambda sessionkey:"session{}".format((ord(sessionkey[-1]) + ord(sessionkey[-2])) % SESSION_CACHES)
+        SESSION_ENGINE = "authome.cachesessionstoredebug" if DEBUG else  "authome.cachesessionstore"
     elif CACHE_SERVER:
-        SESSION_ENGINE = "authome.session" if LOGLEVEL in ["DEBUG"] else  "django.contrib.sessions.backends.cache"
+        SESSION_ENGINE = "authome.cachesessionstoredebug" if DEBUG else  "authome.cachesessionstore"
         SESSION_CACHE_ALIAS = "default"
+        SESSION_CACHES = 1
 
     if CACHE_USER_SERVER:
-        CACHES["user"] = get_cache(CACHE_USER_SERVER)
-        GET_USER_KEY = lambda userid:userid
-        USER_CACHE_ALIAS = "user"
+        CACHE_USER_SERVER = [s.strip() for s in CACHE_USER_SERVER.split(",") if s and s.strip()]
+        USER_CACHES = len(CACHE_USER_SERVER)
+        if USER_CACHES == 1:
+            CACHES["user"] = GET_CACHE_CONF(CACHE_USER_SERVER[0])
+            USER_CACHE_ALIAS = "user"
+        else:
+            for i in range(0,USER_CACHES) :
+                CACHES["user{}".format(i)] = GET_CACHE_CONF(CACHE_USER_SERVER[i])
+
+            USER_CACHE_ALIAS = lambda userid:"user{}".format(abs(userid) % USER_CACHES)
+        if CACHE_KEY_PREFIX:
+            user_key_pattern = "{}:{{}}".format(CACHE_KEY_PREFIX)
+            usertoken_key_pattern = "{}:T{{}}".format(CACHE_KEY_PREFIX)
+            GET_USER_KEY = lambda userid:user_key_pattern.format(userid)
+            GET_USERTOKEN_KEY = lambda userid:usertoken_key_pattern.format(userid)
+        else:
+            GET_USER_KEY = lambda userid:str(userid)
+            GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
     elif CACHE_SERVER:
-        GET_USER_KEY = lambda userid:"user_{}".format(userid)
+        if CACHE_KEY_PREFIX:
+            user_key_pattern = "{}:user:{{}}".format(CACHE_KEY_PREFIX)
+            usertoken_key_pattern = "{}:token:{{}}".format(CACHE_KEY_PREFIX)
+        else:
+            user_key_pattern = "user:{}"
+            usertoken_key_pattern = "token:{}"
+        GET_USER_KEY = lambda userid:user_key_pattern.format(userid)
+        GET_USERTOKEN_KEY = lambda userid:usertoken_key_pattern.format(userid)
         USER_CACHE_ALIAS = "default"
+        USER_CACHES = 1
 
     USER_CACHE_TIMEOUT = env("USER_CACHE_TIMEOUT",86400)
+    if USER_CACHE_TIMEOUT <= 0:
+        USER_CACHE_TIMEOUT = 86400
+
+    STAFF_CACHE_TIMEOUT = env("STAFF_CACHE_TIMEOUT",86400 * 14)
+    if STAFF_CACHE_TIMEOUT <= 0:
+        STAFF_CACHE_TIMEOUT = None
+
