@@ -50,7 +50,7 @@ form button.btn {
   <div class="form-group">
     <label for="last_name" class="col-sm-4 control-label">Name</label>
     <div class="col-sm-8">
-      <input type="text" class="form-control" id="last_name"  value="{{full_name}}" readonly style="width:250px;display:inline">
+      <input type="text" class="form-control" id="full_name"  value="{{full_name}}" readonly style="width:250px;display:inline">
       <button type="button" class="btn btn-primary" onclick="document.location='{% url 'profile_edit' %}?next={{next_url}}'" style="width:45px;margin-top:-4px">Edit</button>
     </div>
   </div>

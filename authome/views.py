@@ -300,7 +300,7 @@ def _populate_response(request,f_cache,cache_key,user,session_key=None):
         'username': user.username,
         'first_name': user.first_name,
         'last_name': user.last_name,
-        'full_name' : "{}, {}".format(user.first_name,user.last_name),
+        'full_name' : "{} {}".format(user.first_name,user.last_name),
         'groups': models.UserGroup.find_groups(user.email)[1],
         'logout_url' : "/sso/auth_logout"
     }

@@ -266,7 +266,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     IdentityProvider 'local' means local account
     IdentityProvider 'local_passwordless' means autenticating user without password
     """
-    AUTH_EMAIL_VERIFY = ("auth_email_verify","Sign in with Passcodey")
+    AUTH_EMAIL_VERIFY = ("auth_email_verify","Sign in with Passcode")
     MANUALLY_LOGOUT = 1
     AUTO_LOGOUT = 2
     AUTO_LOGOUT_WITH_POPUP_WINDOW = 3
