@@ -15,11 +15,13 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 from django.utils.http import http_date
+from django.utils.html import mark_safe
 
 from django_redis import get_redis_connection
 
 from social_django.utils import psa
 from social_core.actions import do_auth, do_complete
+from social_core.exceptions import AuthException
 
 from importlib import import_module
 from ipware.ip import get_client_ip
@@ -1762,19 +1764,34 @@ def handler400(request,exception,**kwargs):
         else:
             request.user = anonymoususer
             return logout_view(request)
-
     elif isinstance(exception,HttpResponseException):
         res = exception.get_response(request)
         if res:
             return res
+        elif settings.DEBUG:
+            message = str(exception)
+        else:
+            if request.session.get(REDIRECT_FIELD_NAME):
+                message = mark_safe("Sign in session is expired, please click <a = href='{}'>here</a> to sign in again.".format(request.session.get(REDIRECT_FIELD_NAME)))
+            else:
+                message = mark_safe("Sign in session is expired, please signin again.")
+    elif isinstance(exception,AuthException):
+        if request.session.get(REDIRECT_FIELD_NAME):
+            message = mark_safe("Sign in session is expired, please click <a = href='{}'>here</a> to sign in again.".format(request.session.get(REDIRECT_FIELD_NAME)))
+        else:
+            message = mark_safe("Sign in session is expired, please signin again.")
+    else:
+        message = str(exception)
 
     domain = request.headers.get("x-upstream-server-name") or utils.get_domain(request.session.get(utils.REDIRECT_FIELD_NAME)) or request.get_host()
     page_layout,extracss = _get_userflow_pagelayout(request,domain)
 
-    context = {"body":page_layout,"extracss":extracss,"message":str(exception),"title":"Authentication failed." if request.path.startswith("/sso/") else "Error","domain":domain}
+    context = {"body":page_layout,"extracss":extracss,"message":message,"title":"Authentication failed." if request.path.startswith("/sso/") else "Error","domain":domain}
 
     code = exception.http_code if (hasattr(exception,"http_code") and exception.http_code) else 400
-    return TemplateResponse(request,"authome/message.html",context=context,status=code)
+    resp = TemplateResponse(request,"authome/message.html",context=context,status=code)
+    resp.render()
+    return resp
  
 def get_active_redis_connections(cachename):
     r = get_redis_connection(cachename) 
