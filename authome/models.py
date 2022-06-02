@@ -759,7 +759,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     parent_group = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
     users = _ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
     excluded_users = _ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
-    identity_provider = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,null=True,blank=True)
+    identity_provider = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,null=True,blank=True,limit_choices_to=~models.Q(idp__exact=IdentityProvider.AUTH_EMAIL_VERIFY[0]))
     session_timeout = models.PositiveSmallIntegerField(null=True,editable=True,blank=True,help_text="Session timeout in seconds, 0 means never timeout")
     modified = models.DateTimeField(editable=False,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
