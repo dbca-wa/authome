@@ -27,7 +27,7 @@ urlpatterns = [
     path('sso/forbidden', views.forbidden, name='forbidden'),
     path('sso/loginstatus', views.loginstatus, name='loginstatus'),
 
-    path('sso/verifycode', views.verify_code_via_email, name='verify_code;'),
+    path('sso/verifycode', views.verify_code_via_email, name='verify_code'),
 
     path('sso/<slug:template>.html', views.adb2c_view, name='adb2c_view'),
 
