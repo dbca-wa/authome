@@ -832,6 +832,7 @@ class MemoryCache(object):
 cache = MemoryCache()
 
 def save_traffic_data():
-    cache._save_traffic_data(timezone.now())
+    if defaultcache:
+        cache._save_traffic_data(timezone.now())
 
 atexit.register(save_traffic_data)
