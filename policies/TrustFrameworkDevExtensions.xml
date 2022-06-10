@@ -77,7 +77,9 @@
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.useremailverify">
-                <LoadUri>https://auth2-dev.dbca.wa.gov.au/sso/b2c_verifyuseremail.html?title=Verify%2520email%26class=self_asserted_container</LoadUri>
+                <LoadUri>
+                    https://auth2-dev.dbca.wa.gov.au/sso/b2c_verifyuseremail.html?title=Verify%2520email%26class=self_asserted_container%26header=Sign%2520in%2520to%2520your%2520Department%2520of%2520Biodiversity,%2520Conservation%2520and%2520Attractions%2520account%2520with%2520a%2520verification%2520code%2520sent%2520to%2520your%2520account%2520email%2520address.
+                </LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.SignUpStep2-UserProperties">
