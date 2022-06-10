@@ -626,7 +626,7 @@
             <OrchestrationSteps>
                 <OrchestrationStep Order="1" Type="ClaimsExchange">
                     <ClaimsExchanges>
-                        <ClaimsExchange Id="PasswordResetUsingEmailAddressExchange" TechnicalProfileReferenceId="SelfAsserted-LocalAccountDiscoveryUsingEmail"/>
+                        <ClaimsExchange Id="PasswordResetUsingEmailAddressExchange" TechnicalProfileReferenceId="SelfAsserted-LocalAccountDiscoveryUsingEmail-ResetPassword"/>
                     </ClaimsExchanges>
                 </OrchestrationStep>
                 <OrchestrationStep Order="2" Type="ClaimsExchange">
