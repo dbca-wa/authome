@@ -93,8 +93,10 @@ form button.btn {
     <label for="mfa_method" class="col-sm-4 control-label">Multi-Factor Authentication</label>
     <div class="col-sm-8">
       <input type="text" class="form-control" id="mfa_method"  value="{{mfa_method}}" readonly style="width:163px;display:inline">
-      <button type="button" class="btn btn-primary" onclick="document.location='{% url 'mfa_set' %}?next={{next_url}}'" style="width:45px;margin-top:-4px">Set</button>
+      <button type="button" class="btn btn-primary" onclick="document.location='{% url 'mfa_set' %}?next={{next_url}}'" style="width:90px;margin-top:-4px">Change</button>
+      {% if False %}
       <button type="button" class="btn btn-primary" onclick="document.location='{% url 'mfa_reset' %}?next={{next_url}}'" style="width:85px;margin-top:-4px">Reset</button>
+      {% endif %}
     </div>
   </div>
   {% endif %}
@@ -132,17 +134,27 @@ form button.btn {
   {% endif %}
   {% if password_reset_enabled %}
   <div class="form-group">
-    <div class="col-sm-offset-1 col-sm-10">
+    <label for="client_ip" class="col-sm-4 control-label">Password</label>
+    <div class="col-sm-8">
+      <button type="button" class="btn btn-primary" style="width:120px;display:inline" onclick="document.location='{% url 'password_reset' %}?next={{next_url}}'">Reset Password</button>
+    </div>
+  </div>
+  {% if False %}
+  <div class="form-group">
+    <div class="col-sm-offset-3 col-sm-8">
       <button type="button" class="btn btn-primary" style="width:200px;display:inline" onclick="document.location='{% url 'password_reset' %}?next={{next_url}}'">Reset Password</button>
       <button type="button" class="btn btn-primary" style="width:200px" onclick="document.location='{{logout_url}}?next={{next_url}}'">Sign out</button>
     </div>
   </div>
+  {% endif %}
   {% else %}
+  {% if False %}
   <div class="form-group">
     <div class="col-sm-offset-4 col-sm-8">
       <button type="button" class="btn btn-primary" style="width:200px" onclick="document.location='{{logout_url}}?next={{next_url}}'">Sign out</button>
     </div>
   </div>
+  {% endif %}
   {% endif %}
 </form>
 
