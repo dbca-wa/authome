@@ -1,12 +1,14 @@
 import logging
+import json
 from datetime import datetime, timedelta
 from collections import OrderedDict
+import atexit
 
 from django.conf import settings
 from django.utils import timezone
 from django.core.cache import caches
 
-from .utils import format_datetime
+from .utils import format_datetime,get_processid,format_timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +193,16 @@ class MemoryCache(object):
         #the map between (groups,domain) and  authorization
         self._groups_authorization_map = OrderedDict() 
         self._groups_authorization_map_ts = None
+
+        self._traffic_data = {"serverid":get_processid()}
+        now = timezone.localtime()
+        today = datetime(now.year,now.month,now.day,tzinfo=now.tzinfo)
+        seconds_in_day = (now - today).seconds
+        self._traffic_data_ts = today + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
+        self._traffic_data_next_ts = self._traffic_data_ts + settings.TRAFFIC_MONITOR_INTERVAL
+        self._traffic_data_name_pattern = settings.GET_CACHE_KEY("traffic-data-level{}-{}-{{}}".format(settings.TRAFFIC_MONITOR_LEVEL,settings.TRAFFIC_MONITOR_INTERVAL.seconds))
+        self.log_request = getattr(self,"_log_request_{}".format(settings.TRAFFIC_MONITOR_LEVEL)) if settings.TRAFFIC_MONITOR_LEVEL > 0 else None
+        self._client = defaultcache.client.get_client() if defaultcache else None
     
         #The runable task to clean authenticaton map and basic authenticaton map
         self._auth_cache_clean_time = HourListTaskRunable("authentication cache",settings.AUTH_CACHE_CLEAN_HOURS)
@@ -511,6 +523,168 @@ class MemoryCache(object):
             if CustomizableUserflowChange.is_changed():
                 CustomizableUserflow.refresh_cache()
 
+    def _save_traffic_data(self,start):
+        name = self._traffic_data_name_pattern.format( self._traffic_data_ts.strftime("%Y%m%d%H%M"))
+        seconds = (start - self._traffic_data_next_ts).seconds
+        self._traffic_data_ts = self._traffic_data_next_ts + timedelta(seconds = seconds - seconds % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
+        self._traffic_data_next_ts += settings.TRAFFIC_MONITOR_INTERVAL
+        try:
+            length = self._client.rpush(name,json.dumps(self._traffic_data))
+        except:
+            self._client = defaultcache.client.get_client()
+            length = self._client.rpush(name,json.dumps(self._traffic_data))
+        if length == 1:
+            self._client.expire(name,settings.TRAFFIC_MONITOR_EXPIRE)
+
+    def _log_request_1(self,name,host,start,status_code):
+        if start >= self._traffic_data_next_ts:
+            self._save_traffic_data(start)
+            for data in self._traffic_data.values():
+                if not isinstance(data,dict):
+                    continue
+                for key in data.keys():
+                    if key == "status":
+                        for domain in data[key].keys():
+                            data[key][domain] = 0
+                    else:
+                        data[key] = 0
+
+        ptime = round((timezone.now() - start).total_seconds() * 1000,2)
+        try:
+            data = self._traffic_data[name]
+        except:
+            self._traffic_data[name] = {
+                "requests":1,
+                "totaltime":ptime,
+                "mintime":ptime,
+                "maxtime":ptime,
+                "status":{
+                    status_code:1
+                }
+            }
+            return
+        data["requests"] += 1
+        data["totaltime"] += ptime
+        if not data["mintime"]  or data["mintime"] > ptime:
+            data["mintime"] = ptime
+        if data["maxtime"] < ptime:
+            data["maxtime"] = ptime
+        data["status"][status_code] = data["status"].get(status_code,0) + 1
+
+    def _log_request_2(self,name,host,start,status_code):
+        if start >= self._traffic_data_next_ts:
+            self._save_traffic_data(start)
+            for data in self._traffic_data.values():
+                if not isinstance(data,dict):
+                    continue
+                for key in data.keys():
+                    if key in ("domains","status"):
+                        for domain in data[key].keys():
+                            data[key][domain] = 0
+                    else:
+                        data[key] = 0
+
+        ptime = round((timezone.now() - start).total_seconds() * 1000,2)
+        try:
+            data = self._traffic_data[name]
+        except:
+            self._traffic_data[name] = {
+                "requests":1,
+                "totaltime":ptime,
+                "mintime":ptime,
+                "maxtime":ptime,
+                "status":{
+                    status_code:1
+                },
+                "domains": {
+                    host : 1
+                }
+            }
+            return
+        data["requests"] += 1
+        data["totaltime"] += ptime
+        if not data["mintime"]  or data["mintime"] > ptime:
+            data["mintime"] = ptime
+        if data["maxtime"] < ptime:
+            data["maxtime"] = ptime
+        data["status"][status_code] = data["status"].get(status_code,0) + 1
+        data["domains"][host] = data["domains"].get(host,0) + 1
+
+    def _log_request_3(self,name,host,start,status_code):
+        if start >= self._traffic_data_next_ts:
+            self._save_traffic_data(start)
+            for data in self._traffic_data.values():
+                if not isinstance(data,dict):
+                    continue
+                for key in data.keys():
+                    if key == "status":
+                        for k in data[key].keys():
+                            data[key][k] = 0
+                    elif key ==  "domains":
+                        for domain_data in data[key].values():
+                            for k in domain_data.keys():
+                                if k == "status":
+                                    for k1 in domain_data[k].keys():
+                                        domain_data[k][k1] = 0
+                                else:
+                                    domain_data[k] = 0
+                    else:
+                        data[key] = 0
+            
+
+        ptime = round((timezone.now() - start).total_seconds() * 1000,2)
+        try:
+            data = self._traffic_data[name]
+        except:
+            self._traffic_data[name] = {
+                "requests":1,
+                "totaltime":ptime,
+                "mintime":ptime,
+                "maxtime":ptime,
+                "status":{
+                    status_code:1
+                },
+                "domains": {
+                    host : {
+                        "requests":1,
+                        "totaltime":ptime,
+                        "mintime":ptime,
+                        "maxtime":ptime,
+                        "status":{
+                            status_code:1
+                        }
+                    }
+                }
+            }
+            return
+        data["requests"] += 1
+        data["totaltime"] += ptime
+        if not data["mintime"]  or data["mintime"] > ptime:
+            data["mintime"] = ptime
+        if data["maxtime"] < ptime:
+            data["maxtime"] = ptime
+        data["status"][status_code] = data["status"].get(status_code,0) + 1
+
+        try:
+            domain_data = data["domains"][host]
+            domain_data["requests"] += 1
+            domain_data["totaltime"] += ptime
+            if not domain_data["mintime"]  or domain_data["mintime"] > ptime:
+                domain_data["mintime"] = ptime
+            if domain_data["maxtime"] < ptime:
+                domain_data["maxtime"] = ptime
+            domain_data["status"][status_code] = domain_data["status"].get(status_code,0) + 1
+        except:
+            domain_data = {
+                "requests":1,
+                "totaltime":ptime,
+                "mintime":ptime,
+                "maxtime":ptime,
+                "status":{
+                    status_code:1
+                }
+            }
+            data["domains"][host] = domain_data
 
     @property
     def status(self):
@@ -656,3 +830,8 @@ class MemoryCache(object):
         return (False,msgs) if msgs else (True,["ok"])
 
 cache = MemoryCache()
+
+def save_traffic_data():
+    cache._save_traffic_data(timezone.now())
+
+atexit.register(save_traffic_data)

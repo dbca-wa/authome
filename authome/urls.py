@@ -7,20 +7,38 @@ from django.conf import settings
 from django.template.response import TemplateResponse
 from django.views.generic.base import RedirectView
 from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
 
 from . import views
 from .cache import cache
+from . import utils
 
 import authome.patch
 
 logger = logging.getLogger(__name__)
 
+def traffic_monitor(name,func):
+    def _monitor(request):
+        start = timezone.now()
+        res = None
+        try:
+           res = func(request)
+           return res
+        finally:
+            try:
+                cache.log_request(name,utils.get_host(request),start,res.status_code if res else 500)
+            except:
+                logger.error("Failed to log the request.{}".format(traceback.format_exc()))
+        
+        
+    return _monitor if settings.TRAFFIC_MONITOR_LEVEL > 0 else func
+
 urlpatterns = [
     path('sso/auth_logout', views.logout_view, name='logout'),
     path('sso/auth_local', views.auth_local, name='auth_local'),
-    path('sso/auth', views.auth, name='auth'),
-    path('sso/auth_optional', views.auth_optional, name='auth_optional'),
-    path('sso/auth_basic', views.auth_basic, name='auth_basic'),
+    path('sso/auth', traffic_monitor("auth",views.auth), name='auth'),
+    path('sso/auth_optional', traffic_monitor("auth_optional",views.auth_optional), name='auth_optional'),
+    path('sso/auth_basic', traffic_monitor("auth_basic",views.auth_basic), name='auth_basic'),
     path('sso/login_domain', csrf_exempt(views.login_domain), name='login_domain'),
     path('sso/profile', views.profile, name='profile'),
     path('sso/signedout', views.signedout, name='signedout'),
@@ -52,6 +70,7 @@ urlpatterns = [
     path('sso/checkauthorization',csrf_exempt(views.checkauthorization),name="checkauthorization"),
 
     path('healthcheck',views.healthcheck,name="healthcheck"),
+    path('trafficmonitor',views.trafficmonitor,name="trafficmonitor"),
     path('status',views.status,name="status"),
 
     path('sso/', include('social_django.urls', namespace='social')),

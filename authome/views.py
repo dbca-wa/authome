@@ -35,6 +35,7 @@ import urllib.parse
 import string
 from collections import OrderedDict
 from pyotp.totp import TOTP
+from datetime import datetime,timedelta
 import time
 
 from . import models
@@ -1977,3 +1978,103 @@ def echo(request):
 
     return JsonResponse(data,status=200)
     
+
+def trafficmonitor(request):
+    client = defaultcache.client.get_client()
+    now = timezone.localtime()
+    today = datetime(now.year,now.month,now.day,tzinfo=now.tzinfo)
+    seconds_in_day = (now - today).seconds
+    latest_data_ts = today + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds - settings.TRAFFIC_MONITOR_INTERVAL.seconds)
+
+    data_ts = None
+    try:
+        start_time = request.GET.get("starttime")
+        if start_time:
+            start_time = timezone.make_aware(datetime.strptime(start_time,"%Y-%m-%d %H:%M:%S"))
+            start_day = datetime(start_time.year,start_time.month,start_time.day,tzinfo=start_time.tzinfo)
+            seconds_in_day = (start_time - start_day).seconds
+            data_ts = start_day + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
+    except:
+        pass
+
+    if not data_ts:
+        try:
+            hours = int(request.GET.get("hours") or 1)
+            if hours <= 0:
+                hours = 1
+        except:
+            hours = 1
+
+        seconds_in_day = (now - today).seconds - hours * 3600
+        data_ts = today + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
+    
+    data = OrderedDict()
+    times_data = OrderedDict()
+    def _sum(d1,d2,excluded_keys=None):
+        if "requests" in d2 and d2["requests"] == 0:
+            return
+        for k,v in d2.items():
+            if excluded_keys and k in excluded_keys:
+                continue
+            if isinstance(v,dict):
+                if k not in d1:
+                   d1[k] = {}
+                _sum(d1[k],v)
+            elif k not in d1:
+                d1[k] = v
+            elif k.startswith("min"):
+                if d1[k] > v:
+                    d1[k] = v
+            elif k.startswith("max"):
+                if d1[k] < v:
+                    d1[k] = v
+            else:
+                d1[k] = (d1[k] or 0) + (v or 0)
+    def _add_avg(d):
+        if all(k in d for k in ("requests","totaltime")):
+            if d["requests"]:
+                d["avgtime"] = d["totaltime"] / d["requests"]
+            else:
+                d["avgtime"] = 0
+
+        for v in d.values():
+            if isinstance(v,dict):
+                _add_avg(v)
+
+    start_ts = data_ts
+    while data_ts <= latest_data_ts:
+        try:
+            key = cache._traffic_data_name_pattern.format(data_ts.strftime("%Y%m%d%H%M"))
+            pdatas = client.lrange(key,0,-1)
+            if not pdatas:
+                continue
+
+            index = len(pdatas) - 1
+            while index >= 0:
+                if not pdatas[index]:
+                    del pdatas[index]
+                else:
+                    pdatas[index] = json.loads(pdatas[index])
+                index -= 1
+                
+            pdatas.sort(key=lambda o:o["serverid"])
+
+            time_data = OrderedDict()
+            servers_data = OrderedDict()
+            times_data[ utils.format_datetime(data_ts)] = time_data
+            for pdata in pdatas:
+                serverid = pdata.pop("serverid")
+                _sum(time_data,pdata)
+                servers_data[serverid] = pdata
+            _sum(data,time_data)
+            time_data["servers"] = servers_data
+        finally:
+            data_ts += settings.TRAFFIC_MONITOR_INTERVAL
+
+    data["times"] = times_data
+    _add_avg(data)
+
+    data["starttime"] = utils.format_datetime(start_ts)
+    data["endtime"] = utils.format_datetime(latest_data_ts)
+
+    return JsonResponse(data,status=200)
