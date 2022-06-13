@@ -2,7 +2,6 @@ import logging
 import traceback
 
 from django.urls import include, path
-from django.contrib import admin
 from django.conf import settings
 from django.template.response import TemplateResponse
 from django.views.generic.base import RedirectView
@@ -12,6 +11,7 @@ from django.utils import timezone
 from . import views
 from .cache import cache
 from . import utils
+from .admin import admin_site
 
 import authome.patch
 
@@ -70,11 +70,10 @@ urlpatterns = [
     path('sso/checkauthorization',csrf_exempt(views.checkauthorization),name="checkauthorization"),
 
     path('healthcheck',views.healthcheck,name="healthcheck"),
-    path('trafficmonitor',views.trafficmonitor,name="trafficmonitor"),
     path('status',views.status,name="status"),
 
     path('sso/', include('social_django.urls', namespace='social')),
-    path('admin/', admin.site.urls),
+    path('admin/', admin_site.urls),
     path('', views.home, name='home'),
 
     path("favicon.ico",RedirectView.as_view(url="{}images/favicon.ico".format(settings.STATIC_URL)))
@@ -89,6 +88,10 @@ if settings.DEBUG:
     urlpatterns.append(path('echo/auth',views.echo,name="echo_auth"))
     urlpatterns.append(path('echo/auth_basic',views.echo,name="echo_auth_basic"))
     urlpatterns.append(path('echo/auth_optional',views.echo,name="echo_auth_optional"))
+
+if settings.TRAFFIC_MONITOR_LEVEL > 0 :
+    urlpatterns.append(path('trafficmonitor',views.trafficmonitor,name="trafficmonitor"))
+
 
 handler400 = views.handler400
 

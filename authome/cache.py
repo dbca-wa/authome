@@ -194,13 +194,12 @@ class MemoryCache(object):
         self._groups_authorization_map = OrderedDict() 
         self._groups_authorization_map_ts = None
 
-        self._traffic_data = {"serverid":get_processid()}
+        self._traffic_data = None
         now = timezone.localtime()
         today = datetime(now.year,now.month,now.day,tzinfo=now.tzinfo)
         seconds_in_day = (now - today).seconds
         self._traffic_data_ts = today + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
         self._traffic_data_next_ts = self._traffic_data_ts + settings.TRAFFIC_MONITOR_INTERVAL
-        self._traffic_data_name_pattern = settings.GET_CACHE_KEY("traffic-data-level{}-{}-{{}}".format(settings.TRAFFIC_MONITOR_LEVEL,settings.TRAFFIC_MONITOR_INTERVAL.seconds))
         self.log_request = getattr(self,"_log_request_{}".format(settings.TRAFFIC_MONITOR_LEVEL)) if settings.TRAFFIC_MONITOR_LEVEL > 0 else None
         self._client = defaultcache.client.get_client() if defaultcache else None
     
@@ -215,6 +214,13 @@ class MemoryCache(object):
 
         #The runable task to check IdentityProvider cache
         self._idp_cache_check_time = IntervalTaskRunable("idp cache",settings.IDP_CACHE_CHECK_INTERVAL) if settings.IDP_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("idp cache",settings.IDP_CACHE_CHECK_HOURS)
+
+    _traffic_data_key_pattern = None
+    @property
+    def traffic_data_key_pattern(self):
+        if not self._traffic_data_key_pattern:
+            self._traffic_data_key_pattern = settings.GET_CACHE_KEY("traffic-data-level{}-{}-{{}}".format(settings.TRAFFIC_MONITOR_LEVEL,settings.TRAFFIC_MONITOR_INTERVAL.seconds))
+        return self._traffic_data_key_pattern
 
     @property
     def usergrouptree(self):
@@ -524,17 +530,18 @@ class MemoryCache(object):
                 CustomizableUserflow.refresh_cache()
 
     def _save_traffic_data(self,start):
-        name = self._traffic_data_name_pattern.format( self._traffic_data_ts.strftime("%Y%m%d%H%M"))
+        name = self.traffic_data_key_pattern.format( self._traffic_data_ts.strftime("%Y%m%d%H%M"))
         seconds = (start - self._traffic_data_next_ts).seconds
         self._traffic_data_ts = self._traffic_data_next_ts + timedelta(seconds = seconds - seconds % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
         self._traffic_data_next_ts += settings.TRAFFIC_MONITOR_INTERVAL
-        try:
-            length = self._client.rpush(name,json.dumps(self._traffic_data))
-        except:
-            self._client = defaultcache.client.get_client()
-            length = self._client.rpush(name,json.dumps(self._traffic_data))
-        if length == 1:
-            self._client.expire(name,settings.TRAFFIC_MONITOR_EXPIRE)
+        if self._traffic_data :
+            try:
+                length = self._client.rpush(name,json.dumps(self._traffic_data))
+            except:
+                self._client = defaultcache.client.get_client()
+                length = self._client.rpush(name,json.dumps(self._traffic_data))
+            if length == 1:
+                self._client.expire(name,settings.TRAFFIC_DATA_EXPIRE)
 
     def _log_request_1(self,name,host,start,status_code):
         if start >= self._traffic_data_next_ts:
@@ -552,7 +559,8 @@ class MemoryCache(object):
         ptime = round((timezone.now() - start).total_seconds() * 1000,2)
         try:
             data = self._traffic_data[name]
-        except:
+        except KeyError as ex:
+            # name not in _traffic_data
             self._traffic_data[name] = {
                 "requests":1,
                 "totaltime":ptime,
@@ -560,6 +568,21 @@ class MemoryCache(object):
                 "maxtime":ptime,
                 "status":{
                     status_code:1
+                }
+            }
+            return
+        except:
+            #_traffic_data is None
+            self._traffic_data= {
+                "serverid":get_processid(),
+                name: {
+                    "requests":1,
+                    "totaltime":ptime,
+                    "mintime":ptime,
+                    "maxtime":ptime,
+                    "status":{
+                       status_code:1
+                    }
                 }
             }
             return
@@ -587,7 +610,8 @@ class MemoryCache(object):
         ptime = round((timezone.now() - start).total_seconds() * 1000,2)
         try:
             data = self._traffic_data[name]
-        except:
+        except KeyError as ex:
+            # name not in _traffic_data
             self._traffic_data[name] = {
                 "requests":1,
                 "totaltime":ptime,
@@ -598,6 +622,24 @@ class MemoryCache(object):
                 },
                 "domains": {
                     host : 1
+                }
+            }
+            return
+        except:
+            #_traffic_data is None
+            self._traffic_data = {
+                "serverid":get_processid(),
+                name: {
+                    "requests":1,
+                    "totaltime":ptime,
+                    "mintime":ptime,
+                    "maxtime":ptime,
+                    "status":{
+                        status_code:1
+                    },
+                    "domains": {
+                        host : 1
+                    }
                 }
             }
             return
@@ -635,7 +677,8 @@ class MemoryCache(object):
         ptime = round((timezone.now() - start).total_seconds() * 1000,2)
         try:
             data = self._traffic_data[name]
-        except:
+        except KeyError as ex:
+            # name not in _traffic_data
             self._traffic_data[name] = {
                 "requests":1,
                 "totaltime":ptime,
@@ -657,6 +700,33 @@ class MemoryCache(object):
                 }
             }
             return
+        except:
+            # _traffic_data is None
+            self._traffic_data = {
+                "serverid":get_processid(),
+                name: {
+                    "requests":1,
+                    "totaltime":ptime,
+                    "mintime":ptime,
+                    "maxtime":ptime,
+                    "status":{
+                        status_code:1
+                    },
+                    "domains": {
+                        host : {
+                            "requests":1,
+                            "totaltime":ptime,
+                            "mintime":ptime,
+                            "maxtime":ptime,
+                            "status":{
+                                status_code:1
+                            }
+                        }
+                    }
+                }
+            }
+            return
+
         data["requests"] += 1
         data["totaltime"] += ptime
         if not data["mintime"]  or data["mintime"] > ptime:
@@ -830,9 +900,9 @@ class MemoryCache(object):
         return (False,msgs) if msgs else (True,["ok"])
 
 cache = MemoryCache()
+if settings.TRAFFIC_MONITOR_LEVEL > 0:
+    def save_traffic_data():
+        if defaultcache:
+            cache._save_traffic_data(timezone.now())
 
-def save_traffic_data():
-    if defaultcache:
-        cache._save_traffic_data(timezone.now())
-
-atexit.register(save_traffic_data)
+    atexit.register(save_traffic_data)

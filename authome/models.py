@@ -10,7 +10,7 @@ from django.db import models, transaction
 from django.contrib.postgres.fields import ArrayField
 from django.db.models.signals import pre_delete, pre_save, post_save, post_delete
 from django.dispatch import receiver
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser,UserManager
 
 import hashlib
 
@@ -295,6 +295,9 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
+    class Meta:
+        verbose_name_plural = "{}Identity Providers".format(" " * 2)
+
     @classmethod
     def get_model_change_cls(self):
         return IdentityProviderChange
@@ -345,9 +348,6 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
 
     def __str__(self):
         return self.name or self.idp
-
-    class Meta:
-        verbose_name_plural = " Identity Providers"
 
 class CustomizableUserflow(CacheableMixin,DbObjectMixin,models.Model):
     """
@@ -491,6 +491,9 @@ Email: enquiries@dbca.wa.gov.au
 
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
+
+    class Meta:
+        verbose_name_plural = "{}Customizable userflows".format(" " * 2)
 
     @classmethod
     def get_model_change_cls(self):
@@ -763,6 +766,10 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     session_timeout = models.PositiveSmallIntegerField(null=True,editable=True,blank=True,help_text="Session timeout in seconds, 0 means never timeout")
     modified = models.DateTimeField(editable=False,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
+
+    class Meta:
+        unique_together = [["users","excluded_users"]]
+        verbose_name_plural = "{}User Groups".format(" " * 4)
 
 
     @property
@@ -1158,10 +1165,6 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
         return None
 
-    class Meta:
-        unique_together = [["users","excluded_users"]]
-        verbose_name_plural = "     User Groups"
-
 class RequestPath(object):
     match_all = False
 
@@ -1261,11 +1264,14 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
     _editable_columns = ("domain","paths","excluded_paths")
 
     domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
-    paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
+    paths = _ArrayField(models.CharField(max_length=512,null=False),null=True,blank=True,help_text=help_text_paths)
     excluded_paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
     sortkey = models.CharField(max_length=128,editable=False)
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
+
+    class Meta:
+        abstract = True
 
     @property
     def allow_all(self):
@@ -1467,9 +1473,6 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
 
         return matched_authorizations
 
-    class Meta:
-        abstract = True
-
 def check_authorization(email,domain,path):
     """
     Return True if the user(email) can access domain/path; otherwise return False
@@ -1524,6 +1527,10 @@ def can_access(email,domain,path):
 class UserAuthorization(CacheableMixin,AuthorizationMixin):
     user = models.EmailField(max_length=64)
 
+    class Meta:
+        unique_together = [["user","domain"]]
+        verbose_name_plural = "{}User Authorizations".format(" " * 1)
+
     @classmethod
     def get_model_change_cls(self):
         return UserAuthorizationChange
@@ -1567,12 +1574,12 @@ class UserAuthorization(CacheableMixin,AuthorizationMixin):
     def __str__(self):
         return self.user
 
-    class Meta:
-        unique_together = [["user","domain"]]
-        verbose_name_plural = "    User Authorizations"
-
 class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
     usergroup = models.ForeignKey(UserGroup, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = [["usergroup","domain"]]
+        verbose_name_plural = "{}User Group Authorizations".format(" " * 3)
 
     @classmethod
     def get_model_change_cls(self):
@@ -1611,14 +1618,24 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
     def __str__(self):
         return str(self.usergroup)
 
-    class Meta:
-        unique_together = [["usergroup","domain"]]
-        verbose_name_plural = "   User Group Authorizations"
+class SystemUserManager(UserManager):
+    def get_queryset(self):
+        return super().get_queryset().filter(systemuser=True)
+
+class NormalUserManager(UserManager):
+    def get_queryset(self):
+        return super().get_queryset().filter(systemuser=False)
 
 class User(AbstractUser):
     last_idp = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,editable=False,null=True)
     systemuser = models.BooleanField(default=False,editable=False)
     modified = models.DateTimeField(auto_now=timezone.now)
+
+    class Meta(AbstractUser.Meta):
+        swappable = 'AUTH_USER_MODEL'
+        db_table = "auth_user"
+        verbose_name_plural = "{}Users".format(" " * 8)
+        unique_together = [["email"]]
 
     def clean(self):
         super().clean()
@@ -1638,12 +1655,6 @@ class User(AbstractUser):
         if dbcagroup and any(usergroup.is_group(dbcagroup) for usergroup in usergroups):
             self.is_staff = True
 
-    class Meta(AbstractUser.Meta):
-        swappable = 'AUTH_USER_MODEL'
-        db_table = "auth_user"
-        verbose_name_plural = "        User"
-        unique_together = [["email"]]
-
 class UserToken(models.Model):
     DISABLED = -1
     NOT_CREATED = -2
@@ -1660,6 +1671,9 @@ class UserToken(models.Model):
     created = models.DateTimeField(null=True,editable=False)
     expired = models.DateField(null=True,editable=False)
     modified = models.DateTimeField(editable=False,db_index=True,auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "{}Access Tokens".format(" " * 1)
 
     @classmethod
     def generate_user_secret(cls):
@@ -1718,9 +1732,6 @@ class UserToken(models.Model):
         with transaction.atomic():
             super().save(*args,**kwargs)
 
-    class Meta:
-        verbose_name_plural = "       User Access Tokens"
-
 class UserTOTP(models.Model):
     email = models.CharField(max_length=64,null=False,editable=False,unique=True)
     secret_key = models.CharField(max_length=512,null=False,editable=False)
@@ -1733,6 +1744,9 @@ class UserTOTP(models.Model):
     last_verified_code = models.CharField(max_length=16,null=True,editable=False)
     last_verified = models.DateTimeField(null=True,editable=False)
     created = models.DateTimeField(null=False,editable=False)
+
+    class Meta:
+        verbose_name_plural = "{}User totps".format(" " * 0)
 
 class UserListener(object):
     @staticmethod

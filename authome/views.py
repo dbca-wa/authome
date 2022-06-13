@@ -1983,8 +1983,6 @@ def trafficmonitor(request):
     client = defaultcache.client.get_client()
     now = timezone.localtime()
     today = datetime(now.year,now.month,now.day,tzinfo=now.tzinfo)
-    seconds_in_day = (now - today).seconds
-    latest_data_ts = today + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds - settings.TRAFFIC_MONITOR_INTERVAL.seconds)
 
     data_ts = None
     try:
@@ -2007,8 +2005,30 @@ def trafficmonitor(request):
 
         seconds_in_day = (now - today).seconds - hours * 3600
         data_ts = today + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
-    
+ 
+    latest_data_ts = None
+    try:
+        end_time = request.GET.get("endtime")
+        if end_time:
+            end_time = timezone.make_aware(datetime.strptime(end_time,"%Y-%m-%d %H:%M:%S"))
+            end_day = datetime(end_time.year,end_time.month,end_time.day,tzinfo=end_time.tzinfo)
+            seconds_in_day = (end_time - end_day).seconds
+            latest_data_ts = end_day + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
+    except:
+        pass
+
+    if not latest_data_ts:
+        seconds_in_day = (now - today).seconds
+        latest_data_ts = today + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds - settings.TRAFFIC_MONITOR_INTERVAL.seconds)
+
     data = OrderedDict()
+    start_ts = data_ts
+    data["starttime"] = utils.format_datetime(start_ts)
+    data["endtime"] = utils.format_datetime(latest_data_ts)
+    if settings.TRAFFIC_MONITOR_LEVEL <= 0:
+        data["traffic_monitor_enabled"] = False
+        return JsonResponse(data,status=200)
+
     times_data = OrderedDict()
     def _sum(d1,d2,excluded_keys=None):
         if "requests" in d2 and d2["requests"] == 0:
@@ -2020,10 +2040,12 @@ def trafficmonitor(request):
                 if k not in d1:
                    d1[k] = {}
                 _sum(d1[k],v)
+            elif v <= 0:
+                pass
             elif k not in d1:
                 d1[k] = v
             elif k.startswith("min"):
-                if d1[k] > v:
+                if d1[k] <= 0 or d1[k] > v:
                     d1[k] = v
             elif k.startswith("max"):
                 if d1[k] < v:
@@ -2040,11 +2062,9 @@ def trafficmonitor(request):
         for v in d.values():
             if isinstance(v,dict):
                 _add_avg(v)
-
-    start_ts = data_ts
     while data_ts <= latest_data_ts:
         try:
-            key = cache._traffic_data_name_pattern.format(data_ts.strftime("%Y%m%d%H%M"))
+            key = cache.traffic_data_key_pattern.format(data_ts.strftime("%Y%m%d%H%M"))
             pdatas = client.lrange(key,0,-1)
             if not pdatas:
                 continue
@@ -2065,7 +2085,17 @@ def trafficmonitor(request):
             for pdata in pdatas:
                 serverid = pdata.pop("serverid")
                 _sum(time_data,pdata)
-                servers_data[serverid] = pdata
+                if serverid in servers_data:
+                    i = 1
+                    while True:
+                        key = "{}.{}".format(serverid,i)
+                        if key in servers_data:
+                            i += 1
+                        else:
+                            servers_data[key] = pdata
+                            break
+                else:
+                    servers_data[serverid] = pdata
             _sum(data,time_data)
             time_data["servers"] = servers_data
         finally:
@@ -2073,8 +2103,5 @@ def trafficmonitor(request):
 
     data["times"] = times_data
     _add_avg(data)
-
-    data["starttime"] = utils.format_datetime(start_ts)
-    data["endtime"] = utils.format_datetime(latest_data_ts)
 
     return JsonResponse(data,status=200)
