@@ -241,7 +241,6 @@ if USERFLOW_CACHE_CHECK_INTERVAL < 0:
     USERFLOW_CACHE_CHECK_INTERVAL = 0
 
 PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
-CACHE_KEY_PREFIX=env('CACHE_KEY_PREFIX',default="")
 
 DBCA_STAFF_GROUPID=env('DBCA_STAFF_GROUPID',default="DBCA") # The emails belongs to group 'dbca staff' are allowed to self sign up (no pre-registration required).
 
@@ -312,16 +311,24 @@ ENABLE_B2C_JS_EXTENSION = env("ENABLE_B2C_JS_EXTENSION",default=True)
 ADD_AUTH2_LOCAL_OPTION = env("ADD_AUTH2_LOCAL_OPTION",default=True)
 
 SYNC_MODE = env("SYNC_MODE",True)
+
+CACHE_KEY_PREFIX=env('CACHE_KEY_PREFIX',default="")
+PREVIOUS_CACHE_KEY_PREFIX=env('PREVIOUS_CACHE_KEY_PREFIX',default="")
 CACHE_SERVER = env("CACHE_SERVER")
 CACHE_SERVER_OPTIONS = env("CACHE_SERVER_OPTIONS",default={})
 CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
+PREVIOUS_CACHE_SESSION_SERVER = env("PREVIOUS_CACHE_SESSION_SERVER")
 CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
+PREVIOUS_CACHE_SESSION_SERVER_OPTIONS = env("PREVIOUS_CACHE_SESSION_SERVER_OPTIONS",default={})
 CACHE_USER_SERVER = env("CACHE_USER_SERVER")
 CACHE_USER_SERVER_OPTIONS = env("CACHE_USER_SERVER_OPTIONS",default={})
 USER_CACHE_ALIAS = None
+PREVIOUS_SESSION_CACHE_ALIAS=None
 GET_CACHE_KEY = lambda key:key
 GET_USER_KEY = lambda userid:str(userid)
 GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
+SESSION_CACHES = 0
+PREVIOUS_SESSION_CACHES = 0
 SESSION_CACHES = 0
 USER_CACHES = 0
 if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
@@ -342,7 +349,7 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
             SESSION_CACHE_ALIAS = "session"
         else:
             for i in range(0,SESSION_CACHES) :
-                CACHES["session{}".format(i)] = GET_CACHE_CONF(CACHE_SESSION_SERVER[i],CACHE_USER_SERVER_OPTIONS)
+                CACHES["session{}".format(i)] = GET_CACHE_CONF(CACHE_SESSION_SERVER[i],CACHE_SESSION_SERVER_OPTIONS)
 
             SESSION_CACHE_ALIAS = lambda sessionkey:"session{}".format((ord(sessionkey[-1]) + ord(sessionkey[-2])) % SESSION_CACHES)
         SESSION_ENGINE = "authome.cachesessionstoredebug" if DEBUG else  "authome.cachesessionstore"
@@ -351,15 +358,27 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
         SESSION_CACHE_ALIAS = "default"
         SESSION_CACHES = 1
 
+    if PREVIOUS_CACHE_SESSION_SERVER:
+        PREVIOUS_CACHE_SESSION_SERVER = [s.strip() for s in PREVIOUS_CACHE_SESSION_SERVER.split(",") if s and s.strip()]
+        PREVIOUS_SESSION_CACHES = len(PREVIOUS_CACHE_SESSION_SERVER)
+        if PREVIOUS_SESSION_CACHES == 1:
+            CACHES["previoussession"] = GET_CACHE_CONF(PREVIOUS_CACHE_SESSION_SERVER[0],PREVIOUS_CACHE_SESSION_SERVER_OPTIONS)
+            PREVIOUS_SESSION_CACHE_ALIAS = "previoussession"
+        else:
+            for i in range(0,PREVIOUS_SESSION_CACHES) :
+                CACHES["previoussession{}".format(i)] = GET_CACHE_CONF(PREVIOUS_CACHE_SESSION_SERVER[i],PREVIOUS_CACHE_SESSION_SERVER_OPTIONS)
+
+            PREVIOUS_SESSION_CACHE_ALIAS = lambda sessionkey:"previoussession{}".format((ord(sessionkey[-1]) + ord(sessionkey[-2])) % PREVIOUS_SESSION_CACHES)
+
     if CACHE_USER_SERVER:
         CACHE_USER_SERVER = [s.strip() for s in CACHE_USER_SERVER.split(",") if s and s.strip()]
         USER_CACHES = len(CACHE_USER_SERVER)
         if USER_CACHES == 1:
-            CACHES["user"] = GET_CACHE_CONF(CACHE_USER_SERVER[0])
+            CACHES["user"] = GET_CACHE_CONF(CACHE_USER_SERVER[0],CACHE_USER_SERVER_OPTIONS)
             USER_CACHE_ALIAS = "user"
         else:
             for i in range(0,USER_CACHES) :
-                CACHES["user{}".format(i)] = GET_CACHE_CONF(CACHE_USER_SERVER[i])
+                CACHES["user{}".format(i)] = GET_CACHE_CONF(CACHE_USER_SERVER[i],CACHE_USER_SERVER_OPTIONS)
 
             USER_CACHE_ALIAS = lambda userid:"user{}".format(abs(userid) % USER_CACHES)
         if CACHE_KEY_PREFIX:
@@ -400,4 +419,7 @@ if TRAFFIC_MONITOR_INTERVAL and TRAFFIC_MONITOR_INTERVAL > 0:
     TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=TRAFFIC_MONITOR_INTERVAL)
 else:
     TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=300)
+
+
+TEST_RUNNER=env("TEST_RUNNER","django.test.runner.DiscoverRunner")
 

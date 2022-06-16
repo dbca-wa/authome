@@ -66,7 +66,7 @@ def to_decimal(s,decimal):
 
         
 class _AbstractSessionStore(SessionBase):
-    cache_key_prefix = "{}-session:".format(settings.CACHE_KEY_PREFIX) if settings.CACHE_KEY_PREFIX else "session:"
+    cache_key_prefix = "{}:session:".format(settings.CACHE_KEY_PREFIX) if settings.CACHE_KEY_PREFIX else "session:"
     _idppk = None
     expired_session_key = None
 
@@ -75,7 +75,6 @@ class _AbstractSessionStore(SessionBase):
         if session_key and "-" in session_key:
             #authenticated session, get the idp pk from session key
             self._idppk = to_decimal(session_key[0:session_key.index("-")],36)
-
 
     @property
     def expireat(self):
@@ -166,34 +165,6 @@ class _AbstractSessionStore(SessionBase):
             session_key = self.session_key
         return self.cache_key_prefix + session_key
 
-
-    def load(self):
-        """
-        Load the session from cache; and reset expire time if cache is redis and session has property 'session_timeout'
-        """
-        try:
-            sessioncache = self._get_cache()
-            cachekey = self.cache_key
-            session_data = sessioncache.get(cachekey)
-            timeout = session_data.get("session_timeout")
-            if timeout and session_data.get(USER_SESSION_KEY):
-                try:
-                    sessioncache.expire(cachekey,timeout)
-                except:
-                    pass
-        except Exception:
-            # Some backends (e.g. memcache) raise an exception on invalid
-            # cache keys. If this happens, reset the session. See #17810.
-            session_data = None
-        if session_data is not None:
-            return session_data
-
-        if self._session_key and "-" in self._session_key:
-            #this is a authenticated session key, keep it for logout feature
-            self.expired_session_key = self._session_key
-        self._session_key = None
-        return {}
-
     def create(self):
         # Because a cache can fail silently (e.g. memcache), we don't know if
         # we are failing to create a new session because of a key collision or
@@ -241,7 +212,7 @@ class _AbstractSessionStore(SessionBase):
         pass
 
 if settings.SYNC_MODE:
-    class _BaseSessionStore(_AbstractSessionStore):
+    class _SessionStoreWithSyncModeSupport(_AbstractSessionStore):
         _process_prefix = None
 
         @classmethod
@@ -277,7 +248,7 @@ if settings.SYNC_MODE:
 
 else:
     import queue
-    class _BaseSessionStore(_AbstractSessionStore):
+    class _SessionStoreWithSyncModeSupport(_AbstractSessionStore):
         _process_prefix = None
 
         @classmethod
@@ -316,9 +287,8 @@ else:
             finally:
                 cls._process_prefix.put(prefix)
 
-
 if settings.SESSION_CACHES == 1:
-    class SessionStore(_BaseSessionStore):
+    class _SessionStoreWithMultiCacheSupport(_SessionStoreWithSyncModeSupport):
         def __init__(self, session_key=None):
             self._cache = caches[settings.SESSION_CACHE_ALIAS]
             super().__init__(session_key)
@@ -326,10 +296,96 @@ if settings.SESSION_CACHES == 1:
         def _get_cache(self,session_key=None):
             return self._cache
 else:
-    class SessionStore(_BaseSessionStore):
+    class _SessionStoreWithMultiCacheSupport(_SessionStoreWithSyncModeSupport):
         def _get_cache(self,session_key=None):
             if not session_key:
-                session_key = self.cache_key
+                session_key = self.session_key
             return caches[settings.SESSION_CACHE_ALIAS(session_key)]
 
+if settings.PREVIOUS_SESSION_CACHES > 0:
+    if settings.PREVIOUS_SESSION_CACHES == 1:
+        class _SessionStoreWithPreviousCacheSupport(_SessionStoreWithMultiCacheSupport):
+            def __init__(self, session_key=None):
+                self._previous_cache = caches[settings.PREVIOUS_SESSION_CACHE_ALIAS]
+                super().__init__(session_key)
+       
+            def _get_previous_cache(self,session_key=None):
+                return self._previous_cache
+    
+    elif settings.PREVIOUS_SESSION_CACHES > 1:
+        class _SessionStoreWithPreviousCacheSupport(_SessionStoreWithMultiCacheSupport):
+            def _get_previous_cache(self,session_key):
+                return caches[settings.PREVIOUS_SESSION_CACHE_ALIAS(session_key)]
+
+    class SessionStore(_SessionStoreWithPreviousCacheSupport):
+        def load(self):
+            """
+            Load the session from cache; and reset expire time if cache is redis and session has property 'session_timeout'
+            """
+            try:
+                sessioncache = self._get_cache()
+                cachekey = self.cache_key
+                session_data = sessioncache.get(cachekey)
+                if not session_data:
+                    #Try to find the session from previous sesstion cache
+                    previous_sessioncache = self._get_previous_cache(self.session_key)
+                    session_data = previous_sessioncache.get(cachekey)
+                    if session_data:
+                        timeout = session_data.get("session_timeout")
+                        if timeout and session_data.get(USER_SESSION_KEY):
+                            sessioncache.set(cachekey,session_data,timeout)
+                        else:
+                            ttl = previous_sessioncache.ttl(cachekey)
+                            if ttl:
+                                sessioncache.set(cachekey,session_data,ttl)
+                            else:
+                                sessioncache.set(cachekey,session_data,self.get_session_age())
+                else:
+                    timeout = session_data.get("session_timeout")
+                    if timeout and session_data.get(USER_SESSION_KEY):
+                        try:
+                            sessioncache.expire(cachekey,timeout)
+                        except:
+                            pass
+            except Exception:
+                # Some backends (e.g. memcache) raise an exception on invalid
+                # cache keys. If this happens, reset the session. See #17810.
+                session_data = None
+            if session_data is not None:
+                return session_data
+    
+            if self._session_key and "-" in self._session_key:
+                #this is a authenticated session key, keep it for logout feature
+                self.expired_session_key = self._session_key
+            self._session_key = None
+            return {}
+else:
+    class SessionStore(_SessionStoreWithMultiCacheSupport):
+        def load(self):
+            """
+            Load the session from cache; and reset expire time if cache is redis and session has property 'session_timeout'
+            """
+            try:
+                sessioncache = self._get_cache()
+                cachekey = self.cache_key
+                session_data = sessioncache.get(cachekey)
+                if session_data:
+                    timeout = session_data.get("session_timeout")
+                    if timeout and session_data.get(USER_SESSION_KEY):
+                        try:
+                            sessioncache.expire(cachekey,timeout)
+                        except:
+                            pass
+            except Exception:
+                # Some backends (e.g. memcache) raise an exception on invalid
+                # cache keys. If this happens, reset the session. See #17810.
+                session_data = None
+            if session_data is not None:
+                return session_data
+    
+            if self._session_key and "-" in self._session_key:
+                #this is a authenticated session key, keep it for logout feature
+                self.expired_session_key = self._session_key
+            self._session_key = None
+            return {}
 

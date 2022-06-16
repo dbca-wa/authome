@@ -30,15 +30,57 @@ class SessionStore(authome.cachesessionstore.SessionStore):
                 performance.end_processingstep("get_session_from_cache")
                 pass
 
-            timeout = session_data.get("session_timeout")
-            if timeout and session_data.get(USER_SESSION_KEY):
-                if hasattr(sessioncache,"expire"):
-                    performance.start_processingstep("set_sessiontimeout_in_cache")
+            if not session_data:
+                if settings.PREVIOUS_SESSION_CACHES > 0:
+                    #Try to find the session from previous sesstion cache
+                    previous_sessioncache = self._get_previous_cache(self.session_key)
+                    performance.start_processingstep("migrate_session")
                     try:
-                        sessioncache.expire(cachekey,timeout)
+                        performance.start_processingstep("get_session_from_previous_session_cache")
+                        try:
+                            session_data = previous_sessioncache.get(cachekey)
+                        finally:
+                            performance.end_processingstep("get_session_from_previous_session_cache")
+                            pass
+                        if session_data:
+                            timeout = session_data.get("session_timeout")
+                            if timeout and session_data.get(USER_SESSION_KEY):
+                                performance.start_processingstep("save_session_to_session_cache")
+                                try:
+                                    sessioncache.set(cachekey,session_data,timeout)
+                                finally:
+                                    performance.end_processingstep("save_session_to_session_cache")
+                                    pass
+                            else:
+                                performance.start_processingstep("get_ttl_from_previous_session_cache")
+                                try:
+                                    ttl = previous_sessioncache.ttl(cachekey)
+                                finally:
+                                    performance.end_processingstep("get_ttl_from_previous_session_cache")
+                                    pass
+    
+                                performance.start_processingstep("save_session_to_session_cache")
+                                try:
+                                    if ttl:
+                                        sessioncache.set(cachekey,session_data,ttl)
+                                    else:
+                                        sessioncache.set(cachekey,session_data,self.get_session_age())
+                                finally:
+                                    performance.end_processingstep("save_session_to_session_cache")
+                                    pass
                     finally:
-                        performance.end_processingstep("set_sessiontimeout_in_cache")
+                        performance.end_processingstep("migrate_session")
                         pass
+            else:
+                timeout = session_data.get("session_timeout")
+                if timeout and session_data.get(USER_SESSION_KEY):
+                    if hasattr(sessioncache,"expire"):
+                        performance.start_processingstep("set_sessiontimeout_in_cache")
+                        try:
+                            sessioncache.expire(cachekey,timeout)
+                        finally:
+                            performance.end_processingstep("set_sessiontimeout_in_cache")
+                            pass
                         
         except Exception:
             # Some backends (e.g. memcache) raise an exception on invalid
