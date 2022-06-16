@@ -546,15 +546,16 @@ class MemoryCache(object):
     def _log_request_1(self,name,host,start,status_code):
         if start >= self._traffic_data_next_ts:
             self._save_traffic_data(start)
-            for data in self._traffic_data.values():
-                if not isinstance(data,dict):
-                    continue
-                for key in data.keys():
-                    if key == "status":
-                        for domain in data[key].keys():
-                            data[key][domain] = 0
-                    else:
-                        data[key] = 0
+            if self._traffic_data:
+                for data in self._traffic_data.values():
+                    if not isinstance(data,dict):
+                        continue
+                    for key in data.keys():
+                        if key == "status":
+                            for domain in data[key].keys():
+                                data[key][domain] = 0
+                        else:
+                            data[key] = 0
 
         ptime = round((timezone.now() - start).total_seconds() * 1000,2)
         try:
@@ -597,15 +598,16 @@ class MemoryCache(object):
     def _log_request_2(self,name,host,start,status_code):
         if start >= self._traffic_data_next_ts:
             self._save_traffic_data(start)
-            for data in self._traffic_data.values():
-                if not isinstance(data,dict):
-                    continue
-                for key in data.keys():
-                    if key in ("domains","status"):
-                        for domain in data[key].keys():
-                            data[key][domain] = 0
-                    else:
-                        data[key] = 0
+            if self._traffic_data:
+                for data in self._traffic_data.values():
+                    if not isinstance(data,dict):
+                        continue
+                    for key in data.keys():
+                        if key in ("domains","status"):
+                            for domain in data[key].keys():
+                                data[key][domain] = 0
+                        else:
+                            data[key] = 0
 
         ptime = round((timezone.now() - start).total_seconds() * 1000,2)
         try:
@@ -655,23 +657,24 @@ class MemoryCache(object):
     def _log_request_3(self,name,host,start,status_code):
         if start >= self._traffic_data_next_ts:
             self._save_traffic_data(start)
-            for data in self._traffic_data.values():
-                if not isinstance(data,dict):
-                    continue
-                for key in data.keys():
-                    if key == "status":
-                        for k in data[key].keys():
-                            data[key][k] = 0
-                    elif key ==  "domains":
-                        for domain_data in data[key].values():
-                            for k in domain_data.keys():
-                                if k == "status":
-                                    for k1 in domain_data[k].keys():
-                                        domain_data[k][k1] = 0
-                                else:
-                                    domain_data[k] = 0
-                    else:
-                        data[key] = 0
+            if self._traffic_data:
+                for data in self._traffic_data.values():
+                    if not isinstance(data,dict):
+                        continue
+                    for key in data.keys():
+                        if key == "status":
+                            for k in data[key].keys():
+                                data[key][k] = 0
+                        elif key ==  "domains":
+                            for domain_data in data[key].values():
+                                for k in domain_data.keys():
+                                    if k == "status":
+                                        for k1 in domain_data[k].keys():
+                                            domain_data[k][k1] = 0
+                                    else:
+                                        domain_data[k] = 0
+                        else:
+                            data[key] = 0
             
 
         ptime = round((timezone.now() - start).total_seconds() * 1000,2)
