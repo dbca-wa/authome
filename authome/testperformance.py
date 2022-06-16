@@ -26,10 +26,11 @@ from authome import performance
 class PerformanceTestCase(TestCase):
     TEST_USER_NUMBER = env("TEST_USER_NUMBER",default=100)
     TEST_USER_BASEID = int(env("TEST_USER_BASEID",default=1))
+    TEST_USER_DOMAIN = env("TEST_USER_DOMAIN",default="dbca.wa.gov.au")
     TEST_TIME = env("TEST_TIME",default=300) #in seconds
     TEST_REQUESTS = env("TEST_REQUESTS",default=0) 
     REQUEST_INTERVAL = env("REQUEST_INTERVAL",default=10) / 1000 #configured in milliseconds
-    TESTED_SERVER = env("TESTED_SERVER",default="http://127.0.0.1:8080")
+    TESTED_SERVER = [s.strip() for s in env("TESTED_SERVER",default="http://127.0.0.1:8080").split(",") if s.strip()]
     PRINT_USER_PERFORMANCE_DATA = env("PRINT_USER_PERFORMANCE_DATA",default=False)
     DOWNLOAD_TEST_DATA = env("DOWNLOAD_TEST_DATA",default=False)
     TEST_DATA_FILE = env("TEST_DATA_FILE")
@@ -37,7 +38,6 @@ class PerformanceTestCase(TestCase):
 
     TESTING_SERVER = env("TESTING_SERVER" ,default=socket.gethostname())
     
-    auth_url = "{}/sso/authperformance".format(TESTED_SERVER)
 
     authrequest = {
         "min_processtime" : None,
@@ -93,10 +93,25 @@ class PerformanceTestCase(TestCase):
     format_datetime = staticmethod(lambda t: t.strftime("%Y-%m-%d %H:%M:%S.%f") if t  else "N/A")
     format_processtime = staticmethod(lambda t: ("{} ms".format(round((t.total_seconds() if hasattr(t,"total_seconds") else t) * 1000,2))) if t is not None  else "N/A")
 
+
+    server_index = 0
+    @classmethod
+    def get_auth_url(cls):
+        if len(cls.TESTED_SERVER) == 1:
+            return "{}/sso/authperformance".format(cls.TESTED_SERVER[0])
+        else:
+            url = "{}/sso/authperformance".format(cls.TESTED_SERVER[cls.server_index])
+            if cls.server_index == len(cls.TESTED_SERVER) - 1:
+                cls.server_index = 0
+            else:
+                cls.server_index += 1
+            return url
+
+
     @classmethod
     def setUpClass(cls):
         print("Prepare {} test users".format(cls.TEST_USER_NUMBER))
-        testemails = [ "testuser_{:0>4}@dbca.wa.gov.au".format(i) for i in range(cls.TEST_USER_BASEID,cls.TEST_USER_BASEID + cls.TEST_USER_NUMBER)]
+        testemails = [ "testuser_{:0>4}@{}".format(i,cls.TEST_USER_DOMAIN) for i in range(cls.TEST_USER_BASEID,cls.TEST_USER_BASEID + cls.TEST_USER_NUMBER)]
 
         if not cls.DOWNLOAD_TEST_DATA and cls.TEST_DATA_FILE:
             with open(cls.TEST_DATA_FILE,'r') as f:
@@ -111,7 +126,6 @@ class PerformanceTestCase(TestCase):
             usersessiondata = testdata["usersession"]
 
             cls.TESTED_SERVER = testdata["TESTED_SERVER"]
-            cls.auth_url = "{}/sso/authperformance".format(cls.TESTED_SERVER)
             cls.CLEAN_TEST_CACHE_DATA = False 
             cls.TEST_TIME = testdata["TEST_TIME"]
             cls.TEST_REQUESTS = testdata["TEST_REQUESTS"]
@@ -287,8 +301,8 @@ class PerformanceTestCase(TestCase):
                 httprequests += 1
                 starttime = timezone.localtime()
                 try:
-                    #print("Begin to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.auth_url,testuser.session.session_key))
-                    res = requests.get(cls.auth_url,cookies={settings.SESSION_COOKIE_NAME:testuser.session.session_key})
+                    #print("Begin to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.get_auth_url(),testuser.session.session_key))
+                    res = requests.get(cls.get_auth_url(),cookies={settings.SESSION_COOKIE_NAME:testuser.session.session_key})
                     res = res.json()
                     endtime = timezone.localtime()
                     self.assertEqual(res["status_code"],200,msg="Should return 200 response for authenticated request")
@@ -301,7 +315,7 @@ class PerformanceTestCase(TestCase):
                     if cls.TEST_REQUESTS:
                         self.print_processingsteps(testuser.email,"/sso/auth",starttime,endtime,processname,processingsteps)
     
-                    #print("Spend {3} to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.auth_url,testuser.session.session_key,self.format_processtime(processtime)))
+                    #print("Spend {3} to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.get_auth_url(),testuser.session.session_key,self.format_processtime(processtime)))
                     if not cls.authrequest["min_processtime"] or cls.authrequest["min_processtime"] >  processtime:
                         cls.authrequest["min_processtime"] = processtime
             
