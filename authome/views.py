@@ -1386,12 +1386,14 @@ def forbidden(request):
     View method for path '/sso/forbidden'
     Provide a consistent,customized forbidden page.
     """
-    domain = utils.get_host(request)
-    path = request.headers.get("x-upstream-request-uri") or request.path
+    url = get_absolute_url(request.GET.get("path"),utils.get_host(request))
+    parsed_url = utils.parse_url(url)
+    domain = parsed_url["domain"]
+    path = parsed_url["path"]
 
     page_layout,extracss = _get_userflow_pagelayout(request,domain)
 
-    context = {"body":page_layout,"extracss":extracss,"path":path,"url":"https://{}{}".format(domain,path),"domain":domain}
+    context = {"body":page_layout,"extracss":extracss,"path":path,"url":url.format(domain,path),"domain":domain}
 
     return TemplateResponse(request,"authome/forbidden.html",context=context)
 
