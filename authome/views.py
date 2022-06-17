@@ -1982,32 +1982,41 @@ def echo(request):
     
 
 def trafficmonitor(request):
+    #level 1: only show the summary, 2: summary, time based summary, 3: summary , time based summary and server process based data
     client = defaultcache.client.get_client()
     now = timezone.localtime()
     today = datetime(now.year,now.month,now.day,tzinfo=now.tzinfo)
 
-    data_ts = None
     try:
-        start_time = request.GET.get("starttime")
-        if start_time:
-            start_time = timezone.make_aware(datetime.strptime(start_time,"%Y-%m-%d %H:%M:%S"))
-            start_day = datetime(start_time.year,start_time.month,start_time.day,tzinfo=start_time.tzinfo)
-            seconds_in_day = (start_time - start_day).seconds
-            data_ts = start_day + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
+        level = int(request.GET.get("level",1))
     except:
-        pass
+        level = 1
+
+    data_ts = None
+
+    hours = request.GET.get("hours")
+    if hours:
+        try:
+            hours = int(hours)
+            if hours > 0:
+                seconds_in_day = (now - today).seconds - hours * 3600
+                data_ts = today + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
+        except:
+            pass
 
     if not data_ts:
         try:
-            hours = int(request.GET.get("hours") or 1)
-            if hours <= 0:
-                hours = 1
+            start_time = request.GET.get("starttime")
+            if start_time:
+                start_time = timezone.make_aware(datetime.strptime(start_time,"%Y-%m-%d %H:%M:%S"))
+                start_day = datetime(start_time.year,start_time.month,start_time.day,tzinfo=start_time.tzinfo)
+                seconds_in_day = (start_time - start_day).seconds
+                data_ts = start_day + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
+            else:
+                data_ts = today
         except:
-            hours = 1
+            data_ts = today
 
-        seconds_in_day = (now - today).seconds - hours * 3600
-        data_ts = today + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
- 
     latest_data_ts = None
     try:
         end_time = request.GET.get("endtime")
@@ -2083,27 +2092,30 @@ def trafficmonitor(request):
 
             time_data = OrderedDict()
             servers_data = OrderedDict()
-            times_data[ utils.format_datetime(data_ts)] = time_data
+            if level > 1:
+                times_data[ utils.format_datetime(data_ts)] = time_data
             for pdata in pdatas:
                 serverid = pdata.pop("serverid")
                 _sum(time_data,pdata)
-                if serverid in servers_data:
-                    i = 1
-                    while True:
-                        key = "{}.{}".format(serverid,i)
-                        if key in servers_data:
-                            i += 1
-                        else:
-                            servers_data[key] = pdata
-                            break
-                else:
-                    servers_data[serverid] = pdata
+                if level > 2:
+                    if serverid in servers_data:
+                        i = 1
+                        while True:
+                            key = "{}.{}".format(serverid,i)
+                            if key in servers_data:
+                                i += 1
+                            else:
+                                servers_data[key] = pdata
+                                break
+                    else:
+                        servers_data[serverid] = pdata
             _sum(data,time_data)
-            time_data["servers"] = servers_data
+            if level > 2:
+                time_data["servers"] = servers_data
         finally:
             data_ts += settings.TRAFFIC_MONITOR_INTERVAL
-
-    data["times"] = times_data
+    if level > 1:
+        data["times"] = times_data
     _add_avg(data)
 
     return JsonResponse(data,status=200)
