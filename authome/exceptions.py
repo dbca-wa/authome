@@ -37,3 +37,6 @@ class AzureADB2CAuthenticateFailed(HttpResponseException):
         else:
             return None
 
+class Auth2ClusterException(Exception):
+    pass
+

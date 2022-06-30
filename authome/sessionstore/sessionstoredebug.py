@@ -4,12 +4,14 @@ from django.conf import settings
 from django.utils import timezone
 from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 
-import authome.cachesessionstore
+from .. import utils
+from .. import sessionstore
+from .. import performance
+from . import sessionstore
+
 logger = logging.getLogger(__name__)
 
-from . import performance
-
-class SessionStore(authome.cachesessionstore.SessionStore):
+class SessionStoreDebugMixin(object):
     """
     Override the cache session store to provide the performance related log
     """
@@ -34,7 +36,7 @@ class SessionStore(authome.cachesessionstore.SessionStore):
                 if settings.PREVIOUS_SESSION_CACHES > 0:
                     #Try to find the session from previous sesstion cache
                     previous_sessioncache = self._get_previous_cache(self.session_key)
-                    performance.start_processingstep("migrate_session")
+                    performance.start_processingstep("migrate_session_from_previous_cache")
                     try:
                         performance.start_processingstep("get_session_from_previous_session_cache")
                         try:
@@ -69,7 +71,7 @@ class SessionStore(authome.cachesessionstore.SessionStore):
                                     performance.end_processingstep("save_session_to_session_cache")
                                     pass
                     finally:
-                        performance.end_processingstep("migrate_session")
+                        performance.end_processingstep("migrate_session_from_previous_cache")
                         pass
             else:
                 timeout = session_data.get("session_timeout")
@@ -130,3 +132,6 @@ class SessionStore(authome.cachesessionstore.SessionStore):
         finally:
             performance.end_processingstep("check_exists_in_cache")
             pass
+
+class SessionStore(SessionStoreDebugMixin,sessionstore.SessionStore):
+    pass

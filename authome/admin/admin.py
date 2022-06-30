@@ -1,8 +1,7 @@
 import logging
 import traceback
 
-from django.apps import apps
-from django.utils.text import capfirst
+from django.http import HttpResponseRedirect
 from django.contrib import admin as djangoadmin
 from django.utils import timezone
 from django.conf import settings
@@ -15,95 +14,26 @@ from django.contrib.admin.views.main import ChangeList
 from django.urls import reverse
 from django.template.response import TemplateResponse
 
-from . import models
-from . import forms
+from .. import models
+from .. import forms
+from ..cache import cache
 
 logger = logging.getLogger(__name__)
 
-class Auth2AdminSite(djangoadmin.AdminSite):
-    def _build_app_dict(self, request, label=None):
-        """
-        Build the app dictionary. The optional `label` parameter filters models
-        of a specific app.
-        """
-        app_dict = {}
-
-        if label:
-            registered_models = {
-                m: m_a for m, m_a in self._registry.items()
-                if m._meta.app_label == label
-            }
-        else:
-            registered_models = self._registry
-
-        for model, model_admin in registered_models.items():
-            app_label = model._meta.app_label
-
-            has_module_perms = model_admin.has_module_permission(request)
-            if not has_module_perms:
-                continue
-
-            perms = model_admin.get_model_perms(request)
-
-            # Check whether user has any perm for this module.
-            # If so, add the module to the model_list.
-            if True not in perms.values():
-                continue
-
-            info = (app_label, model._meta.model_name)
-            model_dict = {
-                'name': capfirst(model._meta.verbose_name_plural),
-                'object_name': model._meta.object_name,
-                'perms': perms,
-                'admin_url': None,
-                'add_url': None,
-            }
-            if perms.get('change') or perms.get('view'):
-                model_dict['view_only'] = not perms.get('change')
-                try:
-                    model_dict['admin_url'] = reverse('admin:%s_%s_changelist' % info, current_app=self.name)
-                except NoReverseMatch:
-                    pass
-            if perms.get('add'):
-                try:
-                    model_dict['add_url'] = reverse('admin:%s_%s_add' % info, current_app=self.name)
-                except NoReverseMatch:
-                    pass
-
-            if not model_dict.get('admin_url') or not models.can_access(request.user.email,settings.AUTH2_DOMAIN,model_dict['admin_url']):
-                continue
-
-            if app_label in app_dict:
-                app_dict[app_label]['models'].append(model_dict)
-            else:
-                app_dict[app_label] = {
-                    'name': apps.get_app_config(app_label).verbose_name,
-                    'app_label': app_label,
-                    'app_url': reverse(
-                        'admin:app_list',
-                        kwargs={'app_label': app_label},
-                        current_app=self.name,
-                    ),
-                    'has_module_perms': has_module_perms,
-                    'models': [model_dict],
-                }
-
-        if label:
-            return app_dict.get(label)
-        return app_dict
-
-admin_site = Auth2AdminSite()
-
-#register all model admins which are already registered in django admin to auth2 admin site
-for model, model_admin in djangoadmin.site._registry.items():
-    if model in (auth.models.Group,auth.models.User):
-        continue
-    admin_site._registry[model] = model_admin
+class CatchModelExceptionMixin(object):
+    def change_view(self,request,*args,**kwargs):
+        try:
+            return super().change_view(request,*args,**kwargs)
+        except Exception as ex:
+            self.message_user(request, str(ex),level=messages.ERROR)
+            return HttpResponseRedirect(request.get_full_path())
+            
 
 
 class CacheableChangeList(ChangeList):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.extra_tools = self.model_admin.extra_tools
         logger.debug("Refresh the model({}) data if required".format(self.model))
         self.model.refresh_cache_if_required()
 
@@ -122,12 +52,12 @@ class CacheableChangeList(ChangeList):
 
 
 class CacheableListTitleMixin(object):
+    extra_tools = None
     def get_changelist(self, request, **kwargs):
         """
         Return the ChangeList class for use on the changelist page.
         """
         return CacheableChangeList
-
 
 class DatetimeMixin(object):
     def _modified(self,obj):
@@ -164,6 +94,48 @@ class DatetimeMixin(object):
         else:
             return timezone.localtime(obj.last_verified).strftime("%Y-%m-%d %H:%M:%S")
     _date_joined.short_description = "Last Verified"
+
+    def _registered(self,obj):
+        if not obj or not obj.registered :
+            return ""
+        else:
+            return timezone.localtime(obj.registered).strftime("%Y-%m-%d %H:%M:%S")
+    _registered.short_description = "Registered"
+
+    def _last_heartbeat(self,obj):
+        if not obj or not obj.last_heartbeat :
+            return ""
+        else:
+            return timezone.localtime(obj.last_heartbeat).strftime("%Y-%m-%d %H:%M:%S")
+    _last_heartbeat.short_description = "Last Heartbeat"
+
+    def _usergroup_lastrefreshed(self,obj):
+        if not obj or not obj.usergroup_lastrefreshed :
+            return ""
+        else:
+            return timezone.localtime(obj.usergroup_lastrefreshed).strftime("%Y-%m-%d %H:%M:%S")
+    _usergroup_lastrefreshed.short_description = "Usergroup Last Refreshed"
+
+    def _usergroupauthorization_lastrefreshed(self,obj):
+        if not obj or not obj.usergroupauthorization_lastrefreshed :
+            return ""
+        else:
+            return timezone.localtime(obj.usergroupauthorization_lastrefreshed).strftime("%Y-%m-%d %H:%M:%S")
+    _usergroupauthorization_lastrefreshed.short_description = "Usergroup Authorization Last Refreshed"
+
+    def _userflow_lastrefreshed(self,obj):
+        if not obj or not obj.userflow_lastrefreshed :
+            return ""
+        else:
+            return timezone.localtime(obj.userflow_lastrefreshed).strftime("%Y-%m-%d %H:%M:%S")
+    _userflow_lastrefreshed.short_description = "Userflow Last Refreshed"
+
+    def _idp_lastrefreshed(self,obj):
+        if not obj or not obj.idp_lastrefreshed :
+            return ""
+        else:
+            return timezone.localtime(obj.idp_lastrefreshed).strftime("%Y-%m-%d %H:%M:%S")
+    _idp_lastrefreshed.short_description = "IDP Last Refreshed"
 
 
 
@@ -220,24 +192,23 @@ class NormalUser(models.User):
     class Meta:
         proxy = True
         verbose_name="User"
-        verbose_name_plural="{}Users".format(" " * 8)
+        verbose_name_plural="{}Users".format(" " * 9)
 
-
-class UserAdmin(UserAuthorizationCheckMixin,UserGroupsMixin,DatetimeMixin,auth.admin.UserAdmin):
+class UserAdmin(UserAuthorizationCheckMixin,UserGroupsMixin,DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdmin):
     list_display = ('username', 'email', 'first_name', 'last_name','is_active', 'is_staff','last_idp','_last_login')
     list_filter = ( 'is_superuser',)
-    readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","_email","_usergroups","last_idp")
+    readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","_email","_usergroups","last_idp","_modified")
     fieldsets = (
         (None, {'fields': ('_email', )}),
         ('Personal info', {'fields': ('username','first_name', 'last_name',"_usergroups")}),
         ('Permissions', {
             'fields': ('is_active', 'is_staff', 'is_superuser', ),
         }),
-        ('Important dates', {'fields': ('last_idp','_last_login', '_date_joined')}),
+        ('Important dates', {'fields': ('last_idp','_last_login', '_date_joined','_modified')}),
     )
 
     change_form_template = 'admin/change_form.html'
-    form = forms.UserCreateForm
+    form = forms.UserEditForm
     actions = ["check_authorization"]
 
     def _email(self,obj):
@@ -249,17 +220,16 @@ class UserAdmin(UserAuthorizationCheckMixin,UserGroupsMixin,DatetimeMixin,auth.a
 
     def has_add_permission(self, request, obj=None):
         return False
-admin_site.register(NormalUser,UserAdmin)
 
 class SystemUser(models.User):
     objects = models.SystemUserManager()
     class Meta:
         proxy = True
         verbose_name="System User"
-        verbose_name_plural="{}System Users".format(" " * 6)
+        verbose_name_plural="{}System Users".format(" " * 7)
 
 
-class SystemUserAdmin(UserGroupsMixin,DatetimeMixin,auth.admin.UserAdmin):
+class SystemUserAdmin(UserGroupsMixin,DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdmin):
     list_display = ('username', 'email', 'is_active', '_usergroups','last_idp','_last_login')
     list_filter = ("is_active",)
     add_form_template = 'admin/change_form.html'
@@ -305,10 +275,9 @@ class SystemUserAdmin(UserGroupsMixin,DatetimeMixin,auth.admin.UserAdmin):
         return models.can_access(request.user.email,settings.AUTH2_DOMAIN,reverse(self.object_change_url_name, args=(-1,)))
 
 
-admin_site.register(SystemUser,SystemUserAdmin)
 
 
-class UserGroupAdmin(CacheableListTitleMixin,DatetimeMixin,djangoadmin.ModelAdmin):
+class UserGroupAdmin(CacheableListTitleMixin,DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmin):
     list_display = ('name','groupid','parent_group','users','excluded_users','identity_provider','_session_timeout','_modified','_created')
     readonly_fields = ('_modified',)
     fields = ('name','groupid','parent_group','users','excluded_users','identity_provider','session_timeout','_modified')
@@ -342,10 +311,9 @@ class UserGroupAdmin(CacheableListTitleMixin,DatetimeMixin,djangoadmin.ModelAdmi
     def has_delete_permission(self, request, obj=None):
         return models.can_access(request.user.email,settings.AUTH2_DOMAIN,reverse(self.object_change_url_name, args=(-1,)))
 
-admin_site.register(models.UserGroup,UserGroupAdmin)
 
 
-class UserGroupAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,djangoadmin.ModelAdmin):
+class UserGroupAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmin):
     list_display = ('usergroup','domain','paths','excluded_paths','_modified','_created')
     readonly_fields = ('_modified',)
     fields = ('usergroup','domain','paths','excluded_paths','_modified')
@@ -368,10 +336,10 @@ class UserGroupAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,djangoad
     def has_delete_permission(self, request, obj=None):
         return models.can_access(request.user.email,settings.AUTH2_DOMAIN,reverse(self.object_change_url_name, args=(-1,)))
 
-admin_site.register(models.UserGroupAuthorization,UserGroupAuthorizationAdmin)
 
 
-class UserAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,djangoadmin.ModelAdmin):
+
+class UserAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmin):
     list_display = ('user','domain','paths','excluded_paths','_modified','_created')
     readonly_fields = ('_modified',)
     fields = ('user','domain','paths','excluded_paths','_modified')
@@ -427,17 +395,17 @@ class SystemUserToken(models.User):
     class Meta:
         proxy = True
         verbose_name="System User"
-        verbose_name_plural="{}System User Tokens".format(" " * 5)
+        verbose_name_plural="{}System User Tokens".format(" " * 6)
 
 class NormalUserToken(models.User):
     objects = models.NormalUserManager()
     class Meta:
         proxy = True
         verbose_name="System User"
-        verbose_name_plural="{}User Tokens".format(" " * 7)
+        verbose_name_plural="{}User Tokens".format(" " * 8)
 
 
-class AccessTokenAdmin(DatetimeMixin,auth.admin.UserAdmin):
+class AccessTokenAdmin(DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdmin):
     list_display = ('email','last_name','first_name','_token_enabled','_token_short','_token_created','_token_expired')
     readonly_fields = ('email','last_name','first_name','_token_enabled','_token','_token_created','_token_expired')
     ordering = ('email',)
@@ -637,11 +605,7 @@ def {}(self,request,queryset):
     setattr(getattr(UserAccessTokenAdmin,method_name),"short_description",'Create {}days Token'.format(token_lifetime) if token_lifetime > 0 else 'Create Permanent Token')
     setattr(getattr(SystemUserAccessTokenAdmin,method_name),"short_description",'Create {}days Token'.format(token_lifetime) if token_lifetime > 0 else 'Create Permanent Token')
 
-admin_site.register(SystemUserToken,SystemUserAccessTokenAdmin)
-admin_site.register(NormalUserToken,UserAccessTokenAdmin)
-
-
-class IdentityProviderAdmin(CacheableListTitleMixin,DatetimeMixin,djangoadmin.ModelAdmin):
+class IdentityProviderAdmin(CacheableListTitleMixin,DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmin):
     list_display = ('idp','name','userflow','logout_method','logout_url','_modified','_created')
     readonly_fields = ('idp','_modified','_created')
     form = forms.IdentityProviderForm
@@ -651,10 +615,8 @@ class IdentityProviderAdmin(CacheableListTitleMixin,DatetimeMixin,djangoadmin.Mo
     def has_add_permission(self, request, obj=None):
         return False
 
-admin_site.register(models.IdentityProvider,IdentityProviderAdmin)
 
-
-class CustomizableUserflowAdmin(CacheableListTitleMixin,DatetimeMixin,djangoadmin.ModelAdmin):
+class CustomizableUserflowAdmin(CacheableListTitleMixin,DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmin):
     list_display = ('domain','fixed','default','mfa_set',"mfa_reset",'password_reset','_modified','_created')
     readonly_fields = ('_modified','_created')
     form = forms.CustomizableUserflowForm
@@ -676,10 +638,8 @@ class CustomizableUserflowAdmin(CacheableListTitleMixin,DatetimeMixin,djangoadmi
     def has_delete_permission(self, request, obj=None):
         return models.can_access(request.user.email,settings.AUTH2_DOMAIN,reverse(self.object_change_url_name, args=(-1,)))
 
-admin_site.register(models.CustomizableUserflow,CustomizableUserflowAdmin)
 
-
-class UserTOTPAdmin(DatetimeMixin,djangoadmin.ModelAdmin):
+class UserTOTPAdmin(DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmin):
     list_display = ('name','email','issuer','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
     readonly_fields = ('name','email','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
     fields = ('name','email','issuer','secret_key','timestep','algorithm','digits','prefix','last_verified_code','_last_verified','_created')
@@ -694,4 +654,3 @@ class UserTOTPAdmin(DatetimeMixin,djangoadmin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
-admin_site.register(models.UserTOTP,UserTOTPAdmin)

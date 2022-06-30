@@ -12,7 +12,8 @@ from django.contrib.sessions.backends.base import (
 from django.core.cache import caches
 from django.utils.crypto import  get_random_string
 
-from . import models
+from .. import models
+from .. import utils
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +72,14 @@ class _AbstractSessionStore(SessionBase):
     expired_session_key = None
 
     def __init__(self, session_key=None):
-        super().__init__(session_key)
         if session_key and "-" in session_key:
             #authenticated session, get the idp pk from session key
-            self._idppk = to_decimal(session_key[0:session_key.index("-")],36)
+            try:
+                self._idppk = to_decimal(session_key[0:session_key.index("-")],36)
+            except:
+                #not a valid session key
+                session_key = None
+        super().__init__(session_key)
 
     @property
     def expireat(self):
@@ -84,10 +89,20 @@ class _AbstractSessionStore(SessionBase):
         try:
             sessioncache = self._get_cache()
             ttl = sessioncache.ttl(self.cache_key)
-            return timezone.now() + timedelta(seconds=ttl)
+            return timezone.localtime() + timedelta(seconds=ttl)
         except:
             return None
     
+    @property
+    def ttl(self):
+        """
+        Return expire time; return None if never expired.
+        """
+        try:
+            sessioncache = self._get_cache()
+            return sessioncache.ttl(self.cache_key)
+        except:
+            return None
 
     @property
     def idpid(self):
@@ -205,6 +220,22 @@ class _AbstractSessionStore(SessionBase):
                 return
             session_key = self.session_key
         self._get_cache(session_key).delete(self.cache_key_prefix + session_key)
+
+    def populate_session_key(self,process_prefix,idpid):
+        if idpid:
+            return "{3}-{1}{0}{2}".format(
+                process_prefix,
+                get_random_string(16, VALID_KEY_CHARS),
+                get_random_string(16, VALID_KEY_CHARS),
+                idpid
+            )
+        else:
+            return "{1}{0}{2}".format(
+                process_prefix,
+                get_random_string(16, VALID_KEY_CHARS),
+                get_random_string(16, VALID_KEY_CHARS)
+            )
+
         
 
     @classmethod
@@ -238,10 +269,7 @@ if settings.SYNC_MODE:
                 idp = models.IdentityProvider.get_idp(idpid)
                 idpid = convert_decimal(idp.id,36)
             while True:
-                if idpid:
-                    session_key = "{3}-{1}{0}{2}".format(self._get_process_prefix(),get_random_string(16, VALID_KEY_CHARS),get_random_string(16, VALID_KEY_CHARS),idpid)
-                else:
-                    session_key = "{1}{0}{2}".format(self._get_process_prefix(),get_random_string(16, VALID_KEY_CHARS),get_random_string(16, VALID_KEY_CHARS))
+                session_key = self.populate_session_key(self._get_process_prefix(),idpid)
 
                 if not self.exists(session_key):
                     return session_key
@@ -277,10 +305,7 @@ else:
                 idpid = convert_decimal(idp.id,36)
             try:
                 while True:
-                    if idp:
-                        session_key = "{3}-{1}{0}{2}".format(prefix,get_random_string(16, VALID_KEY_CHARS),get_random_string(16, VALID_KEY_CHARS),idpid)
-                    else:
-                        session_key = "{1}{0}{2}".format(prefix,get_random_string(16, VALID_KEY_CHARS),get_random_string(16, VALID_KEY_CHARS))
+                    session_key = self.populate_session_key(prefix,idpid)
 
                     if not self.exists(session_key):
                         return session_key
@@ -305,6 +330,7 @@ else:
 if settings.PREVIOUS_SESSION_CACHES > 0:
     if settings.PREVIOUS_SESSION_CACHES == 1:
         class _SessionStoreWithPreviousCacheSupport(_SessionStoreWithMultiCacheSupport):
+            previous_cache_key_prefix = "{}:session:".format(settings.PREVIOUS_CACHE_KEY_PREFIX) if settings.PREVIOUS_CACHE_KEY_PREFIX else "session:"
             def __init__(self, session_key=None):
                 self._previous_cache = caches[settings.PREVIOUS_SESSION_CACHE_ALIAS]
                 super().__init__(session_key)
@@ -318,6 +344,11 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
                 return caches[settings.PREVIOUS_SESSION_CACHE_ALIAS(session_key)]
 
     class SessionStore(_SessionStoreWithPreviousCacheSupport):
+        previous_cache_key_prefix = "{}:session:".format(settings.PREVIOUS_CACHE_KEY_PREFIX) if settings.PREVIOUS_CACHE_KEY_PREFIX else "session:"
+        @property
+        def previous_cache_key(self):
+            return self.previous_cache_key_prefix + self._get_or_create_session_key()
+
         def load(self):
             """
             Load the session from cache; and reset expire time if cache is redis and session has property 'session_timeout'
@@ -328,14 +359,15 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
                 session_data = sessioncache.get(cachekey)
                 if not session_data:
                     #Try to find the session from previous sesstion cache
+                    previous_cachekey = self.previous_cache_key
                     previous_sessioncache = self._get_previous_cache(self.session_key)
-                    session_data = previous_sessioncache.get(cachekey)
+                    session_data = previous_sessioncache.get(previous_cachekey)
                     if session_data:
                         timeout = session_data.get("session_timeout")
                         if timeout and session_data.get(USER_SESSION_KEY):
                             sessioncache.set(cachekey,session_data,timeout)
                         else:
-                            ttl = previous_sessioncache.ttl(cachekey)
+                            ttl = previous_sessioncache.ttl(previous_cachekey)
                             if ttl:
                                 sessioncache.set(cachekey,session_data,ttl)
                             else:

@@ -13,6 +13,7 @@ from .models import IdentityProvider,UserGroup
 from .views import signout
 from .cache import get_usercache
 from . import utils
+from . import exceptions
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,10 @@ def user_details(strategy, details, user=None, *args, **kwargs):
 
     if changed:
         strategy.storage.user.changed(user)
-        usercache = get_usercache(user.id)
-        if usercache:
-            usercache.set(settings.GET_USER_KEY(user.id),user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
-            logger.debug("Cache the user({}) data to usercache".format(user.email))
+    
+    #save the user to cache if user is changed or in multiple cluster env.
+    usercache = get_usercache(user.id)
+    if usercache:
+        usercache.set(settings.GET_USER_KEY(user.id),user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
+
+        

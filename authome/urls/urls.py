@@ -1,37 +1,16 @@
 import logging
-import traceback
 
 from django.urls import include, path
 from django.conf import settings
-from django.template.response import TemplateResponse
 from django.views.generic.base import RedirectView
 from django.views.decorators.csrf import csrf_exempt
-from django.utils import timezone
 
-from . import views
-from .cache import cache
-from . import utils
-from .admin import admin_site
-
-import authome.patch
+from .. import views
+from ..cache import cache
+from ..admin import admin_site
+from .base import traffic_monitor
 
 logger = logging.getLogger(__name__)
-
-def traffic_monitor(name,func):
-    def _monitor(request):
-        start = timezone.now()
-        res = None
-        try:
-           res = func(request)
-           return res
-        finally:
-            try:
-                cache.log_request(name,utils.get_host(request),start,res.status_code if res else 500)
-            except:
-                logger.error("Failed to log the request.{}".format(traceback.format_exc()))
-        
-        
-    return _monitor if settings.TRAFFIC_MONITOR_LEVEL > 0 else func
 
 urlpatterns = [
     path('sso/auth_logout', views.logout_view, name='logout'),
@@ -90,27 +69,6 @@ if settings.DEBUG:
     urlpatterns.append(path('echo/auth_optional',views.echo,name="echo_auth_optional"))
 
 if settings.TRAFFIC_MONITOR_LEVEL > 0 :
-    urlpatterns.append(path('trafficmonitor',views.trafficmonitor,name="trafficmonitor"))
-
+    urlpatterns.append(path('trafficmonitor',views.trafficmonitorfactory(),name="trafficmonitor"))
 
 handler400 = views.handler400
-
-#load cache
-try:
-    cache.refresh_authorization_cache(True)
-except:
-    if not settings.IGNORE_LOADING_ERROR:
-        raise Exception("Failed to load UserGroup and UserGroupAuthorization cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
-    
-try:
-    cache.refresh_idp_cache(True)
-except:
-    if not settings.IGNORE_LOADING_ERROR:
-        raise Exception("Failed to load IdentityProvider cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
-    
-try:
-    cache.refresh_userflow_cache(True)
-except:
-    if not settings.IGNORE_LOADING_ERROR:
-        raise Exception("Failed to load CustomizableUserflow cache during server startingFailed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
-    

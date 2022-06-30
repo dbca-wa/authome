@@ -87,7 +87,7 @@ def migrate_caches(source_caches,session_cache_key_re,default_cache_key_re=None,
             for cachekey,value,expireat in cache_server_client.items():
                 try:
                     print("key="+cachekey)
-                    if expireat and expireat < timezone.now():
+                    if expireat and expireat < timezone.localtime():
                         #key is expired, ignore
                         expired_keys.append("{}={}, expireat:{}".format(cachekey,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
                         continue
@@ -407,7 +407,7 @@ def import_caches(import_dir="./cached_data"):
                     #print("Processing key:{}".format(data))
                     datatype,cachekey,expireat = json.loads(data)
                     expireat =  timezone.make_aware(datetime.strptime(expireat,"%Y-%m-%d %H:%M:%S.%f")) if expireat else None
-                    if expireat and expireat < timezone.now():
+                    if expireat and expireat < timezone.localtime():
                         expired_keys.append("{}={}, expireat".format(cachekey,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f")))
                         continue
                     value = None
@@ -501,8 +501,8 @@ def _save(cache,key,value,expireat):
         cache.set(key,value,timeout=None)
     elif value is None:
         return
-    elif timezone.now() < expireat:
-        if not cache.add(key,value,timeout=int((expireat - timezone.now()).total_seconds())):
+    elif timezone.localtime() < expireat:
+        if not cache.add(key,value,timeout=int((expireat - timezone.localtime()).total_seconds())):
             raise Exception("Failed to save the item({}={}) to current cache server".format(key,value))
 
 
@@ -561,7 +561,7 @@ class MemCachedServerClient(CacheServerClient):
             if not m:
                 continue
             #because minimum time unit is seconds instead of milliseconds, minus one second from the uptime secods to guarantee self._uptime is a little bitter later than the actual uptime. 
-            self._uptime = timezone.now() - timedelta(seconds=(int(m.group("seconds")) - 1) )
+            self._uptime = timezone.localtime() - timedelta(seconds=(int(m.group("seconds")) - 1) )
             break
 
         if not self._uptime:
@@ -679,7 +679,7 @@ class RedisServerClient(CacheServerClient):
                 milliseconds = 0
                 days = seconds / 86400
                 seconds = seconds % 86400
-                expireat = timezone.now() + timedelta(days=days,seconds=seconds,milliseconds=milliseconds)
+                expireat = timezone.localtime() + timedelta(days=days,seconds=seconds,milliseconds=milliseconds)
             else:
                 expireat = None
             value = self.get(cache_key)

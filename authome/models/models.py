@@ -14,7 +14,8 @@ from django.contrib.auth.models import AbstractUser,UserManager
 
 import hashlib
 
-from .cache import cache,get_defaultcache,get_usercache
+from ..cache import cache,get_defaultcache,get_usercache
+from ..  import exceptions
 
 logger = logging.getLogger(__name__)
 
@@ -315,7 +316,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
         """
         logger.debug("Refresh idp cache")
         modified = None
-        refreshtime = timezone.now()
+        refreshtime = timezone.localtime()
         size = 0
         idps = {}
         for obj in cls.objects.all():
@@ -327,6 +328,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
             elif modified < obj.modified:
                 modified = obj.modified
         cache.idps = (idps,size,refreshtime)
+        return refreshtime
 
     @classmethod
     def get_idp(cls,idpid):
@@ -493,7 +495,7 @@ Email: enquiries@dbca.wa.gov.au
     created = models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
-        verbose_name_plural = "{}Customizable userflows".format(" " * 2)
+        verbose_name_plural = "{}Customizable userflows".format(" " * 3)
 
     @classmethod
     def get_model_change_cls(self):
@@ -577,7 +579,7 @@ Email: enquiries@dbca.wa.gov.au
         userflows = []
         defaultuserflow = None
         last_modified = None
-        refreshtime = timezone.now()
+        refreshtime = timezone.localtime()
         size = 0
         for o in cls.objects.all().order_by(sortkey_c.asc()):
             if o.is_default:
@@ -608,6 +610,7 @@ Email: enquiries@dbca.wa.gov.au
                 o.defaultuserflow = None
 
         cache.userflows = (userflows,defaultuserflow,size,refreshtime)
+        return refreshtime
 
 
 class UserEmail(object):
@@ -769,7 +772,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
     class Meta:
         unique_together = [["users","excluded_users"]]
-        verbose_name_plural = "{}User Groups".format(" " * 4)
+        verbose_name_plural = "{}User Groups".format(" " * 5)
 
 
     @property
@@ -822,7 +825,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     def is_changed(self,update_fields=None):
         changed = super().is_changed(update_fields)
         if changed:
-            self.modified = timezone.now()
+            self.modified = timezone.localtime()
             return True
         else:
             return self.name != self.db_obj.name
@@ -1027,7 +1030,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
         logger.debug("Refresh UserGroup cache")
         group_trees = {}
         modified = None
-        refreshtime = timezone.now()
+        refreshtime = timezone.localtime()
         size = 0
         dbca_group = None
         public_group = None
@@ -1054,6 +1057,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                 group_trees[group.parent_group_id][1].append(val)
         group_trees = [v for v in group_trees.values() if not v[0].parent_group_id]
         cache.usergrouptree = (group_trees,groups,public_group,dbca_group,size,refreshtime)
+        return refreshtime
 
     @classmethod
     def get_grouptree(cls):
@@ -1529,7 +1533,7 @@ class UserAuthorization(CacheableMixin,AuthorizationMixin):
 
     class Meta:
         unique_together = [["user","domain"]]
-        verbose_name_plural = "{}User Authorizations".format(" " * 1)
+        verbose_name_plural = "{}User Authorizations".format(" " * 2)
 
     @classmethod
     def get_model_change_cls(self):
@@ -1548,7 +1552,7 @@ class UserAuthorization(CacheableMixin,AuthorizationMixin):
         previous_user = None
         size = 0
         modified = None
-        refreshtime = timezone.now()
+        refreshtime = timezone.localtime()
         for authorization in UserAuthorization.objects.all().order_by("user",sortkey_c.asc()):
             size += 1
             if not modified:
@@ -1566,6 +1570,7 @@ class UserAuthorization(CacheableMixin,AuthorizationMixin):
                 previous_user = authorization.user
 
         cache.userauthorization = (userauthorization,size,refreshtime)
+        return refreshtime
 
     @classmethod
     def get_authorizations(cls,useremail):
@@ -1579,7 +1584,7 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
 
     class Meta:
         unique_together = [["usergroup","domain"]]
-        verbose_name_plural = "{}User Group Authorizations".format(" " * 3)
+        verbose_name_plural = "{}User Group Authorizations".format(" " * 4)
 
     @classmethod
     def get_model_change_cls(self):
@@ -1592,7 +1597,7 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
         previous_usergroup = None
         size = 0
         modified = None
-        refreshtime = timezone.now()
+        refreshtime = timezone.localtime()
         for authorization in UserGroupAuthorization.objects.all().order_by("usergroup","sortkey"):
             size += 1
             if not modified:
@@ -1610,6 +1615,7 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
                 previous_usergroup = authorization.usergroup
 
         cache.usergroupauthorization = (usergroupauthorization,size,refreshtime)
+        return refreshtime
 
     @classmethod
     def get_authorizations(cls,usergroup):
@@ -1634,7 +1640,7 @@ class User(AbstractUser):
     class Meta(AbstractUser.Meta):
         swappable = 'AUTH_USER_MODEL'
         db_table = "auth_user"
-        verbose_name_plural = "{}Users".format(" " * 8)
+        verbose_name_plural = "{}Users".format(" " * 9)
         unique_together = [["email"]]
 
     def clean(self):
@@ -1655,6 +1661,9 @@ class User(AbstractUser):
         if dbcagroup and any(usergroup.is_group(dbcagroup) for usergroup in usergroups):
             self.is_staff = True
 
+    def __str__(self):
+        return self.email
+
 class UserToken(models.Model):
     DISABLED = -1
     NOT_CREATED = -2
@@ -1674,6 +1683,9 @@ class UserToken(models.Model):
 
     class Meta:
         verbose_name_plural = "{}Access Tokens".format(" " * 1)
+
+    def __str__(self):
+        return self.user.email
 
     @classmethod
     def generate_user_secret(cls):
@@ -1746,7 +1758,7 @@ class UserTOTP(models.Model):
     created = models.DateTimeField(null=False,editable=False)
 
     class Meta:
-        verbose_name_plural = "{}User totps".format(" " * 0)
+        verbose_name_plural = "{}User totps".format(" " * 1)
 
 class UserListener(object):
     @staticmethod
@@ -1809,7 +1821,7 @@ if defaultcache:
         key = None
         @classmethod
         def change(cls,timeout=None):
-            defaultcache.set(cls.key,timezone.now(),timeout=timeout)
+            defaultcache.set(cls.key,timezone.localtime(),timeout=timeout)
 
         @classmethod
         def get_cachetime(cls):

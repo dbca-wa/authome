@@ -12,6 +12,8 @@ LOGLEVEL = env('LOGLEVEL',default='WARNING')
 if LOGLEVEL not in ["DEBUG",'INFO','WARNING','ERROR','CRITICAL']:
     LOGLEVEL = 'DEBUG' if DEBUG else 'INFO'
 
+TEST = env("TEST",default=False)
+
 RELEASE = False if LOGLEVEL in ["DEBUG"] else True
 
 SECRET_KEY = env('SECRET_KEY', 'PlaceholderSecretKey')
@@ -352,9 +354,9 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
                 CACHES["session{}".format(i)] = GET_CACHE_CONF(CACHE_SESSION_SERVER[i],CACHE_SESSION_SERVER_OPTIONS)
 
             SESSION_CACHE_ALIAS = lambda sessionkey:"session{}".format((ord(sessionkey[-1]) + ord(sessionkey[-2])) % SESSION_CACHES)
-        SESSION_ENGINE = "authome.cachesessionstoredebug" if DEBUG else  "authome.cachesessionstore"
+        SESSION_ENGINE = "authome.sessionstore"
     elif CACHE_SERVER:
-        SESSION_ENGINE = "authome.cachesessionstoredebug" if DEBUG else  "authome.cachesessionstore"
+        SESSION_ENGINE = "authome.sessionstore"
         SESSION_CACHE_ALIAS = "default"
         SESSION_CACHES = 1
 
@@ -423,3 +425,17 @@ else:
 
 TEST_RUNNER=env("TEST_RUNNER","django.test.runner.DiscoverRunner")
 
+#enable auth2 cluster feature by setting AUTH2_CLUSTERID
+AUTH2_CLUSTERID=env("AUTH2_CLUSTERID",default=None)
+if AUTH2_CLUSTERID:
+    AUTH2_CLUSTER_ENDPOINT=env("AUTH2_CLUSTER_ENDPOINT",default=None)
+    DEFAULT_AUTH2_CLUSTER=env("DEFAULT_AUTH2_CLUSTER",default=False)
+    LB_HASH_KEY_SECRET=env("LB_HASH_KEY_SECRET",default=None)
+    if AUTH2_CLUSTERID and not LB_HASH_KEY_SECRET:
+        raise Exception("Must set LB_HASH_KEY_SECRET for auth2 cluster feature")
+    PREVIOUS_LB_HASH_KEY_SECRET=env("PREVIOUS_LB_HASH_KEY_SECRET",default=None)
+    AUTH2_CLUSTERS_CHECK_INTERVAL=env("AUTH2_CLUSTERS_CHECK_INTERVAL",default=60)
+    if AUTH2_CLUSTERS_CHECK_INTERVAL < 60:
+        AUTH2_CLUSTERS_CHECK_INTERVAL = 60
+
+AUTH2_CLUSTER_ENABLED = True if AUTH2_CLUSTERID else False

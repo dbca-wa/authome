@@ -9,11 +9,11 @@ from django.core.handlers import exception
 
 from social_core.exceptions import AuthException
 
-from .models import User,UserToken
-from .cache import get_usercache
-from .exceptions import UserDoesNotExistException
+from ..models import User,UserToken
+from ..cache import get_usercache
+from ..exceptions import UserDoesNotExistException
 
-from . import performance
+from .. import performance
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +184,7 @@ auth.get_user = _get_user
 def get_response_for_exception():
     original_handler = exception.response_for_exception
     def _response_for_exception(request, exc):
-        from . import views
+        from .. import views
         if isinstance(exc, AuthException):
             return views.handler400(request,exc)
         else:
@@ -192,4 +192,3 @@ def get_response_for_exception():
     return _response_for_exception
 
 exception.response_for_exception = get_response_for_exception()
-

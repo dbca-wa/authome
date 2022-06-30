@@ -18,6 +18,8 @@ __version__ = '1.0.0'
 
 logger = logging.getLogger(__name__)
 
+LB_HASH_KEY_DIGEST_SIZE=8
+
 _processid = None
 def get_processid():
     global _processid
@@ -295,6 +297,29 @@ def _get_host2(request):
 
 get_host = _get_host
 
+def sign_lb_hash_key(hash_key,clusterid,secretkey):
+    h = hashlib.blake2b(digest_size=LB_HASH_KEY_DIGEST_SIZE)
+    h.update("{}{}{}".format(hash_key,clusterid,secretkey).encode())
+    return h.hexdigest()
 
+def add_to_list(l,o):
+    """
+    Add object to list object, if list object is None, create a new list
+    return the list object
+    """
+    if l is None:
+        return [o]
+    else:
+        l.append(o)
+        return l
 
-
+def add_to_map(m,k,v):
+    """
+    Add object to map object, if map object is None, create a new map
+    return the list object
+    """
+    if m is None:
+        return {k:v}
+    else:
+        m[k] = v
+        return m

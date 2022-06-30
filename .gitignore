@@ -18,6 +18,5 @@ gunicorn_*.py
 *.dump
 *.db
 *.sqlite3
-start_*
 build_image*
 
