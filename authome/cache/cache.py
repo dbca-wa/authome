@@ -393,7 +393,7 @@ class MemoryCache(object):
 
     def set_auth(self,user,key,response):
         """
-        cache the auth response content and return the populated http response
+        cache the auth response content 
         """
         now = timezone.localtime()
         if user.is_staff:

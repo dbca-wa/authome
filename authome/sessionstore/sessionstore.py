@@ -63,8 +63,21 @@ def to_decimal(s,decimal):
 
     return number
 
-    
+def expire_at_redis(cache,key,value,timeout):
+    cache.expire_at(key,timezone.now() + timeout)
 
+def expire_at_others(cache,key,value,timeout):
+    cache.set(key,value,timeout.seconds)
+
+def expire_at(cache,value,timeout):
+    try:
+        cache._set_expire_at(value,timeout)
+    except AttributeError as ex:
+        if hasattr(cache.__class__,'expire_at'):
+            setattr(cache.__class__,'_set_expire_at',expire_at_redis)
+        else:
+            setattr(cache.__class__,'_set_expire_at',expire_at_others)
+        cache._set_expire_at(value,timeout)
         
 class _AbstractSessionStore(SessionBase):
     cache_key_prefix = "{}:session:".format(settings.CACHE_KEY_PREFIX) if settings.CACHE_KEY_PREFIX else "session:"
@@ -96,7 +109,7 @@ class _AbstractSessionStore(SessionBase):
     @property
     def ttl(self):
         """
-        Return expire time; return None if never expired.
+        Return expire time; return None if never expired or not supported.
         """
         try:
             sessioncache = self._get_cache()
@@ -141,11 +154,13 @@ class _AbstractSessionStore(SessionBase):
         return self.cache_key_prefix + self._get_or_create_session_key()
 
 
-    def get_session_cookie_age(self):
+    def get_session_cookie_age(self,session_key=None):
         """
         Return different session cookie age for authenticated session and anonymous session
         """
-        if self.get(USER_SESSION_KEY):
+        if not session_key:
+            session_key = self._session_key
+        if session_key and "-" in session_key:
             return settings.SESSION_COOKIE_AGE
         else:
             return settings.GUEST_SESSION_AGE
@@ -164,7 +179,7 @@ class _AbstractSessionStore(SessionBase):
         except:
             pass
 
-        if self.get(USER_SESSION_KEY):
+        if self._session_key and "-" in self._session_key:
             return settings.SESSION_AGE
         else:
             return settings.GUEST_SESSION_AGE
@@ -346,43 +361,49 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
     class SessionStore(_SessionStoreWithPreviousCacheSupport):
         previous_cache_key_prefix = "{}:session:".format(settings.PREVIOUS_CACHE_KEY_PREFIX) if settings.PREVIOUS_CACHE_KEY_PREFIX else "session:"
         @property
-        def previous_cache_key(self):
-            return self.previous_cache_key_prefix + self._get_or_create_session_key()
+        def previous_cachekey(self):
+            return self.previous_cache_key_prefix + self.session_key
 
         def load(self):
             """
             Load the session from cache; and reset expire time if cache is redis and session has property 'session_timeout'
             """
-            try:
-                sessioncache = self._get_cache()
-                cachekey = self.cache_key
-                session_data = sessioncache.get(cachekey)
-                if not session_data:
-                    #Try to find the session from previous sesstion cache
-                    previous_cachekey = self.previous_cache_key
-                    previous_sessioncache = self._get_previous_cache(self.session_key)
-                    session_data = previous_sessioncache.get(previous_cachekey)
-                    if session_data:
+            sessioncache = self._get_cache()
+            cachekey = self.cache_key
+            session_data = sessioncache.get(cachekey)
+            if not session_data:
+                #Try to find the session from previous sesstion cache
+                previous_cachekey = self.previous_cachekey
+                previous_sessioncache = self._get_previous_cache(self.session_key)
+                session_data = previous_sessioncache.get(previous_cachekey)
+                if session_data:
+                    if session_data.get("migrated",False):
+                        #already migrated, load the session again.
+                        session_data = sessioncache.get(cachekey)
+                    else:
+                        #migrate the session from previous cache to current cache
                         timeout = session_data.get("session_timeout")
                         if timeout and session_data.get(USER_SESSION_KEY):
                             sessioncache.set(cachekey,session_data,timeout)
                         else:
-                            ttl = previous_sessioncache.ttl(previous_cachekey)
+                            try:
+                                ttl = previous_sessioncache.ttl(previous_cachekey)
+                            except:
+                                ttl = None
                             if ttl:
                                 sessioncache.set(cachekey,session_data,ttl)
                             else:
                                 sessioncache.set(cachekey,session_data,self.get_session_age())
-                else:
-                    timeout = session_data.get("session_timeout")
-                    if timeout and session_data.get(USER_SESSION_KEY):
-                        try:
-                            sessioncache.expire(cachekey,timeout)
-                        except:
+                        #mark the session as migrated session in previous cache
+                        previous_sessioncache.set(previous_cachekey,{"migrated":True},60)
+
+            else:
+                timeout = session_data.get("session_timeout")
+                if timeout and session_data.get(USER_SESSION_KEY):
+                    try:
+                        sessioncache.expire(cachekey,timeout)
+                    except:
                             pass
-            except Exception:
-                # Some backends (e.g. memcache) raise an exception on invalid
-                # cache keys. If this happens, reset the session. See #17810.
-                session_data = None
             if session_data is not None:
                 return session_data
     
@@ -397,21 +418,16 @@ else:
             """
             Load the session from cache; and reset expire time if cache is redis and session has property 'session_timeout'
             """
-            try:
-                sessioncache = self._get_cache()
-                cachekey = self.cache_key
-                session_data = sessioncache.get(cachekey)
-                if session_data:
-                    timeout = session_data.get("session_timeout")
-                    if timeout and session_data.get(USER_SESSION_KEY):
-                        try:
-                            sessioncache.expire(cachekey,timeout)
-                        except:
-                            pass
-            except Exception:
-                # Some backends (e.g. memcache) raise an exception on invalid
-                # cache keys. If this happens, reset the session. See #17810.
-                session_data = None
+            sessioncache = self._get_cache()
+            cachekey = self.cache_key
+            session_data = sessioncache.get(cachekey)
+            if session_data:
+                timeout = session_data.get("session_timeout")
+                if timeout and session_data.get(USER_SESSION_KEY):
+                    try:
+                        sessioncache.expire(cachekey,timeout)
+                    except:
+                        pass
             if session_data is not None:
                 return session_data
     

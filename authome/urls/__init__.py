@@ -15,7 +15,7 @@ if settings.AUTH2_CLUSTER_ENABLED :
 else:
     logger.info("Start standalone auth2 server")
     
-if settings.TEST :
+if settings.TESTMODE:
     from . import testurls
     urlpatterns.append(path('test/',include((testurls.urlpatterns,'test'),namespace="test")))
     logger.info("Start auth2 in testing mode")

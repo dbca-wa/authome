@@ -8,6 +8,6 @@ if settings.AUTH2_CLUSTER_ENABLED:
     from .clusterviews import *
 
 
-if settings.TEST:
+if settings.TESTMODE:
     from .testviews import *
 

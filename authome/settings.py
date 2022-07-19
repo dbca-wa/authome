@@ -12,7 +12,7 @@ LOGLEVEL = env('LOGLEVEL',default='WARNING')
 if LOGLEVEL not in ["DEBUG",'INFO','WARNING','ERROR','CRITICAL']:
     LOGLEVEL = 'DEBUG' if DEBUG else 'INFO'
 
-TEST = env("TEST",default=False)
+TESTMODE = env("TESTMODE",default=False)
 
 RELEASE = False if LOGLEVEL in ["DEBUG"] else True
 

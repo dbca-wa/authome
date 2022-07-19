@@ -45,31 +45,45 @@ class SessionStoreDebugMixin(object):
                             performance.end_processingstep("get_session_from_previous_session_cache")
                             pass
                         if session_data:
-                            timeout = session_data.get("session_timeout")
-                            if timeout and session_data.get(USER_SESSION_KEY):
-                                performance.start_processingstep("save_session_to_session_cache")
+                            if session_data.get("migrated",False):
+                                #already migrated, load the session again.
                                 try:
-                                    sessioncache.set(cachekey,session_data,timeout)
+                                    performance.start_processingstep("get_session_from_cache")
+                                    session_data = sessioncache.get(cachekey)
                                 finally:
-                                    performance.end_processingstep("save_session_to_session_cache")
+                                    performance.end_processingstep("get_session_from_cache")
                                     pass
                             else:
-                                performance.start_processingstep("get_ttl_from_previous_session_cache")
-                                try:
-                                    ttl = previous_sessioncache.ttl(cachekey)
-                                finally:
-                                    performance.end_processingstep("get_ttl_from_previous_session_cache")
-                                    pass
-    
-                                performance.start_processingstep("save_session_to_session_cache")
-                                try:
-                                    if ttl:
-                                        sessioncache.set(cachekey,session_data,ttl)
-                                    else:
-                                        sessioncache.set(cachekey,session_data,self.get_session_age())
-                                finally:
-                                    performance.end_processingstep("save_session_to_session_cache")
-                                    pass
+                                timeout = session_data.get("session_timeout")
+                                if timeout and session_data.get(USER_SESSION_KEY):
+                                    performance.start_processingstep("save_session_to_session_cache")
+                                    try:
+                                        sessioncache.set(cachekey,session_data,timeout)
+                                    finally:
+                                        performance.end_processingstep("save_session_to_session_cache")
+                                        pass
+                                else:
+                                    performance.start_processingstep("get_ttl_from_previous_session_cache")
+                                    try:
+                                        ttl = previous_sessioncache.ttl(cachekey)
+                                    except:
+                                        ttl = None
+                                    finally:
+                                        performance.end_processingstep("get_ttl_from_previous_session_cache")
+                                        pass
+        
+                                    performance.start_processingstep("save_session_to_session_cache")
+                                    try:
+                                        if ttl:
+                                            sessioncache.set(cachekey,session_data,ttl)
+                                        else:
+                                            sessioncache.set(cachekey,session_data,self.get_session_age())
+                                    finally:
+                                        performance.end_processingstep("save_session_to_session_cache")
+                                        pass
+                                #mark the session as migrated session in previous cache
+                                previous_sessioncache.set(previous_cachekey,{"migrated":True},60)
+
                     finally:
                         performance.end_processingstep("migrate_session_from_previous_cache")
                         pass

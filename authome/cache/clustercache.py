@@ -133,19 +133,19 @@ class MemoryCache(cache.MemoryCache):
         
         if self.refresh_auth2_clusters():
             #refreshed
-            if endpoint != self._auth2_clusters[clusterid].endpoint:
-                #endpoint was changed.
-                try:
+            try:
+                if endpoint != self._auth2_clusters[clusterid].endpoint:
+                    #endpoint was changed.
                     cluster = self._auth2_clusters[clusterid]
                     res = f_send_request(cluster)
                     res.raise_for_status()
                     return res
-                except Exception as ex:
-                    if isinstance(ex,(KeyError,requests.ConnectionError,requests.HTTPError,requests.Timeout)):
-                        exception = ex
-                    else:
-                        raise
-
+            except Exception as ex:
+                if isinstance(ex,(KeyError,requests.ConnectionError,requests.HTTPError,requests.Timeout)):
+                    exception = ex
+                else:
+                    raise
+        logger.debug(str(self._auth2_clusters))
         raise Auth2ClusterException("Failed to access cluster({})".format(clusterid,str(exception)))
 
     def config_changed(self,model_cls,modified=None):
@@ -273,7 +273,46 @@ class MemoryCache(cache.MemoryCache):
             else:
                 return None
         except Exception as ex:
-            logger.error("Failed to get session from {}.{}".format(clusterid,str(ex)))
+            logger.error("Failed to get session from auth2 cluster '{}'.{}".format(clusterid,str(ex)))
+            return None
+
+    def mark_remote_session_as_migrated(self,clusterid,session,raise_exception=False):
+        """
+        mark session as migrated in other auth2 cluster
+        """
+        def _send_request(cluster):
+            logger.debug("Mark the remote session({}.{}) as migrated.endpoint={}".format(clusterid,session,cluster.endpoint))
+            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:mark_session_as_migrated')),data={"session":session})
+
+        try:
+            self._send_request_to_cluster(clusterid,_send_request)
+        except Auth2ClusterException as ex:
+            logger.error("Failed to mark session as migraed in auth2 cluster '{}'.{}".format(clusterid,str(ex)))
+            if raise_exception:
+                raise
+            else:
+                return None
+        except Exception as ex:
+            logger.error("Failed to mark session as migraed in auth2 cluster '{}'.{}".format(clusterid,str(ex)))
+            return None
+
+    def delete_remote_session(self,clusterid,session,raise_exception=False):
+        """
+        get session from other auth2 cluster
+        Return the session_data if found; otherwise return None
+        """
+        def _send_request(cluster):
+            requests.post("{}{}".format(cluster.endpoint,reverse('cluster:delete_session')),data={"session":session})
+
+        try:
+            self._send_request_to_cluster(clusterid,_send_request)
+        except Auth2ClusterException as ex:
+            if raise_exception:
+                raise
+            else:
+                return None
+        except Exception as ex:
+            logger.error("Failed to delete session from {}.{}".format(clusterid,str(ex)))
             return None
 
     def get_traffic_data(self,clusterid,level,starttime,endtime):

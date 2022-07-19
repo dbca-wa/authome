@@ -156,56 +156,6 @@ def checkauthorization(request):
         traceback.print_exc()
         return HttpResponse(status=400,content=str(ex))
 
-def echo(request):
-    data = OrderedDict()
-    data["url"] = "https://{}{}".format(utils.get_host(request),request.get_full_path())
-    data["method"] = request.method
-    
-    keys = [k for k in request.GET.keys()]
-    keys.sort()
-    if keys:
-        data["parameters"] = OrderedDict()
-    for k in keys:
-        v = request.GET.getlist(k)
-        if not v:
-            data["parameters"][k] = v
-        elif len(v) == 1:
-            data["parameters"][k] = v[0]
-        else:
-            data["parameters"][k] = v
-
-    keys = [k for k in request.COOKIES.keys()]
-    keys.sort()
-    if keys:
-        data["cookies"] = OrderedDict()
-    for k in keys:
-        v = request.COOKIES[k]
-        data["cookies"][k] = v
-
-
-    keys = [k for k in request.headers.keys()]
-    keys.sort()
-    if keys:
-        data["headers"] = OrderedDict()
-    for k in keys:
-        v = request.headers[k]
-        data["headers"][k.lower()] = v
-
-    if request.method == "POST":
-        data["body"] = OrderedDict()
-        keys = [k for k in request.POST.keys()]
-        keys.sort()
-        for k in keys:
-            v = request.POST.getlist(k)
-            if not v:
-                data["body"][k] = v
-            elif len(v) == 1:
-                data["body"][k] = v[0]
-            else:
-                data["body"][k] = v
-
-    return JsonResponse(data,status=200)
-
 def _sum(d1,d2,excluded_keys=None):
     if "requests" in d2 and d2["requests"] == 0:
         return

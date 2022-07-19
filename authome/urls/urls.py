@@ -59,14 +59,7 @@ urlpatterns = [
 ]
 if settings.DEBUG:
     #import debug_toolbar
-    from authome import performance
-    #urlpatterns.append(path('__debug__/', include(debug_toolbar.urls)))
-    urlpatterns.append(path('sso/authperformance', performance.performancetester_wrapper(traffic_monitor("auth",views.auth)), name='authperformance'))
-    urlpatterns.append(path('sso/auth_basicperformance', performance.performancetester_wrapper(traffic_monitor("auth_basic",views.auth_basic)), name='auth_basicperformance'))
-    urlpatterns.append(path('echo',views.echo,name="echo"))
-    urlpatterns.append(path('echo/auth',views.echo,name="echo_auth"))
-    urlpatterns.append(path('echo/auth_basic',views.echo,name="echo_auth_basic"))
-    urlpatterns.append(path('echo/auth_optional',views.echo,name="echo_auth_optional"))
+    pass
 
 if settings.TRAFFIC_MONITOR_LEVEL > 0 :
     urlpatterns.append(path('trafficmonitor',views.trafficmonitorfactory(),name="trafficmonitor"))

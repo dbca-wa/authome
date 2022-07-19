@@ -4,6 +4,7 @@ from datetime import datetime
 from django.conf import settings
 from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
+from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 
 from .views import SUCCEED_RESPONSE,RESPONSE_NOT_FOUND
 from ..cache import cache,get_defaultcache,get_usercache
@@ -85,7 +86,7 @@ def usertokens_changed(request):
     return SUCCEED_RESPONSE
 
 def get_remote_session(request):
-    sessionstore = SessionStore(session_key=request.POST.get("session"),auth2_clusterid=settings.AUTH2_CLUSTERID)
+    sessionstore = SessionStore(None,settings.AUTH2_CLUSTERID,request.POST.get("session"))
     session_data = sessionstore.load()
     if session_data:
         timeout = session_data.get("session_timeout")
@@ -99,6 +100,18 @@ def get_remote_session(request):
             return JsonResponse({"session":session_data},status=200)
     else:
         return RESPONSE_NOT_FOUND
+
+def mark_session_as_migrated(request):
+    sessionstore = SessionStore(None,settings.AUTH2_CLUSTERID,request.POST.get("session"))
+    logger.debug("Mark the remote session({}) as migrated".format(request.POST.get("session")))
+    sessionstore.mark_as_migrated()
+    return SUCCEED_RESPONSE
+
+def delete_remote_session(request):
+    request.session.delete(request.POST.get("session"))
+    return RESPONSE_NOT_FOUND
+
+
 
 
 

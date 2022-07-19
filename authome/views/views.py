@@ -876,18 +876,8 @@ def login_domain(request):
         #missing session key, login again
         return HttpResponse(content="session is missing",status=400)
 
-    session = SessionStore(session_key)
-    userid = session.get(USER_SESSION_KEY)
-    if not userid:
-        #missing user id, login again
-        return HttpResponse(content="User is not authenticated",status=400)
-
-    user = load_user(int(userid))
-    if not user.is_authenticated:
-        return HttpResponse(content="User does not exist",status=400)
-
     res = HttpResponseRedirect(next_url) 
-    max_age = session.get_expiry_age()
+    max_age = request.session.get_expiry_age(session_cookie)
     expires_time = time.time() + max_age
     expires = http_date(expires_time)
     res.set_cookie(
@@ -1024,7 +1014,7 @@ def home(request):
             return HttpResponseRedirect(next_url) 
         else:
             #other domain, login to that before redirecting to the original url
-            return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
+            return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.cookie_value,"next_url":next_url,"domain":next_url_domain})
 
 def loginstatus(request):
     """

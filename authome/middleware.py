@@ -51,7 +51,7 @@ class ClusterSessionMiddleware(MiddlewareMixin):
                     request.session = self.SessionStore(None,None,None)
                 else:
                     return HttpResponse("Can't find x-hash-key",status=500)
-            request.session = self.SessionStore(lb_hash_key,None,None)
+            request.session = self.SessionStore(lb_hash_key,settings.AUTH2_CLUSTERID,None)
 
     def process_response(self, request, response):
         """
