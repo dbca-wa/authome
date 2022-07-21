@@ -34,6 +34,7 @@ def _get_processingstep(index):
         return step
 
 def start_processingstep(stepname):
+    logger.debug("Start to process the step '{}'".format(stepname))
     if not _processing_info.enabled:
         return
 
@@ -50,6 +51,7 @@ def start_processingstep(stepname):
             _processing_info.index.append(len(c_step[4]) - 1)
 
 def end_processingstep(stepname):
+    logger.debug("End to process the step '{}'".format(stepname))
     if not _processing_info.enabled:
         return
 

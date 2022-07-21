@@ -13,10 +13,14 @@ class StartServerMixin(object):
     cluster_headers = {"HOST":settings.AUTH2_DOMAIN,"X-hash-key":"dummy key"}
 
     @classmethod
-    def start_auth2_server(cls,servername,port):
+    def start_auth2_server(cls,servername,port,precommands=None):
         if servername in cls.process_map:
             raise Exception("Server({}) is already running".format(servername))
-        cls.process_map[servername] = (subprocess.Popen(["./start_auth2 {} {}".format(port,servername)],shell=True,preexec_fn=os.setsid,stdout=subprocess.PIPE),port)
+        if precommands:
+            command = "{} && ./start_auth2 {} {}".format(precommands,port,servername) 
+        else:
+            command = "./start_auth2 {} {}".format(port,servername) 
+        cls.process_map[servername] = (subprocess.Popen([command],shell=True,preexec_fn=os.setsid,stdout=subprocess.PIPE),port)
         expired = 60
         while (True):
             try:

@@ -8,7 +8,7 @@ from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 
 from .views import SUCCEED_RESPONSE,RESPONSE_NOT_FOUND
 from ..cache import cache,get_defaultcache,get_usercache
-from ..sessionstore import SessionStore
+from ..sessionstore import SessionStore,StandaloneSessionStore
 from .. import models
 
 logger = logging.getLogger(__name__)
@@ -86,8 +86,23 @@ def usertokens_changed(request):
     return SUCCEED_RESPONSE
 
 def get_remote_session(request):
-    sessionstore = SessionStore(None,settings.AUTH2_CLUSTERID,request.POST.get("session"))
+    session = request.POST.get("session")
+    if not session:
+        return RESPONSE_NOT_FOUND
+
+    clusterid = request.POST.get("clusterid")
+    if clusterid and clusterid != settings.AUTH2_CLUSTERID:
+        return RESPONSE_NOT_FOUND
+
+    if clusterid:
+        #load cluster session from cache
+        sessionstore = SessionStore(None,clusterid,session)
+    else:
+        #load standalone session from cache
+        sessionstore = StandaloneSessionStore(session)
+
     session_data = sessionstore.load()
+    logger.debug("Load remote {3} session({1}={2}) from cluster server({0})".format(settings.AUTH2_CLUSTERID,session,session_data,"cluster" if clusterid else "standalone"))
     if session_data:
         timeout = session_data.get("session_timeout")
         if not timeout or not session_data.get(USER_SESSION_KEY):
@@ -102,14 +117,43 @@ def get_remote_session(request):
         return RESPONSE_NOT_FOUND
 
 def mark_session_as_migrated(request):
-    sessionstore = SessionStore(None,settings.AUTH2_CLUSTERID,request.POST.get("session"))
-    logger.debug("Mark the remote session({}) as migrated".format(request.POST.get("session")))
+    session = request.POST.get("session")
+    if not session:
+        return SUCCEED_RESPONSE
+
+    clusterid = request.POST.get("clusterid")
+    if clusterid and clusterid != settings.AUTH2_CLUSTERID:
+        return SUCCEED_RESPONSE
+
+    if clusterid:
+        #load cluster session from cache
+        sessionstore = SessionStore(None,clusterid,session)
+    else:
+        #load standalone session from cache
+        sessionstore = StandaloneSessionStore(session)
+
     sessionstore.mark_as_migrated()
     return SUCCEED_RESPONSE
 
 def delete_remote_session(request):
-    request.session.delete(request.POST.get("session"))
-    return RESPONSE_NOT_FOUND
+    session = request.POST.get("session")
+    if not session:
+        return SUCCEED_RESPONSE
+
+    clusterid = request.POST.get("clusterid")
+    if clusterid and clusterid != settings.AUTH2_CLUSTERID:
+        return SUCCEED_RESPONSE
+
+    if clusterid:
+        #load cluster session from cache
+        sessionstore = SessionStore(None,clusterid,session)
+    else:
+        #load standalone session from cache
+        sessionstore = StandaloneSessionStore(session)
+
+    sessionstore.delete()
+
+    return SUCCEED_RESPONSE
 
 
 

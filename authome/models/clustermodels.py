@@ -31,11 +31,16 @@ class Auth2Cluster(models.Model):
 
     @classmethod
     def register(cls):
+        if settings.DEFAULT_AUTH2_CLUSTER:
+            #update the previous default cluster server to non cluster server
+            cls.objects.filter(default=True).exclude(clusterid=settings.AUTH2_CLUSTERID).update(default=False,modified=timezone.localtime())
         cls.objects.update_or_create(clusterid=settings.AUTH2_CLUSTERID,defaults={
             "endpoint" : settings.AUTH2_CLUSTER_ENDPOINT,
             "default" : settings.DEFAULT_AUTH2_CLUSTER,
-            "last_heartbeat":timezone.localtime()
+            "last_heartbeat":timezone.localtime(),
+            "modified":timezone.localtime()
         })
+
 
     def __str__(self):
         return self.clusterid

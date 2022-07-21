@@ -30,6 +30,7 @@ RUN cp -rf /app/release /app/dev
 #comment out logger.debug to improve perfornace in production environment.
 RUN find ./ -type f -iname '*.py' -exec sed -i 's/logger.debug/#logger.debug/g' "{}" +;
 RUN find ./ -type f -iname '*.py' -exec sed -i 's/from . import performance/#from . import performance/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -i 's/from .. import performance/#from . import performance/g' "{}" +;
 RUN find ./ -type f -iname '*.py' -exec sed -i 's/performance.start_processingstep/#performance.start_processingstep/g' "{}" +;
 RUN find ./ -type f -iname '*.py' -exec sed -i 's/performance.end_processingstep/#performance.end_processingstep/g' "{}" +;
 

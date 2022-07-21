@@ -14,6 +14,7 @@ from django.utils.crypto import  get_random_string
 
 from .. import models
 from .. import utils
+from .. import performance
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,12 @@ class _AbstractSessionStore(SessionBase):
             else:
                 return None
 
+    def mark_as_migrated(self):
+        if self._session_key:
+            cachekey = self.cache_key
+            sessioncache = self._get_cache()
+            sessioncache.set(cachekey,{"migrated":True},settings.MIGRATED_SESSION_TIMEOUT)
+
     def flush(self):
         self.expired_session_key = None
         super().flush()
@@ -152,6 +159,10 @@ class _AbstractSessionStore(SessionBase):
     @property
     def cache_key(self):
         return self.cache_key_prefix + self._get_or_create_session_key()
+
+    @classmethod
+    def get_cache_key(cls,session_key):
+        return cls.cache_key_prefix + session_key
 
 
     def get_session_cookie_age(self,session_key=None):
@@ -201,40 +212,65 @@ class _AbstractSessionStore(SessionBase):
         # because the cache is missing. So we try for a (large) number of times
         # and then raise an exception. That's the risk you shoulder if using
         # cache backing.
-        for i in range(10000):
-            self._session_key = self._get_new_session_key()
-            try:
-                self.save(must_create=True)
-            except CreateError:
-                continue
-            self.modified = True
-            return
-        raise RuntimeError(
-            "Unable to create a new session key. "
-            "It is likely that the cache is unavailable.")
+        try:
+            performance.start_processingstep("create_session")
+            for i in range(10000):
+                self._session_key = self._get_new_session_key()
+                try:
+                    self.save(must_create=True)
+                except CreateError:
+                    continue
+                self.modified = True
+                return
+            raise RuntimeError(
+                "Unable to create a new session key. "
+                "It is likely that the cache is unavailable.")
+
+        finally:
+            performance.end_processingstep("create_session")
+            logger.debug("Add a new session({}) for {} into cache".format(self.session_key,self.get(USER_SESSION_KEY,'GUEST')))
+            pass
+
 
     def save(self, must_create=False):
-        if self.session_key is None:
-            return self.create()
-        if must_create:
-            func = self._get_cache().add
-        else:
-            func = self._get_cache().set
-        result = func(self.cache_key,
-                      self._get_session(no_load=must_create),
-                      self.get_session_age())
-        if must_create and not result:
-            raise CreateError
+        try:
+            performance.start_processingstep("save_session_in_cache")
+            if self.session_key is None:
+                return self.create()
+            if must_create:
+                func = self._get_cache().add
+            else:
+                func = self._get_cache().set
+            result = func(self.cache_key,
+                          self._get_session(no_load=must_create),
+                          self.get_session_age())
+            if must_create and not result:
+                raise CreateError
+        finally:
+            performance.end_processingstep("save_session_in_cache")
+            logger.debug("Save a session({}) for {} into cache".format(self.session_key,self.get(USER_SESSION_KEY,'GUEST')))
+            pass
 
     def exists(self, session_key):
-        return bool(session_key) and (self.cache_key_prefix + session_key) in self._get_cache(session_key)
+        try:
+            performance.start_processingstep("check_exists_in_cache")
+            return bool(session_key) and (self.cache_key_prefix + session_key) in self._get_cache(session_key)
+        finally:
+            performance.end_processingstep("check_exists_in_cache")
+            pass
 
     def delete(self, session_key=None):
-        if session_key is None:
-            if self.session_key is None:
-                return
-            session_key = self.session_key
-        self._get_cache(session_key).delete(self.cache_key_prefix + session_key)
+        try:
+            performance.start_processingstep("delete_session_from_cache")
+            if session_key is None:
+                if self.session_key is None:
+                    return
+                session_key = self.session_key
+            self._get_cache(session_key).delete(self.cache_key_prefix + session_key)
+        finally:
+            performance.end_processingstep("delete_session_from_cache")
+            logger.debug("Delete a session({}) for {} from cache".format(session_key or self.session_key,self.get(USER_SESSION_KEY,'GUEST')))
+            pass
 
     def populate_session_key(self,process_prefix,idpid):
         if idpid:
@@ -287,6 +323,7 @@ if settings.SYNC_MODE:
                 session_key = self.populate_session_key(self._get_process_prefix(),idpid)
 
                 if not self.exists(session_key):
+                    logger.debug("Create a new session key {}".format(session_key))
                     return session_key
 
 else:
@@ -368,42 +405,93 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
             """
             Load the session from cache; and reset expire time if cache is redis and session has property 'session_timeout'
             """
-            sessioncache = self._get_cache()
-            cachekey = self.cache_key
-            session_data = sessioncache.get(cachekey)
-            if not session_data:
-                #Try to find the session from previous sesstion cache
-                previous_cachekey = self.previous_cachekey
-                previous_sessioncache = self._get_previous_cache(self.session_key)
-                session_data = previous_sessioncache.get(previous_cachekey)
-                if session_data:
-                    if session_data.get("migrated",False):
-                        #already migrated, load the session again.
-                        session_data = sessioncache.get(cachekey)
-                    else:
-                        #migrate the session from previous cache to current cache
-                        timeout = session_data.get("session_timeout")
-                        if timeout and session_data.get(USER_SESSION_KEY):
-                            sessioncache.set(cachekey,session_data,timeout)
-                        else:
-                            try:
-                                ttl = previous_sessioncache.ttl(previous_cachekey)
-                            except:
-                                ttl = None
-                            if ttl:
-                                sessioncache.set(cachekey,session_data,ttl)
-                            else:
-                                sessioncache.set(cachekey,session_data,self.get_session_age())
-                        #mark the session as migrated session in previous cache
-                        previous_sessioncache.set(previous_cachekey,{"migrated":True},60)
-
-            else:
-                timeout = session_data.get("session_timeout")
-                if timeout and session_data.get(USER_SESSION_KEY):
+            try:
+                performance.start_processingstep("load_session")
+                sessioncache = self._get_cache()
+                cachekey = self.cache_key
+                try:
+                    performance.start_processingstep("load_session_from_cache")
+                    session_data = sessioncache.get(cachekey)
+                finally:
+                    performance.end_processingstep("load_session_from_cache")
+                    pass
+                if not session_data:
+                    #Try to find the session from previous sesstion cache
                     try:
-                        sessioncache.expire(cachekey,timeout)
-                    except:
+                        performance.start_processingstep("migrate_session_from_previous_cache")
+                        previous_cachekey = self.previous_cachekey
+                        previous_sessioncache = self._get_previous_cache(self.session_key)
+                        try:
+                            performance.start_processingstep("get_session_from_previous_cache")
+                            session_data = previous_sessioncache.get(previous_cachekey)
+                        finally:
+                            performance.end_processingstep("get_session_from_previous_cache")
                             pass
+    
+                        if session_data:
+                            if session_data.get("migrated",False):
+                                #already migrated, load the session again.
+                                try:
+                                    performance.start_processingstep("load_session_from_cache")
+                                    session_data = sessioncache.get(cachekey)
+                                finally:
+                                    performance.end_processingstep("load_session_from_cache")
+                                    pass
+                            else:
+                                #migrate the session from previous cache to current cache
+                                timeout = session_data.get("session_timeout")
+                                if timeout and session_data.get(USER_SESSION_KEY):
+                                    try:
+                                        performance.start_processingstep("save_session_to_cache")
+                                        sessioncache.set(cachekey,session_data,timeout)
+                                    finally:
+                                        performance.end_processingstep("save_session_to_cache")
+                                        pass
+                                else:
+                                    try:
+                                        performance.start_processingstep("get_ttl_from_previous_cache")
+                                        ttl = previous_sessioncache.ttl(previous_cachekey)
+                                    except:
+                                        ttl = None
+                                    finally:
+                                        performance.end_processingstep("get_ttl_from_previous_cache")
+                                        pass
+    
+                                    try:
+                                        performance.start_processingstep("save_session_to_cache")
+                                        if ttl:
+                                            sessioncache.set(cachekey,session_data,ttl)
+                                        else:
+                                            sessioncache.set(cachekey,session_data,self.get_session_age())
+                                    finally:
+                                        performance.end_processingstep("save_session_to_cache")
+                                        pass
+                                #mark the session as migrated session in previous cache
+                                try:
+                                    performance.start_processingstep("mark_previous_session_as_migrated")
+                                    previous_sessioncache.set(previous_cachekey,{"migrated":True},settings.MIGRATED_SESSION_TIMEOUT)
+                                finally:
+                                    performance.end_processingstep("mark_previous_session_as_migrated")
+                                    pass
+                    finally:
+                        performance.end_processingstep("migrate_session_from_previous_cache")
+                        pass
+        
+                else:
+                    timeout = session_data.get("session_timeout")
+                    if timeout and session_data.get(USER_SESSION_KEY):
+                        try:
+                            performance.start_processingstep("set_session_timeout")
+                            sessioncache.expire(cachekey,timeout)
+                        except:
+                            pass
+                        finally:
+                            performance.end_processingstep("set_session_timeout")
+                            pass
+            finally:
+                performance.end_processingstep("load_session")
+                pass
+
             if session_data is not None:
                 return session_data
     
@@ -418,16 +506,34 @@ else:
             """
             Load the session from cache; and reset expire time if cache is redis and session has property 'session_timeout'
             """
-            sessioncache = self._get_cache()
-            cachekey = self.cache_key
-            session_data = sessioncache.get(cachekey)
-            if session_data:
-                timeout = session_data.get("session_timeout")
-                if timeout and session_data.get(USER_SESSION_KEY):
-                    try:
-                        sessioncache.expire(cachekey,timeout)
-                    except:
-                        pass
+            try:
+                performance.start_processingstep("load_session")
+                sessioncache = self._get_cache()
+                cachekey = self.cache_key
+                try:
+                    performance.start_processingstep("load_session_from_cache")
+                    session_data = sessioncache.get(cachekey)
+                finally:
+                    performance.end_processingstep("load_session_from_cache")
+                    pass
+                if session_data:
+                    timeout = session_data.get("session_timeout")
+                    if timeout and session_data.get(USER_SESSION_KEY):
+                        try:
+                            performance.start_processingstep("set_session_timeout")
+                            sessioncache.expire(cachekey,timeout)
+                        except:
+                            pass
+                        finally:
+                            performance.end_processingstep("set_session_timeout")
+                            pass
+            except Exception as ex:
+                logger.error("Failed to load session.{}".format(str(ex)))
+                raise
+            finally:
+                performance.end_processingstep("load_session")
+                pass
+
             if session_data is not None:
                 return session_data
     
