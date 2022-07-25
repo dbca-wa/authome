@@ -160,7 +160,6 @@ class SessionStore(sessionstore.SessionStore):
                         try:
                             performance.start_processingstep("mark_old_session_as_migrated")
                             standalone_sessionstore.mark_as_migrated()
-                            sessioncache.set(cachekey,{"migrated":True},settings.MIGRATED_SESSION_TIMEOUT)
                         finally:
                             performance.end_processingstep("mark_old_session_as_migrated")
                             pass

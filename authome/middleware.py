@@ -26,9 +26,9 @@ class ClusterSessionMiddleware(MiddlewareMixin):
             values = session_cookie.split("|")
             if len(values) == 1:
                 session_key = values[0]
-                lb_hash_key = request.headers.get("x-hash-key")
+                lb_hash_key = request.headers.get("X-lb-hash-key")
                 if not lb_hash_key:
-                    return HttpResponse("Can't find x-hash-key",status=500)
+                    return HttpResponse("Can't find X-lb-hash-key",status=500)
                 request.session = self.SessionStore(lb_hash_key,None,session_key)
             else:
                 try:
@@ -45,12 +45,12 @@ class ClusterSessionMiddleware(MiddlewareMixin):
                     #invalid session cookie
                     request.session = self.SessionStore(None,None,None)
         else:
-            lb_hash_key = request.headers.get("x-hash-key")
+            lb_hash_key = request.headers.get("X-lb-hash-key")
             if not lb_hash_key:
                 if request.path.startswith("/cluster"):
                     request.session = self.SessionStore(None,None,None)
                 else:
-                    return HttpResponse("Can't find x-hash-key",status=500)
+                    return HttpResponse("Can't find X-lb-hash-key",status=500)
             request.session = self.SessionStore(lb_hash_key,settings.AUTH2_CLUSTERID,None)
 
     def process_response(self, request, response):

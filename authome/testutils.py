@@ -6,11 +6,13 @@ import requests
 
 from django.conf import settings
 
+from . import  utils
+
 class StartServerMixin(object):
     TESTED_SERVER = "http://127.0.0.1:{}"
     process_map = {}
     headers = {"HOST":settings.AUTH2_DOMAIN}
-    cluster_headers = {"HOST":settings.AUTH2_DOMAIN,"X-hash-key":"dummy key"}
+    cluster_headers = {"HOST":settings.AUTH2_DOMAIN,"X-LB-HASH-KEY":"dummy key"}
 
     @classmethod
     def start_auth2_server(cls,servername,port,precommands=None):
@@ -59,7 +61,9 @@ class StartServerMixin(object):
 
     @classmethod
     def get_profile_url(cls,servername="standalone"):
-        return "{}/sso/profile".format(cls.get_baseurl(servername))
+        url =  "{}/sso/profile".format(cls.get_baseurl(servername))
+        print("profile url = {}".format(url))
+        return url
 
     @classmethod
     def get_login_user_url(cls,user,servername="standalone"):
@@ -77,5 +81,28 @@ class StartServerMixin(object):
     def get_absolute_url(cls,url,servername="standalone"):
         return "{}{}".format(cls.get_baseurl(servername),url)
 
-        
+    @classmethod
+    def get_session_data(cls,session_cookie,servername="standalone"):
+        res = requests.get("{}?session={}".format(cls.get_absolute_url("/test/session/get",servername),session_cookie),headers=cls.cluster_headers)
+        res.raise_for_status()
+        return res.json()
 
+    migrated_session = {"migrated":True}
+    @classmethod
+    def is_session_migrated(cls,session_cookie,servername="standalone"):
+        session_data = cls.get_session_data(session_cookie,servername=servername)
+        return session_data == cls.migrated_session
+
+    @classmethod
+    def get_cluster_session_cookie(cls,clusterid,session_cookie,lb_hash_key=None):
+        values = session_cookie.split("|")
+        if len(values) == 1:
+            if not lb_hash_key:
+                raise Exception("lb_hash_key is missing")
+            session_key = session_cookie
+        else:
+            lb_hash_key,original_clusterid,session_key = values
+
+        sig = utils.sign_lb_hash_key(lb_hash_key,clusterid,settings.LB_HASH_KEY_SECRET)
+        new_session_key = "{}{}{}".format(session_key[:-2-16],sig,session_key[-2:])
+        return "{}|{}|{}".format(lb_hash_key,clusterid,new_session_key)

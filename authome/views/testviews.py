@@ -1,13 +1,22 @@
 import re
+import logging
 from collections import OrderedDict
 
 from django.utils import timezone
 from django.contrib.auth import login
 from django.http import HttpResponse, JsonResponse
+from django.conf import settings
 
 from . import views
 from .. import models
 from .. import utils
+from ..sessionstore.sessionstore import SessionStore 
+
+if settings.AUTH2_CLUSTER_ENABLED:
+    from ..sessionstore.clustersessionstore import SessionStore as ClusterSessionStore
+    from ..sessionstore.clustersessionstore import StandaloneSessionStore
+
+logger = logging.getLogger(__name__)
 
 def login_user(request):
     email = request.GET.get("user")
@@ -127,3 +136,34 @@ def echo(request):
                 data["body"][k] = v
 
     return JsonResponse(data,status=200)
+
+def get_session(request):
+    """
+    Get the session data from the session cache without previous session cache support.
+    """
+    try:
+        session_cookie = request.GET.get("session")
+        if not session_cookie:
+            return  views.RESPONSE_NOT_FOUND
+    
+        values = session_cookie.split("|")
+        if len(values) == 1:
+            if settings.AUTH2_CLUSTER_ENABLED:
+                sessionstore = StandaloneSessionStore(session_cookie)
+            else:
+                sessionstore = SessionStore(session_cookie)
+        else:
+            lb_hash_key,auth2_clusterid,session_key = values
+            sessionstore = ClusterSessionStore(lb_hash_key,auth2_clusterid,session_key)
+    
+        sessioncache = sessionstore._get_cache()
+        cachekey = sessionstore.cache_key
+        session_data = sessioncache.get(cachekey)
+        if session_data:
+            return JsonResponse(session_data,status=200)
+        else:
+            return  views.RESPONSE_NOT_FOUND
+    except Exception as ex:
+        logger.error("Failed to get session({}) from cache.{} ".format(session_cookie,str(ex)))
+        raise
+
