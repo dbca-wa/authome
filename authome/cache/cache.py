@@ -405,6 +405,32 @@ class MemoryCache(object):
 
         self.clean_auth_cache()
 
+    def del_auth(self,user,key):
+        if not user:
+            #try to delete the data from staff cache
+            try:
+                del self._staff_auth_map[key]
+            except KeyError as ex:
+                #Can't find the data in staff cache
+                #try to delete the data from auth cache
+                try:
+                    del self._auth_map[key]
+                except KeyError as ex:
+                    pass
+
+        elif user.is_staff:
+            try:
+                del self._staff_auth_map[key]
+            except KeyError as ex:
+                pass
+        else:
+            try:
+                del self._auth_map[key]
+            except KeyError as ex:
+                pass
+
+
+
     def get_basic_auth_key(self,name_or_email,token):
         return (name_or_email,token)
 

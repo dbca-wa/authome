@@ -21,6 +21,15 @@ logger = logging.getLogger(__name__)
 
 defaultcache = get_defaultcache()
 
+UP_TO_DATE = 1
+OUTDATED = -1
+OUT_OF_SYNC = -2
+CACHE_STATUS_NAME = {
+    UP_TO_DATE : "Up to date",
+    OUTDATED : "Outdated",
+    OUT_OF_SYNC : "Out of sync"
+}
+
 help_text_users = """
 List all possible user emails in this group separated by new line character.
 The following lists all valid options in the checking order
@@ -84,6 +93,10 @@ class DbObjectMixin(object):
         logger.debug("Try to save the changed {}({})".format(self.__class__.__name__,self))
         with transaction.atomic():
             super().save(update_fields=update_fields,*args,**kwargs)
+
+    def delete(self,*args,**kwargs):
+        with transaction.atomic():
+            super().delete(*args,**kwargs)
 
     def is_changed(self,update_fields=None):
         if self.id is None:
@@ -245,6 +258,10 @@ class CacheableMixin(object):
         return cls.get_model_change_cls().is_changed()
 
     @classmethod
+    def cache_status(cls):
+        return cls.get_model_change_cls().status()
+
+    @classmethod
     def get_cachetime(cls):
         return cls.get_model_change_cls().get_cachetime()
 
@@ -315,7 +332,6 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
         Popuate the data and save them to cache
         """
         logger.debug("Refresh idp cache")
-        modified = None
         refreshtime = timezone.localtime()
         size = 0
         idps = {}
@@ -323,10 +339,6 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
             size += 1
             idps[obj.idp] = obj
             idps[obj.id] = obj
-            if not modified:
-                modified = obj.modified
-            elif modified < obj.modified:
-                modified = obj.modified
         cache.idps = (idps,size,refreshtime)
         return refreshtime
 
@@ -578,7 +590,6 @@ Email: enquiries@dbca.wa.gov.au
         logger.debug("Refresh Customizable Userflow cache")
         userflows = []
         defaultuserflow = None
-        last_modified = None
         refreshtime = timezone.localtime()
         size = 0
         for o in cls.objects.all().order_by(sortkey_c.asc()):
@@ -586,11 +597,6 @@ Email: enquiries@dbca.wa.gov.au
                 defaultuserflow = o
 
             userflows.append(o)
-
-            if not last_modified:
-                last_modified = o.modified
-            elif last_modified < o.modified:
-                last_modified = o.modified
 
             size += 1
 
@@ -985,11 +991,6 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
         return False
 
-    def delete(self,*args,**kwargs):
-        logger.debug("Try to delete the usergroup {}({})".format(self.__class__.__name__,self))
-        with transaction.atomic():
-            super().delete(*args,**kwargs)
-
     def get_useremails(self,users):
         if users:
             user_emails = []
@@ -1029,7 +1030,6 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     def refresh_cache(cls):
         logger.debug("Refresh UserGroup cache")
         group_trees = {}
-        modified = None
         refreshtime = timezone.localtime()
         size = 0
         dbca_group = None
@@ -1044,10 +1044,6 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
             if group.users == ["*"] and group.excluded_users is None:
                 public_group = group
 
-            if not modified:
-                modified = group.modified
-            elif modified < group.modified:
-                modified = group.modified
         if not public_group and group_trees:
             raise Exception("Missing user group 'Public User'")
         #build the tree
@@ -1551,14 +1547,9 @@ class UserAuthorization(CacheableMixin,AuthorizationMixin):
         userauthorization = {}
         previous_user = None
         size = 0
-        modified = None
         refreshtime = timezone.localtime()
         for authorization in UserAuthorization.objects.all().order_by("user",sortkey_c.asc()):
             size += 1
-            if not modified:
-                modified = authorization.modified
-            elif modified < authorization.modified:
-                modified = authorization.modified
 
             if not previous_user:
                 userauthorization[authorization.user] = [authorization]
@@ -1596,14 +1587,9 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
         usergroupauthorization = {}
         previous_usergroup = None
         size = 0
-        modified = None
         refreshtime = timezone.localtime()
         for authorization in UserGroupAuthorization.objects.all().order_by("usergroup","sortkey"):
             size += 1
-            if not modified:
-                modified = authorization.modified
-            elif modified < authorization.modified:
-                modified = authorization.modified
 
             if not previous_usergroup:
                 usergroupauthorization[authorization.usergroup] = [authorization]
@@ -1818,6 +1804,7 @@ class UserGroupListener(object):
 
 if defaultcache:
     class ModelChange(object):
+        model = None
         key = None
         @classmethod
         def change(cls,timeout=None):
@@ -1834,6 +1821,42 @@ if defaultcache:
         @classmethod
         def get_next_refreshtime(cls):
             return None
+
+        @classmethod
+        def status(cls):
+            last_refreshed = cls.get_cachetime()
+            last_synced = defaultcache.get(cls.key)
+            if not last_synced:
+                if last_refreshed:
+                    return UP_TO_DATE
+                else:
+                    return OUTDATED
+
+
+            count =  cls.model.objects.all().count()
+            if count != cls.get_cachesize():
+                #cache is outdated
+                if last_synced > last_refreshed:
+                    return OUTDATED
+                else:
+                    return OUT_OF_SYNC
+
+            if count == 0:
+                return UP_TO_DATE
+
+            o = cls.model.objects.all().order_by("-modified").first()
+            if o:
+                if o.modified > last_synced:
+                    return OUT_OF_SYNC
+            else:
+                return UP_TO_DATE
+
+            if not last_refreshed:
+                return OUTDATED
+            elif last_synced > last_refreshed:
+                return OUTDATED
+            else:
+                return UP_TO_DATE
 
         @classmethod
         def is_changed(cls):
@@ -1854,6 +1877,7 @@ if defaultcache:
 
     class IdentityProviderChange(ModelChange):
         key = settings.GET_CACHE_KEY("idp_last_modified")
+        model = IdentityProvider
 
         @classmethod
         def get_cachetime(cls):
@@ -1883,6 +1907,7 @@ if defaultcache:
 
     class CustomizableUserflowChange(ModelChange):
         key = settings.GET_CACHE_KEY("customizableuserflow_last_modified")
+        model = CustomizableUserflow
 
         @classmethod
         def get_cachetime(cls):
@@ -1912,6 +1937,7 @@ if defaultcache:
 
     class UserGroupChange(ModelChange):
         key = settings.GET_CACHE_KEY("usergroup_last_modified")
+        model = UserGroup
 
         @classmethod
         def get_cachetime(cls):
@@ -1942,6 +1968,7 @@ if defaultcache:
 
     class UserAuthorizationChange(ModelChange):
         key = settings.GET_CACHE_KEY("userauthorization_last_modified")
+        model = UserAuthorization
 
         @classmethod
         def get_cachetime(cls):
@@ -1972,6 +1999,7 @@ if defaultcache:
 
     class UserGroupAuthorizationChange(ModelChange):
         key = settings.GET_CACHE_KEY("usergroupauthorization_last_modified")
+        model = UserGroupAuthorization
 
         @classmethod
         def get_cachetime(cls):
@@ -2011,6 +2039,25 @@ else:
         @classmethod
         def get_cachesize(cls):
             return None
+
+        @classmethod
+        def status(cls):
+            count =  cls.model.objects.all().count()
+            if count != cls.get_cachesize():
+                return OUTDATED
+
+            if count == 0:
+                return UP_TO_DATE
+
+            last_refreshed = cls.get_cachetime()
+            o = cls.model.objects.all().order_by("-modified").first()
+            if o:
+                if o.modified > last_refreshed:
+                    return OUTDATED
+                else:
+                    return UP_TO_DATE
+            else:
+                return UP_TO_DATE
 
         @classmethod
         def is_changed(cls):

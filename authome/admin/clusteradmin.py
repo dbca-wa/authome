@@ -1,5 +1,6 @@
 import logging
 import traceback
+import threading
 
 from django.http import HttpResponseRedirect
 from django.utils import timezone
@@ -19,6 +20,7 @@ from .. import models
 from .. import forms
 from ..cache import cache,get_defaultcache
 from . import admin
+from .. import utils
 
 logger = logging.getLogger(__name__)
 
@@ -159,10 +161,66 @@ class SystemUserAccessTokenAdmin(SyncObjectChangeMixin,admin.SystemUserAccessTok
         return cache.usertokens_changed(objids,True)
         
 class Auth2ClusterAdmin(admin.DatetimeMixin,admin.CatchModelExceptionMixin,djangoadmin.ModelAdmin):
-    list_display = ('clusterid','default','endpoint','_last_heartbeat','_usergroup_lastrefreshed','_usergroupauthorization_lastrefreshed','_userflow_lastrefreshed','_idp_lastrefreshed')
-    readonly_fields = ('clusterid','default','endpoint','_last_heartbeat','_usergroup_lastrefreshed','_usergroupauthorization_lastrefreshed','_userflow_lastrefreshed','_idp_lastrefreshed','modified','registered')
+    list_display = ('clusterid','_running_status','default','endpoint','_last_heartbeat','_usergroup_status','_usergroupauthorization_status','_userflow_status','_idp_status')
+    readonly_fields = ('clusterid','_running_status','default','endpoint','_last_heartbeat','_usergroup_status','_usergroup_lastrefreshed','_usergroupauthorization_status','_usergroupauthorization_lastrefreshed','_userflow_status','_userflow_lastrefreshed','_idp_status','_idp_lastrefreshed','modified','registered')
     fields = readonly_fields
     ordering = ('clusterid',)
+
+    def _get_cache_status(self,obj,key,f_name=None,default="N/A"):
+        try:
+            return f_name(obj.cache_status.get(key,default)) if f_name else obj.cache_status.get(key,default)
+        except AttributeError as ex:
+            if obj.clusterid == settings.AUTH2_CLUSTERID:
+                data = {}
+                for cls in (models.UserGroup,models.UserGroupAuthorization,models.CustomizableUserflow,models.IdentityProvider):
+                    data[cls.__name__] = [cls.cache_status(),utils.format_datetime(cls.get_next_refreshtime())]
+                data["running"] = "Running"
+                obj.cache_status = data
+            else:
+                try:
+                    obj.cache_status = cache.get_model_cachestatus(obj.clusterid)
+                    obj.cache_status["running"] = "Running"
+                except Exception as ex:
+                    obj.cache_status = {"running":str(ex)}
+            return f_name(obj.cache_status.get(key,default)) if f_name else obj.cache_status.get(key,default)
+                
+    def _running_status(self,obj):
+        if not obj :
+            return ""
+        else:
+            return self._get_cache_status(obj,"running")
+    _running_status.short_description = "Running status"
+
+
+    f_cache_status_name = staticmethod(lambda k:mark_safe("<div>{}<br><span style='font-style:italic;font-size:10px'>({})</span></div>".format(models.CACHE_STATUS_NAME.get(k[0],k[0]),k[1]) if k[0] != "N/A" else "N/A" ))
+    def _userflow_status(self,obj):
+        if not obj :
+            return ""
+        else:
+            return self._get_cache_status(obj,models.CustomizableUserflow.__name__,f_name=self.f_cache_status_name,default=("N/A",""))
+    _userflow_status.short_description = "UserFlow Status"
+
+    def _usergroup_status(self,obj):
+        if not obj :
+            return ""
+        else:
+            return self._get_cache_status(obj,models.UserGroup.__name__,f_name=self.f_cache_status_name,default=("N/A",""))
+    _usergroup_status.short_description = "UserGroup Status"
+
+    def _usergroupauthorization_status(self,obj):
+        if not obj :
+            return ""
+        else:
+            return self._get_cache_status(obj,models.UserGroupAuthorization.__name__,f_name=self.f_cache_status_name,default=("N/A",""))
+    _usergroupauthorization_status.short_description = "UserGroup Status"
+
+
+    def _idp_status(self,obj):
+        if not obj :
+            return ""
+        else:
+            return self._get_cache_status(obj,models.IdentityProvider.__name__,f_name=self.f_cache_status_name)
+    _idp_status.short_description = "IDP Status"
 
     def has_change_permission(self, request, obj=None):
         return False

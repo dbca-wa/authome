@@ -38,14 +38,16 @@ class CacheableChangeList(ChangeList):
         self.model.refresh_cache_if_required()
 
         if self.model.is_outdated():
-            self.title = "{}(Cache is outdated, latest refresh time is {}, next refresh time is {})".format(
+            self.title = "{}({}Cache is outdated, latest refresh time is {}, next refresh time is {})".format(
                 self.title,
+                "{} : ".format(settings.AUTH2_CLUSTERID) if settings.AUTH2_CLUSTER_ENABLED else "",
                 timezone.localtime(self.model.get_cachetime()).strftime("%Y-%m-%d %H:%M:%S") if self.model.get_cachetime() else "None",
                 timezone.localtime(self.model.get_next_refreshtime()).strftime("%Y-%m-%d %H:%M:%S") if self.model.get_next_refreshtime() else "None"
             )
         else:
-            self.title = "{}(Cache is up-to-date, latest refresh time is {}, next refresh time is {})".format(
+            self.title = "{}({}Cache is up-to-date, latest refresh time is {}, next refresh time is {})".format(
                 self.title,
+                "{} : ".format(settings.AUTH2_CLUSTERID) if settings.AUTH2_CLUSTER_ENABLED else "",
                 timezone.localtime(self.model.get_cachetime()).strftime("%Y-%m-%d %H:%M:%S") if self.model.get_cachetime() else "None",
                 timezone.localtime(self.model.get_next_refreshtime()).strftime("%Y-%m-%d %H:%M:%S") if self.model.get_next_refreshtime() else "None"
             )
@@ -138,14 +140,15 @@ class DatetimeMixin(object):
     _idp_lastrefreshed.short_description = "IDP Last Refreshed"
 
 
-
-
-class UserGroupsMixin(object):
-    group_change_url_name = 'admin:{}_{}_change'.format(models.UserGroup._meta.app_label,models.UserGroup._meta.model_name)
+class RequestMixin(object):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         self._request = request
         return qs
+
+
+class UserGroupsMixin(RequestMixin):
+    group_change_url_name = 'admin:{}_{}_change'.format(models.UserGroup._meta.app_label,models.UserGroup._meta.model_name)
 
     def _usergroups(self,obj):
         if not obj :

@@ -5,10 +5,12 @@ from django.db import models
 from django.db.models.signals import pre_delete, pre_save, post_save, post_delete
 from django.utils import timezone
 from django.dispatch import receiver
+from django.contrib import messages
 
 from ..  import exceptions
 from ..cache import cache,get_defaultcache,get_usercache
 from .models import UserGroup,UserGroupAuthorization,CustomizableUserflow,IdentityProvider,User,UserToken
+from .. import utils
 
 logger = logging.getLogger(__name__)
 
@@ -57,14 +59,14 @@ def refresh_cache_wrapper(cls,column):
         return refreshtime
     return _func
 
-def change_wrapper(cls):
+def change_wrapper(model):
     _original_func = getattr(cls.get_model_change_cls(),"change")
     def _func(cls,timeout=None,localonly=False):
         _original_func(timeout)
         if not localonly:
-            changed_clusters,not_changed_clusters,failed_clusters = cache.config_changed(cls) 
+            changed_clusters,not_changed_clusters,failed_clusters = cache.config_changed(model) 
             if failed_clusters:
-                raise exceptions.Auth2ClusterException("Failed to send change event of the model '{0}'  to some cluseters.{1} ".format(cls.__name__,["{}:{}".format(c,str(e)) for c,e in failed_clusters]))
+                utils.message_user("Failed to send change event of the model '{0}'  to some cluseters.{1} ".format(cls.__name__,["{}:{}".format(c,str(e)) for c,e in failed_clusters]),level=messages.ERROR)
 
     return _func
 
@@ -82,12 +84,10 @@ if settings.AUTH2_CLUSTER_ENABLED:
     class UserListener4Cluster(object):
         @staticmethod
         def user_changed(instance):
-            failed_clusters = cache.user_changed(instance.id)
+            changed_clusters,not_changed_clusters,failed_clusters = cache.user_changed(instance.id)
             if failed_clusters:
-                raise exceptions.Auth2ClusterException("Failed to send change event of the user({1}<{0}>) to some cluseters.{2} ".format(instance.id,instance.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters]))
-            else:
-                logger.debug("Sucessfully send change event of the user({1}<{0}>) to other cluseters ".format(instance.id,instance.email))
-                pass
+                utils.message_user("Failed to send change event of the user({1}<{0}>) to some cluseters.{2} ".format(instance.id,instance.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters]),level=messages.ERROR)
+
         """
         @staticmethod
         @receiver(post_save, sender=User)
@@ -107,10 +107,7 @@ if settings.AUTH2_CLUSTER_ENABLED:
             user = instance.user
             changed_clusters,not_changed_clusters,failed_clusters = cache.usertoken_changed(user.id)
             if failed_clusters:
-                raise exceptions.Auth2ClusterException("Failed to send token change event of the user({1}<{0}>) to some cluseters.{2} ".format(user.id,user.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters]))
-            else:
-                logger.debug("Sucessfully send token change event of the user({1}<{0}>) to other cluseters ".format(user.id,user.email))
-                pass
+                utils.message_user("Failed to send token change event of the user({1}<{0}>) to some cluseters.{2} ".format(user.id,user.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters]),level=messages.ERROR)
     
         @staticmethod
         @receiver(post_save, sender=UserToken)

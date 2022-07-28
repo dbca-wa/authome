@@ -50,29 +50,58 @@ logger = logging.getLogger(__name__)
 django_engine = engines['django']
 
 RESPONSE_NOT_FOUND = HttpResponseNotFound()
-#pre created succeed response,status = 200
+def response_not_found_factory(request):
+    if request.session.cookie_changed:
+        return HttpResponseNotFound()
+    else:
+        return RESPONSE_NOT_FOUND
+
 SUCCEED_RESPONSE = HttpResponse(content='Succeed',status=200)
+def succeed_response_factory(request):
+    if request.session.cookie_changed:
+        return HttpResponse(content='Succeed',status=200)
+    else:
+        return SUCCEED_RESPONSE
 
-#pre created forbidden response, status = 403
 FORBIDDEN_RESPONSE = HttpResponseForbidden()
+def forbidden_response_factory(request):
+    if request.session.cookie_changed:
+        return HttpResponseForbidden()
+    else:
+        return FORBIDDEN_RESPONSE
 
-#pre created conflict response, status=409
-CONFLICT_RESPONSE = HttpResponse(content="Failed",status=409)
 
-#pre creaed authentication required response, status=401
+#creae authentication required response, status=401
 AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
 AUTH_REQUIRED_RESPONSE.content = "Authentication required"
+def auth_required_response_factory(request):
+    if request.session.cookie_changed:
+        res = HttpResponse(status=401)
+        res.content = "Authentication required"
+        return res
+    else:
+        return AUTH_REQUIRED_RESPONSE
 
-#pre creaed authentication not required response used by auth_optional,status = 204
 AUTH_NOT_REQUIRED_RESPONSE = HttpResponse(content="Succeed",status=204)
+def auth_not_required_response_factory(request):
+    if request.session.cookie_changed:
+        return HttpResponse(content="Succeed",status=204)
+    else:
+        return AUTH_NOT_REQUIRED_RESPONSE
 
-#pre created basic auth required response,status = 401
+#create basic auth required response,status = 401
 BASIC_AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
 BASIC_AUTH_REQUIRED_RESPONSE["WWW-Authenticate"] = 'Basic realm="Please login with your email address and access token"'
 BASIC_AUTH_REQUIRED_RESPONSE.content = "Basic auth required"
-
-#pre created not authorised response,status = 403
-NOT_AUTHORIZED_RESPONSE = HttpResponseForbidden()
+def basic_auth_required_response_factory(request):
+    if request.session.cookie_changed:
+        res = HttpResponse(status=401)
+        res["WWW-Authenticate"] = 'Basic realm="Please login with your email address and access token"'
+        res.content = "Basic auth required"
+        return res
+    else:
+        return BASIC_AUTH_REQUIRED_RESPONSE
+    return res
 
 def _get_next_url(request):
     """
@@ -158,7 +187,7 @@ def check_authorization(request,useremail,domain=None,path=None):
         return None
     else:
         logger.debug("User({}) can't access https://{}{}".format(useremail,domain,path))
-        return NOT_AUTHORIZED_RESPONSE
+        return forbidden_response_factory(request)
 
 def get_absolute_url(url,domain):
     """
@@ -364,7 +393,7 @@ def _auth(request):
             #get the reponse from cache
             user = request.user
             auth_key = request.session.session_key
-            response = cache.get_auth(user,auth_key,user.modified)
+            response = None if request.session.cookie_changed else cache.get_auth(user,auth_key,user.modified)
     
             if response and models.UserGroup.find_groups(user.email)[1] == response["X-groups"]:
                 #response cached
@@ -396,7 +425,7 @@ def auth(request):
         return res
     else:
         #not authenticated
-        return AUTH_REQUIRED_RESPONSE
+        return auth_required_response_factory(request)
 
 @csrf_exempt
 def auth_optional(request):
@@ -408,16 +437,38 @@ def auth_optional(request):
         403 reponse: authenticated,but not authorized
     """
     request.session.modified = False
-    res = _auth(request)
-    if res == NOT_AUTHORIZED_RESPONSE:
-        #not authorized, incorrect configuration, return succeed response to fix this issue.
-        return AUTH_NOT_REQUIRED_RESPONSE
-    elif res:
-        #authenticated, but can be authorized or not authorized
-        return res
-    else:
-        #not authenticated
-        return AUTH_NOT_REQUIRED_RESPONSE
+
+    try:
+        performance.start_processingstep("auth")
+        performance.start_processingstep("authentication")
+        try:
+            if not request.user.is_authenticated or not request.user.is_active:
+                #not authenticated or user is inactive
+                return auth_not_required_response_factory(request)
+        finally:
+            performance.end_processingstep("authentication")
+            pass
+
+        performance.start_processingstep("create_response")
+        try:
+            #get the reponse from cache
+            user = request.user
+            auth_key = request.session.session_key
+            response = None if request.session.cookie_changed else cache.get_auth(user,auth_key,user.modified)
+    
+            if response and models.UserGroup.find_groups(user.email)[1] == response["X-groups"]:
+                #response cached
+                return response
+            else:
+                #reponse not cached or outdated, populate one and cache it.
+                return _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
+        finally:
+            performance.end_processingstep("create_response")
+            pass
+
+    finally:
+        performance.end_processingstep("auth")
+        pass
 
 def is_usertoken_valid(user,token):
     """
@@ -443,14 +494,14 @@ def auth_basic(request):
             return res
         else:
             #not authenticated, return basic auth required response
-            return BASIC_AUTH_REQUIRED_RESPONSE
+            return basic_auth_required_response_factory(request)
 
     #get the user name and user toke by parsing the basic auth data
     try:
         useremail, token = _parse_basic(auth_basic)
     except:
         #failed to parse the basic auth data from request
-        return BASIC_AUTH_REQUIRED_RESPONSE
+        return basic_auth_required_response_factory(request)
 
 
     #try to get the reponse from cache with useremail and token
@@ -471,7 +522,7 @@ def auth_basic(request):
                 if not user.is_active :
                     logger.debug("The user({}) is inactive.".format(useremail))
                     cache.delete_basic_auth(auth_basic_key)
-                    return BASIC_AUTH_REQUIRED_RESPONSE
+                    return basic_auth_required_response_factory(request)
                 elif not is_usertoken_valid(user,token):
                     #token is invalid, remove the cached response
                     cache.delete_basic_auth(auth_basic_key)
@@ -484,7 +535,7 @@ def auth_basic(request):
                     else:
                         #not authenticated, return basic auth required reponse
                         logger.debug("Failed to authenticate the user({}) with token".format(useremail))
-                        return BASIC_AUTH_REQUIRED_RESPONSE
+                        return basic_auth_required_response_factory(request)
     
             request.session.modified = False
             #check authorization
@@ -530,7 +581,7 @@ def auth_basic(request):
                 return response
         elif not user.is_active :
             logger.debug("The user({}) is inactive.".format(useremail))
-            return BASIC_AUTH_REQUIRED_RESPONSE
+            return basic_auth_required_response_factory(request)
         else:
             #user token is invalid; fallback to user session authentication
             res = _auth(request)
@@ -541,11 +592,11 @@ def auth_basic(request):
             else:
                 #Not authenticated, return basic auth required response
                 logger.debug("Failed to authenticate the user({}) with token".format(useremail))
-                return BASIC_AUTH_REQUIRED_RESPONSE
+                return basic_auth_required_response_factory(request)
 
     except Exception as e:
         #return basi auth required response if any exception occured.
-        return BASIC_AUTH_REQUIRED_RESPONSE
+        return basic_auth_required_response_factory(request)
 
 email_re = re.compile("^[a-zA-Z0-9\.!#\$\%\&’'\*\+\/\=\?\^_`\{\|\}\~\-]+@[a-zA-Z0-9\-]+(\.[a-zA-Z0-9-]+)*$")
 VALID_CODE_CHARS = string.digits if settings.PASSCODE_DIGITAL else (string.ascii_uppercase + string.digits)
@@ -1044,7 +1095,7 @@ def profile(request):
         #not authenticated
         return HttpResponse(content=json.dumps({"authenticated":False}),content_type="application/json")
     auth_key = request.session.session_key
-    response = cache.get_auth(user,auth_key,user.modified)
+    response = None if request.session.cookie_changed else cache.get_auth(user,auth_key,user.modified)
 
     if not response:
         response = _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
@@ -1096,7 +1147,6 @@ def user_setting(request):
     #get the auth response
     user = request.user
     auth_key = request.session.session_key
-    response = cache.get_auth(user,auth_key,user.modified)
     back_url = request.GET.get("back") or request.POST.get("back")
     logout_url = request.GET.get("logout") or request.POST.get("logout")
     domain = utils.get_host(request)
@@ -1124,6 +1174,7 @@ def user_setting(request):
         next_url = "https://{}/sso/setting".format(domain)
     next_url = urllib.parse.quote(next_url)
 
+    response = None if request.session.cookie_changed else cache.get_auth(user,auth_key,user.modified)
     if not response:
         response = _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
 
@@ -1603,7 +1654,7 @@ def verify_code_via_email(request):
     #authenticate the request
     if not _auth_bearer(request):
         #not authenticated
-        return FORBIDDEN_RESPONSE
+        return forbidden_response_factory(request)
 
     #get the domain from request url parameters
     domain = request.GET.get('domain', None)
@@ -1620,7 +1671,7 @@ def verify_code_via_email(request):
     #send email
     emails.send_email(userflow.verifyemail_from,data["email"],userflow.verifyemail_subject,verifyemail_body)
     logger.debug("Successfully send verification email to '{}',domain is '{}'".format(data["email"],domain))
-    return SUCCEED_RESPONSE
+    return succeed_response_factory(request)
 
 user_totp_key_chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'
 @never_cache
@@ -1737,7 +1788,7 @@ def totp_verify(request):
         user_totp.last_verified = timezone.localtime()
         user_totp.save(update_fields=["last_verified","last_verified_code"])
         logger.debug("Succeed to verify totp code.{}".format(data))
-        return SUCCEED_RESPONSE
+        return succeed_response_factory(request)
     else:
         #verify failed.
         logger.debug("Failed to verify totp code.{}".format(data))
@@ -1753,9 +1804,9 @@ def handler400(request,exception,**kwargs):
     """
     if isinstance(exception,UserDoesNotExistException):
         if request.path == "/sso/auth":
-            return AUTH_REQUIRED_RESPONSE
+            return auth_required_response_factory(request)
         elif request.path == "/sso/auth_optional":
-            return AUTH_NOT_REQUIRED_RESPONSE
+            return auth_not_required_response_factory(request)
         else:
             request.user = anonymoususer
             return logout_view(request)
@@ -1788,3 +1839,72 @@ def handler400(request,exception,**kwargs):
     resp.render()
     return resp
  
+def checkauthorization(request):
+    if request.method == "GET":
+        return TemplateResponse(request, "authome/check_authorization.html", {"users":"","opts":None})
+
+    try:
+        default_domain = utils.get_host(request)
+        urls = request.POST["url"]
+        users = request.POST["user"]
+        details = request.POST.get("details","false").lower() == "true"
+        flaturl = request.POST.get("flaturl","false").lower() == "true"
+        flatuser = request.POST.get("flatuser","false").lower() == "true"
+
+        if urls:
+            urls = [u.strip() for u in urls.split(",") if u.strip()]
+        if users:
+            users = [u.strip() for u in users.split(",") if u.strip() and "@"  in u]
+    
+        if not urls:
+            return HttpResponse(status=400,content="URL is empty")
+        if not users:
+            return HttpResponse(status=400,content="User is empty")
+    
+        urls = [ utils.parse_url(u) for u in urls]
+        for url in urls:
+            if not url["domain"]:
+                url["domain"] = default_domain
+            if not url["path"] :
+                url["path"] = "/"
+            url["checked_url"] = "{}{}{}".format(url["domain"],":{}".format(url["port"]) if url["port"] else "",url["path"])
+
+        result = []
+        for user in users:
+            if flaturl and len(urls) == 1:
+                url = urls[0]
+                if details:
+                    check_result = models.check_authorization(user,url["domain"] ,url["path"])
+                    #check result is a tupe (Allow?,[(usergroup,checkgroup,allow?),]), change the usergroup to the name of user group
+                    for i in range(len(check_result[1])):
+                        check_result[1][i] = [check_result[1][i][0].name if check_result[1][i][0] else None,check_result[1][i][1].name if check_result[1][i][1] else None,check_result[1][i][2]]
+                    
+                    result.append([user,url["url"],url["checked_url"],check_result])
+                elif url["path"].startswith("/sso/"):
+                    result.append([user,url["url"],url["checked_url"],True ])
+                else:
+                    result.append([user,url["url"],url["checked_url"],models.can_access(user,url["domain"] ,url["path"]) ])
+            else:
+                userresult = {}
+                result.append((user,userresult))
+                for url in urls:
+                    if details:
+                        check_result = models.check_authorization(user,url["domain"] ,url["path"] )
+                        #check result is a tupe (Allow?,[(usergroup,checkgroup,allow?),]), change the usergroup to the name of user group
+                        for i in range(len(check_result[1])):
+                            check_result[1][i] = [check_result[1][i][0].name if check_result[1][i][0] else None,check_result[1][i][1].name if check_result[1][i][1] else None,check_result[1][i][2]]
+                    
+                        userresult[url["url"]] = [url["checked_url"],check_result]
+                    elif url["path"].startswith("/sso/"):
+                        userresult[url["url"]] = [url["checked_url"],True]
+                    else:
+                        userresult[url["url"]] = [url["checked_url"],models.can_access(user,url["domain"],url["path"] )]
+
+        if flatuser and len(users) == 1:
+            result = result[0]
+
+        return HttpResponse(content=json.dumps(result),content_type="application/json")
+    except Exception as ex:
+        traceback.print_exc()
+        return HttpResponse(status=400,content=str(ex))
+

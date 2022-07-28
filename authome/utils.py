@@ -9,10 +9,16 @@ import qrcode
 import socket
 import psutil
 import logging
+import threading
 from datetime import timedelta,datetime
 
 from django.utils import timezone
 from django.contrib.auth import REDIRECT_FIELD_NAME
+from django.db import connections
+from django.core.cache import caches
+from django.contrib import messages
+
+from django_redis import get_redis_connection
 
 __version__ = '1.0.0'
 
@@ -27,6 +33,15 @@ def get_processid():
         processcreatetime = timezone.make_aware(datetime.fromtimestamp(psutil.Process(os.getpid()).create_time())).strftime("%Y-%m-%d %H:%M:%S.%f")
         _processid = "{}-{}-{}".format(socket.gethostname(),processcreatetime,os.getpid())
     return _processid
+
+
+_process_data = threading.local()
+_process_data.request = None
+def attach_request(request):
+    _process_data.request = request
+def message_user(msg,level=messages.INFO):
+    if _process_data.request:
+        messages.add_message(_process_data.request, level, msg)
 
 def _convert(key,value, default=None, required=False, value_type=None,subvalue_type=None):
     """
@@ -304,11 +319,18 @@ def sign_lb_hash_key(hash_key,clusterid,secretkey):
 
 def add_to_list(l,o):
     """
-    Add object to list object, if list object is None, create a new list
+    Add a object or list or tuple to list object, if list object is None, create a new list
     return the list object
     """
     if l is None:
-        return [o]
+        if isinstance(o,list):
+            return o
+        else:
+            return [o]
+    elif isinstance(o,list):
+        for m in o:
+            l.append(m)
+        return l
     else:
         l.append(o)
         return l
@@ -323,3 +345,54 @@ def add_to_map(m,k,v):
     else:
         m[k] = v
         return m
+
+def ping_database(dbalias):
+    msg = "OK"
+    healthy = True
+    with connections[dbalias].cursor() as cursor:
+        try:
+            cursor.execute("select 1")
+            v = cursor.fetchone()[0]
+            if v != 1:
+                healthy = False
+                msg = "Not Available"
+        except Exception as ex:
+            healthy = False
+            msg = str(ex)
+    return (healthy,msg)
+
+def ping_redisserver(serveralias):
+    try:
+        with get_redis_connection(serveralias) as conn:
+            healthy = conn.ping()
+            return (healthy, "OK" if healthy else "Not Available")
+    except Exception as ex:
+        return (False,str(ex))
+
+
+def ping_cacheserver(serveralias):
+    try:
+        caches[serveralias].set("PING","PONG")
+        return (True, "OK")
+    except Exception as ex:
+        return (False,str(ex))
+
+
+def print_cookies(request):
+    msg = "All request cookies"
+    for k,v in request.COOKIES.items():
+        msg = "{}\n\t{} = {}".format(msg,k,v)
+
+    logger.debug(msg)
+
+def print_headers(request,headers=None):
+    msg = "Request headers"
+    if headers:
+        for k in headers:
+            k = k.upper()
+            msg = "{}\n\t{} = {}".format(msg,k,request.headers.get(k) or "")
+    else:
+        for k,v in request.headers.items():
+            msg = "{}\n\t{} = {}".format(msg,k,v)
+    logger.debug(msg)
+

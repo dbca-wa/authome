@@ -1,5 +1,4 @@
 from django.http import HttpResponse, JsonResponse
-from django.template.response import TemplateResponse
 from django.conf import settings
 from django.utils import timezone
 
@@ -27,134 +26,290 @@ def get_active_redis_connections(cachename):
     connection_pool = r.connection_pool
     return connection_pool._created_connections
 
-def status(request):
+def _get_localstatus(request):
     content = OrderedDict()
 
-    content["serverid"] = utils.get_processid()
-    content["healthy"],msgs = cache.healthy
-    if not content["healthy"] :
-        content["warning"] = msgs
+    if settings.AUTH2_CLUSTER_ENABLED:
+        content["clusterid"] = settings.AUTH2_CLUSTERID
+        content["default_cluster"] = settings.DEFAULT_AUTH2_CLUSTER
+        content["endpoint"] = cache._current_auth2_cluster.endpoint
 
-    content["memory"] = "{}MB".format(round(psutil.Process().memory_info().rss / (1024 * 1024),2))
-    redis_servers = OrderedDict()
-    content["redis server"] = redis_servers
+    healthy = True
+    msgs = []
+
+    databases = OrderedDict()
+    for n,d in settings.DATABASES.items():
+        db = "{}:{}/{}".format(d["HOST"],d["PORT"],d["NAME"])
+        db_healthy,db_msg = utils.ping_database(n)
+        databases[n] = "server = {}:{}/{} , status = {}".format(d["HOST"],d["PORT"],d["NAME"],db_msg)
+        if not db_healthy:
+            healthy = False
+            msgs = utils.add_to_list(msgs,db_msg)
+
+    cache_servers = OrderedDict()
+    if settings.CACHE_SERVER:
+        name = "default"
+        if settings.CACHE_SERVER.lower().startswith("redis"):
+            cache_healthy,cache_msg = utils.ping_redisserver(name)
+            r = get_redis_connection(name) 
+            connection_pool = r.connection_pool
+            cache_servers[name] = "server = {} , connections = {} , max connections = {} , status = {}".format(settings.CACHE_SERVER,get_active_redis_connections(name),settings.CACHE_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),cache_msg)
+        else:
+            cache_healthy,cache_msg = utils.ping_cacheserver(name)
+            cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_SERVER,cache_msg)
+        if not cache_healthy:
+            healthy = False
+            msgs = utils.add_to_list(msgs,cache_msg)
+
     if settings.CACHE_USER_SERVER:
         if settings.USER_CACHES  == 1:
+            name = "user"
             if settings.CACHE_USER_SERVER[0].lower().startswith("redis"):
-                name = "user"
+                cache_healthy,cache_msg = utils.ping_redisserver(name)
                 r = get_redis_connection(name) 
                 connection_pool = r.connection_pool
-                redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_USER_SERVER[0],get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
+                cache_servers[name] = "server = {} , connections = {} , max connections = {} , status = {}".format(settings.CACHE_USER_SERVER[0],get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),cache_msg)
+            else:
+                cache_healthy,cache_msg = utils.ping_cacheserver(name)
+                cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_USER_SERVER[0],cache_msg)
+
+            if not cache_healthy:
+                healthy = False
+                msgs = utils.add_to_list(msgs,cache_msg)
         else:
             for i in range(settings.USER_CACHES):
-                if not settings.CACHE_USER_SERVER[i].lower().startswith("redis"):
-                    continue
                 name = "user{}".format(i)
-                r = get_redis_connection(name) 
-                connection_pool = r.connection_pool
-                redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_USER_SERVER[i],get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
+                if settings.CACHE_USER_SERVER[i].lower().startswith("redis"):
+                    cache_healthy,cache_msg = utils.ping_redisserver(name)
+                    r = get_redis_connection(name) 
+                    connection_pool = r.connection_pool
+                    cache_servers[name] = "server = {} , connections = {} , max connections = {} , status = {}".format(settings.CACHE_USER_SERVER[i],get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),cache_msg)
+                else:
+                    cache_healthy,cache_msg = utils.ping_cacheserver(name)
+                    cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_USER_SERVER[i],cache_msg)
+
+                if not cache_healthy:
+                    healthy = False
+                    msgs = utils.add_to_list(msgs,cache_msg)
 
     if settings.CACHE_SESSION_SERVER:
         if settings.SESSION_CACHES  == 1:
+            name = "session"
             if settings.CACHE_SESSION_SERVER[0].lower().startswith("redis"):
-                name = "session"
+                cache_healthy,cache_msg = utils.ping_redisserver(name)
                 r = get_redis_connection(name) 
                 connection_pool = r.connection_pool
-                redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_SESSION_SERVER[0],get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
+                cache_servers[name] = "server = {} , connections = {} , max connections = {} ,  status = {}".format(settings.CACHE_SESSION_SERVER[0],get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured") , cache_msg)
+            else:
+                cache_healthy,cache_msg = utils.ping_cacheserver(name)
+                cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_SESSION_SERVER[0],cache_msg)
+
+            if not cache_healthy:
+                healthy = False
+                msgs = utils.add_to_list(msgs,cache_msg)
+
         else:
             for i in range(settings.SESSION_CACHES):
-                if not settings.CACHE_SESSION_SERVER[i].lower().startswith("redis"):
-                    continue
                 name = "session{}".format(i)
-                r = get_redis_connection(name) 
-                connection_pool = r.connection_pool
-                redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_SESSION_SERVER[i],get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
+                if settings.CACHE_SESSION_SERVER[i].lower().startswith("redis"):
+                    cache_healthy,cache_msg = utils.ping_redisserver(name)
+                    r = get_redis_connection(name) 
+                    connection_pool = r.connection_pool
+                    cache_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_SESSION_SERVER[i],get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
+                else:
+                    cache_healthy,cache_msg = utils.ping_cacheserver(name)
+                    cache_servers[name] = "server = {} ,  status = {}".format(CACHE_SESSION_SERVER[i],cache_msg)
 
-    if settings.CACHE_SERVER and settings.CACHE_SERVER.lower().startswith("redis"):
-        name = "default"
-        r = get_redis_connection(name) 
-        connection_pool = r.connection_pool
-        redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_SERVER,get_active_redis_connections(name),settings.CACHE_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
+                if not cache_healthy:
+                    healthy = False
+                    msgs = utils.add_to_list(msgs,cache_msg)
+
+    cache_healthy,cache_msgs = cache.healthy
+    healthy = healthy and cache_healthy
+    if not cache_healthy:
+        msgs = utils.add_to_list(msgs,cache_msgs)
+    content["healthy"] = healthy
+    if not healthy :
+        content["errors"] = msgs
+
+    content["memory"] = "{}MB".format(round(psutil.Process().memory_info().rss / (1024 * 1024),2))
+
+    content["modelcachestatus"] = {}
+
+    for cls in (models.UserGroup,models.UserGroupAuthorization,models.CustomizableUserflow,models.IdentityProvider):
+        content["modelcachestatus"][cls.__name__] = models.CACHE_STATUS_NAME[cls.cache_status()]
+
+    content["databases"] = databases
+
+    content["cache server"] = cache_servers
 
     content["memorycache"] = cache.status
-    content = json.dumps(content)
-    return HttpResponse(content=content,content_type="application/json")
 
-def healthcheck(request):
-    healthy,msgs = cache.healthy
+    content["serverid"] = utils.get_processid()
+    return content
+
+def _localstatus(request):
+    content = _get_localstatus(request)
+    return JsonResponse(content,status=200)
+
+def _clusterstatus(request):
+    content = OrderedDict()
+    healthy = True
+    msgs = {}
+    clusters_data = OrderedDict()
+    for cluster in models.Auth2Cluster.objects.only("clusterid").order_by("clusterid"):
+        if cluster.clusterid == settings.AUTH2_CLUSTERID:
+            data = _get_localstatus(request)
+        else:
+            data = cache.get_cluster_status(cluster.clusterid)
+        clusters_data[cluster.clusterid] = data
+        if not data["healthy"]:
+            healthy = False
+            msgs[cluster.clusterid] = data["errors"]
+
+    content["healthy"] = healthy
+    if not healthy:
+        content["errors"] = msgs
+            
+
+    content["clusters"] = clusters_data
+    return JsonResponse(content,status=200)
+
+def statusfactory(t=None):
+    if t:
+        if t == "local":
+            return  _localstatus
+        else:
+            return _clusterstatus
+
+    elif settings.AUTH2_CLUSTER_ENABLED:
+        return _clusterstatus
+    else:
+        return  _localstatus
+
+
+def _get_localhealthcheck(request):
+    healthy = True
+    msgs = []
+
+    for n,d in settings.DATABASES.items():
+        db_healthy,db_msg = utils.ping_database(n)
+        if not db_healthy:
+            healthy = False
+            msgs = utils.add_to_list(msgs,db_msg)
+
+    if settings.CACHE_SERVER:
+        name = "default"
+        if settings.CACHE_SERVER.lower().startswith("redis"):
+            cache_healthy,cache_msg = utils.ping_redisserver(name)
+        else:
+            cache_healthy,cache_msg = utils.ping_cacheserver(name)
+        if not cache_healthy:
+            healthy = False
+            msgs = utils.add_to_list(msgs,cache_msg)
+
+    if settings.CACHE_USER_SERVER:
+        if settings.USER_CACHES  == 1:
+            name = "user"
+            if settings.CACHE_USER_SERVER[0].lower().startswith("redis"):
+                cache_healthy,cache_msg = utils.ping_redisserver(name)
+            else:
+                cache_healthy,cache_msg = utils.ping_cacheserver(name)
+
+            if not cache_healthy:
+                healthy = False
+                msgs = utils.add_to_list(msgs,cache_msg)
+        else:
+            for i in range(settings.USER_CACHES):
+                name = "user{}".format(i)
+                if settings.CACHE_USER_SERVER[i].lower().startswith("redis"):
+                    cache_healthy,cache_msg = utils.ping_redisserver(name)
+                else:
+                    cache_healthy,cache_msg = utils.ping_cacheserver(name)
+
+                if not cache_healthy:
+                    healthy = False
+                    msgs = utils.add_to_list(msgs,cache_msg)
+
+    if settings.CACHE_SESSION_SERVER:
+        if settings.SESSION_CACHES  == 1:
+            name = "session"
+            if settings.CACHE_SESSION_SERVER[0].lower().startswith("redis"):
+                cache_healthy,cache_msg = utils.ping_redisserver(name)
+            else:
+                cache_healthy,cache_msg = utils.ping_cacheserver(name)
+
+            if not cache_healthy:
+                healthy = False
+                msgs = utils.add_to_list(msgs,cache_msg)
+
+        else:
+            for i in range(settings.SESSION_CACHES):
+                name = "session{}".format(i)
+                if settings.CACHE_SESSION_SERVER[i].lower().startswith("redis"):
+                    cache_healthy,cache_msg = utils.ping_redisserver(name)
+                else:
+                    cache_healthy,cache_msg = utils.ping_cacheserver(name)
+
+                if not cache_healthy:
+                    healthy = False
+                    msgs = utils.add_to_list(msgs,cache_msg)
+
+    cache_healthy,cache_msgs = cache.healthy
+    healthy = healthy and cache_healthy
+    if not cache_healthy:
+        msgs = utils.add_to_list(msgs,cache_msgs)
+
+    return (healthy,msgs)
+
+def _localhealthcheck(request):
+    healthy,msgs = _get_localhealthcheck(request)
     if healthy:
-        return HttpResponse("ok")
+        return HttpResponse("OK")
     else:
         return HttpResponse(status=503,content="\n".join(msgs))
 
-def checkauthorization(request):
-    if request.method == "GET":
-        return TemplateResponse(request, "authome/check_authorization.html", {"users":"","opts":None})
+def _remotehealthcheck(request):
+    healthy,msgs = _get_localhealthcheck(request)
+    data = {"healthy":healthy}
+    if not healthy:
+        data["errors"] = msgs
+    return JsonResponse(data,status=200)
 
-    try:
-        default_domain = utils.get_host(request)
-        urls = request.POST["url"]
-        users = request.POST["user"]
-        details = request.POST.get("details","false").lower() == "true"
-        flaturl = request.POST.get("flaturl","false").lower() == "true"
-        flatuser = request.POST.get("flatuser","false").lower() == "true"
+def _clusterhealthcheck(request):
+    healthy = True
+    msgs = {}
+    content = {}
+    for cluster in models.Auth2Cluster.objects.only("clusterid").order_by("clusterid"):
+        if cluster.clusterid == settings.AUTH2_CLUSTERID:
+            cluster_healthy,cluster_msg = _get_localhealthcheck(request)
+        else:
+            cluster_healthy,cluster_msg = cache.cluster_healthcheck(cluster.clusterid)
+        if not cluster_healthy:
+            healthy = False
+            msgs[cluster.clusterid] =  cluster_msg
 
-        if urls:
-            urls = [u.strip() for u in urls.split(",") if u.strip()]
-        if users:
-            users = [u.strip() for u in users.split(",") if u.strip() and "@"  in u]
-    
-        if not urls:
-            return HttpResponse(status=400,content="URL is empty")
-        if not users:
-            return HttpResponse(status=400,content="User is empty")
-    
-        urls = [ utils.parse_url(u) for u in urls]
-        for url in urls:
-            if not url["domain"]:
-                url["domain"] = default_domain
-            if not url["path"] :
-                url["path"] = "/"
-            url["checked_url"] = "{}{}{}".format(url["domain"],":{}".format(url["port"]) if url["port"] else "",url["path"])
+    content["healthy"] = healthy
+    if not healthy:
+        content["errors"] = msgs
+            
 
-        result = []
-        for user in users:
-            if flaturl and len(urls) == 1:
-                url = urls[0]
-                if details:
-                    check_result = models.check_authorization(user,url["domain"] ,url["path"])
-                    #check result is a tupe (Allow?,[(usergroup,checkgroup,allow?),]), change the usergroup to the name of user group
-                    for i in range(len(check_result[1])):
-                        check_result[1][i] = [check_result[1][i][0].name if check_result[1][i][0] else None,check_result[1][i][1].name if check_result[1][i][1] else None,check_result[1][i][2]]
-                    
-                    result.append([user,url["url"],url["checked_url"],check_result])
-                elif url["path"].startswith("/sso/"):
-                    result.append([user,url["url"],url["checked_url"],True ])
-                else:
-                    result.append([user,url["url"],url["checked_url"],models.can_access(user,url["domain"] ,url["path"]) ])
-            else:
-                userresult = {}
-                result.append((user,userresult))
-                for url in urls:
-                    if details:
-                        check_result = models.check_authorization(user,url["domain"] ,url["path"] )
-                        #check result is a tupe (Allow?,[(usergroup,checkgroup,allow?),]), change the usergroup to the name of user group
-                        for i in range(len(check_result[1])):
-                            check_result[1][i] = [check_result[1][i][0].name if check_result[1][i][0] else None,check_result[1][i][1].name if check_result[1][i][1] else None,check_result[1][i][2]]
-                    
-                        userresult[url["url"]] = [url["checked_url"],check_result]
-                    elif url["path"].startswith("/sso/"):
-                        userresult[url["url"]] = [url["checked_url"],True]
-                    else:
-                        userresult[url["url"]] = [url["checked_url"],models.can_access(user,url["domain"],url["path"] )]
+    return JsonResponse(content,status=200)
 
-        if flatuser and len(users) == 1:
-            result = result[0]
+def healthcheckfactory(t=None):
+    if t:
+        if t == "local":
+            return  _localhealthcheck
+        elif t == "remote":
+            return  _remotehealthcheck
+        else:
+            return _clusterhealthcheck
 
-        return HttpResponse(content=json.dumps(result),content_type="application/json")
-    except Exception as ex:
-        traceback.print_exc()
-        return HttpResponse(status=400,content=str(ex))
+    elif settings.AUTH2_CLUSTER_ENABLED:
+        return _clusterhealthcheck
+    else:
+        return  _localhealthcheck
+
 
 def _sum(d1,d2,excluded_keys=None):
     if "requests" in d2 and d2["requests"] == 0:

@@ -6,10 +6,11 @@ from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 
-from .views import SUCCEED_RESPONSE,RESPONSE_NOT_FOUND
 from ..cache import cache,get_defaultcache,get_usercache
 from ..sessionstore import SessionStore,StandaloneSessionStore
 from .. import models
+from . import views
+from .. import utils
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ def config_changed(request,modelname):
             pass
 
     model_change_cls.change(localonly=True)
-    return SUCCEED_RESPONSE
+    return HttpResponse(content='Succeed',status=200)
 
 def user_changed(request,userid):
     usercache = get_usercache(userid)
@@ -43,7 +44,7 @@ def user_changed(request,userid):
         except Exception as ex:
             logger.error("Failed to delete the user({}) from user cache.{}".format(userid,str(ex)))
 
-    return SUCCEED_RESPONSE
+    return HttpResponse(content='Succeed',status=200)
 
 def usertoken_changed(request,userid):
     usercache = get_usercache(userid)
@@ -53,12 +54,12 @@ def usertoken_changed(request,userid):
         except Exception as ex:
             logger.error("Failed to delete the token of the user({}) from user cache.{}".format(userid,str(ex)))
 
-    return SUCCEED_RESPONSE
+    return HttpResponse(content='Succeed',status=200)
 
 def users_changed(request):
     userids=request.POST.get("users")
     if not userids:
-        return SUCCEED_RESPONSE
+        return HttpResponse(content='Succeed',status=200)
     for i in userids.split(","):
         try:
             userid = int(i)
@@ -68,12 +69,12 @@ def users_changed(request):
         except Exception as ex:
             logger.error("Failed to delete the user({}) from user cache.{}".format(userid,str(ex)))
 
-    return SUCCEED_RESPONSE
+    return HttpResponse(content='Succeed',status=200)
 
 def usertokens_changed(request):
     userids=request.POST.get("users")
     if not userids:
-        return SUCCEED_RESPONSE
+        return HttpResponse(content='Succeed',status=200)
     for i in userids.split(","):
         try:
             userid = int(i)
@@ -83,16 +84,16 @@ def usertokens_changed(request):
         except Exception as ex:
             logger.error("Failed to delete the token of the user({}) from user cache.{}".format(userid,str(ex)))
 
-    return SUCCEED_RESPONSE
+    return HttpResponse(content='Succeed',status=200)
 
 def get_remote_session(request):
     session = request.POST.get("session")
     if not session:
-        return RESPONSE_NOT_FOUND
+        return views.response_not_found_factory(request)
 
     clusterid = request.POST.get("clusterid")
     if clusterid and clusterid != settings.AUTH2_CLUSTERID:
-        return RESPONSE_NOT_FOUND
+        return views.response_not_found_factory(request)
 
     if clusterid:
         #load cluster session from cache
@@ -114,16 +115,16 @@ def get_remote_session(request):
         else:
             return JsonResponse({"session":session_data},status=200)
     else:
-        return RESPONSE_NOT_FOUND
+        return views.response_not_found_factory(request)
 
 def mark_session_as_migrated(request):
     session = request.POST.get("session")
     if not session:
-        return SUCCEED_RESPONSE
+        return HttpResponse(content='Succeed',status=200)
 
     clusterid = request.POST.get("clusterid")
     if clusterid and clusterid != settings.AUTH2_CLUSTERID:
-        return SUCCEED_RESPONSE
+        return HttpResponse(content='Succeed',status=200)
 
     if clusterid:
         #load cluster session from cache
@@ -132,17 +133,20 @@ def mark_session_as_migrated(request):
         #load standalone session from cache
         sessionstore = StandaloneSessionStore(session)
 
+    #remote response cache
+    cache.del_auth(None,session)
+
     sessionstore.mark_as_migrated()
-    return SUCCEED_RESPONSE
+    return HttpResponse(content='Succeed',status=200)
 
 def delete_remote_session(request):
     session = request.POST.get("session")
     if not session:
-        return SUCCEED_RESPONSE
+        return HttpResponse(content='Succeed',status=200)
 
     clusterid = request.POST.get("clusterid")
     if clusterid and clusterid != settings.AUTH2_CLUSTERID:
-        return SUCCEED_RESPONSE
+        return HttpResponse(content='Succeed',status=200)
 
     if clusterid:
         #load cluster session from cache
@@ -153,8 +157,15 @@ def delete_remote_session(request):
 
     sessionstore.delete()
 
-    return SUCCEED_RESPONSE
+    return HttpResponse(content='Succeed',status=200)
 
+def model_cachestatus(request):
+    cache.refresh_auth2_clusters()
+    content = {}
+    for cls in (models.UserGroup,models.UserGroupAuthorization,models.CustomizableUserflow,models.IdentityProvider):
+        content[cls.__name__] = [cls.cache_status(),utils.format_datetime(cls.get_next_refreshtime())]
+
+    return JsonResponse(content,status=200)
 
 
 

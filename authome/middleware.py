@@ -10,9 +10,12 @@ from django.utils.deprecation import MiddlewareMixin
 from django.utils.http import http_date
 from django.http import HttpResponse,HttpResponseForbidden
 
+from . import utils
+
 logger = logging.getLogger(__name__)
 
 FORBIDDEN_RESPONSE = HttpResponseForbidden()
+LB_HASH_KEY_MISSING_RESPONSE = HttpResponse("Can't find X-lb-hash-key",status=500)
 
 class ClusterSessionMiddleware(MiddlewareMixin):
     def __init__(self, get_response=None):
@@ -21,6 +24,7 @@ class ClusterSessionMiddleware(MiddlewareMixin):
         self.SessionStore = engine.SessionStore
 
     def process_request(self, request):
+        utils.attach_request(request)
         session_cookie = request.COOKIES.get(settings.SESSION_COOKIE_NAME)
         if session_cookie:
             values = session_cookie.split("|")
@@ -28,7 +32,7 @@ class ClusterSessionMiddleware(MiddlewareMixin):
                 session_key = values[0]
                 lb_hash_key = request.headers.get("X-lb-hash-key")
                 if not lb_hash_key:
-                    return HttpResponse("Can't find X-lb-hash-key",status=500)
+                    return LB_HASH_KEY_MISSING_RESPONSE
                 request.session = self.SessionStore(lb_hash_key,None,session_key)
             else:
                 try:
@@ -90,7 +94,7 @@ class ClusterSessionMiddleware(MiddlewareMixin):
                         "out in a concurrent request, for example."
                     )
 
-            if request.session.cookie_changed :
+            if request.session.cookie_changed:
                 logger.debug("Return a session cookie '{}...' in response".format(request.session.cookie_value[:-10]))
                 if request.session.get_expire_at_browser_close():
                     max_age = None

@@ -83,30 +83,31 @@ class MemoryCache(cache.MemoryCache):
                 else:
                     changed_clusters.append(o)
             except requests.ConnectionError as ex:
-                retry_clusters = utils.add_to_map(retry_clusters,o.clusterid,(o,ex))
+                retry_clusters = utils.add_to_list(retry_clusters,(o,ex))
             except requests.HTTPError as ex:
-                retry_clusters = utils.add_to_map(retry_clusters,o.clusterid,(o,ex))
+                retry_clusters = utils.add_to_list(retry_clusters,(o,ex))
             except requests.Timeout as ex:
-                retry_clusters = utils.add_to_map(retry_clusters,o.clusterid,(o,ex))
+                retry_clusters = utils.add_to_list(retry_clusters,(o,ex))
             except Exception as ex:
                 failed_clusters = utils.add_to_list(failed_clusters,(o,ex))
                 
         if retry_clusters or not self._auth2_clusters:
             #some clusters failed
             self.refresh_auth2_clusters(True)
-            for o in self._auth2_clusters.values():
-                if o.clusterid not in retry_clusters or retry_clusters[o.clusterid][0].endpoint == o.endpoint:
-                    failed_clusters = utils.add_to_list(failed_clusters,(o,retry_clusters[o.clusterid][1]))
+            for o,ex in retry_clusters:
+                cluster = self._auth2_clusters.get(o.clusterid)
+                if not cluster or o.endpoint == cluster.endpoint:
+                    failed_clusters = utils.add_to_list(failed_clusters,(cluster,ex))
                     continue
                 try:
-                    res = f_send_req(o)
+                    res = f_send_req(cluster)
                     res.raise_for_status()
                     if res.status_code == 208:
-                        not_changed_clusters.append(o)
+                        not_changed_clusters.append(cluster)
                     else:
-                        changed_clusters.append(o)
+                        changed_clusters.append(cluster)
                 except Exception as ex:
-                    failed_clusters = utils.add_to_list(failed_clusters,(o,ex))
+                    failed_clusters = utils.add_to_list(failed_clusters,(cluster,ex))
 
         return (changed_clusters,not_changed_clusters,failed_clusters)
 
@@ -158,7 +159,6 @@ class MemoryCache(cache.MemoryCache):
                 return requests.get("{}{}?modified={}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__}),modified.strftime("%Y-%m-%d %H:%M:%S.%f")))
             else:
                 return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__})))
-
         return self._send_request_to_other_clusters(_send_request)
 
     def user_changed(self,userid,include_current_cluster=False):
@@ -322,7 +322,7 @@ class MemoryCache(cache.MemoryCache):
         def _send_request(cluster):
             return requests.get("{}{}?level={}&starttime={}&endtime={}".format(
                 cluster.endpoint,
-                reverse('cluster:get_traffic_data'),
+                reverse('cluster:cluster_traffic_data'),
                 level,
                 starttime.strftime("%Y-%m-%d %H:%M:%S"),
                 endtime.strftime("%Y-%m-%d %H:%M:%S")
@@ -330,6 +330,58 @@ class MemoryCache(cache.MemoryCache):
 
         res = self._send_request_to_cluster(clusterid,_send_request)
         return res.json()
+
+    def get_cluster_status(self,clusterid):
+        """
+        get the status of the cluster server
+        Return server status
+        """
+        def _send_request(cluster):
+            return requests.get("{}{}".format(
+                cluster.endpoint,
+                reverse('cluster:cluster_status')
+            ))
+        try:
+            res = self._send_request_to_cluster(clusterid,_send_request)
+            return res.json()
+        except Exception as ex:
+            return {
+                "clusterid":clusterid,
+                "default_cluster":clusterid == self._default_auth2_cluster and self._default_auth2_cluster.clusterid,
+                "endpoint":self._auth2_clusters.get(clusterid).endpoint if (clusterid in self._auth2_clusters) else "N/A",
+                "healthy":False,
+                "errors":[str(ex)]
+            }
+
+    def get_model_cachestatus(self,clusterid):
+        """
+        get the status of the cluster server
+        Return server status
+        """
+        def _send_request(cluster):
+            return requests.get("{}{}".format(
+                cluster.endpoint,
+                reverse('cluster:model_cachestatus')
+            ))
+        res = self._send_request_to_cluster(clusterid,_send_request)
+        return res.json()
+
+    def cluster_healthcheck(self,clusterid):
+        """
+        get the status of the cluster server
+        Return server status
+        """
+        def _send_request(cluster):
+            return requests.get("{}{}".format(
+                cluster.endpoint,
+                reverse('cluster:cluster_healthcheck')
+            ))
+        try:
+            res = self._send_request_to_cluster(clusterid,_send_request)
+            data = res.json()
+            return (data["healthy"],data.get("errors","OK"))
+        except Exception as ex:
+            return (False,[str(ex)])
 
     @property
     def status(self):

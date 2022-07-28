@@ -144,7 +144,7 @@ def get_session(request):
     try:
         session_cookie = request.GET.get("session")
         if not session_cookie:
-            return  views.RESPONSE_NOT_FOUND
+            return  views.response_not_found_factory(request)
     
         values = session_cookie.split("|")
         if len(values) == 1:
@@ -162,7 +162,7 @@ def get_session(request):
         if session_data:
             return JsonResponse(session_data,status=200)
         else:
-            return  views.RESPONSE_NOT_FOUND
+            return  views.response_not_found_factory(request)
     except Exception as ex:
         logger.error("Failed to get session({}) from cache.{} ".format(session_cookie,str(ex)))
         raise

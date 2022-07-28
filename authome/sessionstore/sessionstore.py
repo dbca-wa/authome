@@ -96,6 +96,10 @@ class _AbstractSessionStore(SessionBase):
         super().__init__(session_key)
 
     @property
+    def cookie_changed(self):
+        return False
+
+    @property
     def expireat(self):
         """
         Return expire time; return None if never expired.

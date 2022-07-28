@@ -48,8 +48,9 @@ urlpatterns = [
 
     path('sso/checkauthorization',csrf_exempt(views.checkauthorization),name="checkauthorization"),
 
-    path('healthcheck',views.healthcheck,name="healthcheck"),
-    path('status',views.status,name="status"),
+    path('healthcheck',views.healthcheckfactory(),name="healthcheck"),
+    path('status',views.statusfactory(),name="status"),
+    path('ping',views.statusfactory("local"),name="ping"),
 
     path('sso/', include('social_django.urls', namespace='social')),
     path('admin/', admin_site.urls),
