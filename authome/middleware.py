@@ -10,8 +10,6 @@ from django.utils.deprecation import MiddlewareMixin
 from django.utils.http import http_date
 from django.http import HttpResponse,HttpResponseForbidden
 
-from . import utils
-
 logger = logging.getLogger(__name__)
 
 FORBIDDEN_RESPONSE = HttpResponseForbidden()
@@ -24,7 +22,6 @@ class ClusterSessionMiddleware(MiddlewareMixin):
         self.SessionStore = engine.SessionStore
 
     def process_request(self, request):
-        utils.attach_request(request)
         session_cookie = request.COOKIES.get(settings.SESSION_COOKIE_NAME)
         if session_cookie:
             values = session_cookie.split("|")

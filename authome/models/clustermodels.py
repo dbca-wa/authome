@@ -66,7 +66,9 @@ def change_wrapper(model):
         if not localonly:
             changed_clusters,not_changed_clusters,failed_clusters = cache.config_changed(model) 
             if failed_clusters:
-                utils.message_user("Failed to send change event of the model '{0}'  to some cluseters.{1} ".format(cls.__name__,["{}:{}".format(c,str(e)) for c,e in failed_clusters]),level=messages.ERROR)
+                msg = "Failed to send change event of the model '{0}'  to some cluseters.{1} ".format(cls.__name__,["{}:{}".format(c,str(e)) for c,e in failed_clusters])
+                if not utils.send_message(msg,level=messages.WARNING):
+                    logger.warning(msg)
 
     return _func
 
@@ -86,7 +88,10 @@ if settings.AUTH2_CLUSTER_ENABLED:
         def user_changed(instance):
             changed_clusters,not_changed_clusters,failed_clusters = cache.user_changed(instance.id)
             if failed_clusters:
-                utils.message_user("Failed to send change event of the user({1}<{0}>) to some cluseters.{2} ".format(instance.id,instance.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters]),level=messages.ERROR)
+                msg = "Failed to send change event of the user({1}<{0}>) to some cluseters.{2} ".format(instance.id,instance.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters])
+                if not utils.send_message(msg,level=messages.WARNING):
+                    logger.warning(msg)
+
 
         """
         @staticmethod
@@ -107,7 +112,9 @@ if settings.AUTH2_CLUSTER_ENABLED:
             user = instance.user
             changed_clusters,not_changed_clusters,failed_clusters = cache.usertoken_changed(user.id)
             if failed_clusters:
-                utils.message_user("Failed to send token change event of the user({1}<{0}>) to some cluseters.{2} ".format(user.id,user.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters]),level=messages.ERROR)
+                msg = "Failed to send token change event of the user({1}<{0}>) to some cluseters.{2} ".format(user.id,user.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters])
+                if utils.send_message(msg,level=messages.WARNING):
+                    logger.warning(msg)
     
         @staticmethod
         @receiver(post_save, sender=UserToken)

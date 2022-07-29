@@ -1,4 +1,5 @@
 import logging
+from functools import update_wrapper
 
 from django.apps import apps
 from django.utils.text import capfirst
@@ -8,8 +9,16 @@ from django.contrib import admin as djangoadmin
 from django.contrib import auth
 
 from .. import models
+from .. import utils
 
 class Auth2AdminSite(djangoadmin.AdminSite):
+    def admin_view(self, view, cacheable=False):
+        def _view(request, *args, **kwargs):
+            utils.attach_request(request)
+            return view(request,*args,**kwargs)
+
+        return super().admin_view(_view,cacheable)
+        
     def _build_app_dict(self, request, label=None):
         """
         Build the app dictionary. The optional `label` parameter filters models

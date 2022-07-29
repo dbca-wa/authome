@@ -36,12 +36,14 @@ def get_processid():
 
 
 _process_data = threading.local()
-_process_data.request = None
 def attach_request(request):
     _process_data.request = request
-def message_user(msg,level=messages.INFO):
-    if _process_data.request:
+def send_message(msg,level=messages.INFO):
+    try:
         messages.add_message(_process_data.request, level, msg)
+        return True
+    except:
+        return False
 
 def _convert(key,value, default=None, required=False, value_type=None,subvalue_type=None):
     """

@@ -116,8 +116,8 @@ class SessionStore(sessionstore.SessionStore):
                     pass
                 sig = utils.sign_lb_hash_key(self._lb_hash_key,settings.AUTH2_CLUSTERID,settings.LB_HASH_KEY_SECRET)
                 new_session_key = "{}{}{}".format(self._session_key[:-2],sig,self._session_key[-2:])
+                self._session_key = new_session_key
                 if session_data:
-                    self._session_key = new_session_key
                     newcachekey = self.cache_key
                     sessioncache = self._get_cache()
 
@@ -163,6 +163,16 @@ class SessionStore(sessionstore.SessionStore):
                         finally:
                             performance.end_processingstep("mark_old_session_as_migrated")
                             pass
+
+                if session_data is not None:
+                    return session_data
+    
+                #expired authenticated session, or session does not exist
+                if self._session_key and "-" in self._session_key:
+                    #this is a authenticated session key
+                    self.expired_session_key = self._session_key
+                self._session_key = None
+                return {}
             except Exception as ex:
                 logger.error("Failed to load session.{}".format(str(ex)))
                 raise
@@ -242,25 +252,20 @@ class SessionStore(sessionstore.SessionStore):
                         finally:
                             performance.end_processingstep("mark_remote_session_as_migrated")
                             pass
-                    return session_data
                 else:
                     session_data = None
+
+                if session_data is not None:
+                    return session_data
+    
+                self._session_key = None
+                return {}
             except Exception as ex:
                 logger.error("Failed to load session.{}".format(str(ex)))
                 raise
             finally:
                 performance.end_processingstep("migrate_session_from_other_cluster")
                 pass
-
-        if session_data is not None:
-            return session_data
-    
-        #expired authenticated session, or session does not exist
-        if self._session_key and "-" in self._session_key:
-            #this is a authenticated session key
-            self.expired_session_key = new_session_key
-        self._session_key = None
-        return {}
 
     def populate_session_key(self,process_prefix,idpid):
         sig = utils.sign_lb_hash_key(self._lb_hash_key,settings.AUTH2_CLUSTERID,settings.LB_HASH_KEY_SECRET)
