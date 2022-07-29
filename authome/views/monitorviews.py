@@ -255,11 +255,6 @@ def _get_localhealthcheck(request):
                     healthy = False
                     msgs = utils.add_to_list(msgs,cache_msg)
 
-    cache_healthy,cache_msgs = cache.healthy
-    healthy = healthy and cache_healthy
-    if not cache_healthy:
-        msgs = utils.add_to_list(msgs,cache_msgs)
-
     return (healthy,msgs)
 
 def _localhealthcheck(request):

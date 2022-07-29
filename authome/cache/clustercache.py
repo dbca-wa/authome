@@ -47,7 +47,6 @@ class MemoryCache(cache.MemoryCache):
             l1 = len(self._auth2_clusters)
             l2 = 0
             for o in Auth2Cluster.objects.all():
-                l2 += 1
                 o.refreshtime = refreshtime
                 if o.default:
                     self._default_auth2_cluster = o
@@ -56,6 +55,7 @@ class MemoryCache(cache.MemoryCache):
                     self._current_auth2_cluster = o
                 else:
                     self._auth2_clusters[o.clusterid] = o
+                    l2 += 1
             if l1 != l2 or l1 != len(self._auth2_clusters):
                 expired_clusters = [o for o in self._auth2_clusters.values() if o.refreshtime != refreshtime]
                 for o in expired_clusters:
@@ -96,7 +96,9 @@ class MemoryCache(cache.MemoryCache):
             self.refresh_auth2_clusters(True)
             for o,ex in retry_clusters:
                 cluster = self._auth2_clusters.get(o.clusterid)
-                if not cluster or o.endpoint == cluster.endpoint:
+                if not cluster:
+                    continue
+                elif o.endpoint == cluster.endpoint:
                     failed_clusters = utils.add_to_list(failed_clusters,(cluster,ex))
                     continue
                 try:
@@ -143,7 +145,9 @@ class MemoryCache(cache.MemoryCache):
                     res.raise_for_status()
                     return res
             except Exception as ex:
-                if isinstance(ex,(KeyError,requests.ConnectionError,requests.HTTPError,requests.Timeout)):
+                if isinstance(ex,KeyError):
+                    raise Auth2ClusterException("Auth2 cluster({}) doesn't exist".format(target_clusterid))
+                elif isinstance(ex,(requests.ConnectionError,requests.HTTPError,requests.Timeout)):
                     exception = ex
                 else:
                     raise

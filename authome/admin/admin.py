@@ -197,6 +197,17 @@ class NormalUser(models.User):
         verbose_name="User"
         verbose_name_plural="{}Users".format(" " * 9)
 
+class DeleteMixin(object):
+    def delete_model(self, request, obj):
+        try:
+            super().delete_model(request,obj)
+        except Exception as ex:
+            self.message_user(request, "Failed to delete {}({}).{}".format(obj.__class__.__name__,obj,ex),level=messages.ERROR)
+
+    def delete_queryset(self, request, queryset):
+        for o in queryset:
+            self.delete_model(request,o)
+
 class UserAdmin(UserAuthorizationCheckMixin,UserGroupsMixin,DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdmin):
     list_display = ('username', 'email', 'first_name', 'last_name','is_active', 'is_staff','last_idp','_last_login')
     list_filter = ( 'is_superuser',)

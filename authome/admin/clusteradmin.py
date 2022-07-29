@@ -160,7 +160,7 @@ class SystemUserAccessTokenAdmin(SyncObjectChangeMixin,admin.SystemUserAccessTok
     def _sync_change(self,objids):
         return cache.usertokens_changed(objids,True)
         
-class Auth2ClusterAdmin(admin.DatetimeMixin,admin.CatchModelExceptionMixin,djangoadmin.ModelAdmin):
+class Auth2ClusterAdmin(admin.DeleteMixin,admin.DatetimeMixin,admin.CatchModelExceptionMixin,djangoadmin.ModelAdmin):
     list_display = ('clusterid','_running_status','default','endpoint','_last_heartbeat','_usergroup_status','_usergroupauthorization_status','_userflow_status','_idp_status')
     readonly_fields = ('clusterid','_running_status','default','endpoint','_last_heartbeat','_usergroup_status','_usergroup_lastrefreshed','_usergroupauthorization_status','_usergroupauthorization_lastrefreshed','_userflow_status','_userflow_lastrefreshed','_idp_status','_idp_lastrefreshed','modified','registered')
     fields = readonly_fields

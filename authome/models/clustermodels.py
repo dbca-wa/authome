@@ -47,6 +47,23 @@ class Auth2Cluster(models.Model):
     def __str__(self):
         return self.clusterid
 
+class Auth2ClusterListener(object):
+    @staticmethod
+    @receiver(pre_delete, sender=Auth2Cluster)
+    def pre_delete(sender,instance,**kwargs):
+        if instance.clusterid == settings.AUTH2_CLUSTERID:
+            raise exceptions.Auth2ClusterException("Auth2 cluster({}) is still running, can't delete".format(instance.clusterid))
+        else:
+            try:
+                data = cache.cluster_healthcheck(instance.clusterid)
+                if not data[0]:
+                    return 
+            except:
+                #cluster is not available, can delete
+                return
+            #cluster is running, can't delete
+            raise exceptions.Auth2ClusterException("Auth2 cluster({}) is still running, can't delete".format(instance.clusterid))
+
 def refresh_cache_wrapper(cls,column):
     _original_func = getattr(cls,"refresh_cache")
     def _func(cls):

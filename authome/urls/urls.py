@@ -50,7 +50,7 @@ urlpatterns = [
 
     path('healthcheck',views.healthcheckfactory(),name="healthcheck"),
     path('status',views.statusfactory(),name="status"),
-    path('ping',views.statusfactory("local"),name="ping"),
+    path('ping',views.healthcheckfactory("local"),name="ping"),
 
     path('sso/', include('social_django.urls', namespace='social')),
     path('admin/', admin_site.urls),
