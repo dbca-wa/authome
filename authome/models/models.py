@@ -767,7 +767,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     _editable_columns = ("users","parent_group","excluded_users","identity_provider","groupid","session_timeout")
 
     name = models.CharField(max_length=32,unique=True,null=False)
-    groupid = models.SlugField(max_length=32,null=False)
+    groupid = models.SlugField(max_length=32,null=False,blank=True)
     parent_group = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
     users = _ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
     excluded_users = _ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
