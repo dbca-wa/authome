@@ -26,7 +26,7 @@ def get_active_redis_connections(cachename):
     connection_pool = r.connection_pool
     return connection_pool._created_connections
 
-def _get_localstatus(request):
+def _get_localstatus():
     content = OrderedDict()
 
     if settings.AUTH2_CLUSTER_ENABLED:
@@ -53,7 +53,7 @@ def _get_localstatus(request):
             cache_healthy,cache_msg = utils.ping_redisserver(name)
             r = get_redis_connection(name) 
             connection_pool = r.connection_pool
-            cache_servers[name] = "server = {} , connections = {} , max connections = {} , status = {}".format(settings.CACHE_SERVER,get_active_redis_connections(name),settings.CACHE_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),cache_msg)
+            cache_servers[name] = "server = {} , connections = {} , max connections = {} , status = {}".format(utils.print_redisserver(settings.CACHE_SERVER),get_active_redis_connections(name),settings.CACHE_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),cache_msg)
         else:
             cache_healthy,cache_msg = utils.ping_cacheserver(name)
             cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_SERVER,cache_msg)
@@ -68,7 +68,7 @@ def _get_localstatus(request):
                 cache_healthy,cache_msg = utils.ping_redisserver(name)
                 r = get_redis_connection(name) 
                 connection_pool = r.connection_pool
-                cache_servers[name] = "server = {} , connections = {} , max connections = {} , status = {}".format(settings.CACHE_USER_SERVER[0],get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),cache_msg)
+                cache_servers[name] = "server = {} , connections = {} , max connections = {} , status = {}".format(utils.print_redisserver(settings.CACHE_USER_SERVER[0]),get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),cache_msg)
             else:
                 cache_healthy,cache_msg = utils.ping_cacheserver(name)
                 cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_USER_SERVER[0],cache_msg)
@@ -83,7 +83,7 @@ def _get_localstatus(request):
                     cache_healthy,cache_msg = utils.ping_redisserver(name)
                     r = get_redis_connection(name) 
                     connection_pool = r.connection_pool
-                    cache_servers[name] = "server = {} , connections = {} , max connections = {} , status = {}".format(settings.CACHE_USER_SERVER[i],get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),cache_msg)
+                    cache_servers[name] = "server = {} , connections = {} , max connections = {} , status = {}".format(utils.print_redisserver(settings.CACHE_USER_SERVER[i]),get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),cache_msg)
                 else:
                     cache_healthy,cache_msg = utils.ping_cacheserver(name)
                     cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_USER_SERVER[i],cache_msg)
@@ -99,7 +99,7 @@ def _get_localstatus(request):
                 cache_healthy,cache_msg = utils.ping_redisserver(name)
                 r = get_redis_connection(name) 
                 connection_pool = r.connection_pool
-                cache_servers[name] = "server = {} , connections = {} , max connections = {} ,  status = {}".format(settings.CACHE_SESSION_SERVER[0],get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured") , cache_msg)
+                cache_servers[name] = "server = {} , connections = {} , max connections = {} ,  status = {}".format(utils.print_redisserver(settings.CACHE_SESSION_SERVER[0]),get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured") , cache_msg)
             else:
                 cache_healthy,cache_msg = utils.ping_cacheserver(name)
                 cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_SESSION_SERVER[0],cache_msg)
@@ -115,7 +115,7 @@ def _get_localstatus(request):
                     cache_healthy,cache_msg = utils.ping_redisserver(name)
                     r = get_redis_connection(name) 
                     connection_pool = r.connection_pool
-                    cache_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_SESSION_SERVER[i],get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
+                    cache_servers[name] = "server:{} , connections:{} , max connections: {}".format(utils.print_redisserver(settings.CACHE_SESSION_SERVER[i]),get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
                 else:
                     cache_healthy,cache_msg = utils.ping_cacheserver(name)
                     cache_servers[name] = "server = {} ,  status = {}".format(CACHE_SESSION_SERVER[i],cache_msg)
@@ -149,7 +149,7 @@ def _get_localstatus(request):
     return content
 
 def _localstatus(request):
-    content = _get_localstatus(request)
+    content = _get_localstatus()
     return JsonResponse(content,status=200)
 
 def _clusterstatus(request):
@@ -159,7 +159,7 @@ def _clusterstatus(request):
     clusters_data = OrderedDict()
     for cluster in models.Auth2Cluster.objects.only("clusterid").order_by("clusterid"):
         if cluster.clusterid == settings.AUTH2_CLUSTERID:
-            data = _get_localstatus(request)
+            data = _get_localstatus()
         else:
             data = cache.get_cluster_status(cluster.clusterid)
         clusters_data[cluster.clusterid] = data
@@ -188,7 +188,7 @@ def statusfactory(t=None):
         return  _localstatus
 
 
-def _get_localhealthcheck(request):
+def _get_localhealthcheck():
     healthy = True
     msgs = []
 
@@ -258,14 +258,14 @@ def _get_localhealthcheck(request):
     return (healthy,msgs)
 
 def _localhealthcheck(request):
-    healthy,msgs = _get_localhealthcheck(request)
+    healthy,msgs = _get_localhealthcheck()
     if healthy:
         return HttpResponse("OK")
     else:
         return HttpResponse(status=503,content="\n".join(msgs))
 
 def _remotehealthcheck(request):
-    healthy,msgs = _get_localhealthcheck(request)
+    healthy,msgs = _get_localhealthcheck()
     data = {"healthy":healthy}
     if not healthy:
         data["errors"] = msgs
@@ -277,7 +277,7 @@ def _clusterhealthcheck(request):
     content = {}
     for cluster in models.Auth2Cluster.objects.only("clusterid").order_by("clusterid"):
         if cluster.clusterid == settings.AUTH2_CLUSTERID:
-            cluster_healthy,cluster_msg = _get_localhealthcheck(request)
+            cluster_healthy,cluster_msg = _get_localhealthcheck()
         else:
             cluster_healthy,cluster_msg = cache.cluster_healthcheck(cluster.clusterid)
         if not cluster_healthy:
@@ -290,6 +290,16 @@ def _clusterhealthcheck(request):
             
 
     return JsonResponse(content,status=200)
+
+def ping(request):
+    healthy,msgs = _get_localhealthcheck()
+    if healthy:
+        #in healthy status, update heartbeat
+        cache._current_auth2_cluster.register(only_update_heartbeat=True)
+        return HttpResponse("OK")
+    else:
+        return HttpResponse(status=503,content="\n".join(msgs))
+
 
 def healthcheckfactory(t=None):
     if t:
@@ -459,8 +469,8 @@ def _clusterstrafficmonitor(request):
     result["starttime"] = data.pop("starttime")
     result["endtime"] = data.pop("endtime")
     _sum(result,data,excluded_keys=("avgtime","times"))
-    result["clusters"] = OrderedDict()
-    result["clusters"][settings.AUTH2_CLUSTERID] = data
+    clusters_data = OrderedDict()
+    clusters_data[settings.AUTH2_CLUSTERID] = data
     for c in cache.auth2_clusters.values():
         try:
             data = cache.get_traffic_data(c.clusterid,level,start_data_ts,end_data_ts)
@@ -469,8 +479,9 @@ def _clusterstrafficmonitor(request):
             _sum(result,data,excluded_keys=("avgtime","times","traffic_monitor_enabled"))
         except Exception as ex:
             data["exception"] = str(ex)
-        result["clusters"][settings.AUTH2_CLUSTERID] = data
+        clusters_data[c.clusterid] = data
 
+    result["clusters"] = clusters_data
     _add_avg(result)
     return JsonResponse(result,status=200)
 

@@ -363,6 +363,19 @@ def ping_database(dbalias):
             msg = str(ex)
     return (healthy,msg)
 
+redis_re = re.compile("^\s*(?P<protocol>[a-zA-Z]+)://((?P<user>[^:@]+)?(:(?P<password>[^@]+))?)?@(?P<server>\S+)\s*$")
+def print_redisserver(url):
+    """
+    Return a printable redis server url
+    """
+    try:
+        m = redis_re.search(url)
+        return "{0}://xxx:xxx@{1}".format(m.group("protocol"),m.group("server"))
+    except:
+        return "xxxxxx"
+
+    
+
 def ping_redisserver(serveralias):
     try:
         with get_redis_connection(serveralias) as conn:

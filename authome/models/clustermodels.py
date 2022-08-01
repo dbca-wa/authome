@@ -26,16 +26,21 @@ class Auth2Cluster(models.Model):
     idp_lastrefreshed = models.DateTimeField(editable=False,null=True)
     last_heartbeat = models.DateTimeField(editable=False)
     registered = models.DateTimeField(auto_now_add=timezone.now)
-    modified = models.DateTimeField(editable=False,auto_now=True)
+    modified = models.DateTimeField(editable=False,auto_now=False)
 
     class Meta:
         verbose_name_plural = "{}auth2 clusters".format(" " * 0)
 
     @classmethod
-    def register(cls):
-        if settings.DEFAULT_AUTH2_CLUSTER:
+    def register(cls,only_update_heartbeat=False):
+        if not only_update_heartbeat and settings.DEFAULT_AUTH2_CLUSTER:
             #update the previous default cluster server to non cluster server
             cls.objects.filter(default=True).exclude(clusterid=settings.AUTH2_CLUSTERID).update(default=False,modified=timezone.localtime())
+            
+        if cls.objects.filter(clusterid=settings.AUTH2_CLUSTERID,default=settings.DEFAULT_AUTH2_CLUSTER,endpoint=settings.AUTH2_CLUSTER_ENDPOINT).update(last_heartbeat=timezone.localtime()):
+            #cluster's setting is not changed, only need to update the last heartbeat.
+            return
+
         cls.objects.update_or_create(clusterid=settings.AUTH2_CLUSTERID,defaults={
             "endpoint" : settings.AUTH2_CLUSTER_ENDPOINT,
             "default" : settings.DEFAULT_AUTH2_CLUSTER,
@@ -54,15 +59,21 @@ class Auth2ClusterListener(object):
         if instance.clusterid == settings.AUTH2_CLUSTERID:
             raise exceptions.Auth2ClusterException("Auth2 cluster({}) is still running, can't delete".format(instance.clusterid))
         else:
+            ex = None
             try:
                 data = cache.cluster_healthcheck(instance.clusterid)
-                if not data[0]:
+                if data[0]:
+                    ex = exceptions.Auth2ClusterException("Auth2 cluster({}) is still running, can't delete".format(instance.clusterid))
+                else:
+                    ex = exceptions.Auth2ClusterException("Auth2 cluster({}) is in unhealthy status, but it is still running, can't delete".format(instance.clusterid))
                     return 
             except:
                 #cluster is not available, can delete
                 return
             #cluster is running, can't delete
-            raise exceptions.Auth2ClusterException("Auth2 cluster({}) is still running, can't delete".format(instance.clusterid))
+            if ex:
+                logger.error(str(ex))
+                raise ex
 
 def refresh_cache_wrapper(cls,column):
     _original_func = getattr(cls,"refresh_cache")

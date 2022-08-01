@@ -21,6 +21,7 @@ from .. import forms
 from ..cache import cache,get_defaultcache
 from . import admin
 from .. import utils
+from ..views.monitorviews import _get_localhealthcheck
 
 logger = logging.getLogger(__name__)
 
@@ -171,17 +172,20 @@ class Auth2ClusterAdmin(admin.DeleteMixin,admin.DatetimeMixin,admin.CatchModelEx
             return f_name(obj.cache_status.get(key,default)) if f_name else obj.cache_status.get(key,default)
         except AttributeError as ex:
             if obj.clusterid == settings.AUTH2_CLUSTERID:
+                healthcheck =  _get_localhealthcheck()
                 data = {}
                 for cls in (models.UserGroup,models.UserGroupAuthorization,models.CustomizableUserflow,models.IdentityProvider):
                     data[cls.__name__] = [cls.cache_status(),utils.format_datetime(cls.get_next_refreshtime())]
-                data["running"] = "Running"
+                data["running"] = "Running" if healthcheck[0] else "Warning({})".format(healthcheck[1])
                 obj.cache_status = data
             else:
                 try:
                     obj.cache_status = cache.get_model_cachestatus(obj.clusterid)
-                    obj.cache_status["running"] = "Running"
+                    healthcheck = cache.cluster_healthcheck(obj.clusterid)
+                    obj.cache_status["running"] = "Running" if healthcheck[0] else "Warning({})".format(healthcheck[1])
                 except Exception as ex:
                     obj.cache_status = {"running":str(ex)}
+
             return f_name(obj.cache_status.get(key,default)) if f_name else obj.cache_status.get(key,default)
                 
     def _running_status(self,obj):

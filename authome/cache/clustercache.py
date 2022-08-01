@@ -65,7 +65,7 @@ class MemoryCache(cache.MemoryCache):
         else:
             return False
 
-    def _send_request_to_other_clusters(self,f_send_req):
+    def _send_request_to_other_clusters(self,f_send_req,force_refresh=False):
         """
         send config changed event to other clusters
         Return the failed clusters with associated exception
@@ -74,6 +74,9 @@ class MemoryCache(cache.MemoryCache):
         failed_clusters = None
         changed_clusters = []
         not_changed_clusters = []
+        if force_refresh:
+            self.refresh_auth2_clusters(True)
+
         for o in self._auth2_clusters.values():
             try:
                 res = f_send_req(o)
@@ -82,16 +85,13 @@ class MemoryCache(cache.MemoryCache):
                     not_changed_clusters.append(o)
                 else:
                     changed_clusters.append(o)
-            except requests.ConnectionError as ex:
-                retry_clusters = utils.add_to_list(retry_clusters,(o,ex))
-            except requests.HTTPError as ex:
-                retry_clusters = utils.add_to_list(retry_clusters,(o,ex))
-            except requests.Timeout as ex:
-                retry_clusters = utils.add_to_list(retry_clusters,(o,ex))
             except Exception as ex:
-                failed_clusters = utils.add_to_list(failed_clusters,(o,ex))
-                
-        if retry_clusters or not self._auth2_clusters:
+                if not force_refresh and isinstance(ex,(requests.ConnectionError,requests.HTTPError,requests.Timeout)):
+                    retry_clusters = utils.add_to_list(retry_clusters,(o,ex))
+                else:
+                    failed_clusters = utils.add_to_list(failed_clusters,(o,ex))
+
+        if not force_refresh and (retry_clusters or not self._auth2_clusters):
             #some clusters failed
             self.refresh_auth2_clusters(True)
             for o,ex in retry_clusters:
@@ -163,7 +163,7 @@ class MemoryCache(cache.MemoryCache):
                 return requests.get("{}{}?modified={}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__}),modified.strftime("%Y-%m-%d %H:%M:%S.%f")))
             else:
                 return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__})))
-        return self._send_request_to_other_clusters(_send_request)
+        return self._send_request_to_other_clusters(_send_request,True)
 
     def user_changed(self,userid,include_current_cluster=False):
         """
@@ -181,11 +181,11 @@ class MemoryCache(cache.MemoryCache):
             except Exception as ex:
                 logger.error("Failed to delete the user({}) from user cache.{}".format(userid,str(ex)))
 
-            result = self._send_request_to_other_clusters(_send_request)
+            result = self._send_request_to_other_clusters(_send_request,True)
             result[0].insert(0,self.current_auth2_cluster)
             return result
         else:
-            return self._send_request_to_other_clusters(_send_request)
+            return self._send_request_to_other_clusters(_send_request,True)
 
     def usertoken_changed(self,userid,include_current_cluster=False):
         """
@@ -203,11 +203,11 @@ class MemoryCache(cache.MemoryCache):
             except Exception as ex:
                 logger.error("Failed to delete the user({}) from user cache.{}".format(userid,str(ex)))
 
-            result = self._send_request_to_other_clusters(_send_request)
+            result = self._send_request_to_other_clusters(_send_request,True)
             result[0].insert(0,self.current_auth2_cluster)
             return result
         else:
-            return self._send_request_to_other_clusters(_send_request)
+            return self._send_request_to_other_clusters(_send_request,True)
 
     def users_changed(self,userids,include_current_cluster=False):
         """
@@ -227,12 +227,12 @@ class MemoryCache(cache.MemoryCache):
                     logger.error("Failed to delete the user({}) from user cache.{}".format(userid,str(ex)))
 
             userids = ",".join(userids)
-            result = self._send_request_to_other_clusters(_send_request)
+            result = self._send_request_to_other_clusters(_send_request,True)
             result[0].insert(0,self.current_auth2_cluster)
             return result
         else:
             userids = ",".join(userids)
-            return self._send_request_to_other_clusters(_send_request)
+            return self._send_request_to_other_clusters(_send_request,True)
 
     def usertokens_changed(self,userids,include_current_cluster=False):
         """
@@ -252,12 +252,12 @@ class MemoryCache(cache.MemoryCache):
                     logger.error("Failed to delete the user({}) from user cache.{}".format(userid,str(ex)))
 
             userids = ",".join(userids)
-            result = self._send_request_to_other_clusters(_send_request)
+            result = self._send_request_to_other_clusters(_send_request,True)
             result[0].insert(0,self.current_auth2_cluster)
             return result
         else:
             userids = ",".join(userids)
-            return self._send_request_to_other_clusters(_send_request)
+            return self._send_request_to_other_clusters(_send_request,True)
 
 
     def get_remote_session(self,clusterid,session,raise_exception=False):
