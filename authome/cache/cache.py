@@ -630,7 +630,12 @@ class MemoryCache(object):
                     if not isinstance(data,dict):
                         continue
                     for key in data.keys():
-                        if key in ("domains","status"):
+                        if key == "domains":
+                            for domain in [d for d,v in data[key].items() if v == 0]:
+                                del data[key][domain]
+                            for domain in data[key].keys():
+                                data[key][domain] = 0
+                        elif key in ("status",):
                             for domain in data[key].keys():
                                 data[key][domain] = 0
                         else:
@@ -693,6 +698,8 @@ class MemoryCache(object):
                             for k in data[key].keys():
                                 data[key][k] = 0
                         elif key ==  "domains":
+                            for domain in [d for d,v in data[key].items() if v["requests"] == 0]:
+                                del data[key][domain]
                             for domain_data in data[key].values():
                                 for k in domain_data.keys():
                                     if k == "status":

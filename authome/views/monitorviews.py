@@ -349,6 +349,19 @@ def _add_avg(d):
         if isinstance(v,dict):
             _add_avg(v)
 
+def _del_no_requests_data(d):
+    def _del_func(obj):
+        for k in [k for k,v in obj.items() if isinstance(v,dict) and "requests" in v and v["requests"] == 0]:
+            del obj[k]
+            
+        for v in obj.values():
+            if isinstance(v,dict):
+                _del_func(v)
+
+    for v in d.values():
+        if isinstance(v,dict):
+            _del_func(v)
+
 def _get_localtrafficmonitor(request):
     #level 1: only show the summary, 2: summary, time based summary, 3: summary , time based summary and server process based data
     client = defaultcache.client.get_client()
@@ -455,6 +468,7 @@ def _get_localtrafficmonitor(request):
     if level > 1:
         data["times"] = times_data
     _add_avg(data)
+    _del_no_requests_data(data)
 
     return (level,start_data_ts,end_data_ts,data)
 
