@@ -928,7 +928,7 @@ def login_domain(request):
         return HttpResponse(content="session is missing",status=400)
 
     res = HttpResponseRedirect(next_url) 
-    max_age = request.session.get_expiry_age(session_cookie)
+    max_age = request.session.get_session_cookie_age(session_key)
     expires_time = time.time() + max_age
     expires = http_date(expires_time)
     res.set_cookie(
