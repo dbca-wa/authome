@@ -96,6 +96,11 @@ class _AbstractSessionStore(SessionBase):
         super().__init__(session_key)
 
     @property
+    def cookie_value(self):
+        #should be only called if session is not empty
+        return self.session_key or self.expired_session_key
+
+    @property
     def cookie_changed(self):
         return False
 

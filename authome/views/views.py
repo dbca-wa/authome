@@ -633,7 +633,7 @@ def auth_local(request):
             return HttpResponseRedirect(next_url)
         else:
             #The domain of next url is not the session cookie domain, login to domain first
-            return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
+            return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.cookie_value,"next_url":next_url,"domain":next_url_domain})
 
     page_layout,extracss = _get_userflow_pagelayout(request,next_url_domain)
 
@@ -795,7 +795,7 @@ def auth_local(request):
                     if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                         return HttpResponseRedirect(next_url)
                     else:
-                        return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
+                        return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.cookie_value,"next_url":next_url,"domain":next_url_domain})
                 else:
                     return signout(request,relogin_url=next_url,message="Your account is disabled.",localauth=True)
             else:
@@ -869,7 +869,7 @@ def auth_local(request):
             if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                 return HttpResponseRedirect(next_url)
             else:
-                return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
+                return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.cookie_value,"next_url":next_url,"domain":next_url_domain})
         else:
             context["messages"] = [("error","Action({}) Not Support".format(action))]
             context["codeid"] = get_codeid()
@@ -918,22 +918,22 @@ def login_domain(request):
     """
     Login to other domain
     """
-    session_key = request.POST.get("session")
+    session_cookie = request.POST.get("session")
     next_url = request.POST.get("next_url")
     if not next_url:
         next_url = "https://{}".format(request.get_host())
 
-    if not session_key:
+    if not session_cookie:
         #missing session key, login again
         return HttpResponse(content="session is missing",status=400)
 
     res = HttpResponseRedirect(next_url) 
-    max_age = request.session.get_session_cookie_age(session_key)
+    max_age = request.session.get_session_cookie_age(session_cookie)
     expires_time = time.time() + max_age
     expires = http_date(expires_time)
     res.set_cookie(
         settings.SESSION_COOKIE_NAME,
-        session_key, 
+        session_cookie, 
         max_age=max_age,
         expires=expires, 
         path=settings.SESSION_COOKIE_PATH,
