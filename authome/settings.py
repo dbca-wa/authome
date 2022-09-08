@@ -113,14 +113,43 @@ GUEST_SESSION_AGE=env('GUEST_SESSION_AGE',default=3600) #login session timeout i
 SESSION_AGE=env('SESSION_AGE',default=1209600)
 SESSION_COOKIE_AGE=SESSION_AGE + 86400
 
-SESSION_COOKIE_DOMAINS=env("SESSION_COOKIE_DOMAINS",default={})
+_session_cookie_domain_len = len(SESSION_COOKIE_DOMAIN)
+_session_cookie_domain_index = len(SESSION_COOKIE_DOMAIN) * -1
+_session_cookie_dot_index = len(SESSION_COOKIE_DOMAIN) * -1 - 1
+
+SESSION_COOKIE_DOMAINS=env("SESSION_COOKIE_DOMAINS",default=[])
+i = 0
+while i < len(SESSION_COOKIE_DOMAINS):
+    #remove the leading "."
+    if SESSION_COOKIE_DOMAINS[i][0] == ".":
+        SESSION_COOKIE_DOMAINS[i] = SESSION_COOKIE_DOMAINS[i][1:]
+
+    #check whether the domain is subdomain of other session domains
+    if SESSION_COOKIE_DOMAINS[i].endswith(SESSION_COOKIE_DOMAIN):
+        raise Exception("The domain({0}) is subdomain of domain({1})".format(SESSION_COOKIE_DOMAINS[i],SESSION_COOKIE_DOMAIN))
+    elif SESSION_COOKIE_DOMAIN.endswith(SESSION_COOKIE_DOMAINS[i]):
+        raise Exception("The domain({1}) is subdomain of domain({0})".format(SESSION_COOKIE_DOMAINS[i],SESSION_COOKIE_DOMAIN))
+
+    if i > 0:
+        j = 0
+        while j < i:
+            if SESSION_COOKIE_DOMAINS[i].endswith(SESSION_COOKIE_DOMAINS[j][0]):
+                raise Exception("The domain({0}) is subdomain of domain({1})".format(SESSION_COOKIE_DOMAINS[i],SESSION_COOKIE_DOMAINS[j][0]))
+            elif SESSION_COOKIE_DOMAINS[j][0].endswith(SESSION_COOKIE_DOMAINS[i]):
+                raise Exception("The domain({1}) is subdomain of domain({0})".format(SESSION_COOKIE_DOMAINS[i],SESSION_COOKIE_DOMAINS[j][0]))
+            j += 1
+
+    SESSION_COOKIE_DOMAINS[i] = (SESSION_COOKIE_DOMAINS[i],len(SESSION_COOKIE_DOMAINS[i]),len(SESSION_COOKIE_DOMAINS[i]) * -1,len(SESSION_COOKIE_DOMAINS[i]) * -1 - 1)
+    i += 1
+
+
 def GET_SESSION_COOKIE_DOMAIN(domain):
-    if domain.endswith(SESSION_COOKIE_DOMAIN):
+    if domain[_session_cookie_domain_index:] == SESSION_COOKIE_DOMAIN and (len(domain) == _session_cookie_domain_len or domain[_session_cookie_dot_index] == "."):
         return  SESSION_COOKIE_DOMAIN
     else:
-        for k,v in SESSION_COOKIE_DOMAINS.items():
-            if domain.endswith(k):
-                return v
+        for v in SESSION_COOKIE_DOMAINS:
+            if domain[v[2]:] == v[0] and (len(domain) == v[1] or domain[v[3]] == "."):
+                return v[0]
 
         return None
 
