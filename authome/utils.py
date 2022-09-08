@@ -35,7 +35,6 @@ def get_processid():
         _processid = "{}-{}-{}".format(socket.gethostname(),processcreatetime,os.getpid())
     return _processid
 
-
 _process_data = threading.local()
 def attach_request(request):
     _process_data.request = request
@@ -523,4 +522,11 @@ def print_request_meta(request):
     for k,v in request.META.items():
         msg = "{}\n\t{} = {}".format(msg,k,v)
     logger.debug(msg)
+
+
+def create_secret_key(length=64):
+    from django.utils.crypto import  get_random_string
+    import string
+    return get_random_string(length, string.digits + string.ascii_letters + string.punctuation)
+
 
