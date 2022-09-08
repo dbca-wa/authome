@@ -4,11 +4,13 @@ from django.conf import settings
 
 from .models import *
 from .clustermodels import *
+from .trafficmodels import *
 from .models import _ArrayField
+from .debugmodels import *
 
 
 def initialize():
-    if settings.AUTH2_CLUSTER_ENABLED :
+    if settings.AUTH2_CLUSTER_ENABLED:
         #load cache
         try:
             Auth2Cluster.register()

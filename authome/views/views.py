@@ -51,21 +51,21 @@ django_engine = engines['django']
 
 RESPONSE_NOT_FOUND = HttpResponseNotFound()
 def response_not_found_factory(request):
-    if request.session.cookie_changed:
+    if request.session.cookie_changed or request.session.is_empty():
         return HttpResponseNotFound()
     else:
         return RESPONSE_NOT_FOUND
 
 SUCCEED_RESPONSE = HttpResponse(content='Succeed',status=200)
 def succeed_response_factory(request):
-    if request.session.cookie_changed:
+    if request.session.cookie_changed or request.session.is_empty():
         return HttpResponse(content='Succeed',status=200)
     else:
         return SUCCEED_RESPONSE
 
 FORBIDDEN_RESPONSE = HttpResponseForbidden()
 def forbidden_response_factory(request):
-    if request.session.cookie_changed:
+    if request.session.cookie_changed or request.session.is_empty():
         return HttpResponseForbidden()
     else:
         return FORBIDDEN_RESPONSE
@@ -75,7 +75,7 @@ def forbidden_response_factory(request):
 AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
 AUTH_REQUIRED_RESPONSE.content = "Authentication required"
 def auth_required_response_factory(request):
-    if request.session.cookie_changed:
+    if request.session.cookie_changed or request.session.is_empty():
         res = HttpResponse(status=401)
         res.content = "Authentication required"
         return res
@@ -84,7 +84,7 @@ def auth_required_response_factory(request):
 
 AUTH_NOT_REQUIRED_RESPONSE = HttpResponse(content="Succeed",status=204)
 def auth_not_required_response_factory(request):
-    if request.session.cookie_changed:
+    if request.session.cookie_changed or request.session.is_empty():
         return HttpResponse(content="Succeed",status=204)
     else:
         return AUTH_NOT_REQUIRED_RESPONSE
@@ -94,7 +94,7 @@ BASIC_AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
 BASIC_AUTH_REQUIRED_RESPONSE["WWW-Authenticate"] = 'Basic realm="Please login with your email address and access token"'
 BASIC_AUTH_REQUIRED_RESPONSE.content = "Basic auth required"
 def basic_auth_required_response_factory(request):
-    if request.session.cookie_changed:
+    if request.session.cookie_changed or request.session.is_empty():
         res = HttpResponse(status=401)
         res["WWW-Authenticate"] = 'Basic realm="Please login with your email address and access token"'
         res.content = "Basic auth required"
@@ -393,14 +393,14 @@ def _auth(request):
             #get the reponse from cache
             user = request.user
             auth_key = request.session.session_key
-            response = None if request.session.cookie_changed else cache.get_auth(user,auth_key,user.modified)
+            response = None if (request.session.cookie_changed or request.session.is_empty()) else cache.get_auth(user,auth_key,user.modified)
     
             if response and models.UserGroup.find_groups(user.email)[1] == response["X-groups"]:
                 #response cached
                 return response
             else:
                 #reponse not cached or outdated, populate one and cache it.
-                return _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
+                return _populate_response(request,cache.set_auth,auth_key,user,request.session.cookie_value)
         finally:
             performance.end_processingstep("create_response")
             pass
@@ -454,14 +454,14 @@ def auth_optional(request):
             #get the reponse from cache
             user = request.user
             auth_key = request.session.session_key
-            response = None if request.session.cookie_changed else cache.get_auth(user,auth_key,user.modified)
+            response = None if (request.session.cookie_changed or request.session.is_empty()) else cache.get_auth(user,auth_key,user.modified)
     
             if response and models.UserGroup.find_groups(user.email)[1] == response["X-groups"]:
                 #response cached
                 return response
             else:
                 #reponse not cached or outdated, populate one and cache it.
-                return _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
+                return _populate_response(request,cache.set_auth,auth_key,user,request.session.cookie_value)
         finally:
             performance.end_processingstep("create_response")
             pass
@@ -501,8 +501,14 @@ def auth_basic(request):
         useremail, token = _parse_basic(auth_basic)
     except:
         #failed to parse the basic auth data from request
-        return basic_auth_required_response_factory(request)
-
+        #fallback to normal authentication session
+        res = _auth(request)
+        if res:
+            #already authenticated
+            return res
+        else:
+            #not authenticated, return basic auth required response
+            return basic_auth_required_response_factory(request)
 
     #try to get the reponse from cache with useremail and token
     auth_basic_key = cache.get_basic_auth_key(useremail,token)
@@ -892,14 +898,10 @@ def logout_view(request):
         parameters["relogin"] = relogin_url
         querystring = "&".join( "{}={}".format(k,(urllib.parse.quote(v) if isinstance(v,str) else v)) for k,v in parameters.items())
         url = "https://{}/sso/auth_logout?{}".format(settings.AUTH2_DOMAIN,querystring)
-        res = HttpResponseRedirect(url)
-        res.delete_cookie(
-            settings.SESSION_COOKIE_NAME,
-            path=settings.SESSION_COOKIE_PATH,
-            domain=settings.GET_SESSION_COOKIE_DOMAIN(host),
-            samesite=settings.SESSION_COOKIE_SAMESITE,
-        )
-        return res
+        #delete the session cookie from browser via setting the session_key to None
+        request.session._session_key = None
+        request.session.clear()
+        return HttpResponseRedirect(url)
     #get post logout url
     post_logout_url = get_post_b2c_logout_url(request,encode=False)
     if "localauth" in request.GET:
@@ -931,13 +933,15 @@ def login_domain(request):
     max_age = request.session.get_session_cookie_age(session_cookie)
     expires_time = time.time() + max_age
     expires = http_date(expires_time)
+    host = request.get_host()
+    domain = settings.GET_SESSION_COOKIE_DOMAIN(request.get_host())
     res.set_cookie(
         settings.SESSION_COOKIE_NAME,
-        session_cookie, 
+        "{}|{}".format(session_cookie,domain or host), 
         max_age=max_age,
         expires=expires, 
         path=settings.SESSION_COOKIE_PATH,
-        domain=settings.GET_SESSION_COOKIE_DOMAIN(request.get_host()),
+        domain=domain,
         secure=settings.SESSION_COOKIE_SECURE or None,
         httponly=settings.SESSION_COOKIE_HTTPONLY or None,
         samesite=settings.SESSION_COOKIE_SAMESITE,
@@ -1007,6 +1011,10 @@ def home(request):
             url = reverse('social:begin', args=['azuread-b2c-oauth2'])
             if next_url:
                 #has next_url, add next url to authentication url as url parameter
+                next_url_domain = utils.get_domain(next_url)
+                if next_url_domain and not next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
+                    #crosss domain authentication
+                    next_url = "https://{}?{}".format(settings.AUTH2_DOMAIN,urlencode({'next': next_url}))
                 url = '{}?{}'.format(url,urlencode({'next': next_url}))
             else:
                 #no next_url, clean the next url  from session
@@ -1095,10 +1103,10 @@ def profile(request):
         #not authenticated
         return HttpResponse(content=json.dumps({"authenticated":False}),content_type="application/json")
     auth_key = request.session.session_key
-    response = None if request.session.cookie_changed else cache.get_auth(user,auth_key,user.modified)
+    response = None if (request.session.cookie_changed or request.session.is_empty()) else cache.get_auth(user,auth_key,user.modified)
 
     if not response:
-        response = _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
+        response = _populate_response(request,cache.set_auth,auth_key,user,request.session.cookie_value)
 
     #populte the profile from response headers
     content = {"authenticated":True}
@@ -1174,9 +1182,9 @@ def user_setting(request):
         next_url = "https://{}/sso/setting".format(domain)
     next_url = urllib.parse.quote(next_url)
 
-    response = None if request.session.cookie_changed else cache.get_auth(user,auth_key,user.modified)
+    response = None if (request.session.cookie_changed or request.session.is_empty()) else cache.get_auth(user,auth_key,user.modified)
     if not response:
-        response = _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
+        response = _populate_response(request,cache.set_auth,auth_key,user,request.session.cookie_value)
 
     #populte the profile from response headers
     context = {}

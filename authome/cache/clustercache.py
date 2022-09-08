@@ -1,5 +1,6 @@
 import logging
 import requests
+import traceback
 
 from django.conf import settings
 from django.utils import timezone
@@ -11,6 +12,45 @@ from ..exceptions import Auth2ClusterException
 
 
 logger = logging.getLogger(__name__)
+
+def traffic_monitor(name,func):
+    def _func(self,clusterid,f_send_request,request):
+        return func(self,clusterid,f_send_request)
+
+    def _monitor(self,clusterid,f_send_request,request):
+        start = timezone.localtime()
+        res = None
+        try:
+            res = func(self,clusterid,f_send_request)
+            status_code = res.status_code
+            return res
+        except Exception as ex:
+            if isinstance(ex,Auth2ClusterException):
+                exception = ex.exception
+                logger.debug("Failed to execute '{}',status_code={}.{}".format(name,503 if exception.response is None else exception.response.status_code ,str(ex)))
+            else:
+                exception = ex
+                logger.debug("Failed to execute '{}'.{}".format(name,str(ex)))
+
+            if exception:
+                if isinstance(exception,KeyError):
+                    status_code = 503
+                elif isinstance(exception,requests.RequestException):
+                    status_code = 503 if exception.response is None else exception.response.status_code
+                else:
+                    status_code = 503
+            else:
+                status_code = 503
+            raise ex
+        finally:
+            try:
+                self.log_request(name,utils.get_host(request),start,status_code)
+            except:
+                logger.error("Failed to log the request.{}".format(traceback.format_exc()))
+        
+        
+    return _monitor if settings.TRAFFIC_MONITOR_LEVEL > 0 else _func
+
 
 class MemoryCache(cache.MemoryCache):
     def __init__(self):
@@ -86,7 +126,7 @@ class MemoryCache(cache.MemoryCache):
                 else:
                     changed_clusters.append(o)
             except Exception as ex:
-                if not force_refresh and isinstance(ex,(requests.ConnectionError,requests.HTTPError,requests.Timeout)):
+                if not force_refresh and isinstance(ex,(requests.ConnectionError,requests.Timeout)):
                     retry_clusters = utils.add_to_list(retry_clusters,(o,ex))
                 else:
                     failed_clusters = utils.add_to_list(failed_clusters,(o,ex))
@@ -129,11 +169,11 @@ class MemoryCache(cache.MemoryCache):
         except Exception as ex:
             if isinstance(ex,(KeyError,)):
                 exception = ex
-            elif isinstance(ex,(requests.ConnectionError,requests.HTTPError,requests.Timeout)):
+            elif isinstance(ex,(requests.ConnectionError,requests.Timeout)):
                 exception = ex
                 endpoint = self._auth2_clusters[target_clusterid].endpoint
             else:
-                raise
+                raise Auth2ClusterException("Failed to access cluster({}).{}".format(target_clusterid,str(ex)),ex)
         
         if self.refresh_auth2_clusters():
             #refreshed
@@ -146,12 +186,11 @@ class MemoryCache(cache.MemoryCache):
                     return res
             except Exception as ex:
                 if isinstance(ex,KeyError):
-                    raise Auth2ClusterException("Auth2 cluster({}) doesn't exist".format(target_clusterid))
-                elif isinstance(ex,(requests.ConnectionError,requests.HTTPError,requests.Timeout)):
-                    exception = ex
+                    raise Auth2ClusterException("Auth2 cluster({}) doesn't exist".format(target_clusterid),ex)
                 else:
-                    raise
-        raise Auth2ClusterException("Failed to access cluster({}).{}".format(target_clusterid,str(exception)))
+                    exception = ex
+
+        raise Auth2ClusterException("Failed to access cluster({}).{}".format(target_clusterid,str(exception)),exception)
 
     def config_changed(self,model_cls,modified=None):
         """
@@ -259,81 +298,71 @@ class MemoryCache(cache.MemoryCache):
             userids = ",".join(userids)
             return self._send_request_to_other_clusters(_send_request,True)
 
+    def _get_headers(self,request):
+        if request:
+            return {
+                "HOST":utils.get_host(request),
+                "x-upstream-request-uri":request.headers.get("x-upstream-request-uri") or request.get_full_path()
+            }
+        else:
+            return None
 
-    def get_remote_session(self,clusterid,session,raise_exception=False):
+    def get_remote_session(self,clusterid,session,raise_exception=False,request=None):
         """
         get session from other auth2 cluster
         Return the session_data if found; otherwise return None
         """
+        from ..models import DebugLog
         def _send_request(cluster):
-            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:get_session')),data={"session":session,"clusterid":clusterid})
-
+            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:get_session')),data={"session":session,"clusterid":clusterid},headers=self._get_headers(request))
         try:
-            res = self._send_request_to_cluster(clusterid,_send_request)
+            res = self._get_remote_session(clusterid,_send_request,request)
             return res.json()
         except Auth2ClusterException as ex:
+            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,clusterid,DebugLog.get_base_session_key(session),session,message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
             if raise_exception:
                 raise
             else:
                 return None
         except Exception as ex:
+            DebugLog.log(DebugLog.ERROR,None,clusterid,DebugLog.get_base_session_key(session),session,message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
             logger.error("Failed to get session from auth2 cluster '{}'.{}".format(clusterid,str(ex)))
             return None
 
-    def mark_remote_session_as_migrated(self,clusterid,session,raise_exception=False):
+    def mark_remote_session_as_migrated(self,clusterid,session,raise_exception=False,request=None):
         """
         mark session as migrated in other auth2 cluster
         """
+        from ..models import DebugLog
         def _send_request(cluster):
-            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:mark_session_as_migrated')),data={"session":session,"clusterid":clusterid})
+            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:mark_session_as_migrated')),data={"session":session,"clusterid":clusterid},headers=self._get_headers(request))
 
         try:
-            self._send_request_to_cluster(clusterid,_send_request)
+            self._mark_remote_session_as_migrated(clusterid,_send_request,request)
         except Auth2ClusterException as ex:
-            logger.error("Failed to mark session as migraed in auth2 cluster '{}'.{}".format(clusterid,str(ex)))
+            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,clusterid,DebugLog.get_base_session_key(session),session,message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
             if raise_exception:
                 raise
             else:
                 return None
         except Exception as ex:
+            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,clusterid,DebugLog.get_base_session_key(session),session,message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
             logger.error("Failed to mark session as migraed in auth2 cluster '{}'.{}".format(clusterid,str(ex)))
             return None
 
-    def delete_remote_session(self,clusterid,session,raise_exception=False):
-        """
-        get session from other auth2 cluster
-        Return the session_data if found; otherwise return None
-        """
-        def _send_request(cluster):
-            requests.post("{}{}".format(cluster.endpoint,reverse('cluster:delete_session')),data={"session":session,"clusterid":clusterid})
-
-        try:
-            self._send_request_to_cluster(clusterid,_send_request)
-        except Auth2ClusterException as ex:
-            if raise_exception:
-                raise
-            else:
-                return None
-        except Exception as ex:
-            logger.error("Failed to delete session from {}.{}".format(clusterid,str(ex)))
-            return None
-
-    def get_traffic_data(self,clusterid,level,starttime,endtime):
+    def save_traffic_data(self,clusterid,batchid):
         """
         get traffic from other auth2 cluster
         Return traffic data; if failed, return None
         """
         def _send_request(cluster):
-            return requests.get("{}{}?level={}&starttime={}&endtime={}".format(
+            return requests.get("{}{}?batchid={}".format(
                 cluster.endpoint,
-                reverse('cluster:cluster_traffic_data'),
-                level,
-                starttime.strftime("%Y-%m-%d %H:%M:%S"),
-                endtime.strftime("%Y-%m-%d %H:%M:%S")
+                reverse('cluster:save_traffic_data'),
+                utils.encode_datetime(batchid)
             ))
 
         res = self._send_request_to_cluster(clusterid,_send_request)
-        return res.json()
 
     def get_cluster_status(self,clusterid):
         """
@@ -408,4 +437,7 @@ class MemoryCache(cache.MemoryCache):
                 msgs.append("Auth2 cluster cache is empty")
         
         return (health,msgs)
+
+MemoryCache._get_remote_session = traffic_monitor("get_remote_session",MemoryCache._send_request_to_cluster)
+MemoryCache._mark_remote_session_as_migrated = traffic_monitor("mark_session_as_migrated",MemoryCache._send_request_to_cluster)
 

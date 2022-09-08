@@ -2,7 +2,6 @@ from django.urls import path
 from django.views.decorators.csrf import csrf_exempt
 
 from .. import views
-from .base import traffic_monitor
 
 urlpatterns = [
     path('model/<slug:modelname>/changed',views.config_changed,name="config_changed"),
@@ -11,10 +10,9 @@ urlpatterns = [
     path('usertoken/<int:userid>/changed',views.usertoken_changed,name="usertoken_changed"),
     path('users/changed',csrf_exempt(views.users_changed),name="users_changed"),
     path('usertokens/changed',csrf_exempt(views.usertokens_changed),name="usertokens_changed"),
-    path('session/get',csrf_exempt(traffic_monitor("get_remote_session",views.get_remote_session)),name="get_session"),
-    path('session/delete',csrf_exempt(traffic_monitor("delete_remote_session",views.delete_remote_session)),name="delete_session"),
-    path('session/migrated',csrf_exempt(traffic_monitor("mark_session_as_migrated",views.mark_session_as_migrated)),name="mark_session_as_migrated"),
-    path('trafficdata',views.trafficmonitorfactory("local"),name="cluster_traffic_data"),
+    path('session/get',csrf_exempt(views.get_remote_session),name="get_session"),
+    path('session/migrated',csrf_exempt(views.mark_session_as_migrated),name="mark_session_as_migrated"),
+    path('trafficdata/save',views.save_trafficdata,name="save_traffic_data"),
     path('status',views.statusfactory("local"),name="cluster_status"),
     path('healthcheck',views.healthcheckfactory("remote"),name="cluster_healthcheck")
 ]

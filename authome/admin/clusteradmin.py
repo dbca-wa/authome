@@ -2,7 +2,7 @@ import logging
 import traceback
 import threading
 
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.utils import timezone
 from django.conf import settings
 from django.contrib import messages, auth
@@ -21,7 +21,7 @@ from .. import forms
 from ..cache import cache,get_defaultcache
 from . import admin
 from .. import utils
-from ..views.monitorviews import _get_localhealthcheck
+from ..views.monitorviews import _get_localhealthcheck,_clusterstatus
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +29,7 @@ logger = logging.getLogger(__name__)
 defaultcache = get_defaultcache()
 
 class SyncConfigChangeMixin(object):
-    def __init__(self, model, admin_site):
-        super().__init__(model,admin_site)
-        self.extra_tools = [("sync_changes",'sync_config')]
+    extra_tools = [("sync_changes",'sync_config',"_self")]
     
     def get_urls(self):
         urls = super().get_urls()
@@ -161,12 +159,31 @@ class SystemUserAccessTokenAdmin(SyncObjectChangeMixin,admin.SystemUserAccessTok
     def _sync_change(self,objids):
         return cache.usertokens_changed(objids,True)
         
-class Auth2ClusterAdmin(admin.DeleteMixin,admin.DatetimeMixin,admin.CatchModelExceptionMixin,djangoadmin.ModelAdmin):
+class Auth2ClusterAdmin(admin.ExtraToolsMixin,admin.DeleteMixin,admin.DatetimeMixin,admin.CatchModelExceptionMixin,djangoadmin.ModelAdmin):
     list_display = ('clusterid','_running_status','default','endpoint','_last_heartbeat','_usergroup_status','_usergroupauthorization_status','_userflow_status','_idp_status')
     readonly_fields = ('clusterid','_running_status','default','endpoint','_last_heartbeat','_usergroup_status','_usergroup_lastrefreshed','_usergroupauthorization_status','_usergroupauthorization_lastrefreshed','_userflow_status','_userflow_lastrefreshed','_idp_status','_idp_lastrefreshed','modified','registered')
     fields = readonly_fields
     ordering = ('clusterid',)
+    extra_tools = [("cluster_status",'cluster_status',"clusterstatus")]
 
+    def get_urls(self):
+        urls = super().get_urls()
+        info = self.model._meta.app_label, self.model._meta.model_name
+        urls.insert(0,path('clusterstatus/', self.cluster_status, name='%s_%s_cluster_status' % info))
+        logger.debug(urls)
+        return urls
+
+    def cluster_status(self,request):
+        return _clusterstatus(request)
+
+    changelist_url = None
+    def get_queryset(self, request):
+        if not Auth2ClusterAdmin.changelist_url:
+            Auth2ClusterAdmin.changelist_url = reverse('admin:{}_{}_changelist'.format(self.model._meta.app_label,self.model._meta.model_name))
+        if request.path.endswith(Auth2ClusterAdmin.changelist_url):
+            cache.refresh_auth2_clusters()
+        return super().get_queryset(request)
+        
     def _get_cache_status(self,obj,key,f_name=None,default="N/A"):
         try:
             return f_name(obj.cache_status.get(key,default)) if f_name else obj.cache_status.get(key,default)
@@ -175,6 +192,7 @@ class Auth2ClusterAdmin(admin.DeleteMixin,admin.DatetimeMixin,admin.CatchModelEx
                 healthcheck =  _get_localhealthcheck()
                 data = {}
                 for cls in (models.UserGroup,models.UserGroupAuthorization,models.CustomizableUserflow,models.IdentityProvider):
+                    cls.refresh_cache_if_required()
                     data[cls.__name__] = [cls.cache_status(),utils.format_datetime(cls.get_next_refreshtime())]
                 data["running"] = "Running" if healthcheck[0] else "Warning({})".format(healthcheck[1])
                 obj.cache_status = data
@@ -216,7 +234,7 @@ class Auth2ClusterAdmin(admin.DeleteMixin,admin.DatetimeMixin,admin.CatchModelEx
             return ""
         else:
             return self._get_cache_status(obj,models.UserGroupAuthorization.__name__,f_name=self.f_cache_status_name,default=("N/A",""))
-    _usergroupauthorization_status.short_description = "UserGroup Status"
+    _usergroupauthorization_status.short_description = "UserGroupAuthorization Status"
 
 
     def _idp_status(self,obj):

@@ -18,11 +18,14 @@ To run this test case, you should have the following resources
   E. auth02a: a default cluster auth2 server 'AUTH2_02', it has the same cache server setting as auth2 server 'standalone2' including previous session cache
   F. auth03: a cluster auth2 server 'AUTH2_03' 
 """
+RUN_CASES = -1
 class ClusterTestCase(testutils.StartServerMixin,TestCase):
     def test_previous_session_cache(self):
         """
         Test the feature 'Migrate the session from previous session cache' for standalone auth2 server
         """
+        print("************Begin to run test case 'test_previous_session_cache'******************************")
+        index = 0
         for commands in [
             {},
             {"standalone":"CACHE_KEY_PREFIX=standalone&&export CACHE_KEY_PREFIX","standalone2":"PREVIOUS_CACHE_KEY_PREFIX=standalone&&export PREVIOUS_CACHE_KEY_PREFIX"},
@@ -30,6 +33,9 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
             {"standalone":"CACHE_KEY_PREFIX=standalone&&export CACHE_KEY_PREFIX","standalone2":"PREVIOUS_CACHE_KEY_PREFIX=standalone&&export PREVIOUS_CACHE_KEY_PREFIX&&CACHE_KEY_PREFIX=standalone2&&export CACHE_KEY_PREFIX"},
             {"standalone":"CACHE_KEY_PREFIX=auth2&&export CACHE_KEY_PREFIX","standalone2":"PREVIOUS_CACHE_KEY_PREFIX=auth2&&export PREVIOUS_CACHE_KEY_PREFIX&&CACHE_KEY_PREFIX=auth2&&export CACHE_KEY_PREFIX"},
         ]:
+            index += 1
+            if RUN_CASES > 0 and index > RUN_CASES:
+                break
             print("========================================={}===========================================".format(commands))
 
             try:
@@ -75,6 +81,8 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
         """
         Test the feature "upgrade the session to cluster session of the same cluster server'
         """
+        print("************Begin to run test case 'test_migrate_to_default_cluster'******************************")
+        index = 0
         for commands in [
             {},
             {"standalone":"CACHE_KEY_PREFIX=standalone&&export CACHE_KEY_PREFIX","auth01":"STANDALONE_CACHE_KEY_PREFIX=standalone&&export STANDALONE_CACHE_KEY_PREFIX"},
@@ -82,6 +90,9 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
             {"standalone":"CACHE_KEY_PREFIX=standalone&&export CACHE_KEY_PREFIX","auth01":"CACHE_KEY_PREFIX=auth01;STANDALONE_CACHE_KEY_PREFIX=standalone&&export CACHE_KEY_PREFIXl;export STANDALONE_CACHE_KEY_PREFIX"},
             {"standalone":"CACHE_KEY_PREFIX=auth2&&export CACHE_KEY_PREFIX","auth01":"CACHE_KEY_PREFIX=auth2;STANDALONE_CACHE_KEY_PREFIX=auth2&&export CACHE_KEY_PREFIXl;export STANDALONE_CACHE_KEY_PREFIX"}
         ]:
+            index += 1
+            if RUN_CASES > 0 and index > RUN_CASES:
+                break
             print("========================================={}===========================================".format(commands))
 
             try:
@@ -144,6 +155,8 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
         """
         Test the feature "upgrade the session to cluster session of the same cluster server with previous session cache enabled'
         """
+        print("************Begin to run test case 'test_migrate_to_default_cluster_with_previous_cache'******************************")
+        index = 0
         for commands in [
             {},
             {"standalone":"CACHE_KEY_PREFIX=standalone&&export CACHE_KEY_PREFIX","standalone2":"PREVIOUS_CACHE_KEY_PREFIX=standalone&&export PREVIOUS_CACHE_KEY_PREFIX","auth02a":"PREVIOUS_CACHE_KEY_PREFIX=standalone&&export PREVIOUS_CACHE_KEY_PREFIX"},
@@ -151,6 +164,9 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
             {"standalone":"CACHE_KEY_PREFIX=standalone&&export CACHE_KEY_PREFIX","standalone2":"PREVIOUS_CACHE_KEY_PREFIX=standalone&&export PREVIOUS_CACHE_KEY_PREFIX&&CACHE_KEY_PREFIX=standalone2&&export CACHE_KEY_PREFIX","auth02a":"PREVIOUS_CACHE_KEY_PREFIX=standalone&&export PREVIOUS_CACHE_KEY_PREFIX&&STANDALONE_CACHE_KEY_PREFIX=standalone2&&export STANDALONE_CACHE_KEY_PREFIX&&CACHE_KEY_PREFIX=auth02&&export CACHE_KEY_PREFIX"},
             {"standalone":"CACHE_KEY_PREFIX=auth2&&export CACHE_KEY_PREFIX","standalone2":"PREVIOUS_CACHE_KEY_PREFIX=auth2&&export PREVIOUS_CACHE_KEY_PREFIX&&CACHE_KEY_PREFIX=auth2&&export CACHE_KEY_PREFIX","auth02a":"PREVIOUS_CACHE_KEY_PREFIX=auth2&&export PREVIOUS_CACHE_KEY_PREFIX&&STANDALONE_CACHE_KEY_PREFIX=auth2&&export STANDALONE_CACHE_KEY_PREFIX&&CACHE_KEY_PREFIX=auth2&&export CACHE_KEY_PREFIX"},
         ]:
+            index += 1
+            if RUN_CASES > 0 and index > RUN_CASES:
+                break
             print("========================================={}===========================================".format(commands))
             try:
                 #login to a standalone server to get a standalone session cookie
@@ -220,6 +236,8 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
         """
         Test the feature "upgrade the session to cluster session of the other cluster server'
         """
+        print("************Begin to run test case 'test_migrate_to_other_cluster'******************************")
+        index = 0
         for commands in [
             {},
             {"standalone":"CACHE_KEY_PREFIX=standalone&&export CACHE_KEY_PREFIX","auth01":"STANDALONE_CACHE_KEY_PREFIX=standalone&&export STANDALONE_CACHE_KEY_PREFIX"},
@@ -227,6 +245,9 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
             {"standalone":"CACHE_KEY_PREFIX=standalone&&export CACHE_KEY_PREFIX","auth02":"CACHE_KEY_PREFIX=auth02&&export CACHE_KEY_PREFIX","auth01":"STANDALONE_CACHE_KEY_PREFIX=standalone&&export STANDALONE_CACHE_KEY_PREFIX"},
             {"standalone":"CACHE_KEY_PREFIX=auth2&&export CACHE_KEY_PREFIX","auth02":"CACHE_KEY_PREFIX=auth2&&export CACHE_KEY_PREFIX","auth01":"STANDALONE_CACHE_KEY_PREFIX=auth2&&export STANDALONE_CACHE_KEY_PREFIX"}
         ]:
+            index += 1
+            if RUN_CASES > 0 and index > RUN_CASES:
+                break
             print("========================================={}===========================================".format(commands))
             try:
                 #login to a standalone server to get a standalone session cookie
@@ -289,6 +310,8 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
         """
         Test the feature "upgrade the session to cluster session of the other cluster server with previous session cache enabled'
         """
+        print("************Begin to run test case 'test_migrate_to_other_cluster_with_previous_cache'******************************")
+        index = 0
         for commands in [
             {},
             {
@@ -311,6 +334,9 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 "auth03":"CACHE_KEY_PREFIX=auth2&&export CACHE_KEY_PREFIX"
             }
         ]:
+            index += 1
+            if RUN_CASES > 0 and index > RUN_CASES:
+                break
             print("========================================={}===========================================".format(commands))
 
             try:
@@ -390,6 +416,8 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
         """
         Test the feature "migrate the session among clusters'
         """
+        print("************Begin to run test case 'test_migrate_session_among_clusters'******************************")
+        index = 0
         for commands in [
             {},
             {"auth01":"CACHE_KEY_PREFIX=auth01&&export CACHE_KEY_PREFIX"},
@@ -397,6 +425,9 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
             {"auth01":"CACHE_KEY_PREFIX=auth01&&export CACHE_KEY_PREFIX","auth02":"CACHE_KEY_PREFIX=auth02&&export CACHE_KEY_PREFIX"},
             {"auth01":"CACHE_KEY_PREFIX=auth2&&export CACHE_KEY_PREFIX","auth02":"CACHE_KEY_PREFIX=auth2&&export CACHE_KEY_PREFIX"},
         ]:
+            index += 1
+            if RUN_CASES > 0 and index > RUN_CASES:
+                break
             print("========================================={}===========================================".format(commands))
             try:
                 self.start_auth2_server("auth01",18060,precommands=commands.get("auth01"))
@@ -420,8 +451,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 print("\n".join("{}={}".format(k,v) for k,v in auth01_user_profile.items()))
     
                 #migrate the session to 'auth02'
-                auth02_lb_hash_key = "auth2_clusher_hash_key-{}".format("auth02")
-                self.cluster_headers["X-LB-HASH-KEY"] = auth02_lb_hash_key
+                self.cluster_headers["X-LB-HASH-KEY"] = auth01_lb_hash_key
                 res = requests.get(self.get_profile_url("auth02"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie})
                 res.raise_for_status()
                 auth02_session_cookie = res.cookies[settings.SESSION_COOKIE_NAME]
@@ -456,8 +486,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 print("\n")
     
                 #migrate back to auth01
-                auth01_lb_hash_key2 = "auth2_clusher_hash_key2-{}".format("auth01")
-                self.cluster_headers["X-LB-HASH-KEY"] = auth01_lb_hash_key2
+                self.cluster_headers["X-LB-HASH-KEY"] = auth01_lb_hash_key
                 res = requests.get(self.get_profile_url("auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth02_session_cookie})
                 res.raise_for_status()
                 auth01_user_profile3 = res.json()
@@ -496,6 +525,8 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
         """
         Test the feature 'cluster with previous session cache enabled'
         """
+        print("************Begin to run test case 'test_cluster_with_previous_cache'******************************")
+        index = 0
         for commands in [
             {},
             {
@@ -511,6 +542,9 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 "auth01a":"PREVIOUS_CACHE_KEY_PREFIX=auth2&&export PREVIOUS_CACHE_KEY_PREFIX&&CACHE_KEY_PREFIX=auth2&&export CACHE_KEY_PREFIX"
             }
         ]:
+            index += 1
+            if RUN_CASES > 0 and index > RUN_CASES:
+                break
             print("========================================={}===========================================".format(commands))
 
             try:
@@ -561,6 +595,8 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
         """
         Test the feature "migrate the session among clusters with previous session cache enabled'
         """
+        print("************Begin to run test case 'test_migrate_among_clusters_with_previous_cache'******************************")
+        index = 0
         for commands in [
             {},
             {
@@ -579,6 +615,9 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 "auth03":"CACHE_KEY_PREFIX=auth2&&export CACHE_KEY_PREFIX"
             }
         ]:
+            index += 1
+            if RUN_CASES > 0 and index > RUN_CASES:
+                break
             print("========================================={}===========================================".format(commands))
 
             try:
@@ -604,8 +643,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 self.shutdown_auth2_server("auth01")
                 self.start_auth2_server("auth01a",18060,precommands=commands.get("auth01a"))
                 self.start_auth2_server("auth03",18061,precommands=commands.get("auth03"))
-                auth03_lb_hash_key = "auth2_clusher_hash_key-{}".format("auth03")
-                self.cluster_headers["X-LB-HASH-KEY"] = auth03_lb_hash_key
+                self.cluster_headers["X-LB-HASH-KEY"] = auth01_lb_hash_key
                 res = requests.get(self.get_profile_url("auth03"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie})
                 res.raise_for_status()
                 auth03_user_profile = res.json()

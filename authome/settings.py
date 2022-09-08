@@ -1,7 +1,9 @@
 import os
 
+from django.utils import timezone
+
 from .utils import env, get_digest_function
-from datetime import timedelta
+from datetime import timedelta,datetime
 import dj_database_url
 
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
@@ -109,10 +111,9 @@ if SESSION_COOKIE_SAMESITE and SESSION_COOKIE_SAMESITE.lower() in ("none","null"
 
 GUEST_SESSION_AGE=env('GUEST_SESSION_AGE',default=3600) #login session timeout in seconds
 SESSION_AGE=env('SESSION_AGE',default=1209600)
-SESSION_COOKIE_AGE=SESSION_AGE * 2
+SESSION_COOKIE_AGE=SESSION_AGE + 86400
 
 SESSION_COOKIE_DOMAINS=env("SESSION_COOKIE_DOMAINS",default={})
-
 def GET_SESSION_COOKIE_DOMAIN(domain):
     if domain.endswith(SESSION_COOKIE_DOMAIN):
         return  SESSION_COOKIE_DOMAIN
@@ -122,7 +123,6 @@ def GET_SESSION_COOKIE_DOMAIN(domain):
                 return v
 
         return None
-        
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -322,7 +322,7 @@ CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
 PREVIOUS_CACHE_SESSION_SERVER = env("PREVIOUS_CACHE_SESSION_SERVER")
 CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
 PREVIOUS_CACHE_SESSION_SERVER_OPTIONS = env("PREVIOUS_CACHE_SESSION_SERVER_OPTIONS",default={})
-MIGRATED_SESSION_TIMEOUT = env("MIGRATED_SESSION_TIMEOUT",default=60)
+MIGRATED_SESSION_TIMEOUT = env("MIGRATED_SESSION_TIMEOUT",default=300)
 
 CACHE_USER_SERVER = env("CACHE_USER_SERVER")
 CACHE_USER_SERVER_OPTIONS = env("CACHE_USER_SERVER_OPTIONS",default={})
@@ -417,12 +417,15 @@ TRAFFIC_MONITOR_LEVEL = env('TRAFFIC_MONITOR_LEVEL',default=0) #0: disabled, 1:s
 if not CACHE_SERVER or not CACHE_SERVER.lower().startswith('redis'):
     TRAFFIC_MONITOR_LEVEL = 0
 
-TRAFFIC_DATA_EXPIRE=env('TRAFFIC_DATA_EXPIRE',default=86400) #traffic monitor data expire time
 TRAFFIC_MONITOR_INTERVAL=env('TRAFFIC_MONITOR_INTERVAL',default=3600)
 if TRAFFIC_MONITOR_INTERVAL and TRAFFIC_MONITOR_INTERVAL > 0:
-    TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=TRAFFIC_MONITOR_INTERVAL)
+    if 86400 % TRAFFIC_MONITOR_INTERVAL > 0 :
+        #One day can't be divided by interval, invalid, reset it to one hour
+        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
+    else:
+        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=TRAFFIC_MONITOR_INTERVAL)
 else:
-    TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=300)
+    TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
 
 
 TEST_RUNNER=env("TEST_RUNNER","django.test.runner.DiscoverRunner")
@@ -430,15 +433,20 @@ TEST_RUNNER=env("TEST_RUNNER","django.test.runner.DiscoverRunner")
 #enable auth2 cluster feature by setting AUTH2_CLUSTERID
 LB_HASH_KEY_SECRET=env("LB_HASH_KEY_SECRET",default=None)
 AUTH2_CLUSTERID=env("AUTH2_CLUSTERID",default=None)
-if AUTH2_CLUSTERID:
-    AUTH2_CLUSTER_ENDPOINT=env("AUTH2_CLUSTER_ENDPOINT",default=None)
-    DEFAULT_AUTH2_CLUSTER=env("DEFAULT_AUTH2_CLUSTER",default=False)
-    STANDALONE_CACHE_KEY_PREFIX=env("STANDALONE_CACHE_KEY_PREFIX")
-    if AUTH2_CLUSTERID and not LB_HASH_KEY_SECRET:
-        raise Exception("Must set LB_HASH_KEY_SECRET for auth2 cluster feature")
-    PREVIOUS_LB_HASH_KEY_SECRET=env("PREVIOUS_LB_HASH_KEY_SECRET",default=None)
-    AUTH2_CLUSTERS_CHECK_INTERVAL=env("AUTH2_CLUSTERS_CHECK_INTERVAL",default=60)
-    if AUTH2_CLUSTERS_CHECK_INTERVAL <= 0:
-        AUTH2_CLUSTERS_CHECK_INTERVAL = 60
+AUTH2_CLUSTER_ENDPOINT=env("AUTH2_CLUSTER_ENDPOINT",default=None)
+DEFAULT_AUTH2_CLUSTER=env("DEFAULT_AUTH2_CLUSTER",default=False)
+STANDALONE_CACHE_KEY_PREFIX=env("STANDALONE_CACHE_KEY_PREFIX")
+PREVIOUS_LB_HASH_KEY_SECRET=env("PREVIOUS_LB_HASH_KEY_SECRET",default=None)
+AUTH2_CLUSTERS_CHECK_INTERVAL=env("AUTH2_CLUSTERS_CHECK_INTERVAL",default=60)
+if AUTH2_CLUSTERS_CHECK_INTERVAL <= 0:
+    AUTH2_CLUSTERS_CHECK_INTERVAL = 60
 
-AUTH2_CLUSTER_ENABLED = True if AUTH2_CLUSTERID else False
+AUTH2_CLUSTER_ENABLED = True if AUTH2_CLUSTERID and AUTH2_CLUSTER_ENDPOINT else False
+if AUTH2_CLUSTER_ENABLED:
+    if not LB_HASH_KEY_SECRET:
+        raise Exception("Must set LB_HASH_KEY_SECRET for auth2 cluster feature")
+
+START_OF_WEEK_MONDAY = env("START_OF_WEEK_MONDAY",default=True)
+
+TRAFFIC_DATA_THREADHOLD = env("TRAFFIC_DATA_THREADHOLD",default=500)
+

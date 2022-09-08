@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.utils import timezone
-from django.test import TestCase, Client
+from django.test import TestCase
 from django.conf import settings
 
 import base64
@@ -26,7 +26,7 @@ class AuthTestCase(BaseAuthTestCase):
         ]
         self.populate_testdata()
 
-        #test sso_auth without authentication   
+        #test sso_auth without authentication  
         res = self.client.get(self.auth_url)
         self.assertEqual(res.status_code,401,msg="Should return 401 response for unauthenticated request")
         

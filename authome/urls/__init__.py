@@ -11,9 +11,6 @@ handler400 = views.handler400
 if settings.AUTH2_CLUSTER_ENABLED :
     from . import clusterurls
     urlpatterns.append(path('cluster/',include((clusterurls.urlpatterns,'cluster'),namespace="cluster")))
-    logger.info("Start auth2 cluster server({})".format(settings.AUTH2_CLUSTERID))
-else:
-    logger.info("Start standalone auth2 server")
     
 if settings.TESTMODE:
     from . import testurls

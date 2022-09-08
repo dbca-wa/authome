@@ -216,12 +216,16 @@ class MemoryCache(object):
         #The runable task to check IdentityProvider cache
         self._idp_cache_check_time = IntervalTaskRunable("idp cache",settings.IDP_CACHE_CHECK_INTERVAL) if settings.IDP_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("idp cache",settings.IDP_CACHE_CHECK_HOURS)
 
-    _traffic_data_key_pattern = None
+    _traffic_data_key = None
+    @property
+    def traffic_data_key(self):
+        if not self._traffic_data_key:
+            self._traffic_data_key = settings.GET_CACHE_KEY("traffic-data")
+        return self._traffic_data_key
+
     @property
     def traffic_data_key_pattern(self):
-        if not self._traffic_data_key_pattern:
-            self._traffic_data_key_pattern = settings.GET_CACHE_KEY("traffic-data-level{}-{}-{{}}".format(settings.TRAFFIC_MONITOR_LEVEL,settings.TRAFFIC_MONITOR_INTERVAL.seconds))
-        return self._traffic_data_key_pattern
+        return settings.GET_CACHE_KEY("traffic-data-level{}-{}-{{}}".format(settings.TRAFFIC_MONITOR_LEVEL,settings.TRAFFIC_MONITOR_INTERVAL.seconds))
 
     @property
     def usergrouptree(self):
@@ -557,18 +561,19 @@ class MemoryCache(object):
                 CustomizableUserflow.refresh_cache()
 
     def _save_traffic_data(self,start):
-        name = self.traffic_data_key_pattern.format( self._traffic_data_ts.strftime("%Y%m%d%H%M"))
+        data_starttime = utils.format_datetime(self._traffic_data_ts)
+        data_endtime = utils.format_datetime(self._traffic_data_next_ts)
         seconds = (start - self._traffic_data_next_ts).seconds
         self._traffic_data_ts = self._traffic_data_next_ts + timedelta(seconds = seconds - seconds % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
-        self._traffic_data_next_ts += settings.TRAFFIC_MONITOR_INTERVAL
+        self._traffic_data_next_ts = self._traffic_data_ts + settings.TRAFFIC_MONITOR_INTERVAL
         if self._traffic_data :
+            self._traffic_data["starttime"] = data_starttime
+            self._traffic_data["endtime"] = data_endtime
             try:
-                length = self._client.rpush(name,json.dumps(self._traffic_data))
+                length = self._client.rpush(self.traffic_data_key,json.dumps(self._traffic_data))
             except:
                 self._client = defaultcache.client.get_client()
-                length = self._client.rpush(name,json.dumps(self._traffic_data))
-            if length == 1:
-                self._client.expire(name,settings.TRAFFIC_DATA_EXPIRE)
+                length = self._client.rpush(self.traffic_data_key,json.dumps(self._traffic_data))
 
     def _log_request_1(self,name,host,start,status_code):
         if start >= self._traffic_data_next_ts:

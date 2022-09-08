@@ -5,4 +5,8 @@ if settings.AUTH2_CLUSTER_ENABLED:
     from django.contrib.sessions import middleware
     from ..middleware  import ClusterSessionMiddleware
     middleware.SessionMiddleware = ClusterSessionMiddleware
+else:
+    from django.contrib.sessions import middleware
+    from ..middleware  import SessionMiddleware
+    middleware.SessionMiddleware = SessionMiddleware
 

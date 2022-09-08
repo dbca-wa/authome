@@ -6,13 +6,14 @@ if [[ "$1" == "" ]]
 then
     backend="false"
     envfile=".env.standalone"
-elif [[ "$1" =~ ^([0-9]+)|(shell)$ ]]
+elif [[ "$1" =~ ^([0-9]+)|([a-zA-Z_\-]+)$ ]]
 then
     if [[ "$1" =~ ^([0-9]+)$ ]]
     then
         PORT=$1
     else
-        runtype="shell"
+        runtype="command"
+        command=$1
     fi
     if [[ "$2" == "" ]] 
     then
@@ -51,7 +52,7 @@ fi
 set -a
 source $envfile
 
-if [[ "$runtype" == "shell" ]]
+if [[ "$runtype" == "command" ]]
 then
     backend="false"
     echo "envfile=${envfile}"
@@ -75,7 +76,7 @@ then
     poetry run python manage.py runserver 0.0.0.0:$PORT >./logs/auth2_${PORT}.log 2>&1 &
     pid=$!
     echo ${pid} > ./logs/auth2_${PORT}.pid
-elif [[ "$runtype" == "shell"  ]]
+elif [[ "$runtype" == "command"  ]]
 then
     if [[ "$envfile" == ".env.standalone" ]]
     then
@@ -83,7 +84,7 @@ then
     else
         echo 'Running auth2 cluster shell in foreground'
     fi
-    poetry run python manage.py shell
+    poetry run python manage.py $command
 else
     if [[ "$envfile" == ".env.standalone" ]]
     then

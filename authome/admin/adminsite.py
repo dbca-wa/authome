@@ -100,6 +100,7 @@ for model, model_admin in djangoadmin.site._registry.items():
 
 
 from .admin import NormalUser,SystemUser,NormalUserToken,SystemUserToken
+
 if settings.AUTH2_CLUSTER_ENABLED:
     from .clusteradmin import Auth2ClusterAdmin
     admin_site.register(models.Auth2Cluster,Auth2ClusterAdmin)
@@ -108,6 +109,16 @@ if settings.AUTH2_CLUSTER_ENABLED:
 else:
     from .admin import (UserAdmin,SystemUserAdmin,UserGroupAuthorizationAdmin,UserGroupAdmin,UserAccessTokenAdmin,SystemUserAccessTokenAdmin,
         IdentityProviderAdmin,CustomizableUserflowAdmin,UserTOTPAdmin)
+
+if settings.DEBUG:
+    from .debugadmin import DebugLogAdmin
+    admin_site.register(models.DebugLog,DebugLogAdmin)
+
+if settings.TRAFFIC_MONITOR_LEVEL > 0:
+    from .monitoradmin import TrafficReportAdmin,TrafficDataAdmin
+    admin_site.register(models.TrafficData,TrafficDataAdmin)
+    admin_site.register(models.TrafficReport,TrafficReportAdmin)
+
 
 admin_site.register(NormalUser,UserAdmin)
 admin_site.register(SystemUser,SystemUserAdmin)

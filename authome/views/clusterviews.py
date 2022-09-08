@@ -139,30 +139,11 @@ def mark_session_as_migrated(request):
     sessionstore.mark_as_migrated()
     return HttpResponse(content='Succeed',status=200)
 
-def delete_remote_session(request):
-    session = request.POST.get("session")
-    if not session:
-        return HttpResponse(content='Succeed',status=200)
-
-    clusterid = request.POST.get("clusterid")
-    if clusterid and clusterid != settings.AUTH2_CLUSTERID:
-        return HttpResponse(content='Succeed',status=200)
-
-    if clusterid:
-        #load cluster session from cache
-        sessionstore = SessionStore(None,clusterid,session)
-    else:
-        #load standalone session from cache
-        sessionstore = StandaloneSessionStore(session)
-
-    sessionstore.delete()
-
-    return HttpResponse(content='Succeed',status=200)
-
 def model_cachestatus(request):
     cache.refresh_auth2_clusters()
     content = {}
     for cls in (models.UserGroup,models.UserGroupAuthorization,models.CustomizableUserflow,models.IdentityProvider):
+        cls.refresh_cache_if_required()
         content[cls.__name__] = [cls.cache_status(),utils.format_datetime(cls.get_next_refreshtime())]
 
     return JsonResponse(content,status=200)

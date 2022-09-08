@@ -10,9 +10,18 @@ import base64
 
 from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access,UserToken,User,CustomizableUserflow
 from .cache import cache
+from authome import patch
 groupid = 0
+
+class Auth2Client(Client):
+    def get(self,*args,**kwargs):
+        kwargs["HTTP_HOST"] = settings.AUTH2_DOMAIN
+        kwargs["HTTP_SERVER_NAME"] = settings.AUTH2_DOMAIN
+
+        return super().get(*args,**kwargs)
+    
 class BaseAuthTestCase(TestCase):
-    client = Client()
+    client_class = Auth2Client
     home_url = reverse('home')
     auth_url = reverse('auth')
     auth_basic_url = reverse('auth_basic')
@@ -23,7 +32,7 @@ class BaseAuthTestCase(TestCase):
 
 
     def create_client(self):
-        return Client()
+        return Auth2Client()
 
     def setUp(self):
         if settings.RELEASE:
@@ -57,7 +66,6 @@ class BaseAuthTestCase(TestCase):
                 default='default',
                 mfa_set="default_mfa_set",
                 mfa_reset="default_mfa_reset",
-                email="oim@dbca.wa.gov.au",
                 password_reset="default_password_reset",
                 verifyemail_from="oim@dbca.wa.gov.au",
                 verifyemail_subject="test"

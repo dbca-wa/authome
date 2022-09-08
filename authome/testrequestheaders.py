@@ -21,8 +21,7 @@ from . import testutils
 
 
 class RequestHeaderTestCase(testutils.StartServerMixin,TestCase):
-    headers = {}
-    cluster_headers = {}
+    headers = {"x-lb-hash-key":"dummykey"}
 
     TESTED_SERVER = env("TESTED_SERVER")
     noauth_url = "/test/echo"
@@ -75,11 +74,13 @@ class RequestHeaderTestCase(testutils.StartServerMixin,TestCase):
         sso_headers = []
         other_headers = []
         for k,v in cls.injected_headers.items():
+            if k.lower() in cls.headers:
+                continue
             if k.lower() in cls.sso_headers:
                 if k.lower() in res_headers:
                     sso_headers.append("{}={}".format(k,res_headers[k.lower()]))
             elif v != res_headers.get(k.lower()):
-                other_header.append("{}={}(expected {})".format(k,res_headers.get(k.lower()),v))
+                other_headers.append("{}={}(expected {})".format(k,res_headers.get(k.lower()),v))
 
         self.assertEqual(len(sso_headers),0,msg="SSO headers({}) were injected".format(" , ".join(sso_headers)))
         self.assertEqual(len(other_headers),0,msg="Other headers({}) were changed".format(" , ".join(other_headers)))
@@ -92,6 +93,8 @@ class RequestHeaderTestCase(testutils.StartServerMixin,TestCase):
         sso_headers = []
         other_headers = []
         for k,v in cls.injected_headers.items():
+            if k.lower() in cls.headers:
+                continue
             if k.lower() in cls.sso_headers:
                 if res_headers.get(k.lower()) != cls.user_sso_headers[k]:
                     sso_headers.append("{}={}(expected {})".format(k,res_headers.get(k.lower()),cls.user_sso_headers[k]))
@@ -109,6 +112,8 @@ class RequestHeaderTestCase(testutils.StartServerMixin,TestCase):
         sso_headers = []
         other_headers = []
         for k,v in cls.injected_headers.items():
+            if k.lower() in cls.headers:
+                continue
             if k.lower() in cls.sso_headers:
                 if k.lower() in res_headers:
                     sso_headers.append("{}={}".format(k,res_headers[k.lower()]))
@@ -126,6 +131,8 @@ class RequestHeaderTestCase(testutils.StartServerMixin,TestCase):
         sso_headers = []
         other_headers = []
         for k,v in cls.injected_headers.items():
+            if k.lower() in cls.headers:
+                continue
             if k.lower() in cls.sso_headers:
                 if res_headers.get(k.lower()) != cls.user_sso_headers[k]:
                     sso_headers.append("{}={}(expected {})".format(k,res_headers.get(k.lower()),cls.user_sso_headers[k]))
@@ -137,12 +144,13 @@ class RequestHeaderTestCase(testutils.StartServerMixin,TestCase):
 
     def test_auth_basic(self):
         cls = self.__class__
-
         res = requests.get(cls.get_absolute_url(cls.auth_basic_url),headers=cls.injected_headers,auth=requests.auth.HTTPBasicAuth(cls.testuser.email, cls.testusertoken.token)).json()
         res_headers = res.get("headers",{})
         sso_headers = []
         other_headers = []
         for k,v in cls.injected_headers.items():
+            if k.lower() in cls.headers:
+                continue
             if k.lower() in cls.sso_headers:
                 if res_headers.get(k.lower()) != cls.user_sso_headers[k]:
                     sso_headers.append("{}={}(expected {})".format(k,res_headers.get(k.lower()),cls.user_sso_headers[k]))

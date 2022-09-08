@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+import traceback
 import string
 
 from django.conf import settings
@@ -15,6 +16,7 @@ from django.utils.crypto import  get_random_string
 from .. import models
 from .. import utils
 from .. import performance
+from ..models import DebugLog
 
 logger = logging.getLogger(__name__)
 
@@ -81,11 +83,20 @@ def expire_at(cache,value,timeout):
         cache._set_expire_at(value,timeout)
         
 class _AbstractSessionStore(SessionBase):
+    COOKIEDOMAIN = settings.SESSION_COOKIE_DOMAIN[1:] if (settings.SESSION_COOKIE_DOMAIN and settings.SESSION_COOKIE_DOMAIN[0] == ".") else settings.SESSION_COOKIE_DOMAIN
+    COOKIEDOMAINSUFFIX = settings.SESSION_COOKIE_DOMAIN if (settings.SESSION_COOKIE_DOMAIN and settings.SESSION_COOKIE_DOMAIN[0]) == "." else ".{}".format(settings.SESSION_COOKIE_DOMAIN)
+    
     cache_key_prefix = "{}:session:".format(settings.CACHE_KEY_PREFIX) if settings.CACHE_KEY_PREFIX else "session:"
     _idppk = None
     expired_session_key = None
+    _cookie_changed = None
+    _samedomain = None
+    _cookie_domain = None
 
-    def __init__(self, session_key=None):
+    def __init__(self,session_key=None,request=None,cookie_domain=None):
+        self._request = request
+        if cookie_domain:
+            self._cookie_domain = cookie_domain
         if session_key and "-" in session_key:
             #authenticated session, get the idp pk from session key
             try:
@@ -96,13 +107,117 @@ class _AbstractSessionStore(SessionBase):
         super().__init__(session_key)
 
     @property
+    def samedomain(self):
+        """
+        Return True if the request's host is the domain of the session cookie or subdomain of the session cookie
+        """
+        if self._samedomain is None:
+            if self._request:
+                host = self._request.get_host()
+                self._samedomain = host.endswith(self.COOKIEDOMAINSUFFIX) or host == self.COOKIEDOMAIN
+            else:
+                self._samedomain = True
+
+        return self._samedomain
+
+    @classmethod
+    def is_cookie_domain_match(cls,request,cookie_domain):
+        """
+        Check whether the cookie_domain which is embeded in cookie value match with the required domain, if not match, will delete the cookie and let user login again.
+        This is used to address the issue: if SESSION_COOKIE_DOMAINS changed, session cookie domain for non-dbca domain can be changed, and that will cause browser can keep multiple session cookies for the same non-dbca app. this logic
+        is try to identify this case, and remove the undesired cookies from browser
+        should consider the scenario: backend uses user's session cookie to access other application even in different domain.
+        If cookie domain is null, that cookie should come from dbca domain, always return True
+        If request host is belonging the cookie domain, Return True if the cookie domain match the required domain otherwise return False
+        If requst host is not belonging the cookie domain, means the cookie is used by backend to access the other application which in in other domain, return True
+
+        """
+        if not cookie_domain:
+            #from dbca domain
+            return True
+        host = request.get_host() 
+        if host[len(cookie_domain) * -1:] == cookie_domain and (len(cookie_domain) == len(host) or host[len(cookie_domain) * -1 -1] == "."):
+            #belong the same domain
+            domain = settings.GET_SESSION_COOKIE_DOMAIN(host) or host
+            return domain == cookie_domain
+        else:
+           #don't belong the same domain. cross-domain accessing
+           return True
+
+    @classmethod
+    def get_cookie_domain(cls,request):
+        """
+        Always return a domain of the current session cookie. 
+        used for log.
+        """
+        host = request.get_host() 
+        if host.endswith(cls.COOKIEDOMAINSUFFIX) or host == cls.COOKIEDOMAIN:
+            return settings.SESSION_COOKIE_DOMAIN
+        else:
+            return settings.GET_SESSION_COOKIE_DOMAIN(host) or host
+
+    @property
+    def cookie_domain(self):
+        """
+        Return the domain to populate the session cookie object
+        """
+        if self.samedomain:
+            return settings.SESSION_COOKIE_DOMAIN
+        else:
+            return settings.GET_SESSION_COOKIE_DOMAIN(self._request.get_host())
+
+    @property
+    def current_cookie_domain(self):
+        """
+        Return the domain of the current session cookie 
+        Used for deleting current session cookie from browser
+        """
+        if self._cookie_domain:
+            if self._request.get_host() == self._cookie_domain:
+                return None
+            else:
+                return self._cookie_domain
+        elif self.samedomain:
+            return settings.SESSION_COOKIE_DOMAIN
+        else:
+            return settings.GET_SESSION_COOKIE_DOMAIN(self._request.get_host())
+
+    @property
     def cookie_value(self):
         #should be only called if session is not empty
-        return self.session_key or self.expired_session_key
+        if self._cookie_domain:
+            return "{}|{}".format(self.session_key or self.expired_session_key,self._cookie_domain)
+        else:
+            return self.session_key or self.expired_session_key
+
+    def _get_session_key(self):
+        return self.__session_key
+
+    def _set_session_key(self, value):
+        """
+        Validate session key on assignment. Invalid values will set to None.
+        """
+        if not self._validate_session_key(value):
+            value = None
+
+        if self._cookie_changed is None:
+            self._cookie_changed = False
+        elif value:
+            self._cookie_changed = True
+        else:
+            #session key is set to None, the session cookie should be deleted from browser. 
+            #expired_session_key is set to the value of session key and then session key is set to None, the session cookie shoule remain untouched in browser
+            #in both cases, the session cookie shoule not be updated.
+            self._cookie_changed = False
+
+        self.__session_key = value
+
+    session_key = property(_get_session_key)
+    _session_key = property(_get_session_key, _set_session_key)
 
     @property
     def cookie_changed(self):
-        return False
+        return self._cookie_changed
 
     @property
     def expireat(self):
@@ -375,9 +490,9 @@ else:
 
 if settings.SESSION_CACHES == 1:
     class _SessionStoreWithMultiCacheSupport(_SessionStoreWithSyncModeSupport):
-        def __init__(self, session_key=None):
+        def __init__(self,session_key=None,request=None,cookie_domain=None):
             self._cache = caches[settings.SESSION_CACHE_ALIAS]
-            super().__init__(session_key)
+            super().__init__(session_key=session_key,request=request,cookie_domain=cookie_domain)
 
         def _get_cache(self,session_key=None):
             return self._cache
@@ -392,9 +507,9 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
     if settings.PREVIOUS_SESSION_CACHES == 1:
         class _SessionStoreWithPreviousCacheSupport(_SessionStoreWithMultiCacheSupport):
             previous_cache_key_prefix = "{}:session:".format(settings.PREVIOUS_CACHE_KEY_PREFIX) if settings.PREVIOUS_CACHE_KEY_PREFIX else "session:"
-            def __init__(self, session_key=None):
+            def __init__(self,session_key=None,request=None,cookie_domain=None):
                 self._previous_cache = caches[settings.PREVIOUS_SESSION_CACHE_ALIAS]
-                super().__init__(session_key)
+                super().__init__(session_key=session_key,request=request,cookie_domain=cookie_domain)
        
             def _get_previous_cache(self,session_key=None):
                 return self._previous_cache
@@ -443,6 +558,7 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
                                 try:
                                     performance.start_processingstep("load_session_from_cache")
                                     session_data = sessioncache.get(cachekey)
+                                    DebugLog.log(DebugLog.MOVE_MOVED_PREVIOUS_SESSION if session_data else DebugLog.MOVE_NONEXIST_MOVED_PREVIOUS_SESSION,None,None,self._session_key,self._session_key,message="Move a {1}moved previous session({0})".format(self._session_key,"" if session_data else "non-existing "),target_session_key=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY))
                                 finally:
                                     performance.end_processingstep("load_session_from_cache")
                                     pass
@@ -482,6 +598,10 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
                                 finally:
                                     performance.end_processingstep("mark_previous_session_as_migrated")
                                     pass
+                                DebugLog.log(DebugLog.MOVE_PREVIOUS_SESSION,None,None,self._session_key,self._session_key,message="Move a previous session({0})".format(self._session_key),target_session_key=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY))
+                        else:
+                            DebugLog.log(DebugLog.MOVE_NONEXIST_PREVIOUS_SESSION,None,None,self._session_key ,self._session_key,message="No need to move a non-existing previous session({})".format(self._session_key))
+                            pass
                     finally:
                         performance.end_processingstep("migrate_session_from_previous_cache")
                         pass
@@ -497,14 +617,19 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
                         finally:
                             performance.end_processingstep("set_session_timeout")
                             pass
+            except :
+                logger.error("Failed to load session.{}".format(traceback.format_exc()))
+                #rasing exception will cause error "'NoneType' object has no attribute 'get'" in session  middleware
+                self._session_key = None
+                return  {}
             finally:
                 performance.end_processingstep("load_session")
                 pass
 
-            if session_data is not None:
+            if session_data :
                 return session_data
     
-            if self._session_key and "-" in self._session_key:
+            if self._session_key and "-" in self._session_key and self.samedomain:
                 #this is a authenticated session key, keep it for logout feature
                 self.expired_session_key = self._session_key
             self._session_key = None
@@ -536,17 +661,19 @@ else:
                         finally:
                             performance.end_processingstep("set_session_timeout")
                             pass
-            except Exception as ex:
-                logger.error("Failed to load session.{}".format(str(ex)))
-                raise
+            except :
+                logger.error("Failed to load session.{}".format(traceback.format_exc()))
+                #rasing exception will cause error "'NoneType' object has no attribute 'get'" in session  middleware
+                self._session_key = None
+                return  {}
             finally:
                 performance.end_processingstep("load_session")
                 pass
 
-            if session_data is not None:
+            if session_data :
                 return session_data
     
-            if self._session_key and "-" in self._session_key:
+            if self._session_key and "-" in self._session_key and self.samedomain:
                 #this is a authenticated session key, keep it for logout feature
                 self.expired_session_key = self._session_key
             self._session_key = None

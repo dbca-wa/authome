@@ -314,7 +314,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     created = models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
-        verbose_name_plural = "{}Identity Providers".format(" " * 2)
+        verbose_name_plural = "{}Identity Providers".format(" " * 4)
 
     @classmethod
     def get_model_change_cls(self):
@@ -507,7 +507,7 @@ Email: enquiries@dbca.wa.gov.au
     created = models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
-        verbose_name_plural = "{}Customizable userflows".format(" " * 3)
+        verbose_name_plural = "{}Customizable Userflows".format(" " * 5)
 
     @classmethod
     def get_model_change_cls(self):
@@ -778,7 +778,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
     class Meta:
         unique_together = [["users","excluded_users"]]
-        verbose_name_plural = "{}User Groups".format(" " * 5)
+        verbose_name_plural = "{}User Groups".format(" " * 7)
 
 
     @property
@@ -1575,7 +1575,7 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
 
     class Meta:
         unique_together = [["usergroup","domain"]]
-        verbose_name_plural = "{}User Group Authorizations".format(" " * 4)
+        verbose_name_plural = "{}User Group Authorizations".format(" " * 6)
 
     @classmethod
     def get_model_change_cls(self):
@@ -1668,7 +1668,7 @@ class UserToken(models.Model):
     modified = models.DateTimeField(editable=False,db_index=True,auto_now=True)
 
     class Meta:
-        verbose_name_plural = "{}Access Tokens".format(" " * 1)
+        verbose_name_plural = "{}Access Tokens".format(" " * 3)
 
     def __str__(self):
         return self.user.email
@@ -1744,7 +1744,7 @@ class UserTOTP(models.Model):
     created = models.DateTimeField(null=False,editable=False)
 
     class Meta:
-        verbose_name_plural = "{}User totps".format(" " * 1)
+        verbose_name_plural = "{}User TOTPs".format(" " * 3)
 
 class UserListener(object):
     @staticmethod
@@ -1846,7 +1846,9 @@ if defaultcache:
 
             o = cls.model.objects.all().order_by("-modified").first()
             if o:
-                if o.modified > last_synced:
+                if last_refreshed and last_refreshed >= o.modified:
+                    return UP_TO_DATE
+                elif o.modified > last_synced:
                     return OUT_OF_SYNC
             else:
                 return UP_TO_DATE

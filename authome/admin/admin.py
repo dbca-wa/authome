@@ -28,6 +28,18 @@ class CatchModelExceptionMixin(object):
             self.message_user(request, str(ex),level=messages.ERROR)
             return HttpResponseRedirect(request.get_full_path())
             
+class ExtraToolsChangeList(ChangeList):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.extra_tools = self.model_admin.extra_tools
+
+class ExtraToolsMixin(object):
+    extra_tools = None
+    def get_changelist(self, request, **kwargs):
+        """
+        Return the ChangeList class for use on the changelist page.
+        """
+        return ExtraToolsChangeList
 
 
 class CacheableChangeList(ChangeList):
@@ -62,6 +74,27 @@ class CacheableListTitleMixin(object):
         return CacheableChangeList
 
 class DatetimeMixin(object):
+    def _batchid(self,obj):
+        if not obj or not obj.batchid :
+            return ""
+        else:
+            return timezone.localtime(obj.batchid).strftime("%Y-%m-%d %H:%M:%S")
+    _batchid.short_description = "Batchid"
+
+    def _start_time(self,obj):
+        if not obj or not obj.start_time :
+            return ""
+        else:
+            return timezone.localtime(obj.start_time).strftime("%Y-%m-%d %H:%M:%S")
+    _start_time.short_description = "Start Time"
+
+    def _end_time(self,obj):
+        if not obj or not obj.end_time :
+            return ""
+        else:
+            return timezone.localtime(obj.end_time).strftime("%Y-%m-%d %H:%M:%S")
+    _end_time.short_description = "End Time"
+
     def _modified(self,obj):
         if not obj or not obj.modified :
             return ""
@@ -195,7 +228,7 @@ class NormalUser(models.User):
     class Meta:
         proxy = True
         verbose_name="User"
-        verbose_name_plural="{}Users".format(" " * 9)
+        verbose_name_plural="{}Users".format(" " * 11)
 
 class DeleteMixin(object):
     def delete_model(self, request, obj):
@@ -240,7 +273,7 @@ class SystemUser(models.User):
     class Meta:
         proxy = True
         verbose_name="System User"
-        verbose_name_plural="{}System Users".format(" " * 7)
+        verbose_name_plural="{}System Users".format(" " * 9)
 
 
 class SystemUserAdmin(UserGroupsMixin,DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdmin):
@@ -296,6 +329,8 @@ class UserGroupAdmin(CacheableListTitleMixin,DatetimeMixin,CatchModelExceptionMi
     readonly_fields = ('_modified',)
     fields = ('name','groupid','parent_group','users','excluded_users','identity_provider','session_timeout','_modified')
     ordering = ('parent_group','name',)
+    search_fields=("name",)
+    list_filter = ['parent_group']
     form = forms.UserGroupForm
 
     object_change_url_name = 'admin:{}_{}_change'.format(models.UserGroup._meta.app_label,models.UserGroup._meta.model_name)
@@ -332,6 +367,8 @@ class UserGroupAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,CatchMod
     readonly_fields = ('_modified',)
     fields = ('usergroup','domain','paths','excluded_paths','_modified')
     ordering = ('usergroup',models.sortkey_c.asc())
+    search_fields=("domain",)
+    list_filter = ['usergroup']
     form = forms.UserGroupAuthorizationForm
 
     object_change_url_name = 'admin:{}_{}_change'.format(models.UserGroupAuthorization._meta.app_label,models.UserGroupAuthorization._meta.model_name)
@@ -409,14 +446,14 @@ class SystemUserToken(models.User):
     class Meta:
         proxy = True
         verbose_name="System User"
-        verbose_name_plural="{}System User Tokens".format(" " * 6)
+        verbose_name_plural="{}System User Tokens".format(" " * 8)
 
 class NormalUserToken(models.User):
     objects = models.NormalUserManager()
     class Meta:
         proxy = True
         verbose_name="System User"
-        verbose_name_plural="{}User Tokens".format(" " * 8)
+        verbose_name_plural="{}User Tokens".format(" " * 10)
 
 
 class AccessTokenAdmin(DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdmin):
@@ -636,6 +673,7 @@ class CustomizableUserflowAdmin(CacheableListTitleMixin,DatetimeMixin,CatchModel
     form = forms.CustomizableUserflowForm
     fields = ('domain','fixed','default','mfa_set',"mfa_reset",'password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body","sortkey",'_modified','_created')
     ordering = (models.sortkey_c.asc(),)
+    search_fields=("domain",)
 
     object_change_url_name = 'admin:{}_{}_change'.format(models.CustomizableUserflow._meta.app_label,models.CustomizableUserflow._meta.model_name)
     def get_queryset(self, request):

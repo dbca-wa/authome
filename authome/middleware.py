@@ -1,5 +1,7 @@
 import time
 import logging
+import itertools
+import traceback
 from importlib import import_module
 
 from django.conf import settings
@@ -9,50 +11,87 @@ from django.utils.cache import patch_vary_headers
 from django.utils.deprecation import MiddlewareMixin
 from django.utils.http import http_date
 from django.http import HttpResponse,HttpResponseForbidden
+from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
+from django.http.cookie import SimpleCookie as DjangoSimpleCookie
+
+from .models import DebugLog
+from . import utils
 
 logger = logging.getLogger(__name__)
 
 FORBIDDEN_RESPONSE = HttpResponseForbidden()
 LB_HASH_KEY_MISSING_RESPONSE = HttpResponse("Can't find X-lb-hash-key",status=500)
 
-class ClusterSessionMiddleware(MiddlewareMixin):
+class SimpleCookie(DjangoSimpleCookie):
+    """
+    Enable add multiple "Set-Cookie" for same cookie but different domain in response to delete a cookie for different domains
+    But some browser can delete the cookie from different domains, other browser only choose one 'Set-Cookie' to delete the cookie from only one domain
+    So this solution is not reliable.
+    """
+    def __init__(self,simplecookie=None):
+        for k,v, in (simplecookie or {}).items():
+            self[k] = v
+
+    def delete_cookie(self, key, path='/', domain=None, samesite=None,secure=False,httponly=False):
+        cookies = DjangoSimpleCookie()
+        cookies[key] = ""
+        c = cookies[key]
+        try:
+            existing = self[key]
+            #already existing, create another cookie with same name
+            self["{}({}{})".format(key,domain,path)] = c
+        except KeyError as ex:
+            #does not exist before, add it directly
+            self[key] = c
+
+        c["expires"] ='Thu, 01 Jan 1970 00:00:00 GMT'
+        if domain is not None:
+            c['domain'] = domain
+        
+        c['max-age'] = 0
+        if path is not None:
+            c['path'] = path
+        if secure:
+            c['secure'] = True
+        if samesite:
+            c['samesite'] = samesite
+        if secure:
+            c['secure'] = True
+        if httponly:
+            c['httponly'] = True
+ 
+class SessionMiddleware(MiddlewareMixin):
     def __init__(self, get_response=None):
         super().__init__(get_response)
         engine = import_module(settings.SESSION_ENGINE)
         self.SessionStore = engine.SessionStore
 
+    
+
     def process_request(self, request):
         session_cookie = request.COOKIES.get(settings.SESSION_COOKIE_NAME)
+        
+        DebugLog.attach_request(request)
         if session_cookie:
             values = session_cookie.split("|")
             if len(values) == 1:
+                cookie_domain = None
                 session_key = values[0]
-                lb_hash_key = request.headers.get("X-lb-hash-key")
-                if not lb_hash_key:
-                    return LB_HASH_KEY_MISSING_RESPONSE
-                request.session = self.SessionStore(lb_hash_key,None,session_key)
+            elif len(values) == 2:
+                session_key,cookie_domain = values
             else:
-                try:
-                    lb_hash_key,auth2_clusterid,session_key = values
-                    if auth2_clusterid != settings.AUTH2_CLUSTERID:
-                        #current auth2 server is not the original auth2 server
-                        #maybe caused by new auth2 server added, existing auth2 server removed, some auth2 server unavailable, or hacked by the user
-                        if not self.SessionStore.check_integrity(lb_hash_key,auth2_clusterid,session_key):
-                            #session cookie is hacked by the user or 
-                            return FORBIDDEN_RESPONSE
-                
-                    request.session = self.SessionStore(lb_hash_key,auth2_clusterid,session_key)
-                except:
-                    #invalid session cookie
-                    request.session = self.SessionStore(None,None,None)
+                #invalid cookie, maybe a cluster cookie
+                request.session = self.SessionStore(session_key=None,request=request)
+                return
+
+            if self.SessionStore.is_cookie_domain_match(request,cookie_domain):
+                request.session = self.SessionStore(session_key=session_key,request=request,cookie_domain=cookie_domain)
+            else:
+                request.session = self.SessionStore(session_key=None,request=request,cookie_domain=cookie_domain)
+                logger.warning("The domain({1}) of the cookie({0}) does not match the required domain({2})".format(session_cookie,cookie_domain,self.SessionStore.get_cookie_domain(request)))
+                DebugLog.log(DebugLog.DOMAIN_NOT_MATCH,None,None,session_key,session_key,message="The domain({1}) of the session cookie({0}) does not match the required domain({2}),request={3},cookies={4}".format(session_cookie,cookie_domain,self.SessionStore.get_cookie_domain(request),request.path_info,request.headers.get("cookie")))
         else:
-            lb_hash_key = request.headers.get("X-lb-hash-key")
-            if not lb_hash_key:
-                if request.path.startswith("/cluster"):
-                    request.session = self.SessionStore(None,None,None)
-                else:
-                    return HttpResponse("Can't find X-lb-hash-key",status=500)
-            request.session = self.SessionStore(lb_hash_key,settings.AUTH2_CLUSTERID,None)
+            request.session = self.SessionStore(session_key=None,request=request)
 
     def process_response(self, request, response):
         """
@@ -73,10 +112,11 @@ class ClusterSessionMiddleware(MiddlewareMixin):
                 response.delete_cookie(
                     settings.SESSION_COOKIE_NAME,
                     path=settings.SESSION_COOKIE_PATH,
-                    domain=settings.SESSION_COOKIE_DOMAIN,
-                    samesite=settings.SESSION_COOKIE_SAMESITE,
+                    domain=request.session.current_cookie_domain,
+                    samesite=settings.SESSION_COOKIE_SAMESITE
                 )
                 patch_vary_headers(response, ('Cookie',))
+                DebugLog.log_if_true("-" in utils.get_source_session_key(request) ,DebugLog.DELETE_COOKIE,DebugLog.get_lb_hash_key(request.session),utils.get_source_clusterid(request),utils.get_source_base_session_key(request),utils.get_source_session_key(request),message="Delete an expired authenticated session cookie({})".format(utils.get_source_session_cookie(request)))
         else:
             if accessed:
                 patch_vary_headers(response, ('Cookie',))
@@ -103,12 +143,78 @@ class ClusterSessionMiddleware(MiddlewareMixin):
 
                 response.set_cookie(
                     settings.SESSION_COOKIE_NAME,
-                    request.session.cookie_value, max_age=max_age,
-                    expires=expires, domain=settings.SESSION_COOKIE_DOMAIN,
+                    request.session.cookie_value, 
+                    max_age=max_age,
+                    expires=expires, 
+                    domain=request.session.cookie_domain,
                     path=settings.SESSION_COOKIE_PATH,
                     secure=settings.SESSION_COOKIE_SECURE or None,
                     httponly=settings.SESSION_COOKIE_HTTPONLY or None,
-                    samesite=settings.SESSION_COOKIE_SAMESITE,
+                    samesite=settings.SESSION_COOKIE_SAMESITE
                 )
+                #Only record authenticated session
+                DebugLog.log_if_true("-" in request.session.session_key and utils.get_source_base_session_key(request) == DebugLog.get_base_session_key(session=request.session),DebugLog.UPDATE_COOKIE,DebugLog.get_lb_hash_key(request.session),utils.get_source_clusterid(request),DebugLog.get_base_session_key(session=request.session),utils.get_source_session_key(request),message="Return an updated session cookie({})".format(request.session.cookie_value),userid=request.session.get(USER_SESSION_KEY),target_session_key=request.session.session_key)
+                    
+                DebugLog.log_if_true("-" in request.session.session_key and utils.get_source_base_session_key(request) != DebugLog.get_base_session_key(session=request.session),DebugLog.CREATE_COOKIE,DebugLog.get_lb_hash_key(request.session),utils.get_source_clusterid(request),DebugLog.get_base_session_key(session=request.session),utils.get_source_session_key(request),message="Return a new session cookie({})".format(request.session.cookie_value),userid=request.session.get(USER_SESSION_KEY),target_session_key=request.session.session_key)
         return response
+
+
+class ClusterSessionMiddleware(SessionMiddleware):
+    def process_request(self, request):
+        session_cookie = request.COOKIES.get(settings.SESSION_COOKIE_NAME)
+        nginx_lb_hash_key = request.headers.get("X-lb-hash-key")
+        if not nginx_lb_hash_key and not request.path.startswith("/cluster"):
+            return LB_HASH_KEY_MISSING_RESPONSE
+        DebugLog.attach_request(request)
+        if session_cookie:
+            values = session_cookie.split("|")
+            length = len(values)
+            if length < 3:
+                if length == 1:
+                    session_key  = values[0]
+                    cookie_domain = None
+                else:
+                    session_key,cookie_domain = values
+                if self.SessionStore.is_cookie_domain_match(request,cookie_domain):
+                    request.session = self.SessionStore(nginx_lb_hash_key,None,session_key,request=request,cookie_domain=cookie_domain)
+                else:
+                    request.session = self.SessionStore(nginx_lb_hash_key,None,None,request=request,cookie_domain=cookie_domain)
+                    logger.warning("The domain({1}) of the session cookie({0}) does not match the required domain(    {2}),request={3},cookies={4}".format(session_cookie,cookie_domain,self.SessionStore.get_cookie_domain(request),request.path_info,request.headers.get("cookie")))
+                    DebugLog.log(DebugLog.DOMAIN_NOT_MATCH,nginx_lb_hash_key,None,session_key,session_key,message="The domain({1}) of the session cookie({0}) does not match the required domain({2}),request={3},cookies={4}".format(session_cookie,cookie_domain,self.SessionStore.get_cookie_domain(request),request.path_info,request.headers.get("cookie")))
+            else:
+                try:
+                    if length == 3:
+                        cookie_domain = None
+                        lb_hash_key,auth2_clusterid,session_key = values
+                    else:
+                        lb_hash_key,auth2_clusterid,session_key,cookie_domain = values
+                    #some browser has a bug "send multiple values for a single cookie", or send a cookie for different domain
+                    if not self.SessionStore.is_cookie_domain_match(request,cookie_domain):
+                        #load balance hash key does not match the lb hash key in session cookie, or cookie domain does not match the required domain
+                        #this is a abnormal scenario, logout and let user login again
+                        request.session = self.SessionStore(nginx_lb_hash_key,None,None,request=request,cookie_domain=cookie_domain)
+                        logger.warning("The domain({1}) of the session cookie({0}) does not match the required domain({2}) . request={3}, cookies={4}".format(session_cookie,cookie_domain,self.SessionStore.get_cookie_domain(request),"{}{}".format(utils.get_host(request),request.path_info),request.headers.get("cookie")))
+                        DebugLog.log(DebugLog.DOMAIN_NOT_MATCH,nginx_lb_hash_key,auth2_clusterid,DebugLog.get_base_session_key(session_key),session_key,message="The domain({1}) of the session cookie({0}) does not match the required domain({2}) . request={3}, cookies={4}".format(session_cookie,cookie_domain,self.SessionStore.get_cookie_domain(request),"{}{}".format(utils.get_host(request),request.path_info),request.headers.get("cookie")),userid=request.session.get(USER_SESSION_KEY))
+                        return
+                    elif nginx_lb_hash_key != lb_hash_key:
+                        #load balance hash key does not match the lb hash key in session cookie, or cookie domain does not match the required domain
+                        #this is a abnormal scenario, logout and let user login again
+                        request.session = self.SessionStore(nginx_lb_hash_key,None,None,request=request,cookie_domain=cookie_domain)
+                        logger.warning("The lb hash key in session cookie({}) does not match the request header 'lb-hash-key',maybe more than one session cookies were sent . request={}, lb hash key input={},cookies={}".format(session_cookie,"{}{}".format(utils.get_host(request),request.path_info),request.headers.get("X-lb-hash-key-input"),request.headers.get("cookie")))
+                        DebugLog.log(DebugLog.LB_HASH_KEY_NOT_MATCH,nginx_lb_hash_key,auth2_clusterid,DebugLog.get_base_session_key(session_key),session_key,message="The lb hash key in session cookie({}) does not match the request header 'lb-hash-key', maybe more than one session cookies were sent . request={}, lb hash key input={},cookies={}".format(session_cookie,"{}{}".format(utils.get_host(request),request.path_info),request.headers.get("X-lb-hash-key-input"),request.headers.get("cookie")),userid=request.session.get(USER_SESSION_KEY))
+                        return
+                    
+                    if auth2_clusterid != settings.AUTH2_CLUSTERID:
+                        #current auth2 server is not the original auth2 server
+                        #maybe caused by new auth2 server added, existing auth2 server removed, some auth2 server unavailable, or hacked by the user
+                        if not self.SessionStore.check_integrity(lb_hash_key,auth2_clusterid,session_key):
+                            #session cookie is hacked by the user or 
+                            return FORBIDDEN_RESPONSE
+
+                    request.session = self.SessionStore(lb_hash_key,auth2_clusterid,session_key,request=request,cookie_domain=cookie_domain)
+                except:
+                    #invalid session cookie
+                    request.session = self.SessionStore(nginx_lb_hash_key,None,None,request=request,cookie_domain=cookie_domain)
+        else:
+            request.session = self.SessionStore(nginx_lb_hash_key,settings.AUTH2_CLUSTERID,None,request=request)
 

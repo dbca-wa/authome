@@ -62,7 +62,4 @@ if settings.DEBUG:
     #import debug_toolbar
     pass
 
-if settings.TRAFFIC_MONITOR_LEVEL > 0 :
-    urlpatterns.append(path('trafficmonitor',views.trafficmonitorfactory(),name="trafficmonitor"))
-
 handler400 = views.handler400

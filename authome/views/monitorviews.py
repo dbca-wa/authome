@@ -1,6 +1,7 @@
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 from django.utils import timezone
+from django.db import transaction
 
 from django_redis import get_redis_connection
 
@@ -15,7 +16,6 @@ from datetime import datetime,timedelta
 from .. import models
 from ..cache import cache,get_defaultcache
 from .. import utils
-
 
 defaultcache = get_defaultcache()
 
@@ -50,10 +50,16 @@ def _get_localstatus():
     if settings.CACHE_SERVER:
         name = "default"
         if settings.CACHE_SERVER.lower().startswith("redis"):
-            cache_healthy,cache_msg = utils.ping_redisserver(name)
+            cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
+            if serverinfo:
+                info = " , {}".format(" , ".join("{}={}".format(k,utils.format_datetime(v) if isinstance(v,datetime) else v) for k,v in serverinfo.items()))
+            else:
+                info = ""
+
             r = get_redis_connection(name) 
             connection_pool = r.connection_pool
-            cache_servers[name] = "server = {} , connections = {} , max connections = {} , status = {}".format(utils.print_redisserver(settings.CACHE_SERVER),get_active_redis_connections(name),settings.CACHE_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),cache_msg)
+
+            cache_servers[name] = "server = {} , connections = {} , max connections = {}{}, status = {}".format(utils.print_redisserver(settings.CACHE_SERVER),get_active_redis_connections(name),settings.CACHE_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),info,cache_msg)
         else:
             cache_healthy,cache_msg = utils.ping_cacheserver(name)
             cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_SERVER,cache_msg)
@@ -65,10 +71,15 @@ def _get_localstatus():
         if settings.USER_CACHES  == 1:
             name = "user"
             if settings.CACHE_USER_SERVER[0].lower().startswith("redis"):
-                cache_healthy,cache_msg = utils.ping_redisserver(name)
+                cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
+                if serverinfo:
+                    info = " , {}".format(" , ".join("{}={}".format(k,utils.format_datetime(v) if isinstance(v,datetime) else v) for k,v in serverinfo.items()))
+                else:
+                    info = ""
+
                 r = get_redis_connection(name) 
                 connection_pool = r.connection_pool
-                cache_servers[name] = "server = {} , connections = {} , max connections = {} , status = {}".format(utils.print_redisserver(settings.CACHE_USER_SERVER[0]),get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),cache_msg)
+                cache_servers[name] = "server = {} , connections = {} , max connections = {}{} , status = {}".format(utils.print_redisserver(settings.CACHE_USER_SERVER[0]),get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),info,cache_msg)
             else:
                 cache_healthy,cache_msg = utils.ping_cacheserver(name)
                 cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_USER_SERVER[0],cache_msg)
@@ -80,10 +91,15 @@ def _get_localstatus():
             for i in range(settings.USER_CACHES):
                 name = "user{}".format(i)
                 if settings.CACHE_USER_SERVER[i].lower().startswith("redis"):
-                    cache_healthy,cache_msg = utils.ping_redisserver(name)
+                    cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
+                    if serverinfo:
+                        info = " , {}".format(" , ".join("{}={}".format(k,utils.format_datetime(v) if isinstance(v,datetime) else v) for k,v in serverinfo.items()))
+                    else:
+                        info = ""
+
                     r = get_redis_connection(name) 
                     connection_pool = r.connection_pool
-                    cache_servers[name] = "server = {} , connections = {} , max connections = {} , status = {}".format(utils.print_redisserver(settings.CACHE_USER_SERVER[i]),get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),cache_msg)
+                    cache_servers[name] = "server = {} , connections = {} , max connections = {}{} , status = {}".format(utils.print_redisserver(settings.CACHE_USER_SERVER[i]),get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),info,cache_msg)
                 else:
                     cache_healthy,cache_msg = utils.ping_cacheserver(name)
                     cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_USER_SERVER[i],cache_msg)
@@ -96,10 +112,15 @@ def _get_localstatus():
         if settings.SESSION_CACHES  == 1:
             name = "session"
             if settings.CACHE_SESSION_SERVER[0].lower().startswith("redis"):
-                cache_healthy,cache_msg = utils.ping_redisserver(name)
+                cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
+                if serverinfo:
+                    info = " , {}".format(" , ".join("{}={}".format(k,utils.format_datetime(v) if isinstance(v,datetime) else v) for k,v in serverinfo.items()))
+                else:
+                    info = ""
+
                 r = get_redis_connection(name) 
                 connection_pool = r.connection_pool
-                cache_servers[name] = "server = {} , connections = {} , max connections = {} ,  status = {}".format(utils.print_redisserver(settings.CACHE_SESSION_SERVER[0]),get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured") , cache_msg)
+                cache_servers[name] = "server = {} , connections = {} , max connections = {}{} ,  status = {}".format(utils.print_redisserver(settings.CACHE_SESSION_SERVER[0]),get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured") ,info, cache_msg)
             else:
                 cache_healthy,cache_msg = utils.ping_cacheserver(name)
                 cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_SESSION_SERVER[0],cache_msg)
@@ -112,10 +133,15 @@ def _get_localstatus():
             for i in range(settings.SESSION_CACHES):
                 name = "session{}".format(i)
                 if settings.CACHE_SESSION_SERVER[i].lower().startswith("redis"):
-                    cache_healthy,cache_msg = utils.ping_redisserver(name)
+                    cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
+                    if serverinfo:
+                        info = " , {}".format(" , ".join("{}={}".format(k,utils.format_datetime(v) if isinstance(v,datetime) else v) for k,v in serverinfo.items()))
+                    else:
+                        info = ""
+
                     r = get_redis_connection(name) 
                     connection_pool = r.connection_pool
-                    cache_servers[name] = "server:{} , connections:{} , max connections: {}".format(utils.print_redisserver(settings.CACHE_SESSION_SERVER[i]),get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
+                    cache_servers[name] = "server:{} , connections:{} , max connections: {}{} , status = {}".format(utils.print_redisserver(settings.CACHE_SESSION_SERVER[i]),get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),info,cache_msg)
                 else:
                     cache_healthy,cache_msg = utils.ping_cacheserver(name)
                     cache_servers[name] = "server = {} ,  status = {}".format(CACHE_SESSION_SERVER[i],cache_msg)
@@ -201,7 +227,7 @@ def _get_localhealthcheck():
     if settings.CACHE_SERVER:
         name = "default"
         if settings.CACHE_SERVER.lower().startswith("redis"):
-            cache_healthy,cache_msg = utils.ping_redisserver(name)
+            cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
         else:
             cache_healthy,cache_msg = utils.ping_cacheserver(name)
         if not cache_healthy:
@@ -212,7 +238,7 @@ def _get_localhealthcheck():
         if settings.USER_CACHES  == 1:
             name = "user"
             if settings.CACHE_USER_SERVER[0].lower().startswith("redis"):
-                cache_healthy,cache_msg = utils.ping_redisserver(name)
+                cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
             else:
                 cache_healthy,cache_msg = utils.ping_cacheserver(name)
 
@@ -223,7 +249,7 @@ def _get_localhealthcheck():
             for i in range(settings.USER_CACHES):
                 name = "user{}".format(i)
                 if settings.CACHE_USER_SERVER[i].lower().startswith("redis"):
-                    cache_healthy,cache_msg = utils.ping_redisserver(name)
+                    cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
                 else:
                     cache_healthy,cache_msg = utils.ping_cacheserver(name)
 
@@ -235,7 +261,7 @@ def _get_localhealthcheck():
         if settings.SESSION_CACHES  == 1:
             name = "session"
             if settings.CACHE_SESSION_SERVER[0].lower().startswith("redis"):
-                cache_healthy,cache_msg = utils.ping_redisserver(name)
+                cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
             else:
                 cache_healthy,cache_msg = utils.ping_cacheserver(name)
 
@@ -247,7 +273,7 @@ def _get_localhealthcheck():
             for i in range(settings.SESSION_CACHES):
                 name = "session{}".format(i)
                 if settings.CACHE_SESSION_SERVER[i].lower().startswith("redis"):
-                    cache_healthy,cache_msg = utils.ping_redisserver(name)
+                    cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
                 else:
                     cache_healthy,cache_msg = utils.ping_cacheserver(name)
 
@@ -316,18 +342,38 @@ def healthcheckfactory(t=None):
         return  _localhealthcheck
 
 
-def _sum(d1,d2,excluded_keys=None):
+def _sum(d1,d2,excluded_keys=None,included_keys=None):
+    if not d2:
+        return
     if "requests" in d2 and d2["requests"] == 0:
         return
     for k,v in d2.items():
         if excluded_keys and k in excluded_keys:
             continue
+        if included_keys and k not in included_keys:
+            continue
+        if not v:
+            continue
+        #convert the domains data to the same data structure when the monitor level is changed
+        if k == "domains" and k in d1:
+            if isinstance(v,dict):
+                if not isinstance(d1[k],dict):
+                    #level changed, 
+                    d1[k] = {"requests":d1[k]}
+            elif isinstance(d1[k],dict):
+                #level changed, 
+                v = {"requests":v}
+
         if isinstance(v,dict):
             if k not in d1:
                d1[k] = {}
+            elif not isinstance(d1[k],dict):
+                d1[k] = {}
             _sum(d1[k],v)
+        elif not isinstance(v,(int,float,complex)):
+            continue
         elif v <= 0:
-            pass
+            continue
         elif k not in d1:
             d1[k] = v
         elif k.startswith("min"):
@@ -350,166 +396,121 @@ def _add_avg(d):
             _add_avg(v)
 
 def _del_no_requests_data(d):
-    def _del_func(obj):
-        for k in [k for k,v in obj.items() if isinstance(v,dict) and "requests" in v and v["requests"] == 0]:
-            del obj[k]
-            
-        for v in obj.values():
-            if isinstance(v,dict):
-                _del_func(v)
+    for k in [k for k,v in d.items() if not v or (isinstance(v,dict) and "requests" in v and v["requests"] == 0)]:
+        del d[k]
 
     for v in d.values():
         if isinstance(v,dict):
-            _del_func(v)
+            _del_no_requests_data(v)
 
-def _get_localtrafficmonitor(request):
-    #level 1: only show the summary, 2: summary, time based summary, 3: summary , time based summary and server process based data
+sso_requests_keys = {"auth","auth_basic","auth_optional"}
+def _save_trafficdata(batchid):
     client = defaultcache.client.get_client()
+    trafficdata_key = cache.traffic_data_key
 
-    now = timezone.localtime()
-    today = datetime(now.year,now.month,now.day,tzinfo=now.tzinfo)
+    pdatas = client.lrange(trafficdata_key,0,-1)
+    if not pdatas:
+        return []
 
-    try:
-        level = int(request.GET.get("level",1))
-    except:
-        level = 1
+    traffic_datas = {}
+    datalength = len(pdatas)
+    index = datalength - 1
+    for pdata in pdatas:
+        if not pdata:
+            continue
+        pdata = json.loads(pdata)
+        pdata["starttime"] = utils.parse_datetime(pdata["starttime"])
+        pdata["endtime"] = utils.parse_datetime(pdata["endtime"])
+        key = (pdata["starttime"], pdata["endtime"])
+        traffic_data = traffic_datas.get(key)
+        if not traffic_data:
+            traffic_data = {
+                "starttime":pdata["starttime"],
+                "endtime":pdata["endtime"],
+                "sso_requests":{},
+            }
+            traffic_datas[key] = traffic_data
+        for method in sso_requests_keys:
+            data = pdata.get(method)
+            if data:
+                _sum(traffic_data["sso_requests"],pdata[method])
+        _sum(traffic_data,pdata)
 
-    start_data_ts = None
-
-    hours = request.GET.get("hours")
-    if hours:
-        try:
-            hours = int(hours)
-            if hours > 0:
-                seconds_in_day = (now - today).seconds - hours * 3600
-                start_data_ts = today + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
-        except:
-            pass
-
-    if not start_data_ts:
-        try:
-            start_time = request.GET.get("starttime")
-            if start_time:
-                start_time = timezone.make_aware(datetime.strptime(start_time,"%Y-%m-%d %H:%M:%S"))
-                start_day = datetime(start_time.year,start_time.month,start_time.day,tzinfo=start_time.tzinfo)
-                seconds_in_day = (start_time - start_day).seconds
-                start_data_ts = start_day + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
-            else:
-                start_data_ts = today
-        except:
-            start_data_ts = today
-
-    end_data_ts = None
-    try:
-        end_time = request.GET.get("endtime")
-        if end_time:
-            end_time = timezone.make_aware(datetime.strptime(end_time,"%Y-%m-%d %H:%M:%S"))
-            end_day = datetime(end_time.year,end_time.month,end_time.day,tzinfo=end_time.tzinfo)
-            seconds_in_day = (end_time - end_day).seconds
-            end_data_ts = end_day + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
-    except:
-        pass
-
-    if not end_data_ts:
-        seconds_in_day = (now - today).seconds
-        end_data_ts = today + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds - settings.TRAFFIC_MONITOR_INTERVAL.seconds)
-
-    data = OrderedDict()
-    data_ts = start_data_ts
-    data["starttime"] = utils.format_datetime(start_data_ts)
-    data["endtime"] = utils.format_datetime(end_data_ts)
-    if settings.TRAFFIC_MONITOR_LEVEL <= 0:
-        data["traffic_monitor_enabled"] = False
-        return (level,start_data_ts,end_data_ts,data)
-
-    times_data = OrderedDict()
-
-    while data_ts <= end_data_ts:
-        try:
-            key = cache.traffic_data_key_pattern.format(data_ts.strftime("%Y%m%d%H%M"))
-            pdatas = client.lrange(key,0,-1)
-            if not pdatas:
+    for data in traffic_datas.values():
+        _add_avg(data)
+    result = []
+    with transaction.atomic():
+        #save the data to db
+        for data in traffic_datas.values():
+            if not data.get("sso_requests",{}).get("requests") and not data.get("get_remote_session",{}).get("requests") and not data.get("mark_session_as_migrated",{}).get("requests"):
+                #no requests
+                logger.debug("Ignore empty data")
                 continue
+            traffic_data = models.TrafficData(
+                cluster=cache.current_auth2_cluster if settings.AUTH2_CLUSTER_ENABLED else None,
+                clusterid=settings.AUTH2_CLUSTERID,
+                start_time=data["starttime"],
+                end_time=data["endtime"],
+                batchid=batchid,
+                requests=data["sso_requests"].get("requests") or 0,
+                total_time=data["sso_requests"].get("totaltime"),
+                min_time=data["sso_requests"].get("mintime"),
+                max_time=data["sso_requests"].get("maxtime"),
+                avg_time=data["sso_requests"].get("avgtime"),
+                status=data["sso_requests"].get("status"),
+                domains=data["sso_requests"].get("domains"),
+                get_remote_sessions = data.get("get_remote_session",{}).get("requests") or 0,
+                migrate_remote_sessions = data.get("mark_session_as_migrated",{}).get("requests") or 0
+            )
+            traffic_data.save()
+            result.append([utils.encode_datetime(traffic_data.start_time),utils.encode_datetime(traffic_data.end_time),traffic_data.requests,traffic_data.get_remote_sessions,traffic_data.migrate_remote_sessions])
+            for method,method_data in data.items():
+                if method in ("sso_requests","starttime","endtime"):
+                    continue
+                if not isinstance(method_data,dict) or not method_data.get("requests"):
+                    continue
 
-            index = len(pdatas) - 1
-            while index >= 0:
-                if not pdatas[index]:
-                    del pdatas[index]
-                else:
-                    pdatas[index] = json.loads(pdatas[index])
-                index -= 1
-                
-            pdatas.sort(key=lambda o:o["serverid"])
-
-            time_data = OrderedDict()
-            servers_data = OrderedDict()
-            if level > 1:
-                times_data[ utils.format_datetime(data_ts)] = time_data
-            for pdata in pdatas:
-                serverid = pdata.pop("serverid")
-                _sum(time_data,pdata)
-                if level > 2:
-                    if serverid in servers_data:
-                        i = 1
-                        while True:
-                            key = "{}.{}".format(serverid,i)
-                            if key in servers_data:
-                                i += 1
-                            else:
-                                servers_data[key] = pdata
-                                break
-                    else:
-                        servers_data[serverid] = pdata
-            _sum(data,time_data)
-            if level > 2:
-                time_data["servers"] = servers_data
-        finally:
-            data_ts += settings.TRAFFIC_MONITOR_INTERVAL
-    if level > 1:
-        data["times"] = times_data
-    _add_avg(data)
-    _del_no_requests_data(data)
-
-    return (level,start_data_ts,end_data_ts,data)
-
-def _localtrafficmonitor(request):
-    level,start_data_ts,end_data_ts,data = _get_localtrafficmonitor(request)
-
-    return JsonResponse(data,status=200)
-
-def _clusterstrafficmonitor(request):
-    result = OrderedDict()
-    level,start_data_ts,end_data_ts,data = _get_localtrafficmonitor(request)
-    result["starttime"] = data.pop("starttime")
-    result["endtime"] = data.pop("endtime")
-    _sum(result,data,excluded_keys=("avgtime","times"))
-    clusters_data = OrderedDict()
-    clusters_data[settings.AUTH2_CLUSTERID] = data
-    for c in cache.auth2_clusters.values():
-        try:
-            data = cache.get_traffic_data(c.clusterid,level,start_data_ts,end_data_ts)
-            del data["starttime"]
-            del data["endtime"]
-            _sum(result,data,excluded_keys=("avgtime","times","traffic_monitor_enabled"))
-        except Exception as ex:
-            data["exception"] = str(ex)
-        clusters_data[c.clusterid] = data
-
-    result["clusters"] = clusters_data
-    _add_avg(result)
-    return JsonResponse(result,status=200)
-
-def trafficmonitorfactory(t=None):
-    if t:
-        if t == "local":
-            return  _localtrafficmonitor
+                method_traffic_data = models.SSOMethodTrafficData(
+                    traffic_data=traffic_data,
+                    sso_method=method,
+                    requests=method_data.get("requests"),
+                    total_time=method_data.get("totaltime"),
+                    min_time=method_data.get("mintime"),
+                    max_time=method_data.get("maxtime"),
+                    avg_time=method_data.get("avgtime"),
+                    status=method_data.get("status"),
+                    domains=method_data.get("domains")
+                )
+                method_traffic_data.save()
+        #remove the saved data from cache
+        client.ltrim(trafficdata_key,datalength,-1)
+        #change the traffic_data process status
+        if settings.AUTH2_CLUSTER_ENABLED:
+            models.TrafficDataProcessStatus.objects.update_or_create(cluster=cache.current_auth2_cluster,clusterid=settings.AUTH2_CLUSTERID,defaults={"last_saved_batchid":batchid})
         else:
-            return _clusterstrafficmonitor
+            models.TrafficDataProcessStatus.objects.update_or_create(cluster__isnull=True,clusterid__isnull=True,defaults={"last_saved_batchid":batchid})
 
-    elif settings.AUTH2_CLUSTER_ENABLED:
-        return _clusterstrafficmonitor
-    else:
-        return  _localtrafficmonitor
+        return result
 
+
+def save_trafficdata(request):
+    batchid = request.GET.get("batchid")
+    if not batchid:
+        return  HttpResponse(content="Missing 'batchid'",status=400)
+    try:
+        batchid = utils.decode_datetime(batchid)
+    except:
+        return  HttpResponse(content="Invalid 'batchid'",status=400)
+
+    try:
+         result = _save_trafficdata(batchid)
+         return  JsonResponse({"result":result},status=200)
+    except :
+        if settings.AUTH2_CLUSTERID:
+            msg = "{} : Failed to save traffic data.{}".format(settings.AUTH2_CLUSTERID,traceback.format_exc())
+        else:
+            msg = "Failed to save traffic data.{}".format(traceback.format_exc())
+        logger.error(msg)
+        return HttpResponse(content=msg,status=500)
 
 
