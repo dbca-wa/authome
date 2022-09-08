@@ -113,9 +113,14 @@ GUEST_SESSION_AGE=env('GUEST_SESSION_AGE',default=3600) #login session timeout i
 SESSION_AGE=env('SESSION_AGE',default=1209600)
 SESSION_COOKIE_AGE=SESSION_AGE + 86400
 
-_session_cookie_domain_len = len(SESSION_COOKIE_DOMAIN)
-_session_cookie_domain_index = len(SESSION_COOKIE_DOMAIN) * -1
-_session_cookie_dot_index = len(SESSION_COOKIE_DOMAIN) * -1 - 1
+if SESSION_COOKIE_DOMAIN:
+    _session_cookie_domain_len = len(SESSION_COOKIE_DOMAIN)
+    _session_cookie_domain_index = len(SESSION_COOKIE_DOMAIN) * -1
+    _session_cookie_dot_index = len(SESSION_COOKIE_DOMAIN) * -1 - 1
+else:
+    _session_cookie_domain_len = 0
+    _session_cookie_domain_index = 0
+    _session_cookie_dot_index = 0
 
 SESSION_COOKIE_DOMAINS=env("SESSION_COOKIE_DOMAINS",default=[])
 i = 0
