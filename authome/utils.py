@@ -35,6 +35,21 @@ def get_processid():
         _processid = "{}-{}-{}".format(socket.gethostname(),processcreatetime,os.getpid())
     return _processid
 
+
+def build_cookie_value(lb_hash_key,clusterid,signature,session_key,cookie_domain):
+    from django.conf import settings
+    if cookie_domain:
+        if clusterid:
+            return "{}|{}|{}|{}{}{}".format(lb_hash_key,clusterid,signature,session_key,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,cookie_domain)
+        else:
+            return "{}{}{}".format(session_key,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,cookie_domain)
+    else:
+        if clusterid:
+            return "{}|{}|{}|{}".format(lb_hash_key,clusterid,signature,session_key)
+        else:
+            return session_key
+
+
 _process_data = threading.local()
 def attach_request(request):
     _process_data.request = request
@@ -49,6 +64,7 @@ def get_useragent():
         return _process_data.request.META.get('HTTP_USER_AGENT')
     except:
         return None
+
 def get_source_session_cookie(request=None):
     from django.conf import settings
     if not request:
@@ -57,53 +73,53 @@ def get_source_session_cookie(request=None):
         return None
     return request.COOKIES.get(settings.SESSION_COOKIE_NAME)
 
-def get_source_base_session_key(request=None):
+def get_source_cookie_domain(request=None):
     cookie = get_source_session_cookie(request)
+    return get_cookie_domain(cookie)
+
+def get_cookie_domain(cookie):
     if not cookie:
         return None
-    cookie_components = cookie.split("|")
-    if len(cookie_components) == 1:
-        return cookie_components[0]
-    elif len(cookie_components) == 2:
-        return cookie_components[0]
-    elif len(cookie_components) == 3:
-        return "{}{}".format(cookie_components[2][:-2-16],cookie_components[2][-2:])
-    elif len(cookie_components) == 4:
-        return "{}{}".format(cookie_components[2][:-2-16],cookie_components[2][-2:])
+    if settings.SESSION_COOKIE_DOMAIN_SEPATATOR in cookie:
+        return cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)[1]
     else:
-        return cookie
+        return None
 
 def get_source_session_key(request=None):
     cookie = get_source_session_cookie(request)
+    return get_session_key(cookie)
+
+def get_session_key(cookie):
+    from django.conf import settings
     if not cookie:
         return None
-    cookie_components = cookie.split("|")
-    if len(cookie_components) == 1:
-        return cookie_components[0]
-    elif len(cookie_components) == 2:
-        return cookie_components[0]
-    elif len(cookie_components) == 3:
-        return cookie_components[2]
-    elif len(cookie_components) == 4:
-        return cookie_components[2]
-    else:
-        return cookie
+    return cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)[0].rsplit("|",1)[-1]
 
 def get_source_clusterid(request=None):
     cookie = get_source_session_cookie(request)
+    return get_clusterid(cookie)
+
+def get_clusterid(cookie):
     if not cookie:
         return None
-    cookie_components = cookie.split("|")
-    if len(cookie_components) == 1:
+    cookie_components = cookie.split("|",3)
+    if len(cookie_components) < 4:
         return None
-    elif len(cookie_components) == 2:
-        return None
-    elif len(cookie_components) == 3:
-        return cookie_components[1]
-    elif len(cookie_components) == 4:
-        return cookie_components[1]
     else:
+        return cookie_components[1]
+
+def get_source_lb_hash_key(request=None):
+    cookie = get_source_session_cookie(request)
+    return get_lb_hash_key(cookie)
+
+def get_lb_hash_key(cookie):
+    if not cookie:
         return None
+    cookie_components = cookie.split("|",3)
+    if len(cookie_components) < 4:
+        return None
+    else:
+        return cookie_components[0]
 
 def get_request_path():
     try:
@@ -413,6 +429,18 @@ def _get_host2(request):
     return request.get_host()
 
 get_host = _get_host
+
+def check_integrity(lb_hash_key,auth2_clusterid,signature):
+    sig = sign_lb_hash_key(lb_hash_key,auth2_clusterid,settings.LB_HASH_KEY_SECRET)
+    if signature != sig:
+        if settings.PREVIOUS_LB_HASH_KEY_SECRET:
+            sig = utils.sign_lb_hash_key(hash_key,auth2_clusterid,settings.PREVIOUS_LB_HASH_KEY_SECRET)
+            if signature != sig:
+                return False
+        else:
+            return False
+
+    return True
 
 def sign_lb_hash_key(hash_key,clusterid,secretkey):
     h = hashlib.blake2b(digest_size=LB_HASH_KEY_DIGEST_SIZE)

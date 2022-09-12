@@ -186,7 +186,7 @@ class _AbstractSessionStore(SessionBase):
     def cookie_value(self):
         #should be only called if session is not empty
         if self._cookie_domain:
-            return "{}|{}".format(self.session_key or self.expired_session_key,self._cookie_domain)
+            return "{}{}{}".format(self.session_key or self.expired_session_key,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,self._cookie_domain)
         else:
             return self.session_key or self.expired_session_key
 
@@ -558,7 +558,7 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
                                 try:
                                     performance.start_processingstep("load_session_from_cache")
                                     session_data = sessioncache.get(cachekey)
-                                    DebugLog.log(DebugLog.MOVE_MOVED_PREVIOUS_SESSION if session_data else DebugLog.MOVE_NONEXIST_MOVED_PREVIOUS_SESSION,None,None,self._session_key,self._session_key,message="Move a {1}moved previous session({0})".format(self._session_key,"" if session_data else "non-existing "),target_session_key=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY))
+                                    DebugLog.log(DebugLog.MOVE_MOVED_PREVIOUS_SESSION if session_data else DebugLog.MOVE_NONEXIST_MOVED_PREVIOUS_SESSION,None,None,self._session_key,self._session_key,message="Move a {1}moved previous session({0})".format(self._session_key,"" if session_data else "non-existing "),target_session_cookie=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY))
                                 finally:
                                     performance.end_processingstep("load_session_from_cache")
                                     pass
@@ -598,9 +598,9 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
                                 finally:
                                     performance.end_processingstep("mark_previous_session_as_migrated")
                                     pass
-                                DebugLog.log(DebugLog.MOVE_PREVIOUS_SESSION,None,None,self._session_key,self._session_key,message="Move a previous session({0})".format(self._session_key),target_session_key=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY))
+                                DebugLog.log(DebugLog.MOVE_PREVIOUS_SESSION,None,None,self._session_key,utils.get_source_session_cookie(self._request),message="Move a previous session({0})".format(self._session_key),target_session_cookie=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY))
                         else:
-                            DebugLog.log(DebugLog.MOVE_NONEXIST_PREVIOUS_SESSION,None,None,self._session_key ,self._session_key,message="No need to move a non-existing previous session({})".format(self._session_key))
+                            DebugLog.log(DebugLog.MOVE_NONEXIST_PREVIOUS_SESSION,None,None,self._session_key ,utils.get_source_session_cookie(self._request),message="No need to move a non-existing previous session({})".format(self._session_key))
                             pass
                     finally:
                         performance.end_processingstep("migrate_session_from_previous_cache")
@@ -620,6 +620,7 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
             except :
                 logger.error("Failed to load session.{}".format(traceback.format_exc()))
                 #rasing exception will cause error "'NoneType' object has no attribute 'get'" in session  middleware
+                DebugLog.log(DebugLog.ERROR,None,None,self._session_key,utils.get_source_session_cookie(self._request),message="Failed to load session({}).{}".format(self._session_key,traceback.format_exc()))
                 self._session_key = None
                 return  {}
             finally:
@@ -664,6 +665,8 @@ else:
             except :
                 logger.error("Failed to load session.{}".format(traceback.format_exc()))
                 #rasing exception will cause error "'NoneType' object has no attribute 'get'" in session  middleware
+                DebugLog.log(DebugLog.ERROR,None,None,self._session_key,utils.get_source_session_cookie(self._request),message="Failed to load session({}).{}".format(self._session_key,traceback.format_exc()))
+                self._session_key = None
                 self._session_key = None
                 return  {}
             finally:

@@ -36,6 +36,7 @@ class DebugLog(models.Model):
     ERROR = 200
     LB_HASH_KEY_NOT_MATCH = 201
     DOMAIN_NOT_MATCH = 202
+    SESSION_COOKIE_HACKED = 210
 
     CATEGORIES = [
         (CREATE_COOKIE , "Create cookie"),
@@ -62,6 +63,7 @@ class DebugLog(models.Model):
 
         (LB_HASH_KEY_NOT_MATCH , "LB key not match"),
         (DOMAIN_NOT_MATCH, "Domain not match"),
+        (SESSION_COOKIE_HACKED,"Session cookie hacked"),
 
         (ERROR,"Error")
 
@@ -70,9 +72,9 @@ class DebugLog(models.Model):
     lb_hash_key = models.CharField(max_length=128,editable=False,null=True,db_index=True)
     clusterid = models.CharField(max_length=32,editable=False,null=True,db_index=True)
     session_clusterid = models.CharField(max_length=32,editable=False,null=True,db_index=True)
-    base_session_key = models.CharField(max_length=128,editable=False,null=True,db_index=True)
-    source_session_key = models.CharField(max_length=128,editable=False,null=True)
-    target_session_key = models.CharField(max_length=128,editable=False,null=True)
+    session_key = models.CharField(max_length=128,editable=False,null=True,db_index=True)
+    source_session_cookie = models.CharField(max_length=128,editable=False,null=True)
+    target_session_cookie = models.CharField(max_length=128,editable=False,null=True)
     email = models.CharField(max_length=128,editable=False,null=True,db_index=True)
     request = models.CharField(max_length=256,editable=False,null=True,db_index=True)
     category = models.PositiveSmallIntegerField(choices=CATEGORIES,default=CREATE_COOKIE)
@@ -81,18 +83,6 @@ class DebugLog(models.Model):
 
     class Meta:
         verbose_name_plural = "{}Auth2 Logs".format(" " * 0)
-
-    @classmethod
-    def get_base_session_key(cls,session_key=None,session=None):
-        import authome.sessionstore.clustersessionstore
-        if session_key:
-            return "{}{}".format(session_key[:-2-16],session_key[-2:])
-        elif not session:
-            return None
-        elif isinstance(session,authome.sessionstore.clustersessionstore.SessionStore):
-            return "{}{}".format(session.session_key[:-2-16],session.session_key[-2:])
-        else:
-            return session.session_key
 
     @classmethod
     def attach_request(cls,request):
@@ -110,9 +100,11 @@ class DebugLog(models.Model):
             return None
 
     @classmethod
-    def get_lb_hash_key(cls,session):
+    def get_lb_hash_key(cls,session=None,session_key=None):
         import authome.sessionstore.clustersessionstore
-        if isinstance(session,authome.sessionstore.clustersessionstore.SessionStore):
+        if session_key:
+            get_source_session_key
+        elif isinstance(session,authome.sessionstore.clustersessionstore.SessionStore):
             return session._lb_hash_key
         else:
             return None
@@ -130,18 +122,18 @@ class DebugLog(models.Model):
         if log.category >= cls.WARNING:
             return
 
-        logger.debug("{}, lb_hash_key={}, clusterid={}, session_clusterid={}, base_session_key={}, source_session_key={}, target_session_key={}, email={}, request={}".format(log.message,log.lb_hash_key,log.clusterid,log.session_clusterid,log.base_session_key,log.source_session_key,log.target_session_key,log.email,log.request))
+        logger.debug("{}, lb_hash_key={}, clusterid={}, session_clusterid={}, session_key={}, source_session_cookie={}, target_session_cookie={}, email={}, request={}".format(log.message,log.lb_hash_key,log.clusterid,log.session_clusterid,log.session_key,log.source_session_cookie,log.target_session_cookie,log.email,log.request))
 
 
     @classmethod
-    def log(cls,category,lb_hash_key,session_clusterid,base_session_key,source_session_key,message,target_session_key=None,userid=None):
+    def log(cls,category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=None,userid=None):
         log = DebugLog(
             lb_hash_key = lb_hash_key,
             clusterid = settings.AUTH2_CLUSTERID if settings.AUTH2_CLUSTER_ENABLED else None,
             session_clusterid = (session_clusterid if session_clusterid else (cache.default_auth2_cluster.clusterid if cache.default_auth2_cluster else "N/A")) if settings.AUTH2_CLUSTER_ENABLED else None,
-            base_session_key = base_session_key,
-            source_session_key = source_session_key,
-            target_session_key = target_session_key,
+            session_key = session_key,
+            source_session_cookie = source_session_cookie,
+            target_session_cookie = target_session_cookie,
             message = message,
             category=category,
             email = cls.get_email(userid),
@@ -152,16 +144,16 @@ class DebugLog(models.Model):
         cls.print(log)
 
     @classmethod
-    def log_if_true(cls,condition,category,lb_hash_key,session_clusterid,base_session_key,source_session_key,message,target_session_key=None,userid=None):
+    def log_if_true(cls,condition,category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=None,userid=None):
         if not condition:
             return
         log = DebugLog(
             lb_hash_key = lb_hash_key,
             clusterid = settings.AUTH2_CLUSTERID if settings.AUTH2_CLUSTER_ENABLED else None,
             session_clusterid = (session_clusterid if session_clusterid else (cache.default_auth2_cluster.clusterid if cache.default_auth2_cluster else "N/A")) if settings.AUTH2_CLUSTER_ENABLED else None,
-            base_session_key = base_session_key,
-            source_session_key = source_session_key,
-            target_session_key = target_session_key,
+            session_key = session_key,
+            source_session_cookie = source_session_cookie,
+            target_session_cookie = target_session_cookie,
             message = message,
             category=category,
             email = cls.get_email(userid),

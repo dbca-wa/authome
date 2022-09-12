@@ -40,6 +40,7 @@ from .. import emails
 from ..exceptions import HttpResponseException,UserDoesNotExistException
 from ..patch import load_user,anonymoususer,load_usertoken
 from ..sessionstore import SessionStore
+from ..models import DebugLog
 
 from .. import performance
 
@@ -937,7 +938,7 @@ def login_domain(request):
     domain = settings.GET_SESSION_COOKIE_DOMAIN(request.get_host())
     res.set_cookie(
         settings.SESSION_COOKIE_NAME,
-        "{}|{}".format(session_cookie,domain or host), 
+        "{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host), 
         max_age=max_age,
         expires=expires, 
         path=settings.SESSION_COOKIE_PATH,
@@ -946,6 +947,7 @@ def login_domain(request):
         httponly=settings.SESSION_COOKIE_HTTPONLY or None,
         samesite=settings.SESSION_COOKIE_SAMESITE,
     )
+    DebugLog.log(DebugLog.CREATE_COOKIE,utils.get_lb_hash_key(session_cookie),utils.get_clusterid(session_cookie),utils.get_session_key(session_cookie),session_cookie,message="Return a new session cookie({}) for domain({})".format("{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host),domain or host),userid=None,target_session_cookie="{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host))
     return res
     
 

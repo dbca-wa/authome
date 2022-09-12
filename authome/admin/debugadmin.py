@@ -31,37 +31,38 @@ class DebugLogAdmin(djangoadmin.ModelAdmin):
 
         models.DebugLog.LB_HASH_KEY_NOT_MATCH : "red",
         models.DebugLog.DOMAIN_NOT_MATCH: "coral",
+        models.DebugLog.SESSION_COOKIE_HACKED: "#ff0080",
 
         models.DebugLog.ERROR : "darkred"
 
     }
-    list_display = ("_logtime","category","lb_hash_key","_base_session_key","session_clusterid","clusterid","email","request","_useragent")
-    readonly_fields = ("_logtime","category","lb_hash_key","_base_session_key","session_clusterid","_source_session_key","clusterid","_target_session_key","email","request","useragent","_message")
+    list_display = ("_logtime","category","lb_hash_key","_session_key","session_clusterid","clusterid","email","request","_useragent")
+    readonly_fields = ("_logtime","category","lb_hash_key","_session_key","session_clusterid","_source_session_cookie","clusterid","_target_session_cookie","email","request","useragent","_message")
     fields = readonly_fields
     ordering = ('-logtime',)
-    search_fields = ["lb_hash_key","base_session_key","email" ,"request"]
+    search_fields = ["lb_hash_key","session_key","email" ,"request"]
     list_filter = ["category","clusterid","session_clusterid"]
 
-    def _target_session_key(self,obj):
-        if not obj or not obj.target_session_key :
+    def _target_session_cookie(self,obj):
+        if not obj or not obj.target_session_cookie :
             return ""
         else:
-            return mark_safe("<span style='font-family: monospace'>{}</span>".format(obj.target_session_key))
-    _target_session_key.short_description = "Target Session Key"
+            return mark_safe("<span style='font-family: monospace'>{}</span>".format(obj.target_session_cookie))
+    _target_session_cookie.short_description = "Target Session Cookie"
 
-    def _source_session_key(self,obj):
-        if not obj or not obj.source_session_key :
+    def _source_session_cookie(self,obj):
+        if not obj or not obj.source_session_cookie :
             return ""
         else:
-            return mark_safe("<span style='font-family: monospace'>{}</span>".format(obj.source_session_key))
-    _source_session_key.short_description = "Source Session Key"
+            return mark_safe("<span style='font-family: monospace'>{}</span>".format(obj.source_session_cookie))
+    _source_session_cookie.short_description = "Source Session Cookie"
 
-    def _base_session_key(self,obj):
-        if not obj or not obj.base_session_key :
+    def _session_key(self,obj):
+        if not obj or not obj.session_key :
             return ""
         else:
-            return mark_safe("<span style='font-family: monospace'>{}</span>".format(obj.base_session_key))
-    _base_session_key.short_description = "Base Session Key"
+            return mark_safe("<span style='font-family: monospace'>{}</span>".format(obj.session_key))
+    _session_key.short_description = "Session Key"
 
     def _logtime(self,obj):
         if not obj or not obj.logtime :

@@ -319,13 +319,13 @@ class MemoryCache(cache.MemoryCache):
             res = self._get_remote_session(clusterid,_send_request,request)
             return res.json()
         except Auth2ClusterException as ex:
-            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,clusterid,DebugLog.get_base_session_key(session),session,message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
+            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,clusterid,session,utils.get_source_session_cookie(),message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
             if raise_exception:
                 raise
             else:
                 return None
         except Exception as ex:
-            DebugLog.log(DebugLog.ERROR,None,clusterid,DebugLog.get_base_session_key(session),session,message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
+            DebugLog.log(DebugLog.ERROR,None,clusterid,session,utils.get_source_session_cookie(),session,message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
             logger.error("Failed to get session from auth2 cluster '{}'.{}".format(clusterid,str(ex)))
             return None
 
@@ -340,13 +340,13 @@ class MemoryCache(cache.MemoryCache):
         try:
             self._mark_remote_session_as_migrated(clusterid,_send_request,request)
         except Auth2ClusterException as ex:
-            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,clusterid,DebugLog.get_base_session_key(session),session,message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
+            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,clusterid,session,utils.get_source_sessioin_cookie(),message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
             if raise_exception:
                 raise
             else:
                 return None
         except Exception as ex:
-            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,clusterid,DebugLog.get_base_session_key(session),session,message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
+            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,clusterid,session,utils.get_source_session_cookie(),message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
             logger.error("Failed to mark session as migraed in auth2 cluster '{}'.{}".format(clusterid,str(ex)))
             return None
 

@@ -115,7 +115,7 @@ class Command(BaseCommand):
                         for traffic_report in traffic_reports.values():
                             if traffic_report.changed:
                                 traffic_report.save()
-                                logger.info("{}Save the traffic report({}), requests={}".format("{}.".format(traffic_report.clusterid) if traffic_report.clusterid else "","{}({} - {})".format(models.TrafficReport.get_reportname(report_type),utils.format_datetime(traffic_report.start_time),utils.format_datetime(traffic_report.end_time)), traffic_report.requests))
+                                logger.info("{}Save the traffic report({}), requests={}".format("{}.".format(traffic_report.clusterid) if traffic_report.clusterid else "","{}({} - {})".format(models.TrafficReport.get_reportname(traffic_report.report_type),utils.format_datetime(traffic_report.start_time),utils.format_datetime(traffic_report.end_time)), traffic_report.requests))
                         for traffic_report in method_traffic_reports.values():
                             if traffic_report.changed:
                                 traffic_report.save()
