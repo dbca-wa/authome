@@ -197,8 +197,8 @@ class ClusterSessionMiddleware(SessionMiddleware):
             if session_cookie:
                 values = session_cookie.split("|",3)
                 length = len(values)
-                if length < 3:
-                    values = session_cookie.split(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)
+                if length == 1:
+                    values = session_cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)
                     if len(values) == 1:
                         cookie_domain = None
                         session_key = values[0]
@@ -250,6 +250,10 @@ class ClusterSessionMiddleware(SessionMiddleware):
                         request.session = self.SessionStore(nginx_lb_hash_key,None,None,request=request,cookie_domain=cookie_domain)
                         return
                 else:
+                    if settings.SESSION_COOKIE_DOMAIN_SEPATATOR in session_cookie:
+                        cookie_domain = session_cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)[-1]
+                    else:
+                        cookie_domain = None
                     #invalid session key
                     request.session = self.SessionStore(nginx_lb_hash_key,None,None,request=request,cookie_domain=cookie_domain)
                     return
