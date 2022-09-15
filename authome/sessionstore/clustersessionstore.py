@@ -36,7 +36,7 @@ class SessionStore(sessionstore.SessionStore):
     @property
     def _signature(self):
         if not self.__signature:
-            self.__signature = utils.sign_lb_hash_key(self._lb_hash_key,settings.AUTH2_CLUSTERID,settings.LB_HASH_KEY_SECRET)
+            self.__signature = utils.sign_lb_hash_key(self._lb_hash_key,settings.AUTH2_CLUSTERID,settings.SECRET_KEY)
         return self.__signature
 
     @property

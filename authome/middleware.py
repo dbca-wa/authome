@@ -61,10 +61,10 @@ class SimpleCookie(DjangoSimpleCookie):
             c['httponly'] = True
  
 def check_integrity(lb_hash_key,auth2_clusterid,signature):
-    sig = utils.sign_lb_hash_key(lb_hash_key,auth2_clusterid,settings.LB_HASH_KEY_SECRET)
+    sig = utils.sign_lb_hash_key(lb_hash_key,auth2_clusterid,settings.SECRET_KEY)
     if signature != sig:
-        if settings.PREVIOUS_LB_HASH_KEY_SECRET:
-            sig = utils.sign_lb_hash_key(hash_key,auth2_clusterid,settings.PREVIOUS_LB_HASH_KEY_SECRET)
+        if settings.PREVIOUS_SECRET_KEY:
+            sig = utils.sign_lb_hash_key(hash_key,auth2_clusterid,settings.PREVIOUS_SECRET_KEY)
             if signature != sig:
                 return False
         else:
