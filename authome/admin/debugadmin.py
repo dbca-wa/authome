@@ -12,23 +12,19 @@ class DebugLogAdmin(djangoadmin.ModelAdmin):
         models.DebugLog.DELETE_COOKIE : "#8000ff",
 
         models.DebugLog.UPGRADE_SESSION : "green",
-        models.DebugLog.UPGRADE_UPGRADED_SESSION : "green",
+        models.DebugLog.SESSION_ALREADY_UPGRADED : "green",
         models.DebugLog.UPGRADE_NONEXIST_SESSION : "green",
 
         models.DebugLog.MIGRATE_SESSION : "blue",
-        models.DebugLog.MIGRATE_MIGRATED_SESSION : "blue",
+        models.DebugLog.SESSION_ALREADY_MIGRATED : "blue",
         models.DebugLog.MIGRATE_NONEXIST_SESSION : "blue",
     
-        models.DebugLog.MOVE_PREVIOUS_SESSION : "#008080",
-        models.DebugLog.MOVE_MOVED_PREVIOUS_SESSION : "#008080",
-        models.DebugLog.MOVE_NONEXIST_PREVIOUS_SESSION : "#008080",
+        models.DebugLog.MOVE_SESSION : "#008080",
+        models.DebugLog.SESSION_ALREADY_MOVED : "#008080",
+        models.DebugLog.MOVE_NONEXIST_SESSION : "#008080",
 
         models.DebugLog.AUTH2_CLUSTER_NOTAVAILABLE : "#4000ff",
     
-        models.DebugLog.UPGRADE_NONEXIST_UPGRADED_SESSION : "orange",
-        models.DebugLog.MIGRATE_NONEXIST_MIGRATED_SESSION : "orange",
-        models.DebugLog.MOVE_NONEXIST_MOVED_PREVIOUS_SESSION : "orange",
-
         models.DebugLog.LB_HASH_KEY_NOT_MATCH : "red",
         models.DebugLog.DOMAIN_NOT_MATCH: "coral",
         models.DebugLog.SESSION_COOKIE_HACKED: "#ff0080",

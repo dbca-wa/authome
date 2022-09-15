@@ -1,6 +1,7 @@
 import re
 import logging
 from collections import OrderedDict
+from datetime import datetime,timedelta
 
 from django.utils import timezone
 from django.contrib.auth import login
@@ -137,6 +138,27 @@ def echo(request):
 
     return JsonResponse(data,status=200)
 
+def get_settings(request):
+    try:
+        names = request.GET.get("names").split(",")
+        data = {}
+        for name in names:
+            if hasattr(settings,name):
+                val = getattr(settings,name)
+                if isinstance(val,datetime):
+                    data[name] = utils.encode_datetime(val)
+                elif isinstance(val,timedelta):
+                    data[name] = utils.encode_timedelta(val)
+                else:
+                    data[name] = val
+            else:
+                data[name] = None
+        return JsonResponse(data,status=200)
+    except Exception as ex:
+        logger.error("Failed to get settings({}).{} ".format(names,str(ex)))
+        raise
+
+
 def get_session(request):
     """
     Get the session data from the session cache without previous session cache support.
@@ -148,13 +170,26 @@ def get_session(request):
     
         values = session_cookie.split("|")
         if len(values) == 1:
-            if settings.AUTH2_CLUSTER_ENABLED:
-                sessionstore = StandaloneSessionStore(session_cookie)
+            session_key = values[0]
+            values = session_key.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)
+            if len(values) == 1:
+                cookie_domain = None
+                session_key = values[0]
             else:
-                sessionstore = SessionStore(session_cookie)
+                session_key,cookie_domain = values
+            if settings.AUTH2_CLUSTER_ENABLED:
+                sessionstore = StandaloneSessionStore(session_key)
+            else:
+                sessionstore = SessionStore(session_key,cookie_domain=cookie_domain)
         else:
-            lb_hash_key,auth2_clusterid,session_key = values
-            sessionstore = ClusterSessionStore(lb_hash_key,auth2_clusterid,session_key)
+            lb_hash_key,auth2_clusterid,signature,session_key = values
+            values = session_key.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)
+            if len(values) == 1:
+                cookie_domain = None
+                session_key = values[0]
+            else:
+                session_key,cookie_domain = values
+            sessionstore = ClusterSessionStore(lb_hash_key,auth2_clusterid,session_key,cookie_domain=cookie_domain)
     
         sessioncache = sessionstore._get_cache()
         cachekey = sessionstore.cache_key

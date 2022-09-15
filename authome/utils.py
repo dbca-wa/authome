@@ -18,6 +18,7 @@ from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.db import connections
 from django.core.cache import caches
 from django.contrib import messages
+from django_redis.cache import RedisCache
 
 from django_redis import get_redis_connection
 
@@ -351,13 +352,19 @@ def format_datetime(dt):
     return timezone.localtime(dt).strftime("%Y-%m-%d %H:%M:%S") if dt else None
 
 def parse_datetime(dt):
-    return timezone.make_aware(datetime.strptime(dt,"%Y-%m-%d %H:%M:%S"))
+    return timezone.make_aware(datetime.strptime(dt,"%Y-%m-%d %H:%M:%S")) if dt else None
 
 def encode_datetime(dt):
     return timezone.localtime(dt).strftime("%Y-%m-%dT%H:%M:%S") if dt else None
 
 def decode_datetime(dt):
-    return timezone.make_aware(datetime.strptime(dt,"%Y-%m-%dT%H:%M:%S"))
+    return timezone.make_aware(datetime.strptime(dt,"%Y-%m-%dT%H:%M:%S")) if dt else None
+
+def encode_timedelta(df):
+    return (df.days * 86400 + df.seconds) if df else None
+
+def decode_timedelta(df):
+    return timedetla(seconds=df) if df else None
 
 
 def format_timedelta(td,unit="s"):
@@ -430,18 +437,6 @@ def _get_host2(request):
 
 get_host = _get_host
 
-def check_integrity(lb_hash_key,auth2_clusterid,signature):
-    sig = sign_lb_hash_key(lb_hash_key,auth2_clusterid,settings.LB_HASH_KEY_SECRET)
-    if signature != sig:
-        if settings.PREVIOUS_LB_HASH_KEY_SECRET:
-            sig = utils.sign_lb_hash_key(hash_key,auth2_clusterid,settings.PREVIOUS_LB_HASH_KEY_SECRET)
-            if signature != sig:
-                return False
-        else:
-            return False
-
-    return True
-
 def sign_lb_hash_key(hash_key,clusterid,secretkey):
     h = hashlib.blake2b(digest_size=LB_HASH_KEY_DIGEST_SIZE)
     h.update("{}{}{}".format(hash_key,clusterid,secretkey).encode())
@@ -492,18 +487,22 @@ def ping_database(dbalias):
     return (healthy,msg)
 
 redis_re = re.compile("^\s*(?P<protocol>[a-zA-Z]+)://((?P<user>[^:@]+)?(:(?P<password>[^@]+))?@)?(?P<server>\S+)\s*$")
-def print_redisserver(url):
+def print_redisserver(server):
     """
     Return a printable redis server url
     """
+    if isinstance(server,RedisCache):
+        server = server._server
+    elif not isinstance(server,str):
+        return str(server)
+
     try:
-        m = redis_re.search(url)
+        m = redis_re.search(server)
         return "{0}://xxx:xxx@{1}".format(m.group("protocol"),m.group("server"))
     except:
         return "xxxxxx"
 
     
-
 def ping_redisserver(serveralias):
     try:
         with get_redis_connection(serveralias) as conn:

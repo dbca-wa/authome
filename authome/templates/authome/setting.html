@@ -40,6 +40,7 @@ form button.btn {
 {% if back_url %}
 <button id="cancel" aria-label="Cancel" style="border:0px;padding-left:20px;background-color:transparent" onclick="document.location='{{back_url}}'"><img src="{% static 'images/left-arrow.svg'%}" style="padding-right:10px;"/>Back</button>
 {% endif %}
+
 <form class="form-horizontal">
   <div class="form-group">
     <label for="email" class="col-sm-4 control-label">Email</label>
@@ -54,6 +55,7 @@ form button.btn {
       <button type="button" class="btn btn-primary" onclick="document.location='{% url 'profile_edit' %}?next={{next_url}}'" style="width:45px;margin-top:-4px">Edit</button>
     </div>
   </div>
+
   {% if is_staff %}
   <div class="form-group">
     <label for="groups" class="col-sm-4 control-label">Groups</label>
@@ -62,12 +64,14 @@ form button.btn {
     </div>
   </div>
   {% endif %}
+
   <div class="form-group">
     <label for="groups" class="col-sm-4 control-label">Active</label>
     <div class="col-sm-8" >
       <img alt="true" {% if is_active%} src="/sso/static/admin/img/icon-yes.svg" {% else %}src="/sso/static/admin/img/icon-no.svg"{% endif %} style="text-align:left;height:20px;margin-left:0px">
     </div>
   </div>
+
   {% if is_staff %}
   <div class="form-group">
     <label for="groups" class="col-sm-4 control-label">Staff</label>
@@ -88,6 +92,7 @@ form button.btn {
     </div>
   </div>
   {% endif %}
+
   {% if mfa_enabled %}
   <div class="form-group">
     <label for="mfa_method" class="col-sm-4 control-label">Multi-Factor Authentication</label>
@@ -100,6 +105,7 @@ form button.btn {
     </div>
   </div>
   {% endif %}
+
   {% if is_staff %}
   {% if session_timeout %}
   <div class="form-group">
@@ -132,6 +138,7 @@ form button.btn {
     </div>
   </div>
   {% endif %}
+
   {% if password_reset_enabled %}
   <div class="form-group">
     <label for="client_ip" class="col-sm-4 control-label">Password</label>
@@ -139,7 +146,7 @@ form button.btn {
       <button type="button" class="btn btn-primary" style="width:120px;display:inline" onclick="document.location='{% url 'password_reset' %}?next={{next_url}}'">Reset Password</button>
     </div>
   </div>
-  {% if False %}
+  {% if logout_enabled %}
   <div class="form-group">
     <div class="col-sm-offset-3 col-sm-8">
       <button type="button" class="btn btn-primary" style="width:200px;display:inline" onclick="document.location='{% url 'password_reset' %}?next={{next_url}}'">Reset Password</button>
@@ -148,7 +155,7 @@ form button.btn {
   </div>
   {% endif %}
   {% else %}
-  {% if False %}
+  {% if logout_enabled %}
   <div class="form-group">
     <div class="col-sm-offset-4 col-sm-8">
       <button type="button" class="btn btn-primary" style="width:200px" onclick="document.location='{{logout_url}}?next={{next_url}}'">Sign out</button>

@@ -442,7 +442,7 @@ def _save_trafficdata(batchid):
     with transaction.atomic():
         #save the data to db
         for data in traffic_datas.values():
-            if not data.get("sso_requests",{}).get("requests") and not data.get("get_remote_session",{}).get("requests") and not data.get("mark_session_as_migrated",{}).get("requests"):
+            if not data.get("sso_requests",{}).get("requests") and not data.get("get_remote_session",{}).get("requests") and not data.get("delete_remote_session",{}).get("requests"):
                 #no requests
                 logger.debug("Ignore empty data")
                 continue
@@ -460,10 +460,10 @@ def _save_trafficdata(batchid):
                 status=data["sso_requests"].get("status"),
                 domains=data["sso_requests"].get("domains"),
                 get_remote_sessions = data.get("get_remote_session",{}).get("requests") or 0,
-                migrate_remote_sessions = data.get("mark_session_as_migrated",{}).get("requests") or 0
+                delete_remote_sessions = data.get("delete_remote_session",{}).get("requests") or 0
             )
             traffic_data.save()
-            result.append([utils.encode_datetime(traffic_data.start_time),utils.encode_datetime(traffic_data.end_time),traffic_data.requests,traffic_data.get_remote_sessions,traffic_data.migrate_remote_sessions])
+            result.append([utils.encode_datetime(traffic_data.start_time),utils.encode_datetime(traffic_data.end_time),traffic_data.requests,traffic_data.get_remote_sessions,traffic_data.delete_remote_sessions])
             for method,method_data in data.items():
                 if method in ("sso_requests","starttime","endtime"):
                     continue

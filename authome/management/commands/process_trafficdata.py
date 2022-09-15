@@ -58,7 +58,7 @@ class Command(BaseCommand):
                 data = res.json().get("result",[]) 
                 if data:
                     data.sort(key=lambda o:o[0]) 
-                    data = "\n    ".join("start_time={}, end_time={}, requests={}, get_remote_session={}, migrate_remote_sessions={}".format(*d) for d in data)
+                    data = "\n    ".join("start_time={}, end_time={}, requests={}, get_remote_session={}, delete_remote_sessions={}".format(*d) for d in data)
                     logger.info("Succeed to save the traffic data for cluster({}).batchid={}\n    {}".format(cluster.clusterid,batchid,data))
                 else:
                     logger.info("No new traffic data for cluster({}).batchid={}".format(cluster.clusterid,batchid))
@@ -73,7 +73,7 @@ class Command(BaseCommand):
             data = _save_trafficdata(batchid)
             if data:
                 data.sort(key=lambda o:o[0]) 
-                data = "\n    ".join("start_time={}, end_time={}, requests={}, get_remote_session={}, migrate_remote_sessions={}".format(*d) for d in data)
+                data = "\n    ".join("start_time={}, end_time={}, requests={}, get_remote_session={}, delete_remote_sessions={}".format(*d) for d in data)
                 logger.info("Succeed to save the traffic data .batchid={}\n    {}".format(batchid,data))
             else:
                 logger.info("No new traffic data.batchid={}\n    {}".format(batchid))
@@ -134,7 +134,7 @@ class Command(BaseCommand):
 
                 if data.batchid == self.BATCHID_END:
                     continue
-                if not data.requests and not data.get_remote_sessions and not data.migrate_remote_sessions:
+                if not data.requests and not data.get_remote_sessions and not data.delete_remote_sessions:
                     #no requests
                     continue
 
@@ -175,7 +175,7 @@ class Command(BaseCommand):
                         if traffic_report.requests:
                             traffic_report.avg_time = (traffic_report.total_time or 0) / traffic_report.requests
                         traffic_report.get_remote_sessions += data.get_remote_sessions or 0
-                        traffic_report.migrate_remote_sessions += data.migrate_remote_sessions or 0
+                        traffic_report.delete_remote_sessions += data.delete_remote_sessions or 0
 
                         if data.status:
                             if traffic_report.status:

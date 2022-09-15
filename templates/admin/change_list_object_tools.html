@@ -1,13 +1,17 @@
 {% load i18n admin_urls %}
+{% load auth2 %}
 
 {% block object-tools-items %}
   {% if cl.extra_tools %}
   {% for name,urlname,target in cl.extra_tools %}
   <li>
     {% url cl.opts|admin_urlname:urlname as tool_url %}
+    {% can_access  tool_url as has_permission %}
+    {% if has_permission %}
     <a href="{{tool_url}}"  target="{{target}}">
       {{ name }}
     </a>
+    {% endif %}
   </li>
   {% endfor %}
   {% endif %}

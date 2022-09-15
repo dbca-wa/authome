@@ -329,16 +329,16 @@ class MemoryCache(cache.MemoryCache):
             logger.error("Failed to get session from auth2 cluster '{}'.{}".format(clusterid,str(ex)))
             return None
 
-    def mark_remote_session_as_migrated(self,clusterid,session,raise_exception=False,request=None):
+    def delete_remote_session(self,clusterid,session,raise_exception=False,request=None):
         """
-        mark session as migrated in other auth2 cluster
+        delete remote session from other auth2 cluster
         """
         from ..models import DebugLog
         def _send_request(cluster):
-            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:mark_session_as_migrated')),data={"session":session,"clusterid":clusterid},headers=self._get_headers(request))
+            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:delete_session')),data={"session":session,"clusterid":clusterid},headers=self._get_headers(request))
 
         try:
-            self._mark_remote_session_as_migrated(clusterid,_send_request,request)
+            self._delete_remote_session(clusterid,_send_request,request)
         except Auth2ClusterException as ex:
             DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,clusterid,session,utils.get_source_sessioin_cookie(),message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
             if raise_exception:
@@ -439,5 +439,5 @@ class MemoryCache(cache.MemoryCache):
         return (health,msgs)
 
 MemoryCache._get_remote_session = traffic_monitor("get_remote_session",MemoryCache._send_request_to_cluster)
-MemoryCache._mark_remote_session_as_migrated = traffic_monitor("mark_session_as_migrated",MemoryCache._send_request_to_cluster)
+MemoryCache._delete_remote_session = traffic_monitor("delete_remote_session",MemoryCache._send_request_to_cluster)
 

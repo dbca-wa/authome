@@ -29,7 +29,7 @@ class TrafficData(models.Model):
     max_time = models.FloatField(null=True,editable=False)
     avg_time = models.FloatField(null=True,editable=False)
     get_remote_sessions = models.PositiveIntegerField(default=0,editable=False)
-    migrate_remote_sessions = models.PositiveIntegerField(default=0,editable=False)
+    delete_remote_sessions = models.PositiveIntegerField(default=0,editable=False)
     status = models.JSONField(null=True,editable=False)
     domains = models.JSONField(null=True,editable=False)
 
@@ -103,7 +103,7 @@ class TrafficReport(models.Model):
     ]
     REPORT_NAMES = dict(REPORT_TYPES)
 
-    cluster = models.ForeignKey(Auth2Cluster, on_delete=models.CASCADE,null=True,editable=False)
+    cluster = models.ForeignKey(Auth2Cluster, on_delete=models.SET_NULL,null=True,editable=False)
     clusterid = models.CharField(max_length=32,editable=False,null=True)
     report_type = models.PositiveSmallIntegerField(choices=REPORT_TYPES)
     start_time = models.DateTimeField(editable=False,db_index=True)
@@ -115,7 +115,7 @@ class TrafficReport(models.Model):
     avg_time = models.FloatField(null=True,editable=False)
     status = models.JSONField(null=True,editable=False)
     get_remote_sessions = models.PositiveIntegerField(default=0,editable=False)
-    migrate_remote_sessions = models.PositiveIntegerField(default=0,editable=False)
+    delete_remote_sessions = models.PositiveIntegerField(default=0,editable=False)
     domains = models.JSONField(null=True,editable=False)
 
     class Meta:

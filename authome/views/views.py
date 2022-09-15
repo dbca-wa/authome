@@ -1230,6 +1230,7 @@ def user_setting(request):
     context["is_active"] = request.user.is_active
     context["is_staff"] = request.user.is_staff
     context["is_superuser"] = request.user.is_superuser
+    context["logout_enabled"] = request.user.is_staff and request.get_host() == settings.AUTH2_DOMAIN
 
  
     domain = utils.get_host(request)

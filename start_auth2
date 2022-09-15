@@ -2,19 +2,26 @@
 shopt -s nocasematch;
 PORT=""
 runtype="server"
+
 if [[ "$1" == "" ]] 
 then
-    backend="false"
     envfile=".env.standalone"
-elif [[ "$1" =~ ^([0-9]+)|([a-zA-Z_\-]+)$ ]]
+    backend="false"
+elif [[ -f ".env.$1" ]]
 then
-    if [[ "$1" =~ ^([0-9]+)$ ]]
+    envfile=".env.$1"
+    if [[ "$2" == "" ]] 
     then
-        PORT=$1
+        backend="false"
+    elif [[ "$2" =~ ^(true|false)$ ]]
+    then
+        backend=$2
     else
-        runtype="command"
-        command=$1
+        backend="false"
     fi
+elif [[ "$1" =~ ^[0-9]+$ ]]
+then  
+    PORT=$1
     if [[ "$2" == "" ]] 
     then
         envfile=".env.standalone"
@@ -35,16 +42,19 @@ then
 elif [[ "$1" =~ ^(true|false)$ ]]
 then 
     backend=$1
+    envfile=".env.standalone"
+
+else
+    envfile=".env.$1"
+    backend="false"
+    runtype="command"
+    command="$1"
     if [[ "$2" == "" ]] 
     then
         envfile=".env.standalone"
     else
         envfile=".env.$2"
     fi
-
-else
-    envfile=".env.$1"
-    backend="false"
 fi
 
 

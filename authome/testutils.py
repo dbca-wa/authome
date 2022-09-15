@@ -83,16 +83,39 @@ class StartServerMixin(object):
         return "{}{}".format(cls.get_baseurl(servername),url)
 
     @classmethod
-    def get_session_data(cls,session_cookie,servername="standalone"):
-        res = requests.get("{}?session={}".format(cls.get_absolute_url("/test/session/get",servername),session_cookie),headers=cls.cluster_headers)
+    def get_settings(cls,names,servername="standalone"):
+        """
+        Return session data if found, otherwise return None
+        """
+        if isinstance(names,(list,tuple)):
+            namestr = ",".join(names)
+        else:
+            namestr = names
+            names = namestr.split(",")
+
+        res = requests.get("{}?names={}".format(cls.get_absolute_url("/test/settings/get",servername),namestr),headers=cls.cluster_headers)
         res.raise_for_status()
+        data = res.json()
+        if len(names) == 1:
+            return data.get(names[0])
+        else:
+            return [data.get(name) for name in names]
+
+    @classmethod
+    def get_session_data(cls,session_cookie,servername="standalone"):
+        """
+        Return session data if found, otherwise return None
+        """
+        res = requests.get("{}?session={}".format(cls.get_absolute_url("/test/session/get",servername),session_cookie),headers=cls.cluster_headers)
+        if res.status_code == 404:
+            return None
+        else:
+            res.raise_for_status()
         return res.json()
 
-    migrated_session = {"migrated":True}
     @classmethod
-    def is_session_migrated(cls,session_cookie,servername="standalone"):
-        session_data = cls.get_session_data(session_cookie,servername=servername)
-        return session_data == cls.migrated_session
+    def is_session_deleted(cls,session_cookie,servername="standalone"):
+        return cls.get_session_data(session_cookie,servername=servername) is None
 
     @classmethod
     def get_cluster_session_cookie(cls,clusterid,session_cookie,lb_hash_key=None):
@@ -102,8 +125,7 @@ class StartServerMixin(object):
                 raise Exception("lb_hash_key is missing")
             session_key = session_cookie
         else:
-            lb_hash_key,original_clusterid,session_key = values
+            lb_hash_key,original_clusterid,signature,session_key = values
 
         sig = utils.sign_lb_hash_key(lb_hash_key,clusterid,settings.LB_HASH_KEY_SECRET)
-        new_session_key = "{}{}{}".format(session_key[:-2-16],sig,session_key[-2:])
-        return "{}|{}|{}".format(lb_hash_key,clusterid,new_session_key)
+        return "{}|{}|{}|{}".format(lb_hash_key,clusterid,signature,session_key)

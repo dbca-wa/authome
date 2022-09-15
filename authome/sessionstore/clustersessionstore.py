@@ -26,14 +26,12 @@ class SessionStore(sessionstore.SessionStore):
     but the cache key prefix can be different.
 
     """
-    standalone_cache_key_prefix = "{}:session:".format(settings.STANDALONE_CACHE_KEY_PREFIX) if settings.STANDALONE_CACHE_KEY_PREFIX else "session:"
-    SIGNATURE_LEN = utils.LB_HASH_KEY_DIGEST_SIZE * 2
     __signature = None
+    _clusterid_prefix = settings.AUTH2_CLUSTERID.replace("-","").replace("_","").lower() if settings.AUTH2_CLUSTERID else ""
     def __init__(self,lb_hash_key,auth2_clusterid,session_key,request=None,cookie_domain=None):
         super().__init__(session_key=session_key,request=request,cookie_domain=cookie_domain)
         self._lb_hash_key = lb_hash_key
         self._source_auth2_clusterid = auth2_clusterid
-        self._cookie_changed = False
 
     @property
     def _signature(self):
@@ -42,12 +40,9 @@ class SessionStore(sessionstore.SessionStore):
         return self.__signature
 
     @property
-    def standalone_cache_key(self):
-        return self.standalone_cache_key_prefix + self.session_key
+    def cookie_changed(self):
+        return self._cookie_changed or self._source_session_key != (self._session_key or self.expired_session_key) or self._source_auth2_clusterid != settings.AUTH2_CLUSTERID
 
-    @classmethod
-    def standalone_cache_key(cls,session_key):
-        return cls.standalone_cache_key_prefix + session_key
 
     @property
     def source_session_key(self):
@@ -70,26 +65,24 @@ class SessionStore(sessionstore.SessionStore):
         else:
             return settings.GUEST_SESSION_AGE
 
-    def _get_session_key(self):
-        return self.__session_key
-
-    def _set_session_key(self, value):
-        """
-        Validate session key on assignment. Invalid values will set to None.
-        """
-        if not self._validate_session_key(value):
-            value = None
-
-        if value:
-            self._cookie_changed = True
+    def populate_session_key(self,process_prefix,idpid):
+        if idpid:
+            return "{4}-{0}{2}{1}{3}".format(
+                self._clusterid_prefix,
+                process_prefix,
+                get_random_string(16, sessionstore.VALID_KEY_CHARS),
+                get_random_string(16, sessionstore.VALID_KEY_CHARS),
+                idpid
+            )
         else:
-            self._cookie_changed = False
+            return "{0}{2}{1}{3}".format(
+                self._clusterid_prefix,
+                process_prefix,
+                get_random_string(16, sessionstore.VALID_KEY_CHARS),
+                get_random_string(16, sessionstore.VALID_KEY_CHARS)
+            )
 
-        self.__session_key = value
-
-    session_key = property(_get_session_key)
-    _session_key = property(_get_session_key, _set_session_key)
-
+        
     @property
     def cookie_value(self):
         #should be only called if session is not empty
@@ -106,11 +99,88 @@ class SessionStore(sessionstore.SessionStore):
         if not self._source_auth2_clusterid and auth2cache.current_auth2_cluster.default:
             #sessionid created in the same auth2 server,
             #upgrade the session to cluster session
-            session_data = super().load()
-            DebugLog.log_if_true(session_data,DebugLog.UPGRADE_SESSION,self._lb_hash_key,None,self._session_key,self._session_key,message="Upgrade a session({}) from the same server to cluster session({})".format(self.source_session_cookie,self.cookie_value),target_session_cookie=self.cookie_value,userid=session_data.get(USER_SESSION_KEY))
+            if settings.STANDALONE_CACHE_KEY_PREFIX == settings.CACHE_KEY_PREFIX:
+                #cache key prefix is not changed, cluster session key is the same as the non-cluster session key
+                session_data = super().load()
+                DebugLog.log_if_true(session_data,DebugLog.UPGRADE_SESSION,self._lb_hash_key,None,self._session_key,self.source_session_cookie,message="Upgrade a session({}) from the same server to cluster session({})".format(self.source_session_cookie,self.cookie_value),target_session_cookie=self.cookie_value,userid=(session_data or {}).get(USER_SESSION_KEY))
 
-            DebugLog.log_if_true(not session_data,DebugLog.UPGRADE_NONEXIST_SESSION,self._lb_hash_key,None,self._session_key,self._session_key,message="Upgrade a non-existing session({}) from the same server to cluster session".format(self.source_session_cookie))
-            return session_data
+                DebugLog.log_if_true(not session_data,DebugLog.UPGRADE_NONEXIST_SESSION,self._lb_hash_key,None,self._session_key,self.source_session_cookie,message="No need to upgrade a non-existing session({}) from the same server to cluster session".format(self.source_session_cookie))
+                return session_data
+            else:
+                try:
+                    performance.start_processingstep("upgrade_to_cluster_session")
+                    standalone_sessionstore = StandaloneSessionStore(session_key=self._session_key,request=self._request)
+                    try:
+                        performance.start_processingstep("load_noncluster_session_from_same_cluster")
+                        session_data = standalone_sessionstore.load()
+                    finally:
+                        performance.end_processingstep("load_noncluster_session_from_same_cluster")
+                        pass
+
+                    newcachekey = self.cache_key
+                    sessioncache = self._get_cache()
+                    if session_data:
+                        timeout = session_data.get("session_timeout")
+                        if timeout and session_data.get(USER_SESSION_KEY):
+                            try:
+                                performance.start_processingstep("set_cluster_session_to_cache")
+                                sessioncache.set(newcachekey,session_data,timeout)
+                            finally:
+                                performance.end_processingstep("set_cluster_session_to_cache")
+                                pass
+                        else:
+                            try:
+                                performance.start_processingstep("get_noncluster_session_ttl_from_same_cluster")
+                                ttl = standalone_sessionstore.ttl
+                            except:
+                                ttl = None
+                            finally:
+                                performance.end_processingstep("get_noncluster_session_ttl_from_same_cluster")
+                                pass
+    
+                            try:
+                                performance.start_processingstep("set_cluster_session_to_cache")
+                                if ttl:
+                                    sessioncache.set(newcachekey,session_data,ttl)
+                                else:
+                                    sessioncache.set(newcachekey,session_data,self.get_session_age())
+                            finally:
+                                performance.end_processingstep("set_cluster_session_to_cache")
+                                pass
+                        try:
+                            performance.start_processingstep("delete_noncluster_session")
+                            standalone_sessionstore.delete()
+                        finally:
+                            performance.end_processingstep("delete-noncluster_session")
+                            pass
+                        DebugLog.log(DebugLog.UPGRADE_SESSION,self._lb_hash_key,None,self._session_key,self.source_session_cookie,message="Upgrade a session({}) from the same server to cluster session({})".format(self.source_session_cookie,self.cookie_value),target_session_cookie=self.cookie_value,userid=session_data.get(USER_SESSION_KEY))
+                    else:
+                        try:
+                            performance.start_processingstep("load_cluster_session_from_same_cluster")
+                            session_data = sessioncache.get(newcachekey)
+                            DebugLog.log_if_true(session_data,DebugLog.SESSION_ALREADY_UPGRADED,self._lb_hash_key,None,self._session_key,self.source_session_cookie,message="The session({0}) has already upgraded from the same server to cluster session({1})".format(self.source_session_cookie,self.cookie_value),target_session_cookie=self.cookie_value,userid=(session_data or {}).get(USER_SESSION_KEY))
+                            DebugLog.log_if_true(not session_data,DebugLog.UPGRADE_NONEXIST_SESSION,self._lb_hash_key,None,self._session_key,self.source_session_cookie,message="No need to upgrade a non-existing session({}) from the same server to cluster session".format(self.source_session_cookie))
+                        finally:
+                            performance.end_processingstep("load_cluster_session_from_same_cluster")
+                            pass
+    
+                    if session_data :
+                        return session_data
+        
+                    #expired authenticated session, or session does not exist
+                    if self._session_key and "-" in self._session_key and self.samedomain:
+                        #this is a authenticated session key
+                        self.expired_session_key = self._session_key
+                    self._session_key = None
+                    return {}
+                except :
+                    logger.error("Failed to load session.{}".format(traceback.format_exc()))
+                    DebugLog.log(DebugLog.ERROR,self._lb_hash_key,None,self._session_key,utils.get_source_session_cookie(self._request),message="Failed to upgrade a session({}) from the same server to cluster session.{}".format(utils.get_source_session_cookie(self._request),traceback.format_exc()))
+                    self._session_key = None
+                    return {}
+                finally:
+                    performance.end_processingstep("upgrade_to_cluster_session")
+                    pass
         else:
             #session should be migrated from original server to current server
             try:
@@ -127,64 +197,54 @@ class SessionStore(sessionstore.SessionStore):
 
                 if session:
                     session_data = session["session"]
-                    if session_data.get("migrated",False):
-                        #already migrated, load the session directly
-                        try:
-                            performance.start_processingstep("load_cluster_session_from_cache")
-                            session_data = sessioncache.get(cachekey)
-                            logger.debug("Load the migrated session .{}".format(session_data))
-                            DebugLog.log((DebugLog.MIGRATE_MIGRATED_SESSION if self._source_auth2_clusterid else DebugLog.UPGRADE_UPGRADED_SESSION) if session_data else (DebugLog.MIGRATE_NONEXIST_MIGRATED_SESSION if self._source_auth2_clusterid else DebugLog.UPGRADE_NONEXIST_UPGRADED_SESSION),self._lb_hash_key,self._source_auth2_clusterid,self.source_session_key,self.source_session_cookie,message="{} a {}{} session({}) from {} to cluster session({})".format("Migrate" if self._source_auth2_clusterid else  "Upgrade","" if session_data else "non-existing ","migrated" if self._source_auth2_clusterid else  "upgraded",self.source_session_cookie,self._source_auth2_clusterid or auth2cache.default_auth2_cluster.clusterid,self.cookie_value),target_session_cookie=self.cookie_value,userid=session_data.get(USER_SESSION_KEY) if session_data else None)
-                        finally:
-                            performance.end_processingstep("load_cluster_session_from_cache")
-                            pass
-                    else:
-                        timeout = session_data.get("session_timeout")
-                        try:
-                            performance.start_processingstep("save_session_to_cache")
-                            if timeout and session_data.get(USER_SESSION_KEY):
-                                sessioncache.set(cachekey,session_data,timeout)
+                    timeout = session_data.get("session_timeout")
+                    try:
+                        performance.start_processingstep("set_cluster_session_to_cache")
+                        if timeout and session_data.get(USER_SESSION_KEY):
+                            sessioncache.set(cachekey,session_data,timeout)
+                        else:
+                            ttl = session.get("ttl")
+                            if ttl:
+                                sessioncache.set(cachekey,session_data,ttl)
                             else:
-                                ttl = session.get("ttl")
-                                if ttl:
-                                    sessioncache.set(cachekey,session_data,ttl)
-                                else:
-                                    sessioncache.set(cachekey,session_data,self.get_session_age())
-                        finally:
-                            performance.end_processingstep("save_session_to_cache")
-                            pass
+                                sessioncache.set(cachekey,session_data,self.get_session_age())
+                    finally:
+                        performance.end_processingstep("set_cluster_session_to_cache")
+                        pass
 
-                        #remove the user from cache to refresh the user data from migrated session
-                        userid = session_data.get(USER_SESSION_KEY)
-                        if userid:
-                            try:
-                                performance.start_processingstep("remove_user_from_usercache")
-                                userid = int(userid)
-                                usercache = get_usercache(userid)
-                                if usercache:
-                                    usercache.delete(settings.GET_USER_KEY(userid))
-                            except:
-                                pass
-                            finally:
-                                performance.end_processingstep("remove_user_from_usercache")
-                                pass
-
-                        #mark the session as migrated session in original cache server
+                    #remove the user from cache to refresh the user data from migrated session
+                    userid = session_data.get(USER_SESSION_KEY)
+                    if userid:
                         try:
-                            performance.start_processingstep("mark_remote_session_as_migrated")
-                            auth2cache.mark_remote_session_as_migrated(self._source_auth2_clusterid ,original_session_key,False,request=self._request)
-                        finally:
-                            performance.end_processingstep("mark_remote_session_as_migrated")
+                            performance.start_processingstep("remove_user_from_usercache")
+                            userid = int(userid)
+                            usercache = get_usercache(userid)
+                            if usercache:
+                                usercache.delete(settings.GET_USER_KEY(userid))
+                        except:
                             pass
-                        DebugLog.log(DebugLog.MIGRATE_SESSION if self._source_auth2_clusterid else DebugLog.UPGRADE_SESSION,self._lb_hash_key,self._source_auth2_clusterid,self.source_session_key,self.source_session_cookie,message="{} a session({}) from {} to cluster session({})".format("Migrate" if self._source_auth2_clusterid else  "Upgrade",self.source_session_cookie,self._source_auth2_clusterid or auth2cache.default_auth2_cluster.clusterid,self.cookie_value),target_session_cookie=self.cookie_value,userid=session_data.get(USER_SESSION_KEY))
+                        finally:
+                            performance.end_processingstep("remove_user_from_usercache")
+                            pass
+
+                    #mark the session as migrated session in original cache server
+                    try:
+                        performance.start_processingstep("delete_remote_session")
+                        auth2cache.delete_remote_session(self._source_auth2_clusterid ,self._session_key,False,request=self._request)
+                    finally:
+                        performance.end_processingstep("delete_remote_session")
+                        pass
+                    DebugLog.log(DebugLog.MIGRATE_SESSION if self._source_auth2_clusterid else DebugLog.UPGRADE_SESSION,self._lb_hash_key,self._source_auth2_clusterid,self.source_session_key,self.source_session_cookie,message="{} a session({}) from {} to cluster session({})".format("Migrate" if self._source_auth2_clusterid else  "Upgrade",self.source_session_cookie,self._source_auth2_clusterid or auth2cache.default_auth2_cluster.clusterid,self.cookie_value),target_session_cookie=self.cookie_value,userid=session_data.get(USER_SESSION_KEY))
                 else:
                     try:
-                        performance.start_processingstep("load_cluster_session_from_cache")
+                        performance.start_processingstep("load_cluster_session_from_same_cluster")
                         session_data = sessioncache.get(cachekey)
-                        if session_data and session_data.get("migrated",False):
-                            session_data = None
-                        DebugLog.log((DebugLog.MIGRATE_MIGRATED_SESSION if self._source_auth2_clusterid else DebugLog.UPGRADE_UPGRADED_SESSION) if session_data else (DebugLog.MIGRATE_NONEXIST_SESSION if self._source_auth2_clusterid else DebugLog.UPGRADE_NONEXIST_SESSION),self._lb_hash_key,self._source_auth2_clusterid,self.source_session_key,self.source_session_cookie,message="{} a {}{} session({}) from {} to cluster session({})".format("Migrate" if self._source_auth2_clusterid else  "Upgrade","" if session_data else "non-existing ",("migrated" if self._source_auth2_clusterid else  "upgraded") if session_data else "",self.source_session_key,self._source_auth2_clusterid or auth2cache.default_auth2_cluster.clusterid,self.cookie_value),target_session_cookie=self.cookie_value,userid=session_data.get(USER_SESSION_KEY) if session_data else None)
+
+                        DebugLog.log_if_true(session_data,DebugLog.SESSION_ALREADY_MIGRATED if self._source_auth2_clusterid else DebugLog.SESSION_ALREADY_UPGRADED,self._lb_hash_key,self._source_auth2_clusterid,self.source_session_key,self.source_session_cookie,message="The session({}) has already {} from {} to cluster session({})".format(self.source_session_cookie,"migrated" if self._source_auth2_clusterid else  "upgraded",self._source_auth2_clusterid or auth2cache.default_auth2_cluster.clusterid,self.cookie_value),target_session_cookie=self.cookie_value,userid=(session_data or {}).get(USER_SESSION_KEY))
+
+                        DebugLog.log_if_true(not session_data,DebugLog.MIGRATE_NONEXIST_SESSION if self._source_auth2_clusterid else DebugLog.UPGRADE_NONEXIST_SESSION,self._lb_hash_key,self._source_auth2_clusterid,self.source_session_key,self.source_session_cookie,message="No need to {} a non-existing session({}) from {} to cluster({})".format("migrate" if self._source_auth2_clusterid else  "upgrade",self.source_session_cookie,self._source_auth2_clusterid or auth2cache.default_auth2_cluster.clusterid,auth2cache.current_auth2_cluster.clusterid))
                     finally:
-                        performance.end_processingstep("load_cluster_session_from_cache")
+                        performance.end_processingstep("load_cluster_session_from_same_cluster")
                         pass
 
                 if session_data :

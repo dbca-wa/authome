@@ -89,9 +89,9 @@ class _AbstractSessionStore(SessionBase):
     cache_key_prefix = "{}:session:".format(settings.CACHE_KEY_PREFIX) if settings.CACHE_KEY_PREFIX else "session:"
     _idppk = None
     expired_session_key = None
-    _cookie_changed = None
     _samedomain = None
     _cookie_domain = None
+    _cookie_changed = False
 
     def __init__(self,session_key=None,request=None,cookie_domain=None):
         self._request = request
@@ -105,6 +105,7 @@ class _AbstractSessionStore(SessionBase):
                 #not a valid session key
                 session_key = None
         super().__init__(session_key)
+        self._source_session_key = session_key
 
     @property
     def samedomain(self):
@@ -190,34 +191,9 @@ class _AbstractSessionStore(SessionBase):
         else:
             return self.session_key or self.expired_session_key
 
-    def _get_session_key(self):
-        return self.__session_key
-
-    def _set_session_key(self, value):
-        """
-        Validate session key on assignment. Invalid values will set to None.
-        """
-        if not self._validate_session_key(value):
-            value = None
-
-        if self._cookie_changed is None:
-            self._cookie_changed = False
-        elif value:
-            self._cookie_changed = True
-        else:
-            #session key is set to None, the session cookie should be deleted from browser. 
-            #expired_session_key is set to the value of session key and then session key is set to None, the session cookie shoule remain untouched in browser
-            #in both cases, the session cookie shoule not be updated.
-            self._cookie_changed = False
-
-        self.__session_key = value
-
-    session_key = property(_get_session_key)
-    _session_key = property(_get_session_key, _set_session_key)
-
     @property
     def cookie_changed(self):
-        return self._cookie_changed
+        return self._cookie_changed or self._source_session_key != (self._session_key or self.expired_session_key)
 
     @property
     def expireat(self):
@@ -257,12 +233,6 @@ class _AbstractSessionStore(SessionBase):
                 return idp.idp
             else:
                 return None
-
-    def mark_as_migrated(self):
-        if self._session_key:
-            cachekey = self.cache_key
-            sessioncache = self._get_cache()
-            sessioncache.set(cachekey,{"migrated":True},settings.MIGRATED_SESSION_TIMEOUT)
 
     def flush(self):
         self.expired_session_key = None
@@ -393,7 +363,7 @@ class _AbstractSessionStore(SessionBase):
             self._get_cache(session_key).delete(self.cache_key_prefix + session_key)
         finally:
             performance.end_processingstep("delete_session_from_cache")
-            logger.debug("Delete a session({}) for {} from cache".format(session_key or self.session_key,self.get(USER_SESSION_KEY,'GUEST')))
+            logger.debug("Delete a session({}) from cache".format(session_key or self.session_key))
             pass
 
     def populate_session_key(self,process_prefix,idpid):
@@ -553,55 +523,51 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
                             pass
     
                         if session_data:
-                            if session_data.get("migrated",False):
-                                #already migrated, load the session again.
+                            #migrate the session from previous cache to current cache
+                            timeout = session_data.get("session_timeout")
+                            if timeout and session_data.get(USER_SESSION_KEY):
                                 try:
-                                    performance.start_processingstep("load_session_from_cache")
-                                    session_data = sessioncache.get(cachekey)
-                                    DebugLog.log(DebugLog.MOVE_MOVED_PREVIOUS_SESSION if session_data else DebugLog.MOVE_NONEXIST_MOVED_PREVIOUS_SESSION,None,None,self._session_key,self._session_key,message="Move a {1}moved previous session({0})".format(self._session_key,"" if session_data else "non-existing "),target_session_cookie=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY))
+                                    performance.start_processingstep("save_session_to_cache")
+                                    sessioncache.set(cachekey,session_data,timeout)
                                 finally:
-                                    performance.end_processingstep("load_session_from_cache")
+                                    performance.end_processingstep("save_session_to_cache")
                                     pass
                             else:
-                                #migrate the session from previous cache to current cache
-                                timeout = session_data.get("session_timeout")
-                                if timeout and session_data.get(USER_SESSION_KEY):
-                                    try:
-                                        performance.start_processingstep("save_session_to_cache")
-                                        sessioncache.set(cachekey,session_data,timeout)
-                                    finally:
-                                        performance.end_processingstep("save_session_to_cache")
-                                        pass
-                                else:
-                                    try:
-                                        performance.start_processingstep("get_ttl_from_previous_cache")
-                                        ttl = previous_sessioncache.ttl(previous_cachekey)
-                                    except:
-                                        ttl = None
-                                    finally:
-                                        performance.end_processingstep("get_ttl_from_previous_cache")
-                                        pass
-    
-                                    try:
-                                        performance.start_processingstep("save_session_to_cache")
-                                        if ttl:
-                                            sessioncache.set(cachekey,session_data,ttl)
-                                        else:
-                                            sessioncache.set(cachekey,session_data,self.get_session_age())
-                                    finally:
-                                        performance.end_processingstep("save_session_to_cache")
-                                        pass
-                                #mark the session as migrated session in previous cache
                                 try:
-                                    performance.start_processingstep("mark_previous_session_as_migrated")
-                                    previous_sessioncache.set(previous_cachekey,{"migrated":True},settings.MIGRATED_SESSION_TIMEOUT)
+                                    performance.start_processingstep("get_ttl_from_previous_cache")
+                                    ttl = previous_sessioncache.ttl(previous_cachekey)
+                                except:
+                                    ttl = None
                                 finally:
-                                    performance.end_processingstep("mark_previous_session_as_migrated")
+                                    performance.end_processingstep("get_ttl_from_previous_cache")
                                     pass
-                                DebugLog.log(DebugLog.MOVE_PREVIOUS_SESSION,None,None,self._session_key,utils.get_source_session_cookie(self._request),message="Move a previous session({0})".format(self._session_key),target_session_cookie=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY))
+
+                                try:
+                                    performance.start_processingstep("save_session_to_cache")
+                                    if ttl:
+                                        sessioncache.set(cachekey,session_data,ttl)
+                                    else:
+                                        sessioncache.set(cachekey,session_data,self.get_session_age())
+                                finally:
+                                    performance.end_processingstep("save_session_to_cache")
+                                    pass
+                            #mark the session as migrated session in previous cache
+                            try:
+                                performance.start_processingstep("delete_session_from_previous_cache")
+                                previous_sessioncache.delete(previous_cachekey)
+                            finally:
+                                performance.end_processingstep("delete_session_from_previous_cache")
+                                pass
+                            DebugLog.log(DebugLog.MOVE_SESSION,None,None,self._session_key,utils.get_source_session_cookie(self._request),message="Move a session({0}) from previous redis server({1}) to redis server({2})".format(self._session_key,utils.print_redisserver(previous_sessioncache),utils.print_redisserver(sessioncache)),target_session_cookie=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY))
                         else:
-                            DebugLog.log(DebugLog.MOVE_NONEXIST_PREVIOUS_SESSION,None,None,self._session_key ,utils.get_source_session_cookie(self._request),message="No need to move a non-existing previous session({})".format(self._session_key))
-                            pass
+                            try:
+                                performance.start_processingstep("load_session_from_cache")
+                                session_data = sessioncache.get(cachekey)
+                                DebugLog.log_if_true(session_data,DebugLog.SESSION_ALREADY_MOVED,None,None,self._session_key,self._session_key,message="Session({0}) has already moved from previous redis server({1}) to redis server({2})".format(self._session_key,utils.print_redisserver(previous_sessioncache),utils.print_redisserver(sessioncache)),target_session_cookie=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY))
+                                DebugLog.log_if_true(not session_data,DebugLog.MOVE_NONEXIST_SESSION,None,None,self._session_key,self._session_key,message="No need to move a non-existing session({0}) from previous redis server({1})".format(self._session_key,utils.print_redisserver(previous_sessioncache)),target_session_cookie=self._session_key)
+                            finally:
+                                performance.end_processingstep("load_session_from_cache")
+                                pass
                     finally:
                         performance.end_processingstep("migrate_session_from_previous_cache")
                         pass
@@ -666,7 +632,6 @@ else:
                 logger.error("Failed to load session.{}".format(traceback.format_exc()))
                 #rasing exception will cause error "'NoneType' object has no attribute 'get'" in session  middleware
                 DebugLog.log(DebugLog.ERROR,None,None,self._session_key,utils.get_source_session_cookie(self._request),message="Failed to load session({}).{}".format(self._session_key,traceback.format_exc()))
-                self._session_key = None
                 self._session_key = None
                 return  {}
             finally:

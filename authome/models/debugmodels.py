@@ -15,23 +15,20 @@ class DebugLog(models.Model):
     DELETE_COOKIE = 12
 
     UPGRADE_SESSION = 20
-    UPGRADE_UPGRADED_SESSION = 21
+    SESSION_ALREADY_UPGRADED = 21
     UPGRADE_NONEXIST_SESSION = 22
 
     MIGRATE_SESSION = 30
-    MIGRATE_MIGRATED_SESSION = 31
+    SESSION_ALREADY_MIGRATED = 31
     MIGRATE_NONEXIST_SESSION = 32
 
-    MOVE_PREVIOUS_SESSION = 40
-    MOVE_MOVED_PREVIOUS_SESSION = 41
-    MOVE_NONEXIST_PREVIOUS_SESSION = 42
+    MOVE_SESSION = 40
+    SESSION_ALREADY_MOVED = 41
+    MOVE_NONEXIST_SESSION = 42
 
     AUTH2_CLUSTER_NOTAVAILABLE = 50
     
     WARNING = 100
-    UPGRADE_NONEXIST_UPGRADED_SESSION = 123
-    MIGRATE_NONEXIST_MIGRATED_SESSION = 133
-    MOVE_NONEXIST_MOVED_PREVIOUS_SESSION = 143
 
     ERROR = 200
     LB_HASH_KEY_NOT_MATCH = 201
@@ -44,22 +41,18 @@ class DebugLog(models.Model):
         (DELETE_COOKIE , "Delete cookie"),
 
         (UPGRADE_SESSION , "Upgrade session"),
-        (UPGRADE_UPGRADED_SESSION , "Upgrade upgraded session"),
+        (SESSION_ALREADY_UPGRADED , "Session already upgraded"),
         (UPGRADE_NONEXIST_SESSION , "Upgrade non-exist session"),
 
         (MIGRATE_SESSION , "Migrate session"),
-        (MIGRATE_MIGRATED_SESSION , "Migrate migrated session"),
+        (SESSION_ALREADY_MIGRATED , "Session already migrated"),
         (MIGRATE_NONEXIST_SESSION , "Migrate non-exist session"),
     
-        (MOVE_PREVIOUS_SESSION , "Move previous session"),
-        (MOVE_MOVED_PREVIOUS_SESSION , "Move moved previous session"),
-        (MOVE_NONEXIST_PREVIOUS_SESSION , "Move non-exist previous session"),
+        (MOVE_SESSION , "Move session"),
+        (SESSION_ALREADY_MOVED , "Session already moved"),
+        (MOVE_NONEXIST_SESSION , "Move non-exist session"),
 
         (AUTH2_CLUSTER_NOTAVAILABLE , "Auth2 Cluster Not Available"),
-
-        (UPGRADE_NONEXIST_UPGRADED_SESSION , "Upgrade non-exist upgraded session"),
-        (MIGRATE_NONEXIST_MIGRATED_SESSION , "Migrate non-exist migrated session"),
-        (MOVE_NONEXIST_MOVED_PREVIOUS_SESSION , "Move non-exist moved previous session"),
 
         (LB_HASH_KEY_NOT_MATCH , "LB key not match"),
         (DOMAIN_NOT_MATCH, "Domain not match"),

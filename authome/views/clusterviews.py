@@ -117,7 +117,7 @@ def get_remote_session(request):
     else:
         return views.response_not_found_factory(request)
 
-def mark_session_as_migrated(request):
+def delete_remote_session(request):
     session = request.POST.get("session")
     if not session:
         return HttpResponse(content='Succeed',status=200)
@@ -136,7 +136,7 @@ def mark_session_as_migrated(request):
     #remote response cache
     cache.del_auth(None,session)
 
-    sessionstore.mark_as_migrated()
+    sessionstore.delete()
     return HttpResponse(content='Succeed',status=200)
 
 def model_cachestatus(request):

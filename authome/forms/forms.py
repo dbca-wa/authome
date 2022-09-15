@@ -62,13 +62,6 @@ if (value == "" || value[0] == "." || value.indexOf('*') >= 0) {
 
 
 class UserGroupAuthorizationForm(AuthorizationForm):
-    def __init__(self,*args,**kwargs):
-        super().__init__(*args,**kwargs)
-        if self.instance :
-            if self.instance.created:
-                if "usergroup" in self.fields :
-                    self.fields["usergroup"].widget = ReadonlyWidget(lambda d:UserGroup.objects.get(id = int(d)) if d else "")
-
     class Meta:
         model = UserGroupAuthorization
         fields = "__all__"

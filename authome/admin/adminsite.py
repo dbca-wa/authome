@@ -11,6 +11,8 @@ from django.contrib import auth
 from .. import models
 from .. import utils
 
+logger = logging.getLogger(__name__)
+
 class Auth2AdminSite(djangoadmin.AdminSite):
     def admin_view(self, view, cacheable=False):
         def _view(request, *args, **kwargs):
@@ -33,8 +35,8 @@ class Auth2AdminSite(djangoadmin.AdminSite):
             }
         else:
             registered_models = self._registry
-
         for model, model_admin in registered_models.items():
+
             app_label = model._meta.app_label
 
             has_module_perms = model_admin.has_module_permission(request)
@@ -93,10 +95,12 @@ class Auth2AdminSite(djangoadmin.AdminSite):
 admin_site = Auth2AdminSite()
 
 #register all model admins which are already registered in django admin to auth2 admin site
-for model, model_admin in djangoadmin.site._registry.items():
+registered_admins  = [(model,model_admin)for model, model_admin in djangoadmin.site._registry.items()]
+for model, model_admin in registered_admins:
+    djangoadmin.site.unregister(model)
     if model in (auth.models.Group,auth.models.User):
         continue
-    admin_site._registry[model] = model_admin
+    admin_site.register(model,model_admin.__class__)
 
 
 from .admin import NormalUser,SystemUser,NormalUserToken,SystemUserToken

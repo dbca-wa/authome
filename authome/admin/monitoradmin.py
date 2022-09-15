@@ -72,8 +72,8 @@ class SSOMethodTrafficDataInline(TrafficDataPropertyMixin,djangoadmin.TabularInl
     fields = readonly_fields
 
 class TrafficDataAdmin(TrafficDataPropertyMixin,admin.DatetimeMixin,djangoadmin.ModelAdmin):
-    list_display = ("_start_time","_cluster","requests","_total_time","_min_time","_max_time","_avg_time","get_remote_sessions","migrate_remote_sessions")
-    readonly_fields = ("_cluster","_start_time","_end_time","requests","_total_time","_min_time","_max_time","_avg_time","_status","_domains","_batchid")
+    list_display = ("_start_time","_cluster","requests","_total_time","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions")
+    readonly_fields = ("_cluster","_start_time","_end_time","requests","_total_time","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains","_batchid")
     fields = readonly_fields
     ordering = ("-start_time","clusterid")
     list_filter = ['clusterid']
@@ -116,8 +116,8 @@ class SSOMethodTrafficReportInline(TrafficDataPropertyMixin,djangoadmin.TabularI
     fields = readonly_fields
 
 class TrafficReportAdmin(TrafficDataPropertyMixin,admin.DatetimeMixin,djangoadmin.ModelAdmin):
-    list_display = ("report_type","_start_time","_cluster","requests","_total_time","_min_time","_max_time","_avg_time","get_remote_sessions","migrate_remote_sessions","_subreports")
-    readonly_fields = ("_cluster","report_type","_start_time","_end_time","requests","_total_time","_min_time","_max_time","_avg_time","_status","_domains")
+    list_display = ("report_type","_start_time","_cluster","requests","_total_time","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_subreports")
+    readonly_fields = ("_cluster","report_type","_start_time","_end_time","requests","_total_time","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains")
     fields = readonly_fields
     ordering = ("report_type","-start_time",'clusterid')
     list_filter = ['clusterid',"report_type"]
