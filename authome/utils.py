@@ -554,6 +554,6 @@ def print_request_meta(request):
 def create_secret_key(length=64):
     from django.utils.crypto import  get_random_string
     import string
-    return get_random_string(length, string.digits + string.ascii_letters + string.punctuation)
+    return get_random_string(length, string.digits + string.ascii_letters + "`~!@$%^&*()_+-={}|[]:;,./<>?")
 
 

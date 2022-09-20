@@ -9,7 +9,7 @@
 
 {% block realcontent %}
 
-<form method="post" action="{% url 'profile_edit' %}" id="attributeVerification" class="localAccount">
+<form method="post" action="{% url 'selfservice:profile_edit' %}" id="attributeVerification" class="localAccount">
 {% csrf_token %}
 <input type="hidden" id="id_next" name="next" value="{{next}}">
 <div >

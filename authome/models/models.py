@@ -11,6 +11,7 @@ from django.contrib.postgres.fields import ArrayField
 from django.db.models.signals import pre_delete, pre_save, post_save, post_delete
 from django.dispatch import receiver
 from django.contrib.auth.models import AbstractUser,UserManager
+from django.utils.html import mark_safe
 
 import hashlib
 
@@ -1679,12 +1680,32 @@ class UserToken(models.Model):
 
     @property
     def is_expired(self):
-        if not self.enabled or not self.token:
+        if not self.token:
             return True
         elif self.expired:
             return timezone.localdate() > self.expired
         else:
             return False
+    @property
+    def html_statusname(self):
+        if not self.enabled:
+            return mark_safe("<span style='background-color:darkred;color:white;padding:0px 20px 0px 20px;'>Disabled</span>")
+        elif not self.token:
+            return ""
+        elif not self.expired:
+            return mark_safe("<span style='background-color:green;color:white;padding:0px 20px 0px 20px;'>Expired at : 2099-12-31</span>")
+        else:
+            today = timezone.localdate()
+            t = self.expired.strftime("%Y-%m-%d")
+            if today > self.expired:
+                return mark_safe("<span style='background-color:darkred;color:white;padding:0px 20px 0px 20px;'>Expired at : {}</span>".format(t))
+            elif not settings.USER_ACCESS_TOKEN_WARNING:
+                return mark_safe("<span style='background-color:green;color:white;padding:0px 20px 0px 20px;'>Expired at : {}</span>".format(t))
+            elif today + settings.USER_ACCESS_TOKEN_WARNING >= self.expired:
+                return mark_safe("<span style='background-color:#ff9966;color:white;padding:0px 20px 0px 20px;'>Expired at : {}</span>".format(t))
+            else:
+                return mark_safe("<span style='background-color:green;color:white;padding:0px 20px 0px 20px;'>Expired at : {}</span>".format(t))
+
 
     @property
     def status(self):

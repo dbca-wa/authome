@@ -6,8 +6,8 @@
 {% block extrapagecss %}
 <style>
 .self_asserted_container .col-lg-6 {
-    max-width:800px;
-    width:650px;
+    max-width:1000px;
+    width:900px;
     text-align:left;
 }
 .self_asserted_container .row .panel-default .panel-body {
@@ -42,6 +42,13 @@ form button.btn {
 {% endif %}
 
 <form class="form-horizontal">
+  {% if message %}
+  <div class="form-group">
+    <div class="col-sm-12">
+        <pre id="message" style="line-height:30px;font-size:20px;text-align:left;white-space: break-spaces;color:red">{{message}}</pre>
+    </div>
+  </div>
+  {%  endif %}
   <div class="form-group">
     <label for="email" class="col-sm-4 control-label">Email</label>
     <div class="col-sm-8">
@@ -52,7 +59,7 @@ form button.btn {
     <label for="last_name" class="col-sm-4 control-label">Name</label>
     <div class="col-sm-8">
       <input type="text" class="form-control" id="full_name"  value="{{full_name}}" readonly style="width:250px;display:inline">
-      <button type="button" class="btn btn-primary" onclick="document.location='{% url 'profile_edit' %}?next={{next_url}}'" style="width:45px;margin-top:-4px">Edit</button>
+      <button type="button" class="btn btn-primary" onclick="document.location='{% url 'selfservice:profile_edit' %}?next={{next_url}}'" style="width:45px;margin-top:-4px">Edit</button>
     </div>
   </div>
 
@@ -73,6 +80,30 @@ form button.btn {
   </div>
 
   {% if is_staff %}
+  <div class="form-group">
+    <label for="idp" class="col-sm-4 control-label">Access Token</label>
+    <div class="col-sm-8">
+      <input type="text" class="form-control" id="idp"  value="{{token.token|default_if_none:''}}" readonly style="width:100%"> 
+      <br>{{token.html_statusname}}
+      <br>
+      <br>
+      {% if not token.is_expired %}
+          {% if token.enabled %}
+              <button type="button" class="btn btn-primary" onclick="document.location='{% url 'selfservice:disable_token' %}?next={{next_url}}'" style="width:60px;margin-top:-4px">Disable</button>
+          {% else %}
+              <button type="button" class="btn btn-primary" onclick="document.location='{% url 'selfservice:enable_token' %}?next={{next_url}}'" style="width:60px;margin-top:-4px">Enable</button>
+          {% endif %}
+          <button type="button" class="btn btn-primary" onclick="document.location='{% url 'selfservice:revoke_token' %}?next={{next_url}}'" style="width:60px;margin-top:-4px">Revoke</button>
+      {% endif %}
+      {% for index,l in token_lifetime %}
+          {% if l > 0 %}
+              <button type="button" class="btn btn-primary" onclick="document.location='{% url 'selfservice:create_token' index=index %}?next={{next_url}}'" style="width:120px;margin-top:-4px">{{l}} Days Token</button>
+          {% else %}
+              <button type="button" class="btn btn-primary" onclick="document.location='{% url 'selfservice:create_token' index=index %}?next={{next_url}}'" style="width:120px;margin-top:-4px">Permanent Token</button>
+          {% endif %}
+      {% endfor %}
+    </div>
+  </div>
   <div class="form-group">
     <label for="groups" class="col-sm-4 control-label">Staff</label>
     <div class="col-sm-8" >

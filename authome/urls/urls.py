@@ -30,7 +30,6 @@ urlpatterns = [
 
     #path('sso/profile/edit', views.profile_edit,{"backend":"azuread-b2c-oauth2"},name='profile_edit'),
     #path('sso/profile/edit/complete', views.profile_edit_complete,{"backend":"azuread-b2c-oauth2"},name='profile_edit_complete'),
-    path('sso/profile/edit', views.profile_edit,name='profile_edit'),
 
     path('sso/password/reset', views.password_reset,{"backend":"azuread-b2c-oauth2"},name='password_reset'),
     path('sso/password/reset/complete', views.password_reset_complete,{"backend":"azuread-b2c-oauth2"},name='password_reset_complete'),
@@ -44,7 +43,7 @@ urlpatterns = [
     path('sso/totp/generate',views.totp_generate,name="totp_generate"),
     path('sso/totp/verify',views.totp_verify,name="totp_verify"),
 
-    path('sso/setting',views.user_setting,name="user_setting"),
+    path('sso/setting',views.selfservice.user_setting,name="user_setting"),
 
     path('sso/checkauthorization',csrf_exempt(views.checkauthorization),name="checkauthorization"),
 
