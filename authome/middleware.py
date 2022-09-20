@@ -19,7 +19,6 @@ from . import utils
 
 logger = logging.getLogger(__name__)
 
-FORBIDDEN_RESPONSE = HttpResponseForbidden()
 LB_HASH_KEY_MISSING_RESPONSE = HttpResponse("Can't find X-lb-hash-key",status=500)
 
 class SimpleCookie(DjangoSimpleCookie):
@@ -236,13 +235,25 @@ class ClusterSessionMiddleware(SessionMiddleware):
                             DebugLog.log(DebugLog.LB_HASH_KEY_NOT_MATCH,nginx_lb_hash_key,auth2_clusterid,session_key,session_cookie,message="The lb hash key({}) in session cookie({}) does not match the request header 'lb-hash-key'({}),maybe more than one session cookies were sent . request={}, cookies={}".format(lb_hash_key,session_cookie,nginx_lb_hash_key,"{}{}".format(utils.get_host(request),request.path_info),request.headers.get("cookie")))
                             return
                         
-                        if auth2_clusterid != settings.AUTH2_CLUSTERID:
+                        if auth2_clusterid != settings.AUTH2_CLUSTERID :
                             #current auth2 server is not the original auth2 server
                             #maybe caused by new auth2 server added, existing auth2 server removed, some auth2 server unavailable, or hacked by the user
-                            if not check_integrity(lb_hash_key,auth2_clusterid,session_key,signature):
+                            if not check_integrity(lb_hash_key,auth2_clusterid,session_key,signature) :
                                 #session cookie is hacked by the user or 
                                 DebugLog.log(DebugLog.SESSION_COOKIE_HACKED,nginx_lb_hash_key,auth2_clusterid,session_key,session_cookie,message="The hash  key of the session cookie({0}) does not match the required hash key.".format(session_cookie))
-                                return FORBIDDEN_RESPONSE
+                                if not cookie_domain and session_key.endswith(".au"):
+                                    request.session = self.SessionStore(nginx_lb_hash_key,auth2_clusterid,None,request=request,cookie_domain=session_key)
+                                    return
+                                else:
+                                    request.session = self.SessionStore(nginx_lb_hash_key,auth2_clusterid,None,request=request,cookie_domain=cookie_domain)
+                                    resp = HttpResponseForbidden()
+                                    resp.delete_cookie(
+                                        settings.SESSION_COOKIE_NAME,
+                                        path=settings.SESSION_COOKIE_PATH,
+                                        domain=request.session.cookie_domain,
+                                        samesite=settings.SESSION_COOKIE_SAMESITE
+                                    )
+                                    return resp
     
                         request.session = self.SessionStore(lb_hash_key,auth2_clusterid,session_key,request=request,cookie_domain=cookie_domain)
                     except:
