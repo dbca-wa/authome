@@ -602,7 +602,7 @@ class AccessTokenAdmin(DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdm
         if not obj or not obj.token or not obj.token.token:
             return None
         elif not obj.token.expired:
-            return mark_safe("<A style='background-color:green;color:white;padding:0px 20px 0px 20px;'>209902-31</A>")
+            return mark_safe("<A style='background-color:green;color:white;padding:0px 20px 0px 20px;'>2099-12-31</A>")
         else:
             t = obj.token.expired.strftime("%Y-%m-%d")
             status = obj.token.status
@@ -613,14 +613,6 @@ class AccessTokenAdmin(DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdm
             else:
                 return mark_safe("<A style='background-color:#ff9966;color:white;padding:0px 20px 0px 20px;'>{}</A>".format(t))
     _token_expired.short_description = "Token Expired At"
-
-
-    def _token_is_expired(self,obj):
-        if not obj or not obj.token or not obj.token.token:
-            return None
-        else:
-            return mark_safe("<img src='{}'/>".format(static('admin/img/icon-%s.svg' % {True: 'yes', False: 'no'}[obj.token.is_expired])))
-    _token_is_expired.short_description = "Token Expired"
 
 
     def has_change_permission(self, request, obj=None):
@@ -675,6 +667,15 @@ class CustomizableUserflowAdmin(PermissionCheckMixin,CacheableListTitleMixin,Dat
     model = models.CustomizableUserflow
     object_change_url_name = 'admin:{}_{}_change'.format(models.CustomizableUserflow._meta.app_label,models.CustomizableUserflow._meta.model_name)
     object_delete_url_name = 'admin:{}_{}_delete'.format(models.CustomizableUserflow._meta.app_label,models.CustomizableUserflow._meta.model_name)
+
+    def get_readonly_fields(self, request, obj=None):
+        if not obj or not obj.id:
+            return ('_modified','_created')
+        elif models.can_access(request.user.email,settings.AUTH2_DOMAIN,reverse(self.object_change_url_name, args=(0,))):
+            # can modify any objects
+            return ('_modified','_created')
+        else:
+            return ('_modified','_created',"domain")
 
 
 class UserTOTPAdmin(DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmin):

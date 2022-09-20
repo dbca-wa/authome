@@ -437,9 +437,9 @@ def _get_host2(request):
 
 get_host = _get_host
 
-def sign_lb_hash_key(hash_key,clusterid,secretkey):
+def sign_session_cookie(hash_key,clusterid,session_key,secretkey):
     h = hashlib.blake2b(digest_size=LB_HASH_KEY_DIGEST_SIZE)
-    h.update("{}{}{}".format(hash_key,clusterid,secretkey).encode())
+    h.update("{}{}{}{}".format(hash_key,clusterid,session_key,secretkey).encode())
     return h.hexdigest()
 
 def add_to_list(l,o):

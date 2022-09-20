@@ -60,11 +60,11 @@ class SimpleCookie(DjangoSimpleCookie):
         if httponly:
             c['httponly'] = True
  
-def check_integrity(lb_hash_key,auth2_clusterid,signature):
-    sig = utils.sign_lb_hash_key(lb_hash_key,auth2_clusterid,settings.SECRET_KEY)
+def check_integrity(lb_hash_key,auth2_clusterid,session_key,signature):
+    sig = utils.sign_session_cookie(lb_hash_key,auth2_clusterid,session_key,settings.SECRET_KEY)
     if signature != sig:
         if settings.PREVIOUS_SECRET_KEY:
-            sig = utils.sign_lb_hash_key(hash_key,auth2_clusterid,settings.PREVIOUS_SECRET_KEY)
+            sig = utils.sign_session_cookie(hash_key,auth2_clusterid,session_key,settings.PREVIOUS_SECRET_KEY)
             if signature != sig:
                 return False
         else:
@@ -239,7 +239,7 @@ class ClusterSessionMiddleware(SessionMiddleware):
                         if auth2_clusterid != settings.AUTH2_CLUSTERID:
                             #current auth2 server is not the original auth2 server
                             #maybe caused by new auth2 server added, existing auth2 server removed, some auth2 server unavailable, or hacked by the user
-                            if not check_integrity(lb_hash_key,auth2_clusterid,signature):
+                            if not check_integrity(lb_hash_key,auth2_clusterid,session_key,signature):
                                 #session cookie is hacked by the user or 
                                 DebugLog.log(DebugLog.SESSION_COOKIE_HACKED,nginx_lb_hash_key,auth2_clusterid,session_key,session_cookie,message="The hash  key of the session cookie({0}) does not match the required hash key.".format(session_cookie))
                                 return FORBIDDEN_RESPONSE

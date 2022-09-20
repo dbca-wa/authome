@@ -127,5 +127,5 @@ class StartServerMixin(object):
         else:
             lb_hash_key,original_clusterid,signature,session_key = values
 
-        sig = utils.sign_lb_hash_key(lb_hash_key,clusterid,settings.SECRET_KEY)
+        sig = utils.sign_session_cookie(lb_hash_key,clusterid,session_key,settings.SECRET_KEY)
         return "{}|{}|{}|{}".format(lb_hash_key,clusterid,signature,session_key)

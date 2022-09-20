@@ -26,7 +26,6 @@ class SessionStore(sessionstore.SessionStore):
     but the cache key prefix can be different.
 
     """
-    __signature = None
     _clusterid_prefix = settings.AUTH2_CLUSTERID.replace("-","").replace("_","").lower() if settings.AUTH2_CLUSTERID else ""
     def __init__(self,lb_hash_key,auth2_clusterid,session_key,request=None,cookie_domain=None):
         super().__init__(session_key=session_key,request=request,cookie_domain=cookie_domain)
@@ -35,9 +34,7 @@ class SessionStore(sessionstore.SessionStore):
 
     @property
     def _signature(self):
-        if not self.__signature:
-            self.__signature = utils.sign_lb_hash_key(self._lb_hash_key,settings.AUTH2_CLUSTERID,settings.SECRET_KEY)
-        return self.__signature
+        return utils.sign_session_cookie(self._lb_hash_key,settings.AUTH2_CLUSTERID,(self._session_key or self.expired_session_key),settings.SECRET_KEY)
 
     @property
     def cookie_changed(self):
