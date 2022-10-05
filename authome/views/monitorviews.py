@@ -10,6 +10,8 @@ import json
 import psutil
 import traceback
 import logging
+import os
+import socket
 from collections import OrderedDict
 from datetime import datetime,timedelta
 
@@ -28,6 +30,10 @@ def get_active_redis_connections(cachename):
 
 def _get_localstatus():
     content = OrderedDict()
+
+    content["host"] = socket.gethostname()
+    content["pid"] = os.getpid()
+    content["starttime"] = utils.get_process_starttime()
 
     if settings.AUTH2_CLUSTER_ENABLED:
         content["clusterid"] = settings.AUTH2_CLUSTERID

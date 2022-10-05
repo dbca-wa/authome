@@ -32,9 +32,15 @@ _processid = None
 def get_processid():
     global _processid
     if not _processid:
-        processcreatetime = timezone.make_aware(datetime.fromtimestamp(psutil.Process(os.getpid()).create_time())).strftime("%Y-%m-%d %H:%M:%S.%f")
-        _processid = "{}-{}-{}".format(socket.gethostname(),processcreatetime,os.getpid())
+        _processid = "{}-{}-{}".format(socket.gethostname(),get_process_starttime(),os.getpid())
     return _processid
+
+_process_starttime = None
+def get_process_starttime():
+    global _process_starttime
+    if not _process_starttime:
+        _process_starttime = timezone.make_aware(datetime.fromtimestamp(psutil.Process(os.getpid()).create_time())).strftime("%Y-%m-%d %H:%M:%S.%f")
+    return _process_starttime
 
 
 def build_cookie_value(lb_hash_key,clusterid,signature,session_key,cookie_domain):

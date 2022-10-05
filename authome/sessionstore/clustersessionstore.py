@@ -166,7 +166,7 @@ class SessionStore(sessionstore.SessionStore):
         
                     #expired authenticated session, or session does not exist
                     if self._session_key and "-" in self._session_key and self.samedomain:
-                        #this is a authenticated session key
+                        #keep the session cookie to sign out from B2C if the session is authenticated session and also come from the same domain; otherwise, delete the session cookie from browser to let user signin again, if b2c cookie still exists in the browser, the user will automatically sign in 
                         self.expired_session_key = self._session_key
                     self._session_key = None
                     return {}
