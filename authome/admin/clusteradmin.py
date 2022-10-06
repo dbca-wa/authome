@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 defaultcache = get_defaultcache()
 
 class SyncConfigChangeMixin(object):
-    extra_tools = [("sync_changes",'sync_config',"_self")]
+    extra_tools = [("sync changes",'sync_config',"_self")]
     
     def get_urls(self):
         urls = super().get_urls()
@@ -79,7 +79,7 @@ class SyncConfigChangeMixin(object):
         if changed_clusters:
             message = "{}, succeed clusters are {}".format(message,[c.clusterid for c in changed_clusters])
         if not_changed_clusters:
-            message = "{}, already up_to_date clusters are {}".format(message,[c.clusterid for c in not_changed_clusters])
+            message = "{}, already up-to-date clusters are {}".format(message,[c.clusterid for c in not_changed_clusters])
         if failed_clusters:
             self.message_user(
                 request, 
@@ -164,7 +164,7 @@ class Auth2ClusterAdmin(admin.ExtraToolsMixin,admin.DeleteMixin,admin.DatetimeMi
     readonly_fields = ('clusterid','_running_status','default','endpoint','_last_heartbeat','_usergroup_status','_usergroup_lastrefreshed','_usergroupauthorization_status','_usergroupauthorization_lastrefreshed','_userflow_status','_userflow_lastrefreshed','_idp_status','_idp_lastrefreshed','modified','registered')
     fields = readonly_fields
     ordering = ('clusterid',)
-    extra_tools = [("cluster_status",'cluster_status',"clusterstatus")]
+    extra_tools = [("cluster status",'cluster_status',"clusterstatus")]
 
     def get_urls(self):
         urls = super().get_urls()
