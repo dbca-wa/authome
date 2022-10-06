@@ -488,15 +488,15 @@ def _save_trafficdata(batchid):
                     domains=method_data.get("domains")
                 )
                 method_traffic_data.save()
-        #remove the saved data from cache
-        client.ltrim(trafficdata_key,datalength,-1)
         #change the traffic_data process status
         if settings.AUTH2_CLUSTER_ENABLED:
             models.TrafficDataProcessStatus.objects.update_or_create(cluster=cache.current_auth2_cluster,clusterid=settings.AUTH2_CLUSTERID,defaults={"last_saved_batchid":batchid})
         else:
             models.TrafficDataProcessStatus.objects.update_or_create(cluster__isnull=True,clusterid__isnull=True,defaults={"last_saved_batchid":batchid})
+        #remove the saved data from cache
+        client.ltrim(trafficdata_key,datalength,-1)
 
-        return result
+    return result
 
 
 def save_trafficdata(request):
