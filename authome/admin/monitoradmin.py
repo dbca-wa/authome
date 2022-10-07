@@ -72,8 +72,8 @@ class SSOMethodTrafficDataInline(TrafficDataPropertyMixin,djangoadmin.TabularInl
     fields = readonly_fields
 
 class TrafficDataAdmin(TrafficDataPropertyMixin,admin.DatetimeMixin,djangoadmin.ModelAdmin):
-    list_display = ("_start_time","_cluster","requests","_total_time","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions")
-    readonly_fields = ("_cluster","_start_time","_end_time","requests","_total_time","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains","_batchid")
+    list_display = ("_start_time","_cluster","_servers","requests","_total_time","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions")
+    readonly_fields = ("_cluster","_start_time","_end_time","_serverlist","requests","_total_time","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains","_batchid")
     fields = readonly_fields
     ordering = ("-start_time","clusterid")
     list_filter = ['clusterid']
@@ -100,6 +100,20 @@ class TrafficDataAdmin(TrafficDataPropertyMixin,admin.DatetimeMixin,djangoadmin.
               
             return obj.cluster.clusterid if obj.cluster else obj.clusterid
     _subreports.short_description = "Sub Reports"
+
+    def _servers(self,obj):
+        if not obj or not obj.servers:
+            return ""
+        else:
+            return len(obj.servers)
+    _servers.short_description = "Servers"
+
+    def _serverlist(self,obj):
+        if not obj or not obj.servers:
+            return ""
+        else:
+            return mark_safe("<pre>{}\r\n    {}</pre>".format("1 Server" if len(obj.servers) < 2 else "{} Servers".format(len(obj.servers)),"\r\n    ".join(obj.servers)))
+    _serverlist.short_description = "Servers"
 
     def has_add_permission(self, request, obj=None):
         return False

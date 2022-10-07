@@ -4,6 +4,7 @@ import logging
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from django.contrib.postgres.fields import ArrayField
 
 from .clustermodels import Auth2Cluster
 from .. import utils
@@ -20,6 +21,7 @@ class TrafficDataProcessStatus(models.Model):
 class TrafficData(models.Model):
     cluster = models.ForeignKey(Auth2Cluster, on_delete=models.SET_NULL,null=True,editable=False)
     clusterid = models.CharField(max_length=32,editable=False,null=True)
+    servers = ArrayField(models.CharField(max_length=512,null=False),editable=False,null=True)
     start_time = models.DateTimeField(editable=False,db_index=True)
     end_time = models.DateTimeField(editable=False)
     batchid = models.DateTimeField(editable=False,db_index=True)

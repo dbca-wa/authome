@@ -32,14 +32,14 @@ _processid = None
 def get_processid():
     global _processid
     if not _processid:
-        _processid = "{}-{}-{}".format(socket.gethostname(),get_process_starttime(),os.getpid())
+        _processid = "{}-{}-{}".format(socket.gethostname(),os.getpid(),get_process_starttime())
     return _processid
 
 _process_starttime = None
 def get_process_starttime():
     global _process_starttime
     if not _process_starttime:
-        _process_starttime = timezone.make_aware(datetime.fromtimestamp(psutil.Process(os.getpid()).create_time())).strftime("%Y-%m-%d %H:%M:%S.%f")
+        _process_starttime = timezone.make_aware(datetime.fromtimestamp(psutil.Process(os.getpid()).create_time())).strftime("%Y-%m-%dT%H:%M:%S.%f")
     return _process_starttime
 
 

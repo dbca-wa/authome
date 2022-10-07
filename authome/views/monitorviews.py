@@ -434,8 +434,11 @@ def _save_trafficdata(batchid):
                 "starttime":pdata["starttime"],
                 "endtime":pdata["endtime"],
                 "sso_requests":{},
+                "servers":[pdata["serverid"]]
             }
             traffic_datas[key] = traffic_data
+        else:
+            traffic_data["servers"].append(pdata["serverid"])
         for method in sso_requests_keys:
             data = pdata.get(method)
             if data:
@@ -458,6 +461,7 @@ def _save_trafficdata(batchid):
                 start_time=data["starttime"],
                 end_time=data["endtime"],
                 batchid=batchid,
+                servers=data["servers"],
                 requests=data["sso_requests"].get("requests") or 0,
                 total_time=data["sso_requests"].get("totaltime"),
                 min_time=data["sso_requests"].get("mintime"),
@@ -471,7 +475,7 @@ def _save_trafficdata(batchid):
             traffic_data.save()
             result.append([utils.encode_datetime(traffic_data.start_time),utils.encode_datetime(traffic_data.end_time),traffic_data.requests,traffic_data.get_remote_sessions,traffic_data.delete_remote_sessions])
             for method,method_data in data.items():
-                if method in ("sso_requests","starttime","endtime"):
+                if method in ("sso_requests","starttime","endtime","servers"):
                     continue
                 if not isinstance(method_data,dict) or not method_data.get("requests"):
                     continue
