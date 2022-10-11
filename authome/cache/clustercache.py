@@ -199,9 +199,9 @@ class MemoryCache(cache.MemoryCache):
         """
         def _send_request(cluster):
             if modified:
-                return requests.get("{}{}?modified={}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__}),modified.strftime("%Y-%m-%d %H:%M:%S.%f")))
+                return requests.get("{}{}?modified={}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__}),modified.strftime("%Y-%m-%d %H:%M:%S.%f")),headers=self._get_headers())
             else:
-                return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__})))
+                return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__})),headers=self._get_headers())
         return self._send_request_to_other_clusters(_send_request,True)
 
     def user_changed(self,userid,include_current_cluster=False):
@@ -210,7 +210,7 @@ class MemoryCache(cache.MemoryCache):
         Return the failed clusters with associated exception
         """
         def _send_request(cluster):
-            return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:user_changed', kwargs={'userid': userid})))
+            return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:user_changed', kwargs={'userid': userid})),headers=self._get_headers())
 
         if include_current_cluster:
             try:
@@ -232,7 +232,7 @@ class MemoryCache(cache.MemoryCache):
         Return the failed clusters with associated exception
         """
         def _send_request(cluster):
-            return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:usertoken_changed', kwargs={'userid': userid})))
+            return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:usertoken_changed', kwargs={'userid': userid})),headers=self._get_headers())
 
         if include_current_cluster:
             try:
@@ -254,7 +254,7 @@ class MemoryCache(cache.MemoryCache):
         Return the failed clusters with associated exception
         """
         def _send_request(cluster):
-            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:users_changed')),data={"users":userids})
+            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:users_changed')),data={"users":userids},headers=self._get_headers())
 
         if include_current_cluster:
             for userid in userids:
@@ -279,7 +279,7 @@ class MemoryCache(cache.MemoryCache):
         Return the failed clusters with associated exception
         """
         def _send_request(cluster):
-            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:usertokens_changed')),data={"users":userids})
+            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:usertokens_changed')),data={"users":userids},headers=self._get_headers())
 
         if include_current_cluster:
             for userid in userids:
@@ -298,14 +298,16 @@ class MemoryCache(cache.MemoryCache):
             userids = ",".join(userids)
             return self._send_request_to_other_clusters(_send_request,True)
 
-    def _get_headers(self,request):
+    def _get_headers(self,request=None):
         if request:
             return {
                 "HOST":utils.get_host(request),
                 "x-upstream-request-uri":request.headers.get("x-upstream-request-uri") or request.get_full_path()
             }
         else:
-            return None
+            return {
+                "HOST":settings.AUTH2_DOMAIN
+            }
 
     def get_remote_session(self,clusterid,session,raise_exception=False,request=None):
         """
@@ -360,7 +362,7 @@ class MemoryCache(cache.MemoryCache):
                 cluster.endpoint,
                 reverse('cluster:save_traffic_data'),
                 utils.encode_datetime(batchid)
-            ))
+            ),headers=self._get_headers())
 
         res = self._send_request_to_cluster(clusterid,_send_request)
 
@@ -373,7 +375,7 @@ class MemoryCache(cache.MemoryCache):
             return requests.get("{}{}".format(
                 cluster.endpoint,
                 reverse('cluster:cluster_status')
-            ))
+            ),headers=self._get_headers())
         try:
             res = self._send_request_to_cluster(clusterid,_send_request)
             return res.json()
@@ -395,7 +397,7 @@ class MemoryCache(cache.MemoryCache):
             return requests.get("{}{}".format(
                 cluster.endpoint,
                 reverse('cluster:model_cachestatus')
-            ))
+            ),headers=self._get_headers())
         res = self._send_request_to_cluster(clusterid,_send_request)
         return res.json()
 
@@ -408,7 +410,7 @@ class MemoryCache(cache.MemoryCache):
             return requests.get("{}{}".format(
                 cluster.endpoint,
                 reverse('cluster:cluster_healthcheck')
-            ))
+            ),headers=self._get_headers())
         try:
             res = self._send_request_to_cluster(clusterid,_send_request)
             data = res.json()
