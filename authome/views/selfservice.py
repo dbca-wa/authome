@@ -76,6 +76,9 @@ def user_setting(request):
     context["mfa_enabled"] = False
     context["password_reset_enabled"] = False
     context["mfa_method"] = ""
+    if settings.AUTH2_CLUSTER_ENABLED:
+        context["auth2_cluster"] = settings.AUTH2_CLUSTERID
+
     if request.session.get("mfa_method"):
         context["mfa_method"] = MFA_METHOD_MAPPING.get(request.session["mfa_method"],request.session["mfa_method"])
     if request.session.get("idp"):
