@@ -58,8 +58,7 @@ if [[ \"\$DEBUG\" == \"True\" || -n \"\${LOGLEVEL}\" ]]; then \n\
     cd /app/dev && python manage.py \"\$@\" \n\
 else \n\
     echo \"Running in release mode\" \n\
-    cd /app/release && gunicorn authome.wsgi --bind=:8080 --config=gunicorn.py \n\
-    cd /app/dev && python manage.py \"\$@\" \n\
+    cd /app/release && python manage.py \"\$@\" \n\
 fi \n\
 " > run_command
 

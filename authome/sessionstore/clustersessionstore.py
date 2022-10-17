@@ -178,7 +178,7 @@ class SessionStore(sessionstore.SessionStore):
                 finally:
                     performance.end_processingstep("upgrade_to_cluster_session")
                     pass
-        else:
+        elif self._source_auth2_clusterid or auth2cache.default_auth2_cluster:
             #session should be migrated from original server to current server
             try:
                 performance.start_processingstep("migrate_session_from_other_cluster")
@@ -257,5 +257,10 @@ class SessionStore(sessionstore.SessionStore):
             finally:
                 performance.end_processingstep("migrate_session_from_other_cluster")
                 pass
+
+        else:
+            DebugLog.log(DebugLog.UPGRADE_NONEXIST_SESSION,self._lb_hash_key,self._source_auth2_clusterid,self.source_session_key,self.source_session_cookie,message="Can't upgrade a session({}) to cluster({}) without default auth2 cluster".format(self.source_session_cookie,auth2cache.current_auth2_cluster.clusterid))
+            self._session_key = None
+            return {}
 
 

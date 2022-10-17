@@ -64,7 +64,10 @@ class MemoryCache(cache.MemoryCache):
 
     @property
     def default_auth2_cluster(self):
-        if not self._default_auth2_cluster:
+        """
+        In cluster environment, default cluster can be null, but current auth2 cluster can't be null
+        """
+        if not self._current_auth2_cluster:
             self.refresh_auth2_clusters(True)
         return self._default_auth2_cluster
 
@@ -86,16 +89,18 @@ class MemoryCache(cache.MemoryCache):
             refreshtime = timezone.localtime()
             l1 = len(self._auth2_clusters)
             l2 = 0
+            default_auth2_cluster = None
             for o in Auth2Cluster.objects.all():
                 o.refreshtime = refreshtime
                 if o.default:
-                    self._default_auth2_cluster = o
+                    default_auth2_cluster = o
 
                 if o.clusterid == settings.AUTH2_CLUSTERID:
                     self._current_auth2_cluster = o
                 else:
                     self._auth2_clusters[o.clusterid] = o
                     l2 += 1
+            self._default_auth2_cluster = default_auth2_cluster
             if l1 != l2 or l1 != len(self._auth2_clusters):
                 expired_clusters = [o for o in self._auth2_clusters.values() if o.refreshtime != refreshtime]
                 for o in expired_clusters:
@@ -160,9 +165,8 @@ class MemoryCache(cache.MemoryCache):
         """
         exception = None
         endpoint = None
-        target_clusterid = clusterid or self._default_auth2_cluster.clusterid
         try:
-            cluster = self._auth2_clusters[target_clusterid]
+            cluster = self._auth2_clusters[clusterid]
             res = f_send_request(cluster)
             res.raise_for_status()
             return res
@@ -171,26 +175,26 @@ class MemoryCache(cache.MemoryCache):
                 exception = ex
             elif isinstance(ex,(requests.ConnectionError,requests.Timeout)):
                 exception = ex
-                endpoint = self._auth2_clusters[target_clusterid].endpoint
+                endpoint = self._auth2_clusters[clusterid].endpoint
             else:
-                raise Auth2ClusterException("Failed to access cluster({}).{}".format(target_clusterid,str(ex)),ex)
+                raise Auth2ClusterException("Failed to access cluster({}).{}".format(clusterid,str(ex)),ex)
         
         if self.refresh_auth2_clusters():
             #refreshed
             try:
-                if endpoint != self._auth2_clusters[target_clusterid].endpoint:
+                if endpoint != self._auth2_clusters[clusterid].endpoint:
                     #endpoint was changed.
-                    cluster = self._auth2_clusters[target_clusterid]
+                    cluster = self._auth2_clusters[clusterid]
                     res = f_send_request(cluster)
                     res.raise_for_status()
                     return res
             except Exception as ex:
                 if isinstance(ex,KeyError):
-                    raise Auth2ClusterException("Auth2 cluster({}) doesn't exist".format(target_clusterid),ex)
+                    raise Auth2ClusterException("Auth2 cluster({}) doesn't exist".format(clusterid),ex)
                 else:
                     exception = ex
 
-        raise Auth2ClusterException("Failed to access cluster({}).{}".format(target_clusterid,str(exception)),exception)
+        raise Auth2ClusterException("Failed to access cluster({}).{}".format(clusterid,str(exception)),exception)
 
     def config_changed(self,model_cls,modified=None):
         """
@@ -315,6 +319,11 @@ class MemoryCache(cache.MemoryCache):
         Return the session_data if found; otherwise return None
         """
         from ..models import DebugLog
+        target_clusterid = clusterid or (self._default_auth2_cluster.clusterid if self._default_auth2_cluster else None)
+        if not target_clusterid:
+            # Can't find the auth2 cluster which manage the session
+            return None
+
         def _send_request(cluster):
             return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:get_session')),data={"session":session,"clusterid":clusterid},headers=self._get_headers(request))
         try:
@@ -336,6 +345,10 @@ class MemoryCache(cache.MemoryCache):
         delete remote session from other auth2 cluster
         """
         from ..models import DebugLog
+        target_clusterid = clusterid or (self._default_auth2_cluster.clusterid if self._default_auth2_cluster else None)
+        if not target_clusterid:
+            return
+
         def _send_request(cluster):
             return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:delete_session')),data={"session":session,"clusterid":clusterid},headers=self._get_headers(request))
 
@@ -346,25 +359,12 @@ class MemoryCache(cache.MemoryCache):
             if raise_exception:
                 raise
             else:
-                return None
+                return
         except Exception as ex:
             DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,clusterid,session,utils.get_source_session_cookie(),message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
             logger.error("Failed to mark session as migraed in auth2 cluster '{}'.{}".format(clusterid,str(ex)))
-            return None
+            return
 
-    def save_traffic_data(self,clusterid,batchid):
-        """
-        get traffic from other auth2 cluster
-        Return traffic data; if failed, return None
-        """
-        def _send_request(cluster):
-            return requests.get("{}{}?batchid={}".format(
-                cluster.endpoint,
-                reverse('cluster:save_traffic_data'),
-                utils.encode_datetime(batchid)
-            ),headers=self._get_headers())
-
-        res = self._send_request_to_cluster(clusterid,_send_request)
 
     def get_cluster_status(self,clusterid):
         """
