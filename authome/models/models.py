@@ -1976,7 +1976,8 @@ if defaultcache:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            if cache._authorization_cache_check_time.can_run():
+            next_refreshtime = cls.get_next_refreshtime()
+            if not next_refreshtime or  timezone.localtime() >= next_refreshtime:
                 cache.refresh_usergroups()
 
         @staticmethod
@@ -2007,7 +2008,8 @@ if defaultcache:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            if cache._authorization_cache_check_time.can_run():
+            next_refreshtime = cls.get_next_refreshtime()
+            if not next_refreshtime or  timezone.localtime() >= next_refreshtime:
                 cache.refresh_userauthorization()
 
         @staticmethod
@@ -2038,7 +2040,8 @@ if defaultcache:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            if cache._authorization_cache_check_time.can_run():
+            next_refreshtime = cls.get_next_refreshtime()
+            if not next_refreshtime or  timezone.localtime() >= next_refreshtime:
                 cache.refresh_usergroupauthorization()
 
         @staticmethod
@@ -2150,7 +2153,9 @@ else:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            cache.refresh_usergroups()
+            next_refreshtime = cls.get_next_refreshtime()
+            if not next_refreshtime or  timezone.localtime() >= next_refreshtime:
+                cache.refresh_usergroups()
 
     class UserAuthorizationChange(ModelChange):
         model = UserAuthorization
@@ -2169,7 +2174,9 @@ else:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            cache.refresh_userauthorization()
+            next_refreshtime = cls.get_next_refreshtime()
+            if not next_refreshtime or  timezone.localtime() >= next_refreshtime:
+                cache.refresh_userauthorization()
 
     class UserGroupAuthorizationChange(ModelChange):
         model = UserGroupAuthorization
@@ -2188,4 +2195,6 @@ else:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            cache.refresh_usergroupauthorization()
+            next_refreshtime = cls.get_next_refreshtime()
+            if not next_refreshtime or  timezone.localtime() >= next_refreshtime:
+                cache.refresh_usergroupauthorization()
