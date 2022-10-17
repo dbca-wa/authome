@@ -169,7 +169,8 @@ def _get_localstatus():
     content["modelcachestatus"] = {}
 
     for cls in (models.UserGroup,models.UserGroupAuthorization,models.CustomizableUserflow,models.IdentityProvider):
-        content["modelcachestatus"][cls.__name__] = models.CACHE_STATUS_NAME[cls.cache_status()]
+        status,refreshtime = cls.cache_status()
+        content["modelcachestatus"][cls.__name__] = "{}( Latest Refresh Time:{} , Next Refresh Time:{} )".format(models.CACHE_STATUS_NAME[status],utils.format_datetime(refreshtime),utils.format_datetime(cls.get_next_refreshtime()))
 
     content["databases"] = databases
 

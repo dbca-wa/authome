@@ -193,7 +193,8 @@ class Auth2ClusterAdmin(admin.ExtraToolsMixin,admin.DeleteMixin,admin.DatetimeMi
                 data = {}
                 for cls in (models.UserGroup,models.UserGroupAuthorization,models.CustomizableUserflow,models.IdentityProvider):
                     cls.refresh_cache_if_required()
-                    data[cls.__name__] = [cls.cache_status(),utils.format_datetime(cls.get_next_refreshtime())]
+                    status,refreshtime = cls.cache_status()
+                    data[cls.__name__] = [status,utils.format_datetime(refreshtime),utils.format_datetime(cls.get_next_refreshtime())]
                 data["running"] = "Running" if healthcheck[0] else "Warning({})".format(healthcheck[1])
                 obj.cache_status = data
             else:
@@ -214,26 +215,26 @@ class Auth2ClusterAdmin(admin.ExtraToolsMixin,admin.DeleteMixin,admin.DatetimeMi
     _running_status.short_description = "Running status"
 
 
-    f_cache_status_name = staticmethod(lambda k:mark_safe("<div>{}<br><span style='font-style:italic;font-size:10px'>({})</span></div>".format(models.CACHE_STATUS_NAME.get(k[0],k[0]),k[1]) if k[0] != "N/A" else "N/A" ))
+    f_cache_status_name = staticmethod(lambda k:mark_safe("<div>{}<span style='font-style:italic;font-size:12px'>({})</span><br><span style='font-style:italic;font-size:10px'>({})</span></div>".format(models.CACHE_STATUS_NAME.get(k[0],k[0]),k[1],k[2]) if k[0] != "N/A" else "N/A" ))
     def _userflow_status(self,obj):
         if not obj :
             return ""
         else:
-            return self._get_cache_status(obj,models.CustomizableUserflow.__name__,f_name=self.f_cache_status_name,default=("N/A",""))
+            return self._get_cache_status(obj,models.CustomizableUserflow.__name__,f_name=self.f_cache_status_name,default=("N/A","",""))
     _userflow_status.short_description = "UserFlow Status"
 
     def _usergroup_status(self,obj):
         if not obj :
             return ""
         else:
-            return self._get_cache_status(obj,models.UserGroup.__name__,f_name=self.f_cache_status_name,default=("N/A",""))
+            return self._get_cache_status(obj,models.UserGroup.__name__,f_name=self.f_cache_status_name,default=("N/A","",""))
     _usergroup_status.short_description = "UserGroup Status"
 
     def _usergroupauthorization_status(self,obj):
         if not obj :
             return ""
         else:
-            return self._get_cache_status(obj,models.UserGroupAuthorization.__name__,f_name=self.f_cache_status_name,default=("N/A",""))
+            return self._get_cache_status(obj,models.UserGroupAuthorization.__name__,f_name=self.f_cache_status_name,default=("N/A","",""))
     _usergroupauthorization_status.short_description = "UserGroupAuthorization Status"
 
 
@@ -241,7 +242,7 @@ class Auth2ClusterAdmin(admin.ExtraToolsMixin,admin.DeleteMixin,admin.DatetimeMi
         if not obj :
             return ""
         else:
-            return self._get_cache_status(obj,models.IdentityProvider.__name__,f_name=self.f_cache_status_name)
+            return self._get_cache_status(obj,models.IdentityProvider.__name__,f_name=self.f_cache_status_name,default=("N/A","",""))
     _idp_status.short_description = "IDP Status"
 
     def has_change_permission(self, request, obj=None):

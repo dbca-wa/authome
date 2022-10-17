@@ -144,7 +144,8 @@ def model_cachestatus(request):
     content = {}
     for cls in (models.UserGroup,models.UserGroupAuthorization,models.CustomizableUserflow,models.IdentityProvider):
         cls.refresh_cache_if_required()
-        content[cls.__name__] = [cls.cache_status(),utils.format_datetime(cls.get_next_refreshtime())]
+        status,refreshtime = cls.cache_status()
+        content[cls.__name__] = [status,utils.format_datetime(refreshtime),utils.format_datetime(cls.get_next_refreshtime())]
 
     return JsonResponse(content,status=200)
 

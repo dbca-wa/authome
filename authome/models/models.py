@@ -1849,37 +1849,37 @@ if defaultcache:
             last_synced = defaultcache.get(cls.key)
             if not last_synced:
                 if last_refreshed:
-                    return UP_TO_DATE
+                    return (UP_TO_DATE,last_refreshed)
                 else:
-                    return OUTDATED
+                    return (OUTDATED,last_refreshed)
 
 
             count =  cls.model.objects.all().count()
             if count != cls.get_cachesize():
                 #cache is outdated
                 if last_synced > last_refreshed:
-                    return OUTDATED
+                    return (OUTDATED,last_refreshed)
                 else:
-                    return OUT_OF_SYNC
+                    return (OUT_OF_SYNC,last_refreshed)
 
             if count == 0:
-                return UP_TO_DATE
+                return (UP_TO_DATE,last_refreshed)
 
             o = cls.model.objects.all().order_by("-modified").first()
             if o:
                 if last_refreshed and last_refreshed >= o.modified:
-                    return UP_TO_DATE
+                    return (UP_TO_DATE,last_refreshed)
                 elif o.modified > last_synced:
-                    return OUT_OF_SYNC
+                    return (OUT_OF_SYNC,last_refreshed)
             else:
-                return UP_TO_DATE
+                return (UP_TO_DATE,last_refreshed)
 
             if not last_refreshed:
-                return OUTDATED
+                return (OUTDATED,last_refreshed)
             elif last_synced > last_refreshed:
-                return OUTDATED
+                return (OUTDATED,last_refreshed)
             else:
-                return UP_TO_DATE
+                return (UP_TO_DATE,last_refreshed)
 
         @classmethod
         def is_changed(cls):
@@ -2065,22 +2065,22 @@ else:
 
         @classmethod
         def status(cls):
+            last_refreshed = cls.get_cachetime()
             count =  cls.model.objects.all().count()
             if count != cls.get_cachesize():
-                return OUTDATED
+                return (OUTDATED,last_refreshed)
 
             if count == 0:
-                return UP_TO_DATE
+                return (UP_TO_DATE,last_refreshed)
 
-            last_refreshed = cls.get_cachetime()
             o = cls.model.objects.all().order_by("-modified").first()
             if o:
                 if o.modified > last_refreshed:
-                    return OUTDATED
+                    return (OUTDATED,last_refreshed)
                 else:
-                    return UP_TO_DATE
+                    return (UP_TO_DATE,last_refreshed)
             else:
-                return UP_TO_DATE
+                return (UP_TO_DATE,last_refreshed)
 
         @classmethod
         def is_changed(cls):
