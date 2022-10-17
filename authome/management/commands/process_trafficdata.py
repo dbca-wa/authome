@@ -53,7 +53,7 @@ class Command(BaseCommand):
                 res = requests.get("{}/cluster/trafficdata/save?batchid={}".format(
                     cluster.endpoint,
                     encoded_batchid
-                ))
+                ),headers={"HOST":settings.AUTH2_DOMAIN})
                 res.raise_for_status()
                 data = res.json().get("result",[]) 
                 if data:
