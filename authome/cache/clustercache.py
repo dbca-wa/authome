@@ -27,7 +27,7 @@ def traffic_monitor(name,func):
         except Exception as ex:
             if isinstance(ex,Auth2ClusterException):
                 exception = ex.exception
-                logger.debug("Failed to execute '{}',status_code={}.{}".format(name,503 if exception.response is None else exception.response.status_code ,str(ex)))
+                logger.debug("Failed to execute '{}',status_code={}.{}".format(name,503 if (not hasattr(exception,'response') or exception.response is None) else exception.response.status_code ,str(ex)))
             else:
                 exception = ex
                 logger.debug("Failed to execute '{}'.{}".format(name,str(ex)))
@@ -327,17 +327,17 @@ class MemoryCache(cache.MemoryCache):
         def _send_request(cluster):
             return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:get_session')),data={"session":session,"clusterid":clusterid},headers=self._get_headers(request))
         try:
-            res = self._get_remote_session(clusterid,_send_request,request)
+            res = self._get_remote_session(target_clusterid,_send_request,request)
             return res.json()
         except Auth2ClusterException as ex:
-            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,clusterid,session,utils.get_source_session_cookie(),message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
+            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,target_clusterid,session,utils.get_source_session_cookie(),message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)))
             if raise_exception:
                 raise
             else:
                 return None
         except Exception as ex:
-            DebugLog.log(DebugLog.ERROR,None,clusterid,session,utils.get_source_session_cookie(),session,message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
-            logger.error("Failed to get session from auth2 cluster '{}'.{}".format(clusterid,str(ex)))
+            DebugLog.log(DebugLog.ERROR,None,target_clusterid,session,utils.get_source_session_cookie(),session,message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)))
+            logger.error("Failed to get session from auth2 cluster '{}'.{}".format(target_clusterid,str(ex)))
             return None
 
     def delete_remote_session(self,clusterid,session,raise_exception=False,request=None):
@@ -353,16 +353,16 @@ class MemoryCache(cache.MemoryCache):
             return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:delete_session')),data={"session":session,"clusterid":clusterid},headers=self._get_headers(request))
 
         try:
-            self._delete_remote_session(clusterid,_send_request,request)
+            self._delete_remote_session(target_clusterid,_send_request,request)
         except Auth2ClusterException as ex:
-            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,clusterid,session,utils.get_source_sessioin_cookie(),message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
+            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,target_clusterid,session,utils.get_source_sessioin_cookie(),message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)))
             if raise_exception:
                 raise
             else:
                 return
         except Exception as ex:
-            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,clusterid,session,utils.get_source_session_cookie(),message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(clusterid,session,str(ex)))
-            logger.error("Failed to mark session as migraed in auth2 cluster '{}'.{}".format(clusterid,str(ex)))
+            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,target_clusterid,session,utils.get_source_session_cookie(),message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)))
+            logger.error("Failed to mark session as migraed in auth2 cluster '{}'.{}".format(target_clusterid,str(ex)))
             return
 
 

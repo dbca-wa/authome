@@ -33,14 +33,14 @@ class Auth2Cluster(models.Model):
 
     @classmethod
     def register(cls,only_update_heartbeat=False):
-        if not only_update_heartbeat and settings.DEFAULT_AUTH2_CLUSTER:
+        if only_update_heartbeat :
+            if cls.objects.filter(clusterid=settings.AUTH2_CLUSTERID).update(last_heartbeat=timezone.localtime()):
+                #call by ping, only need to update the heartbeat.
+                return
+        elif settings.DEFAULT_AUTH2_CLUSTER:
             #update the previous default cluster server to non cluster server
             cls.objects.filter(default=True).exclude(clusterid=settings.AUTH2_CLUSTERID).update(default=False,modified=timezone.localtime())
             
-        if cls.objects.filter(clusterid=settings.AUTH2_CLUSTERID,default=settings.DEFAULT_AUTH2_CLUSTER,endpoint=settings.AUTH2_CLUSTER_ENDPOINT).update(last_heartbeat=timezone.localtime()):
-            #cluster's setting is not changed, only need to update the last heartbeat.
-            return
-
         cls.objects.update_or_create(clusterid=settings.AUTH2_CLUSTERID,defaults={
             "endpoint" : settings.AUTH2_CLUSTER_ENDPOINT,
             "default" : settings.DEFAULT_AUTH2_CLUSTER,
