@@ -947,7 +947,7 @@ def login_domain(request):
         httponly=settings.SESSION_COOKIE_HTTPONLY or None,
         samesite=settings.SESSION_COOKIE_SAMESITE,
     )
-    DebugLog.log(DebugLog.CREATE_COOKIE,utils.get_lb_hash_key(session_cookie),utils.get_clusterid(session_cookie),utils.get_session_key(session_cookie),session_cookie,message="Return a new session cookie({}) for domain({})".format("{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host),domain or host),userid=None,target_session_cookie="{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host))
+    DebugLog.log(DebugLog.CREATE_COOKIE,utils.get_lb_hash_key(session_cookie),utils.get_clusterid(session_cookie),utils.get_session_key(session_cookie),session_cookie,message="Return a new session cookie({}) for domain({})".format("{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host),domain or host),userid=None,target_session_cookie="{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host),request=request)
     return res
     
 

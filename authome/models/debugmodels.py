@@ -27,8 +27,9 @@ class DebugLog(models.Model):
     MOVE_NONEXIST_SESSION = 42
 
     AUTH2_CLUSTER_NOTAVAILABLE = 50
-    
+
     WARNING = 100
+    INTERCONNECTION_TIMEOUT = 101
 
     ERROR = 200
     LB_HASH_KEY_NOT_MATCH = 201
@@ -53,6 +54,7 @@ class DebugLog(models.Model):
         (MOVE_NONEXIST_SESSION , "Move non-exist session"),
 
         (AUTH2_CLUSTER_NOTAVAILABLE , "Auth2 Cluster Not Available"),
+        (INTERCONNECTION_TIMEOUT, "Auth2 Interconnection Timeout"),
 
         (LB_HASH_KEY_NOT_MATCH , "LB key not match"),
         (DOMAIN_NOT_MATCH, "Domain not match"),
@@ -119,7 +121,17 @@ class DebugLog(models.Model):
 
 
     @classmethod
-    def log(cls,category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=None,userid=None):
+    def log(cls,category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=None,userid=None,request=None):
+        if settings.DEBUG:
+            cls.warning(category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=target_session_cookie,userid=userid,request=request)
+
+    @classmethod
+    def log_if_true(cls,condition,category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=None,userid=None,request=None):
+        if settings.DEBUG:
+            cls.warning_if_true(condition,category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=target_session_cookie,userid=userid,request=request)
+
+    @classmethod
+    def warning(cls,category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=None,userid=None,request=None):
         log = DebugLog(
             lb_hash_key = lb_hash_key,
             clusterid = settings.AUTH2_CLUSTERID if settings.AUTH2_CLUSTER_ENABLED else None,
@@ -130,14 +142,13 @@ class DebugLog(models.Model):
             message = message,
             category=category,
             email = cls.get_email(userid),
-            request=utils.get_request_path()[:255],
-            useragent=utils.get_useragent()
+            request=utils.get_request_path(request)[:255],
+            useragent=utils.get_useragent(request)
         )
         log.save()
-        cls.print(log)
 
     @classmethod
-    def log_if_true(cls,condition,category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=None,userid=None):
+    def warning_if_true(cls,condition,category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=None,userid=None,request=None):
         if not condition:
             return
         log = DebugLog(
@@ -150,11 +161,12 @@ class DebugLog(models.Model):
             message = message,
             category=category,
             email = cls.get_email(userid),
-            request=utils.get_request_path()[:255],
-            useragent=utils.get_useragent()
+            request=utils.get_request_path(request)[:255],
+            useragent=utils.get_useragent(request)
         )
         log.save()
-        cls.print(log)
+
+
 
 
 

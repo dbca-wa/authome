@@ -60,15 +60,19 @@ def build_cookie_value(lb_hash_key,clusterid,signature,session_key,cookie_domain
 _process_data = threading.local()
 def attach_request(request):
     _process_data.request = request
+
 def send_message(msg,level=messages.INFO):
     try:
         messages.add_message(_process_data.request, level, msg)
         return True
     except:
         return False
-def get_useragent():
+def get_useragent(request=None):
     try:
-        return _process_data.request.META.get('HTTP_USER_AGENT')
+        if request:
+            return request.META.get('HTTP_USER_AGENT')
+        else:
+            return _process_data.request.META.get('HTTP_USER_AGENT')
     except:
         return None
 
@@ -128,9 +132,12 @@ def get_lb_hash_key(cookie):
     else:
         return cookie_components[0]
 
-def get_request_path():
+def get_request_path(request=None):
     try:
-        path = _process_data.request.headers.get("x-upstream-request-uri")
+        if request:
+            path = request.headers.get("x-upstream-request-uri")
+        else:
+            path = _process_data.request.headers.get("x-upstream-request-uri")
         if not path:
             #can't get the original path, use request path directly
             path = _process_data.request.get_full_path()
@@ -139,9 +146,12 @@ def get_request_path():
     except:
         return None
 
-def get_request_pathinfo():
+def get_request_pathinfo(request=None):
     try:
-        path = _process_data.request.headers.get("x-upstream-request-uri")
+        if request:
+            path = request.headers.get("x-upstream-request-uri")
+        else:
+            path = _process_data.request.headers.get("x-upstream-request-uri")
         if path:
             #get the original request path
             #remove the query string

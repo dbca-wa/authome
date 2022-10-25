@@ -1,9 +1,15 @@
 from django.utils.html import mark_safe
+from django.conf import settings
 from django.contrib import admin as djangoadmin
 from django.utils import timezone
 
 from . import admin
 from .. import models
+from .filters import FilteredChoicesFieldListFilter
+
+class ProdCategoryChoicesFieldListFilter(FilteredChoicesFieldListFilter):
+    def __init__(self, field, request, params, model, model_admin, field_path):
+        super().__init__(field, request, params, model, model_admin, field_path,lambda val,name:val >= models.DebugLog.WARNING)
 
 class DebugLogAdmin(djangoadmin.ModelAdmin):
     color_map  = {
@@ -24,6 +30,8 @@ class DebugLogAdmin(djangoadmin.ModelAdmin):
         models.DebugLog.MOVE_NONEXIST_SESSION : "#008080",
 
         models.DebugLog.AUTH2_CLUSTER_NOTAVAILABLE : "#4000ff",
+
+        models.DebugLog.INTERCONNECTION_TIMEOUT : "#ff00ff",
     
         models.DebugLog.LB_HASH_KEY_NOT_MATCH : "red",
         models.DebugLog.DOMAIN_NOT_MATCH: "coral",
@@ -38,6 +46,13 @@ class DebugLogAdmin(djangoadmin.ModelAdmin):
     ordering = ('-logtime',)
     search_fields = ["lb_hash_key","session_key","email" ,"request"]
     list_filter = ["category","clusterid","session_clusterid"]
+
+    @property
+    def list_filter(self):
+        if settings.DEBUG:
+            return ["category","clusterid","session_clusterid"]
+        else:
+            return [("category",ProdCategoryChoicesFieldListFilter),"clusterid","session_clusterid"]
 
     def _target_session_cookie(self,obj):
         if not obj or not obj.target_session_cookie :

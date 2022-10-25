@@ -14,33 +14,32 @@ from ..exceptions import Auth2ClusterException
 logger = logging.getLogger(__name__)
 
 def traffic_monitor(name,func):
-    def _func(self,clusterid,f_send_request,request):
-        return func(self,clusterid,f_send_request)
-
-    def _monitor(self,clusterid,f_send_request,request):
+    def _monitor(self,request,clusterid,f_send_request):
         start = timezone.localtime()
         res = None
         try:
-            res = func(self,clusterid,f_send_request)
+            res = func(self,request,clusterid,f_send_request)
             status_code = res.status_code
             return res
         except Exception as ex:
             if isinstance(ex,Auth2ClusterException):
                 exception = ex.exception
-                logger.debug("Failed to execute '{}',status_code={}.{}".format(name,503 if (not hasattr(exception,'response') or exception.response is None) else exception.response.status_code ,str(ex)))
             else:
                 exception = ex
-                logger.debug("Failed to execute '{}'.{}".format(name,str(ex)))
 
             if exception:
                 if isinstance(exception,KeyError):
                     status_code = 503
+                elif isinstance(exception,requests.Timeout):
+                    status_code = 504
                 elif isinstance(exception,requests.RequestException):
                     status_code = 503 if exception.response is None else exception.response.status_code
                 else:
                     status_code = 503
             else:
                 status_code = 503
+
+            logger.debug("Failed to execute '{}',status_code={}.{}".format(name,status_code ,str(ex)))
             raise ex
         finally:
             try:
@@ -49,7 +48,7 @@ def traffic_monitor(name,func):
                 logger.error("Failed to log the request.{}".format(traceback.format_exc()))
         
         
-    return _monitor if settings.TRAFFIC_MONITOR_LEVEL > 0 else _func
+    return _monitor if settings.TRAFFIC_MONITOR_LEVEL > 0 else func
 
 
 class MemoryCache(cache.MemoryCache):
@@ -110,7 +109,7 @@ class MemoryCache(cache.MemoryCache):
         else:
             return False
 
-    def _send_request_to_other_clusters(self,f_send_req,force_refresh=False):
+    def _send_request_to_other_clusters(self,request,f_send_req,force_refresh=False):
         """
         send config changed event to other clusters
         Return the failed clusters with associated exception
@@ -121,7 +120,6 @@ class MemoryCache(cache.MemoryCache):
         not_changed_clusters = []
         if force_refresh:
             self.refresh_auth2_clusters(True)
-
         for o in self._auth2_clusters.values():
             try:
                 res = f_send_req(o)
@@ -134,6 +132,9 @@ class MemoryCache(cache.MemoryCache):
                 if not force_refresh and isinstance(ex,(requests.ConnectionError,requests.Timeout)):
                     retry_clusters = utils.add_to_list(retry_clusters,(o,ex))
                 else:
+                    if isinstance(ex,requests.Timeout):
+                        from  authome.models import DebugLog
+                        DebugLog.warning(DebugLog.INTERCONNECTION_TIMEOUT,None,o.clusterid,None,None,message="Accessing auth2 cluster({1}) times out({0} seconds),{2}".format(settings.AUTH2_INTERCONNECTION_TIMEOUT,o.clusterid,str(ex)),request=request)
                     failed_clusters = utils.add_to_list(failed_clusters,(o,ex))
 
         if not force_refresh and (retry_clusters or not self._auth2_clusters):
@@ -144,6 +145,9 @@ class MemoryCache(cache.MemoryCache):
                 if not cluster:
                     continue
                 elif o.endpoint == cluster.endpoint:
+                    if isinstance(ex,requests.Timeout):
+                        from  authome.models import DebugLog
+                        DebugLog.warning(DebugLog.INTERCONNECTION_TIMEOUT,None,cluster.clusterid,None,None,message="Accessing auth2 cluster({1}) times out({0} seconds),{2}".format(settings.AUTH2_INTERCONNECTION_TIMEOUT,cluster.clusterid,str(ex)),request=request)
                     failed_clusters = utils.add_to_list(failed_clusters,(cluster,ex))
                     continue
                 try:
@@ -153,12 +157,16 @@ class MemoryCache(cache.MemoryCache):
                         not_changed_clusters.append(cluster)
                     else:
                         changed_clusters.append(cluster)
+                except requests.Timeout as ex:
+                    from  authome.models import DebugLog
+                    DebugLog.warning(DebugLog.INTERCONNECTION_TIMEOUT,None,cluster.clusterid,None,None,message="Accessing auth2 cluster({1}) times out({0} seconds),{2}".format(settings.AUTH2_INTERCONNECTION_TIMEOUT,cluster.clusterid,str(ex)),request=request)
+                    failed_clusters = utils.add_to_list(failed_clusters,(cluster,ex))
                 except Exception as ex:
                     failed_clusters = utils.add_to_list(failed_clusters,(cluster,ex))
 
         return (changed_clusters,not_changed_clusters,failed_clusters)
 
-    def _send_request_to_cluster(self,clusterid,f_send_request):
+    def _send_request_to_cluster(self,request,clusterid,f_send_request):
         """
         send a request to a cluster
         Return the response 
@@ -188,11 +196,21 @@ class MemoryCache(cache.MemoryCache):
                     res = f_send_request(cluster)
                     res.raise_for_status()
                     return res
+                elif isinstance(exception,requests.Timeout):
+                    from  authome.models import DebugLog
+                    DebugLog.warning(DebugLog.INTERCONNECTION_TIMEOUT,None,clusterid,None,None,message="Accessing auth2 cluster({1}) times out({0} seconds),{2}".format(settings.AUTH2_INTERCONNECTION_TIMEOUT,clusterid,str(exception)),request=request)
             except Exception as ex:
                 if isinstance(ex,KeyError):
                     raise Auth2ClusterException("Auth2 cluster({}) doesn't exist".format(clusterid),ex)
+                elif isinstance(ex,requests.Timeout):
+                    from  authome.models import DebugLog
+                    DebugLog.warning(DebugLog.INTERCONNECTION_TIMEOUT,None,clusterid,None,None,message="Accessing auth2 cluster({1}) times out({0} seconds),{2}".format(settings.AUTH2_INTERCONNECTION_TIMEOUT,clusterid,str(ex)),request=request)
+                    exception = ex
                 else:
                     exception = ex
+        elif isinstance(exception,requests.Timeout):
+            from  authome.models import DebugLog
+            DebugLog.warning(DebugLog.INTERCONNECTION_TIMEOUT,None,clusterid,None,None,message="Accessing auth2 cluster({1}) times out({0} seconds),{2}".format(settings.AUTH2_INTERCONNECTION_TIMEOUT,clusterid,str(exception)),request=request)
 
         raise Auth2ClusterException("Failed to access cluster({}).{}".format(clusterid,str(exception)),exception)
 
@@ -203,10 +221,10 @@ class MemoryCache(cache.MemoryCache):
         """
         def _send_request(cluster):
             if modified:
-                return requests.get("{}{}?modified={}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__}),modified.strftime("%Y-%m-%d %H:%M:%S.%f")),headers=self._get_headers())
+                return requests.get("{}{}?modified={}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__}),modified.strftime("%Y-%m-%d %H:%M:%S.%f")),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
             else:
-                return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__})),headers=self._get_headers())
-        return self._send_request_to_other_clusters(_send_request,True)
+                return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__})),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
+        return self._send_request_to_other_clusters(None,_send_request,True)
 
     def user_changed(self,userid,include_current_cluster=False):
         """
@@ -214,21 +232,26 @@ class MemoryCache(cache.MemoryCache):
         Return the failed clusters with associated exception
         """
         def _send_request(cluster):
-            return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:user_changed', kwargs={'userid': userid})),headers=self._get_headers())
+            return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:user_changed', kwargs={'userid': userid})),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
 
         if include_current_cluster:
+            local_succeed = True
             try:
                 usercache = get_usercache(userid)
                 if usercache:
                     usercache.delete(settings.GET_USERTOKEN_KEY(userid))
             except Exception as ex:
                 logger.error("Failed to delete the user({}) from user cache.{}".format(userid,str(ex)))
+                local_succeed = False
 
-            result = self._send_request_to_other_clusters(_send_request,True)
-            result[0].insert(0,self.current_auth2_cluster)
+            result = self._send_request_to_other_clusters(None,_send_request,True)
+            if local_succeed:
+                result[0].insert(0,self.current_auth2_cluster)
+            else:
+                result[2].insert(0,self.current_auth2_cluster)
             return result
         else:
-            return self._send_request_to_other_clusters(_send_request,True)
+            return self._send_request_to_other_clusters(None,_send_request,True)
 
     def usertoken_changed(self,userid,include_current_cluster=False):
         """
@@ -236,21 +259,26 @@ class MemoryCache(cache.MemoryCache):
         Return the failed clusters with associated exception
         """
         def _send_request(cluster):
-            return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:usertoken_changed', kwargs={'userid': userid})),headers=self._get_headers())
+            return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:usertoken_changed', kwargs={'userid': userid})),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
 
         if include_current_cluster:
+            local_succeed = True
             try:
                 usercache = get_usercache(userid)
                 if usercache:
                     usercache.delete(settings.GET_USERTOKEN_KEY(userid))
             except Exception as ex:
                 logger.error("Failed to delete the user({}) from user cache.{}".format(userid,str(ex)))
+                local_succeed = False
 
-            result = self._send_request_to_other_clusters(_send_request,True)
-            result[0].insert(0,self.current_auth2_cluster)
+            result = self._send_request_to_other_clusters(None,_send_request,True)
+            if local_succeed:
+                result[0].insert(0,self.current_auth2_cluster)
+            else:
+                result[2].insert(0,self.current_auth2_cluster)
             return result
         else:
-            return self._send_request_to_other_clusters(_send_request,True)
+            return self._send_request_to_other_clusters(None,_send_request,True)
 
     def users_changed(self,userids,include_current_cluster=False):
         """
@@ -258,9 +286,10 @@ class MemoryCache(cache.MemoryCache):
         Return the failed clusters with associated exception
         """
         def _send_request(cluster):
-            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:users_changed')),data={"users":userids},headers=self._get_headers())
+            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:users_changed')),data={"users":userids},headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
 
         if include_current_cluster:
+            local_succeed = True
             for userid in userids:
                 try:
                     usercache = get_usercache(userid)
@@ -268,14 +297,18 @@ class MemoryCache(cache.MemoryCache):
                         usercache.delete(settings.GET_USER_KEY(userid))
                 except Exception as ex:
                     logger.error("Failed to delete the user({}) from user cache.{}".format(userid,str(ex)))
+                    local_succeed = False
 
             userids = ",".join(userids)
-            result = self._send_request_to_other_clusters(_send_request,True)
-            result[0].insert(0,self.current_auth2_cluster)
+            result = self._send_request_to_other_clusters(None,_send_request,True)
+            if local_succeed:
+                result[0].insert(0,self.current_auth2_cluster)
+            else:
+                result[2].insert(0,self.current_auth2_cluster)
             return result
         else:
             userids = ",".join(userids)
-            return self._send_request_to_other_clusters(_send_request,True)
+            return self._send_request_to_other_clusters(None,_send_request,True)
 
     def usertokens_changed(self,userids,include_current_cluster=False):
         """
@@ -283,9 +316,10 @@ class MemoryCache(cache.MemoryCache):
         Return the failed clusters with associated exception
         """
         def _send_request(cluster):
-            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:usertokens_changed')),data={"users":userids},headers=self._get_headers())
+            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:usertokens_changed')),data={"users":userids},headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
 
         if include_current_cluster:
+            local_succeed = True
             for userid in userids:
                 try:
                     usercache = get_usercache(userid)
@@ -293,14 +327,18 @@ class MemoryCache(cache.MemoryCache):
                         usercache.delete(settings.GET_USERTOKEN_KEY(userid))
                 except Exception as ex:
                     logger.error("Failed to delete the user({}) from user cache.{}".format(userid,str(ex)))
+                    local_succeed = False
 
             userids = ",".join(userids)
-            result = self._send_request_to_other_clusters(_send_request,True)
-            result[0].insert(0,self.current_auth2_cluster)
+            result = self._send_request_to_other_clusters(None,_send_request,True)
+            if local_succeed:
+                result[0].insert(0,self.current_auth2_cluster)
+            else:
+                result[2].insert(0,self.current_auth2_cluster)
             return result
         else:
             userids = ",".join(userids)
-            return self._send_request_to_other_clusters(_send_request,True)
+            return self._send_request_to_other_clusters(None,_send_request,True)
 
     def _get_headers(self,request=None):
         if request:
@@ -318,25 +356,26 @@ class MemoryCache(cache.MemoryCache):
         get session from other auth2 cluster
         Return the session_data if found; otherwise return None
         """
-        from ..models import DebugLog
         target_clusterid = clusterid or (self._default_auth2_cluster.clusterid if self._default_auth2_cluster else None)
         if not target_clusterid:
             # Can't find the auth2 cluster which manage the session
             return None
 
         def _send_request(cluster):
-            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:get_session')),data={"session":session,"clusterid":clusterid},headers=self._get_headers(request))
+            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:get_session')),data={"session":session,"clusterid":clusterid},headers=self._get_headers(request),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
         try:
-            res = self._get_remote_session(target_clusterid,_send_request,request)
+            res = self._get_remote_session(request,target_clusterid,_send_request)
             return res.json()
         except Auth2ClusterException as ex:
-            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,target_clusterid,session,utils.get_source_session_cookie(),message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)))
+            from  ..models import DebugLog
+            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,target_clusterid,session,utils.get_source_session_cookie(),message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)),request=request)
             if raise_exception:
                 raise
             else:
                 return None
         except Exception as ex:
-            DebugLog.log(DebugLog.ERROR,None,target_clusterid,session,utils.get_source_session_cookie(),session,message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)))
+            from  authome.models import DebugLog
+            DebugLog.warning(DebugLog.ERROR,None,target_clusterid,session,utils.get_source_session_cookie(),session,message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)))
             logger.error("Failed to get session from auth2 cluster '{}'.{}".format(target_clusterid,str(ex)))
             return None
 
@@ -344,24 +383,25 @@ class MemoryCache(cache.MemoryCache):
         """
         delete remote session from other auth2 cluster
         """
-        from ..models import DebugLog
         target_clusterid = clusterid or (self._default_auth2_cluster.clusterid if self._default_auth2_cluster else None)
         if not target_clusterid:
             return
 
         def _send_request(cluster):
-            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:delete_session')),data={"session":session,"clusterid":clusterid},headers=self._get_headers(request))
+            return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:delete_session')),data={"session":session,"clusterid":clusterid},headers=self._get_headers(request),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
 
         try:
-            self._delete_remote_session(target_clusterid,_send_request,request)
+            self._delete_remote_session(request,target_clusterid,_send_request)
         except Auth2ClusterException as ex:
-            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,target_clusterid,session,utils.get_source_sessioin_cookie(),message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)))
+            from  ..models import DebugLog
+            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,target_clusterid,session,utils.get_source_sessioin_cookie(),message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)),request=request)
             if raise_exception:
                 raise
             else:
                 return
         except Exception as ex:
-            DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,target_clusterid,session,utils.get_source_session_cookie(),message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)))
+            from  authome.models import DebugLog
+            DebugLog.warning(DebugLog.ERROR,None,target_clusterid,session,utils.get_source_session_cookie(),message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)))
             logger.error("Failed to mark session as migraed in auth2 cluster '{}'.{}".format(target_clusterid,str(ex)))
             return
 
@@ -375,9 +415,9 @@ class MemoryCache(cache.MemoryCache):
             return requests.get("{}{}".format(
                 cluster.endpoint,
                 reverse('cluster:cluster_status')
-            ),headers=self._get_headers())
+            ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
         try:
-            res = self._send_request_to_cluster(clusterid,_send_request)
+            res = self._send_request_to_cluster(None,clusterid,_send_request)
             return res.json()
         except Exception as ex:
             return {
@@ -397,8 +437,8 @@ class MemoryCache(cache.MemoryCache):
             return requests.get("{}{}".format(
                 cluster.endpoint,
                 reverse('cluster:model_cachestatus')
-            ),headers=self._get_headers())
-        res = self._send_request_to_cluster(clusterid,_send_request)
+            ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
+        res = self._send_request_to_cluster(None,clusterid,_send_request)
         return res.json()
 
     def cluster_healthcheck(self,clusterid):
@@ -410,9 +450,9 @@ class MemoryCache(cache.MemoryCache):
             return requests.get("{}{}".format(
                 cluster.endpoint,
                 reverse('cluster:cluster_healthcheck')
-            ),headers=self._get_headers())
+            ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
         try:
-            res = self._send_request_to_cluster(clusterid,_send_request)
+            res = self._send_request_to_cluster(None,clusterid,_send_request)
             data = res.json()
             return (data["healthy"],data.get("errors","OK"))
         except Exception as ex:

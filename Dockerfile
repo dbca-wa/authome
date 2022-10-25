@@ -41,7 +41,7 @@ RUN find ./ -type f -iname '*.py' -exec sed -i 's/DebugLog\.attach_request/#Debu
 
 WORKDIR /app
 RUN echo "#!/bin/bash \n\
-if [[ \"\$DEBUG\" == \"True\" || -n \"\${LOGLEVEL}\" ]]; then \n\
+if [[ \"\$DEBUG\" == \"True\" || \"\${LOGLEVEL}\" == \"DEBUG\" ]]; then \n\
     echo \"Running in dev mode\" \n\
     cd /app/dev && gunicorn authome.wsgi --bind=:8080 --config=gunicorn.py \n\
 else \n\
@@ -53,7 +53,7 @@ fi \n\
 RUN chmod 555 start_app
 
 RUN echo "#!/bin/bash \n\
-if [[ \"\$DEBUG\" == \"True\" || -n \"\${LOGLEVEL}\" ]]; then \n\
+if [[ \"\$DEBUG\" == \"True\" || \"\${LOGLEVEL}\" == \"DEBUG\" ]]; then \n\
     echo \"Running in dev mode\" \n\
     cd /app/dev && python manage.py \"\$@\" \n\
 else \n\

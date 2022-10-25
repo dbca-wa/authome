@@ -16,7 +16,7 @@ from django.utils.crypto import  get_random_string
 from .. import models
 from .. import utils
 from .. import performance
-from ..models import DebugLog
+from authome.models import DebugLog
 
 logger = logging.getLogger(__name__)
 
@@ -558,13 +558,13 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
                             finally:
                                 performance.end_processingstep("delete_session_from_previous_cache")
                                 pass
-                            DebugLog.log(DebugLog.MOVE_SESSION,None,None,self._session_key,utils.get_source_session_cookie(self._request),message="Move a session({0}) from previous redis server({1}) to redis server({2})".format(self._session_key,utils.print_redisserver(previous_sessioncache),utils.print_redisserver(sessioncache)),target_session_cookie=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY))
+                            DebugLog.log(DebugLog.MOVE_SESSION,None,None,self._session_key,utils.get_source_session_cookie(self._request),message="Move a session({0}) from previous redis server({1}) to redis server({2})".format(self._session_key,utils.print_redisserver(previous_sessioncache),utils.print_redisserver(sessioncache)),target_session_cookie=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY),request=self._request)
                         else:
                             try:
                                 performance.start_processingstep("load_session_from_cache")
                                 session_data = sessioncache.get(cachekey)
-                                DebugLog.log_if_true(session_data,DebugLog.SESSION_ALREADY_MOVED,None,None,self._session_key,self._session_key,message="Session({0}) has already moved from previous redis server({1}) to redis server({2})".format(self._session_key,utils.print_redisserver(previous_sessioncache),utils.print_redisserver(sessioncache)),target_session_cookie=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY))
-                                DebugLog.log_if_true(not session_data,DebugLog.MOVE_NONEXIST_SESSION,None,None,self._session_key,self._session_key,message="No need to move a non-existing session({0}) from previous redis server({1})".format(self._session_key,utils.print_redisserver(previous_sessioncache)),target_session_cookie=self._session_key)
+                                DebugLog.log_if_true(session_data,DebugLog.SESSION_ALREADY_MOVED,None,None,self._session_key,self._session_key,message="Session({0}) has already moved from previous redis server({1}) to redis server({2})".format(self._session_key,utils.print_redisserver(previous_sessioncache),utils.print_redisserver(sessioncache)),target_session_cookie=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY),request=self._request)
+                                DebugLog.log_if_true(not session_data,DebugLog.MOVE_NONEXIST_SESSION,None,None,self._session_key,self._session_key,message="No need to move a non-existing session({0}) from previous redis server({1})".format(self._session_key,utils.print_redisserver(previous_sessioncache)),target_session_cookie=self._session_key,request=self._request)
                             finally:
                                 performance.end_processingstep("load_session_from_cache")
                                 pass
@@ -586,7 +586,7 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
             except :
                 logger.error("Failed to load session.{}".format(traceback.format_exc()))
                 #rasing exception will cause error "'NoneType' object has no attribute 'get'" in session  middleware
-                DebugLog.log(DebugLog.ERROR,None,None,self._session_key,utils.get_source_session_cookie(self._request),message="Failed to load session({}).{}".format(self._session_key,traceback.format_exc()))
+                DebugLog.warning(DebugLog.ERROR,None,None,self._session_key,utils.get_source_session_cookie(self._request),message="Failed to load session({}).{}".format(self._session_key,traceback.format_exc()),request=self._request)
                 self._session_key = None
                 return  {}
             finally:
@@ -631,7 +631,7 @@ else:
             except :
                 logger.error("Failed to load session.{}".format(traceback.format_exc()))
                 #rasing exception will cause error "'NoneType' object has no attribute 'get'" in session  middleware
-                DebugLog.log(DebugLog.ERROR,None,None,self._session_key,utils.get_source_session_cookie(self._request),message="Failed to load session({}).{}".format(self._session_key,traceback.format_exc()))
+                DebugLog.warning(DebugLog.ERROR,None,None,self._session_key,utils.get_source_session_cookie(self._request),message="Failed to load session({}).{}".format(self._session_key,traceback.format_exc()),request=self._request)
                 self._session_key = None
                 return  {}
             finally:

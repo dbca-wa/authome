@@ -114,9 +114,8 @@ else:
     from .admin import (UserAdmin,SystemUserAdmin,UserGroupAuthorizationAdmin,UserGroupAdmin,UserAccessTokenAdmin,SystemUserAccessTokenAdmin,
         IdentityProviderAdmin,CustomizableUserflowAdmin,UserTOTPAdmin)
 
-if settings.DEBUG:
-    from .debugadmin import DebugLogAdmin
-    admin_site.register(models.DebugLog,DebugLogAdmin)
+from .debugadmin import DebugLogAdmin
+admin_site.register(models.DebugLog,DebugLogAdmin)
 
 if settings.TRAFFIC_MONITOR_LEVEL > 0:
     from .monitoradmin import TrafficReportAdmin,TrafficDataAdmin
