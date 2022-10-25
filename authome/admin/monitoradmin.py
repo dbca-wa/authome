@@ -5,6 +5,7 @@ from django.contrib import admin as djangoadmin
 from django.utils.html import mark_safe
 from django.urls import reverse
 from django.conf import settings
+from django.utils import timezone
 
 from . import admin
 from .. import  models
@@ -65,6 +66,19 @@ class TrafficDataPropertyMixin(object):
             return mark_safe("<pre>{}</pre>".format("\r\n".join("  {} : {}".format(o[0],o[1]) for o in datas)))
     _status.short_description = "Status"
 
+    def _report_type(self,obj):
+        if not obj or not obj.report_type :
+            return ""
+        else:
+            if obj.report_type == models.TrafficReport.DAILY_REPORT:
+                return "{} - {}".format(obj.get_report_type_display(),timezone.localtime(obj.start_time).strftime("%a"))
+
+            elif obj.report_type == models.TrafficReport.MONTHLY_REPORT:
+                return "{} - {}".format(obj.get_report_type_display(),timezone.localtime(obj.start_time).strftime("%b"))
+            else:
+                return obj.get_report_type_display()
+    _report_type.short_description = "Report Type"
+
 
 class SSOMethodTrafficDataInline(TrafficDataPropertyMixin,djangoadmin.TabularInline):
     model = models.SSOMethodTrafficData
@@ -72,8 +86,8 @@ class SSOMethodTrafficDataInline(TrafficDataPropertyMixin,djangoadmin.TabularInl
     fields = readonly_fields
 
 class TrafficDataAdmin(TrafficDataPropertyMixin,admin.DatetimeMixin,djangoadmin.ModelAdmin):
-    list_display = ("_start_time","_cluster","_servers","requests","_total_time","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions")
-    readonly_fields = ("_cluster","_start_time","_end_time","_serverlist","requests","_total_time","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains","_batchid")
+    list_display = ("_start_time","_cluster","_servers","requests","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions")
+    readonly_fields = ("_cluster","_start_time","_end_time","_serverlist","requests","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains","_batchid")
     fields = readonly_fields
     ordering = ("-start_time","clusterid")
     list_filter = ['clusterid']
@@ -130,8 +144,8 @@ class SSOMethodTrafficReportInline(TrafficDataPropertyMixin,djangoadmin.TabularI
     fields = readonly_fields
 
 class TrafficReportAdmin(TrafficDataPropertyMixin,admin.DatetimeMixin,djangoadmin.ModelAdmin):
-    list_display = ("report_type","_start_time","_cluster","requests","_total_time","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_subreports")
-    readonly_fields = ("_cluster","report_type","_start_time","_end_time","requests","_total_time","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains")
+    list_display = ("_report_type","_start_time","_cluster","requests","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_subreports")
+    readonly_fields = ("_cluster","_report_type","_start_time","_end_time","requests","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains")
     fields = readonly_fields
     ordering = ("report_type","-start_time",'clusterid')
     list_filter = ['clusterid',"report_type"]
