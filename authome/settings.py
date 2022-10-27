@@ -1,7 +1,9 @@
 import os
 
+from django.utils import timezone
+
 from .utils import env, get_digest_function
-from datetime import timedelta
+from datetime import timedelta,datetime
 import dj_database_url
 
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
@@ -12,9 +14,12 @@ LOGLEVEL = env('LOGLEVEL',default='WARNING')
 if LOGLEVEL not in ["DEBUG",'INFO','WARNING','ERROR','CRITICAL']:
     LOGLEVEL = 'DEBUG' if DEBUG else 'INFO'
 
+TESTMODE = env("TESTMODE",default=False)
+
 RELEASE = False if LOGLEVEL in ["DEBUG"] else True
 
 SECRET_KEY = env('SECRET_KEY', 'PlaceholderSecretKey')
+PREVIOUS_SECRET_KEY=env("PREVIOUS_SECRET_KEY",default=None)
 if not DEBUG:
     ALLOWED_HOSTS = env('ALLOWED_DOMAINS', '').split(',')
 else:
@@ -100,26 +105,59 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_HTTPONLY = env('SESSION_COOKIE_HTTPONLY', True)
 SESSION_COOKIE_SECURE = env('SESSION_COOKIE_SECURE', True)
 CSRF_COOKIE_SECURE = env('CSRF_COOKIE_SECURE', True)
+CSRF_COOKIE_HTTPONLY = env('CSRF_COOKIE_HTTPONLY', True)
 SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE","Lax") or None
 if SESSION_COOKIE_SAMESITE and SESSION_COOKIE_SAMESITE.lower() in ("none","null") :
     SESSION_COOKIE_SAMESITE = None
 
 GUEST_SESSION_AGE=env('GUEST_SESSION_AGE',default=3600) #login session timeout in seconds
 SESSION_AGE=env('SESSION_AGE',default=1209600)
-SESSION_COOKIE_AGE=SESSION_AGE * 2
+SESSION_COOKIE_AGE=SESSION_AGE + 86400
 
-SESSION_COOKIE_DOMAINS=env("SESSION_COOKIE_DOMAINS",default={})
+if SESSION_COOKIE_DOMAIN:
+    _session_cookie_domain_len = len(SESSION_COOKIE_DOMAIN)
+    _session_cookie_domain_index = len(SESSION_COOKIE_DOMAIN) * -1
+    _session_cookie_dot_index = len(SESSION_COOKIE_DOMAIN) * -1 - 1
+else:
+    _session_cookie_domain_len = 0
+    _session_cookie_domain_index = 0
+    _session_cookie_dot_index = 0
+
+SESSION_COOKIE_DOMAINS=env("SESSION_COOKIE_DOMAINS",default=[])
+i = 0
+while i < len(SESSION_COOKIE_DOMAINS):
+    #remove the leading "."
+    if SESSION_COOKIE_DOMAINS[i][0] == ".":
+        SESSION_COOKIE_DOMAINS[i] = SESSION_COOKIE_DOMAINS[i][1:]
+
+    #check whether the domain is subdomain of other session domains
+    if SESSION_COOKIE_DOMAINS[i].endswith(SESSION_COOKIE_DOMAIN):
+        raise Exception("The domain({0}) is subdomain of domain({1})".format(SESSION_COOKIE_DOMAINS[i],SESSION_COOKIE_DOMAIN))
+    elif SESSION_COOKIE_DOMAIN.endswith(SESSION_COOKIE_DOMAINS[i]):
+        raise Exception("The domain({1}) is subdomain of domain({0})".format(SESSION_COOKIE_DOMAINS[i],SESSION_COOKIE_DOMAIN))
+
+    if i > 0:
+        j = 0
+        while j < i:
+            if SESSION_COOKIE_DOMAINS[i].endswith(SESSION_COOKIE_DOMAINS[j][0]):
+                raise Exception("The domain({0}) is subdomain of domain({1})".format(SESSION_COOKIE_DOMAINS[i],SESSION_COOKIE_DOMAINS[j][0]))
+            elif SESSION_COOKIE_DOMAINS[j][0].endswith(SESSION_COOKIE_DOMAINS[i]):
+                raise Exception("The domain({1}) is subdomain of domain({0})".format(SESSION_COOKIE_DOMAINS[i],SESSION_COOKIE_DOMAINS[j][0]))
+            j += 1
+
+    SESSION_COOKIE_DOMAINS[i] = (SESSION_COOKIE_DOMAINS[i],len(SESSION_COOKIE_DOMAINS[i]),len(SESSION_COOKIE_DOMAINS[i]) * -1,len(SESSION_COOKIE_DOMAINS[i]) * -1 - 1)
+    i += 1
+
 
 def GET_SESSION_COOKIE_DOMAIN(domain):
-    if domain.endswith(SESSION_COOKIE_DOMAIN):
+    if domain[_session_cookie_domain_index:] == SESSION_COOKIE_DOMAIN and (len(domain) == _session_cookie_domain_len or domain[_session_cookie_dot_index] == "."):
         return  SESSION_COOKIE_DOMAIN
     else:
-        for k,v in SESSION_COOKIE_DOMAINS.items():
-            if domain.endswith(k):
-                return v
+        for v in SESSION_COOKIE_DOMAINS:
+            if domain[v[2]:] == v[0] and (len(domain) == v[1] or domain[v[3]] == "."):
+                return v[0]
 
         return None
-        
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -215,6 +253,8 @@ else:
 
 USER_ACCESS_TOKEN_LIFETIME=env('USER_ACCESS_TOKEN_LIFETIME',default=[0]) #user access token life time in days
 USER_ACCESS_TOKEN_LIFETIME = [l if l > 0 else 0 for l in USER_ACCESS_TOKEN_LIFETIME]
+USER_ACCESS_TOKEN_LIFETIME_SELFSERVICE=env('USER_ACCESS_TOKEN_LIFETIME_SELFSERVICE',default=[28]) #user access token life time in days
+USER_ACCESS_TOKEN_LIFETIME_SELFSERVICE = [l if l > 0 else 0 for l in USER_ACCESS_TOKEN_LIFETIME_SELFSERVICE]
 
 USER_ACCESS_TOKEN_WARNING=env('USER_ACCESS_TOKEN_WARNING',default=7) #warning the user when the remaining lifetime is less than the configured days
 if USER_ACCESS_TOKEN_WARNING > 0:
@@ -240,14 +280,11 @@ if USERFLOW_CACHE_CHECK_INTERVAL < 0:
     USERFLOW_CACHE_CHECK_INTERVAL = 0
 
 PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
-CACHE_KEY_PREFIX=env('CACHE_KEY_PREFIX',default="")
 
 DBCA_STAFF_GROUPID=env('DBCA_STAFF_GROUPID',default="DBCA") # The emails belongs to group 'dbca staff' are allowed to self sign up (no pre-registration required).
 
 AUTO_SIGNOUT_DELAY_SECONDS=env('AUTO_SIGNOUT_DELAY_SECONDS',default=10)
 
-
-AUTH_CHECKING_THRESHOLD_TIME=env('AUTH_CHECKING_THRESHOLD_TIME',default=50) * 1000 #in milliseconds, should be less than 1000
 
 SWITCH_TO_AUTH_LOCAL=env('SWITCH_TO_AUTH_LOCAL',default=False) #Switch to magic auth to login in user if azure ad b2c does not work.
 
@@ -311,16 +348,25 @@ ENABLE_B2C_JS_EXTENSION = env("ENABLE_B2C_JS_EXTENSION",default=True)
 ADD_AUTH2_LOCAL_OPTION = env("ADD_AUTH2_LOCAL_OPTION",default=True)
 
 SYNC_MODE = env("SYNC_MODE",True)
+
+CACHE_KEY_PREFIX=env('CACHE_KEY_PREFIX',default="") or None
+PREVIOUS_CACHE_KEY_PREFIX=env('PREVIOUS_CACHE_KEY_PREFIX',default="") or None
 CACHE_SERVER = env("CACHE_SERVER")
 CACHE_SERVER_OPTIONS = env("CACHE_SERVER_OPTIONS",default={})
 CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
 CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
+PREVIOUS_CACHE_SESSION_SERVER = env("PREVIOUS_CACHE_SESSION_SERVER")
+PREVIOUS_CACHE_SESSION_SERVER_OPTIONS = env("PREVIOUS_CACHE_SESSION_SERVER_OPTIONS",default={})
+
 CACHE_USER_SERVER = env("CACHE_USER_SERVER")
 CACHE_USER_SERVER_OPTIONS = env("CACHE_USER_SERVER_OPTIONS",default={})
 USER_CACHE_ALIAS = None
+PREVIOUS_SESSION_CACHE_ALIAS=None
 GET_CACHE_KEY = lambda key:key
 GET_USER_KEY = lambda userid:str(userid)
 GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
+SESSION_CACHES = 0
+PREVIOUS_SESSION_CACHES = 0
 SESSION_CACHES = 0
 USER_CACHES = 0
 if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
@@ -341,24 +387,36 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
             SESSION_CACHE_ALIAS = "session"
         else:
             for i in range(0,SESSION_CACHES) :
-                CACHES["session{}".format(i)] = GET_CACHE_CONF(CACHE_SESSION_SERVER[i],CACHE_USER_SERVER_OPTIONS)
+                CACHES["session{}".format(i)] = GET_CACHE_CONF(CACHE_SESSION_SERVER[i],CACHE_SESSION_SERVER_OPTIONS)
 
             SESSION_CACHE_ALIAS = lambda sessionkey:"session{}".format((ord(sessionkey[-1]) + ord(sessionkey[-2])) % SESSION_CACHES)
-        SESSION_ENGINE = "authome.cachesessionstoredebug" if DEBUG else  "authome.cachesessionstore"
+        SESSION_ENGINE = "authome.sessionstore"
     elif CACHE_SERVER:
-        SESSION_ENGINE = "authome.cachesessionstoredebug" if DEBUG else  "authome.cachesessionstore"
+        SESSION_ENGINE = "authome.sessionstore"
         SESSION_CACHE_ALIAS = "default"
         SESSION_CACHES = 1
+
+    if PREVIOUS_CACHE_SESSION_SERVER:
+        PREVIOUS_CACHE_SESSION_SERVER = [s.strip() for s in PREVIOUS_CACHE_SESSION_SERVER.split(",") if s and s.strip()]
+        PREVIOUS_SESSION_CACHES = len(PREVIOUS_CACHE_SESSION_SERVER)
+        if PREVIOUS_SESSION_CACHES == 1:
+            CACHES["previoussession"] = GET_CACHE_CONF(PREVIOUS_CACHE_SESSION_SERVER[0],PREVIOUS_CACHE_SESSION_SERVER_OPTIONS)
+            PREVIOUS_SESSION_CACHE_ALIAS = "previoussession"
+        else:
+            for i in range(0,PREVIOUS_SESSION_CACHES) :
+                CACHES["previoussession{}".format(i)] = GET_CACHE_CONF(PREVIOUS_CACHE_SESSION_SERVER[i],PREVIOUS_CACHE_SESSION_SERVER_OPTIONS)
+
+            PREVIOUS_SESSION_CACHE_ALIAS = lambda sessionkey:"previoussession{}".format((ord(sessionkey[-1]) + ord(sessionkey[-2])) % PREVIOUS_SESSION_CACHES)
 
     if CACHE_USER_SERVER:
         CACHE_USER_SERVER = [s.strip() for s in CACHE_USER_SERVER.split(",") if s and s.strip()]
         USER_CACHES = len(CACHE_USER_SERVER)
         if USER_CACHES == 1:
-            CACHES["user"] = GET_CACHE_CONF(CACHE_USER_SERVER[0])
+            CACHES["user"] = GET_CACHE_CONF(CACHE_USER_SERVER[0],CACHE_USER_SERVER_OPTIONS)
             USER_CACHE_ALIAS = "user"
         else:
             for i in range(0,USER_CACHES) :
-                CACHES["user{}".format(i)] = GET_CACHE_CONF(CACHE_USER_SERVER[i])
+                CACHES["user{}".format(i)] = GET_CACHE_CONF(CACHE_USER_SERVER[i],CACHE_USER_SERVER_OPTIONS)
 
             USER_CACHE_ALIAS = lambda userid:"user{}".format(abs(userid) % USER_CACHES)
         if CACHE_KEY_PREFIX:
@@ -388,4 +446,43 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     STAFF_CACHE_TIMEOUT = env("STAFF_CACHE_TIMEOUT",86400 * 14)
     if STAFF_CACHE_TIMEOUT <= 0:
         STAFF_CACHE_TIMEOUT = None
+
+TRAFFIC_MONITOR_LEVEL = env('TRAFFIC_MONITOR_LEVEL',default=0) #0: disabled, 1:summary, 2: per domain
+if not CACHE_SERVER or not CACHE_SERVER.lower().startswith('redis'):
+    TRAFFIC_MONITOR_LEVEL = 0
+
+TRAFFIC_MONITOR_INTERVAL=env('TRAFFIC_MONITOR_INTERVAL',default=3600)
+if TRAFFIC_MONITOR_INTERVAL and TRAFFIC_MONITOR_INTERVAL > 0:
+    if 86400 % TRAFFIC_MONITOR_INTERVAL > 0 :
+        #One day can't be divided by interval, invalid, reset it to one hour
+        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
+    else:
+        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=TRAFFIC_MONITOR_INTERVAL)
+else:
+    TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
+
+
+TEST_RUNNER=env("TEST_RUNNER","django.test.runner.DiscoverRunner")
+
+#enable auth2 cluster feature by setting AUTH2_CLUSTERID
+AUTH2_CLUSTERID=env("AUTH2_CLUSTERID",default=None)
+AUTH2_CLUSTER_ENDPOINT=env("AUTH2_CLUSTER_ENDPOINT",default=None)
+DEFAULT_AUTH2_CLUSTER=env("DEFAULT_AUTH2_CLUSTER",default=False)
+STANDALONE_CACHE_KEY_PREFIX=env("STANDALONE_CACHE_KEY_PREFIX") or None
+AUTH2_CLUSTERS_CHECK_INTERVAL=env("AUTH2_CLUSTERS_CHECK_INTERVAL",default=60)
+if AUTH2_CLUSTERS_CHECK_INTERVAL <= 0:
+    AUTH2_CLUSTERS_CHECK_INTERVAL = 60
+
+AUTH2_CLUSTER_ENABLED = True if AUTH2_CLUSTERID and AUTH2_CLUSTER_ENDPOINT else False
+if AUTH2_CLUSTER_ENABLED:
+    if not SECRET_KEY:
+        raise Exception("Must set SECRET_KEY for auth2 cluster feature")
+
+START_OF_WEEK_MONDAY = env("START_OF_WEEK_MONDAY",default=True)
+
+SESSION_COOKIE_DOMAIN_SEPATATOR=":"
+
+AUTH2_INTERCONNECTION_TIMEOUT = env('AUTH2_INTERCONNECTION_TIMEOUT',default=5000)#timeout for interconnection among auth2 clusters, in milliseconds
+AUTH2_INTERCONNECTION_TIMEOUT = round(AUTH2_INTERCONNECTION_TIMEOUT/1000,3)# convert AUTH2_INTERCONNECTION_TIMEOUT from milliseconds to seconds
+
 

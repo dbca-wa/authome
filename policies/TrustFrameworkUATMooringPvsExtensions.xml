@@ -58,12 +58,28 @@
                 <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?domain=mooring.dbca.wa.gov.au%26title=User%2520profile</LoadUri>
             </ContentDefinition>
 
+            <ContentDefinition Id="api.selfasserted.emailverify.signup">
+                <LoadUri>
+                    https://auth2-uat.dbca.wa.gov.au/sso/b2c_verifyemail.html?domain=mooring.dbca.wa.gov.au%26title=Verify%2520email%26class=self_asserted_container%26header=Sign%2520up%2520for%2520a%2520new%2520account%2520with%2520Department%2520of%2520Biodiversity,%2520Conservation%2520and%2520Attractions%2520using%2520a%2520verification%2520code%2520sent%2520to%2520your%2520email.
+            </LoadUri>
+            </ContentDefinition>
+
             <ContentDefinition Id="api.selfasserted.emailverify">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/b2c_verifyemail.html?domain=mooring.dbca.wa.gov.au%26title=Verify%2520email%26class=self_asserted_container%26header=Sign%2520in%2520to%2520your%2520Department%2520of%2520Biodiversity,%2520Conservation%2520and%2520Attractions%2520account%2520with%2520a%2520verification%2520code%2520sent%2520to%2520your%2520account%2520email%2520address.</LoadUri>
+                <LoadUri>
+                    https://auth2-uat.dbca.wa.gov.au/sso/b2c_verifyemail.html?domain=mooring.dbca.wa.gov.au%26title=Verify%2520email%26class=self_asserted_container%26header=Sign%2520in%2520to%2520your%2520Department%2520of%2520Biodiversity,%2520Conservation%2520and%2520Attractions%2520account%2520with%2520a%2520verification%2520code%2520sent%2520to%2520your%2520account%2520email%2520address.
+                </LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.emailverify.resetpassword">
+                <LoadUri>
+                    https://auth2-uat.dbca.wa.gov.au/sso/b2c_verifyemail.html?domain=mooring.dbca.wa.gov.au%26title=Verify%2520email%26class=self_asserted_container%26header=Reset%2520the%2520password%2520of%2520your%2520Department%2520of%2520Biodiversity,%2520Conservation%2520and%2520Attractions%2520account%2520using%2520a%2520verification%2520code%2520sent%2520to%2520your%2520account%2520email%2520address.
+                </LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.useremailverify">
-                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/b2c_verifyuseremail.html?domain=mooring.dbca.wa.gov.au%26title=Verify%2520email%26class=self_asserted_container</LoadUri>
+                <LoadUri>
+                    https://auth2-uat.dbca.wa.gov.au/sso/b2c_verifyuseremail.html?domain=mooring.dbca.wa.gov.au%26title=Verify%2520email%26class=self_asserted_container%26header=Sign%2520in%2520to%2520your%2520Department%2520of%2520Biodiversity,%2520Conservation%2520and%2520Attractions%2520account%2520with%2520a%2520verification%2520code%2520sent%2520to%2520your%2520account%2520email%2520address.
+                </LoadUri>
             </ContentDefinition>
 
             <ContentDefinition Id="api.selfasserted.SignUpStep2-UserProperties">

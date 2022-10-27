@@ -37,3 +37,9 @@ class AzureADB2CAuthenticateFailed(HttpResponseException):
         else:
             return None
 
+class Auth2ClusterException(Exception):
+    def __init__(self,message,ex=None):
+        super().__init__(message)
+        self.exception = ex
+    pass
+

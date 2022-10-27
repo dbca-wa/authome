@@ -16,28 +16,27 @@ from django.conf import settings
 
 from . import urls
 
-from . import cachesessionstore
 from .utils import env
 from . import models
-from .cache import cache,get_usercache
 from authome import performance
+from . import testutils
 
 
-class PerformanceTestCase(TestCase):
+class PerformanceTestCase(testutils.StartServerMixin,TestCase):
+    headers = {}
+    cluster_headers = {}
+
     TEST_USER_NUMBER = env("TEST_USER_NUMBER",default=100)
     TEST_USER_BASEID = int(env("TEST_USER_BASEID",default=1))
+    TEST_USER_DOMAIN = env("TEST_USER_DOMAIN",default="dbca.wa.gov.au")
     TEST_TIME = env("TEST_TIME",default=300) #in seconds
     TEST_REQUESTS = env("TEST_REQUESTS",default=0) 
     REQUEST_INTERVAL = env("REQUEST_INTERVAL",default=10) / 1000 #configured in milliseconds
-    TESTED_SERVER = env("TESTED_SERVER",default="http://127.0.0.1:8080")
+    TESTED_SERVER = env("TESTED_SERVER",default="https://auth2-uat.dbca.wa.gov.au")
     PRINT_USER_PERFORMANCE_DATA = env("PRINT_USER_PERFORMANCE_DATA",default=False)
-    DOWNLOAD_TEST_DATA = env("DOWNLOAD_TEST_DATA",default=False)
-    TEST_DATA_FILE = env("TEST_DATA_FILE")
-    CLEAN_TEST_CACHE_DATA = False if DOWNLOAD_TEST_DATA else env("CLEAN_TEST_CACHE_DATA",default=(False if TEST_DATA_FILE else True))
 
     TESTING_SERVER = env("TESTING_SERVER" ,default=socket.gethostname())
     
-    auth_url = "{}/sso/authperformance".format(TESTED_SERVER)
 
     authrequest = {
         "min_processtime" : None,
@@ -93,76 +92,36 @@ class PerformanceTestCase(TestCase):
     format_datetime = staticmethod(lambda t: t.strftime("%Y-%m-%d %H:%M:%S.%f") if t  else "N/A")
     format_processtime = staticmethod(lambda t: ("{} ms".format(round((t.total_seconds() if hasattr(t,"total_seconds") else t) * 1000,2))) if t is not None  else "N/A")
 
+
+    server_index = 0
+    @classmethod
+    def get_auth_url(cls):
+        return "{}/test/sso/authperformance".format(cls.TESTED_SERVER)
+
     @classmethod
     def setUpClass(cls):
         print("Prepare {} test users".format(cls.TEST_USER_NUMBER))
-        testemails = [ "testuser_{:0>4}@dbca.wa.gov.au".format(i) for i in range(cls.TEST_USER_BASEID,cls.TEST_USER_BASEID + cls.TEST_USER_NUMBER)]
+        testemails = [ "testuser_{:0>4}@{}".format(i,cls.TEST_USER_DOMAIN) for i in range(cls.TEST_USER_BASEID,cls.TEST_USER_BASEID + cls.TEST_USER_NUMBER)]
 
-        if not cls.DOWNLOAD_TEST_DATA and cls.TEST_DATA_FILE:
-            with open(cls.TEST_DATA_FILE,'r') as f:
-                testdata = json.loads(f.read())
-            
-            settings.CACHE_SESSION_SERVER = testdata["CACHE_SESSION_SERVER"]
-            settings.CACHE_USER_SERVER = testdata["CACHE_USER_SERVER"]
-            settings.CACHE_SERVER = testdata["CACHE_SERVER"]
-            settings.SESSION_COOKIE_NAME = testdata.get("SESSION_COOKIE_NAME")
-            settings.CACHE_KEY_PREFIX = testdata.get("CACHE_KEY_PREFIX")
-            cachesessionstore.SessionStore.cache_key_prefix = "{}_session".format(settings.CACHE_KEY_PREFIX) if settings.CACHE_KEY_PREFIX else "session"
-            usersessiondata = testdata["usersession"]
-
-            cls.TESTED_SERVER = testdata["TESTED_SERVER"]
-            cls.auth_url = "{}/sso/authperformance".format(cls.TESTED_SERVER)
-            cls.CLEAN_TEST_CACHE_DATA = False 
-            cls.TEST_TIME = testdata["TEST_TIME"]
-            cls.TEST_REQUESTS = testdata["TEST_REQUESTS"]
-            cls.REQUEST_INTERVAL = testdata["REQUEST_INTERVAL"] / 1000 
-
-            cls.testusers = []
-            for email in testemails:
-                userdata = usersessiondata[email]
-                testuser = models.User(email=email,id=userdata["id"])
-
-                usersession = cachesessionstore.SessionStore(userdata["sessionkey"])
-
-                testuser.session=usersession
-                cls.testusers.append(testuser)
-            print("Loaded {1} test users from file({0})".format(cls.TEST_DATA_FILE,cls.TEST_USER_NUMBER))
-        else:
-            cls.testusers = []
-        
-            userid = cls.TEST_USER_BASEID * -1
-            for testemail in testemails:
-                testuser = models.User(username=testemail,email=testemail,first_name="",last_name="",systemuser=True,is_staff=True,is_superuser=False,id=userid)
-                usergroups = models.UserGroup.find_groups(testemail)[0]
-                userid -= 1
+        cls.testusers = []
     
-                usercache = get_usercache(testuser.id)
-                usercache.set(settings.GET_USER_KEY(testuser.id),testuser,86400 * 14)
-                usersession = cachesessionstore.SessionStore()
-    
-                usersession[USER_SESSION_KEY] = str(testuser.id)
-                usersession[BACKEND_SESSION_KEY] = "django.contrib.auth.backends.ModelBackend"
-                usersession[HASH_SESSION_KEY] = ""
-                usersession["session_timeout"] = 600
+        for testemail in testemails:
+            res = requests.get(cls.get_login_user_url(testemail),headers=cls.headers)
+            res.raise_for_status()
+            userprofile = res.json()
 
-                usersession.save()
-    
-                #print("create the session({1}) for user({0})".format(testuser,usersession.session_key))
-    
-                testuser.session = usersession
-                cls.testusers.append(testuser)
+            testuser = models.User(email=testemail)
+            testuser.token = models.UserToken(user=testuser,enabled=False if "access_token_error" in userprofile else True,token=userprofile["access_token"])
+            testuser.session_key = res.cookies[settings.SESSION_COOKIE_NAME]
+            cls.testusers.append(testuser)
 
     @classmethod
     def tearDownClass(cls):
-        if cls.CLEAN_TEST_CACHE_DATA:
-            print("Clean the cached session data and user data")
-            for testuser in cls.testusers:
-                testuser.session.delete()
-                usercache = get_usercache(testuser.id)
-                #print("Delete session key {}".format(testuser.session.cache_key_prefix + testuser.session.session_key))
-                usercache.delete(settings.GET_USER_KEY(testuser.id))
-                #print("Delete user {} from cache with key({})".format(testuser.email,settings.GET_USER_KEY(testuser.id)))
-                pass
+        print("logout all test user sessions")
+        for testuser in cls.testusers:
+            res = requests.get(cls.get_logout_url(),headers=cls.headers,cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},allow_redirects=False)
+            res.raise_for_status()
+            pass
 
     def parse_processingsteps(self,test_starttime,test_endtime,starttime,endtime,processname,processcreatetime,processmemory,processingsteps):
         cls = self.__class__
@@ -287,10 +246,13 @@ class PerformanceTestCase(TestCase):
                 httprequests += 1
                 starttime = timezone.localtime()
                 try:
-                    #print("Begin to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.auth_url,testuser.session.session_key))
-                    res = requests.get(cls.auth_url,cookies={settings.SESSION_COOKIE_NAME:testuser.session.session_key})
+                    #print("Begin to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.get_auth_url(),testuser.session.session_key))
+                    res = requests.get(cls.get_auth_url(),cookies={settings.SESSION_COOKIE_NAME:testuser.session_key})
                     res = res.json()
                     endtime = timezone.localtime()
+                    if res["status_code"] != 200:
+                        print("--url={}, user={}, session key={}, status code={}".format(cls.get_auth_url(),testuser.email,testuser.session_key,res["status_code"]))
+
                     self.assertEqual(res["status_code"],200,msg="Should return 200 response for authenticated request")
                     processingsteps = performance.parse_processingsteps(res["processingsteps"])
                     processname = res["processname"]
@@ -301,7 +263,7 @@ class PerformanceTestCase(TestCase):
                     if cls.TEST_REQUESTS:
                         self.print_processingsteps(testuser.email,"/sso/auth",starttime,endtime,processname,processingsteps)
     
-                    #print("Spend {3} to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.auth_url,testuser.session.session_key,self.format_processtime(processtime)))
+                    #print("Spend {3} to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.get_auth_url(),testuser.session.session_key,self.format_processtime(processtime)))
                     if not cls.authrequest["min_processtime"] or cls.authrequest["min_processtime"] >  processtime:
                         cls.authrequest["min_processtime"] = processtime
             
@@ -515,29 +477,6 @@ class PerformanceTestCase(TestCase):
     def test_performance(self):
         cls = self.__class__
 
-        if cls.DOWNLOAD_TEST_DATA:
-            usersessiondata = dict([(u.email,{"id":u.id,"sessionkey":u.session.session_key}) for u in cls.testusers])
-            testdata = {
-                "TESTED_SERVER" : cls.TESTED_SERVER,
-                "TEST_TIME" : cls.TEST_TIME,
-                "TEST_REQUESTS" : cls.TEST_REQUESTS,
-                "REQUEST_INTERVAL" : cls.REQUEST_INTERVAL * 1000 ,
-                "CACHE_SESSION_SERVER" : settings.CACHE_SESSION_SERVER,
-                "CACHE_USER_SERVER" : settings.CACHE_USER_SERVER,
-                "CACHE_SERVER" : settings.CACHE_SERVER,
-                "CACHE_KEY_PREFIX":settings.CACHE_KEY_PREFIX,
-                "SESSION_COOKIE_NAME":settings.SESSION_COOKIE_NAME,
-                "usersession" : usersessiondata
-            }
-            with open(cls.TEST_DATA_FILE,'w') as f:
-                f.write(json.dumps(testdata,indent=4))
-            print("Test data was exported to file '{}'".format(cls.TEST_DATA_FILE))
-            return
-        elif cls.TEST_DATA_FILE and cls.CLEAN_TEST_CACHE_DATA:
-            #Clean the test cache data
-            return
-            
-
         processes = []
         now = timezone.localtime()
         if self.TEST_USER_NUMBER == 1:
@@ -574,9 +513,6 @@ class PerformanceTestCase(TestCase):
                     first = False
                     print("""Test Environment
     Tested Server       : {}
-    Session Cache       : {}
-    User Cache          : {}
-    Default Cache       : {}
     
     Testing Server      : {}
     Test URL            : {}
@@ -584,9 +520,6 @@ class PerformanceTestCase(TestCase):
     Request Interval    : {} milliseconds
     Test Time           : {} seconds""".format(
                         cls.TESTED_SERVER,
-                        settings.CACHE_SESSION_SERVER or settings.CACHE_SERVER,
-                        settings.CACHE_USER_SERVER or settings.CACHE_SERVER,
-                        settings.CACHE_SERVER,
 
                         cls.TESTING_SERVER,
                         "/sso/auth",

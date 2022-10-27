@@ -5,12 +5,15 @@ from django.utils import timezone
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.handlers import exception
 
-from .models import User,UserToken
-from .cache import get_usercache
-from .exceptions import UserDoesNotExistException
+from social_core.exceptions import AuthException
 
-from . import performance
+from ..models import User,UserToken
+from ..cache import get_usercache
+from ..exceptions import UserDoesNotExistException
+
+from .. import performance
 
 logger = logging.getLogger(__name__)
 
@@ -178,3 +181,14 @@ def _get_user(request):
 auth.get_user = _get_user
 
 
+def get_response_for_exception():
+    original_handler = exception.response_for_exception
+    def _response_for_exception(request, exc):
+        from .. import views
+        if isinstance(exc, AuthException):
+            return views.handler400(request,exc)
+        else:
+            return original_handler(request,exc)
+    return _response_for_exception
+
+exception.response_for_exception = get_response_for_exception()

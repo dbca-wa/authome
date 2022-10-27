@@ -10,20 +10,25 @@ var action = null;
 var email = null;
 
 function sendcode_succeed() {
-    email_field.attr('readonly', true)
+    email_field.prop('readonly', true)
+    email_field.prop('disabled', true)
     verifycode_field.show()
 
-    send_btn.attr('disabled', true)
+    send_btn.prop('disabled', true)
     send_btn.hide()
 
-    verify_btn.attr('disabled', false)
+    verify_btn.prop('disabled', false)
     verify_btn.show()
 
-    resend_btn.attr('disabled', false)
+    resend_btn.prop('disabled', false)
     resend_btn.show()
 
-    if (!email_readonly) {
-        change_btn.attr('disabled', false)
+    if (email_readonly) {
+        change_btn.prop('readonly', true)
+        change_btn.prop('disabled', true)
+    } else {
+        change_btn.prop('readonly', false)
+        change_btn.prop('disabled', false)
         change_btn.show()
     }
 
@@ -32,58 +37,64 @@ function sendcode_succeed() {
 function sendcode_failed() {
     verifycode_field.hide()
 
-    send_btn.attr('disabled', false)
+    send_btn.prop('disabled', false)
     send_btn.show()
 
-    verify_btn.attr('disabled', true)
+    verify_btn.prop('disabled', true)
     verify_btn.hide()
 
-    resend_btn.attr('disabled', true)
+    resend_btn.prop('disabled', true)
     resend_btn.hide()
 
-    if (!email_readonly) {
-        change_btn.attr('disabled', true)
+    if (email_readonly) {
+        email_field.prop('readonly', true)
+        email_field.prop('disabled', true)
+    } else {
+        change_btn.prop('disabled', true)
         change_btn.hide()
-        email_field.attr('readonly', false)
+        email_field.prop('readonly', false)
+        email_field.prop('disabled', false)
     }
 
     continue_btn.hide()
 }
 function resendcode_succeed() {
-    email_field.attr('readonly', true)
+    email_field.prop('readonly', true)
+    email_field.prop('disabled', true)
     verifycode_field.show()
 
-    send_btn.attr('disabled', true)
+    send_btn.prop('disabled', true)
     send_btn.hide()
 
-    verify_btn.attr('disabled', false)
+    verify_btn.prop('disabled', false)
     verify_btn.show()
 
-    resend_btn.attr('disabled', false)
+    resend_btn.prop('disabled', false)
     resend_btn.show()
 
     if (!email_readonly) {
-        change_btn.attr('disabled', false)
+        change_btn.prop('disabled', false)
         change_btn.show()
     }
 
     continue_btn.hide()
 }
 function resendcode_failed() {
-    email_field.attr('readonly', true)
+    email_field.prop('readonly', true)
+    email_field.prop('disabled', true)
     verifycode_field.show()
 
-    send_btn.attr('disabled', true)
+    send_btn.prop('disabled', true)
     send_btn.hide()
 
-    verify_btn.attr('disabled', false)
+    verify_btn.prop('disabled', false)
     verify_btn.show()
 
-    resend_btn.attr('disabled', false)
+    resend_btn.prop('disabled', false)
     resend_btn.show()
 
     if (!email_readonly) {
-        change_btn.attr('disabled', false)
+        change_btn.prop('disabled', false)
         change_btn.show()
     }
 
@@ -92,19 +103,20 @@ function resendcode_failed() {
 function change_succeed() {
     verifycode_field.hide()
 
-    send_btn.attr('disabled', false)
+    send_btn.prop('disabled', false)
     send_btn.show()
 
-    verify_btn.attr('disabled', true)
+    verify_btn.prop('disabled', true)
     verify_btn.hide()
 
-    resend_btn.attr('disabled', true)
+    resend_btn.prop('disabled', true)
     resend_btn.hide()
 
     if (!email_readonly) {
-        change_btn.attr('disabled', true)
+        change_btn.prop('disabled', true)
         change_btn.hide()
-        email_field.attr('readonly', false)
+        email_field.prop('readonly', false)
+        email_field.prop('disabled', false)
         if (!email_field.val()) {
             email_field.val(email)
         }
@@ -113,51 +125,54 @@ function change_succeed() {
     continue_btn.hide()
 }
 function verifycode_succeed() {
-    email_field.attr('readonly', true)
+    email_field.prop('readonly', true)
+    email_field.prop('disabled', true)
     verifycode_field.hide()
 
-    send_btn.attr('disabled', true)
+    send_btn.prop('disabled', true)
     send_btn.hide()
 
-    verify_btn.attr('disabled', true)
+    verify_btn.prop('disabled', true)
     verify_btn.hide()
 
-    resend_btn.attr('disabled', true)
+    resend_btn.prop('disabled', true)
     resend_btn.hide()
 
-    change_btn.attr('disabled', true)
+    change_btn.prop('disabled', true)
     change_btn.hide()
 
     continue_btn.hide()
     continue_btn.click()
 }
 function verifycode_failed() {
-    email_field.attr('readonly', true)
+    email_field.prop('readonly', true)
+    email_field.prop('disabled', true)
     verifycode_field.show()
 
-    send_btn.attr('disabled', true)
+    send_btn.prop('disabled', true)
     send_btn.hide()
 
-    verify_btn.attr('disabled', false)
+    verify_btn.prop('disabled', false)
     verify_btn.show()
 
-    resend_btn.attr('disabled', false)
+    resend_btn.prop('disabled', false)
     resend_btn.show()
 
     if (!email_readonly) {
-        change_btn.attr('disabled', false)
+        change_btn.prop('disabled', false)
         change_btn.show()
     }
 
     continue_btn.hide()
 }
 function disable_btns() {
-    email_field.attr('readonly', true)
-    send_btn.attr('disabled', true)
-    verify_btn.attr('disabled', true)
-    resend_btn.attr('disabled', true)
+    email_field.prop('readonly', true)
+    email_field.prop('disabled', true)
+    send_btn.prop('disabled', true)
+    verify_btn.prop('disabled', true)
+    resend_btn.prop('disabled', true)
     if (!email_readonly) {
-        change_btn.attr('disabled', true)
+        change_btn.prop('disabled', true)
     }
     continue_btn.hide()
 }
@@ -180,16 +195,44 @@ $(document).ready(function () {
         return
     }
     continue_btn.hide()
-    send_btn.show()
     verify_btn.hide()
     resend_btn.hide()
     change_btn.hide()
-    change_btn.attr('disabled', true)
+    change_btn.prop('disabled', true)
+
     if (email_readonly) {
-        email_field.attr('readonly', true)
+        email_field.prop('readonly', true)
+        email_field.prop('disabled', true)
+
+        send_btn.hide()
     } else {
-        email_field.attr('readonly', false)
+        email_field.prop('readonly', false)
+        email_field.prop('disabled', false)
+
+        email_field.keypress(function(event) {
+            // If the user presses the "Enter" key on the keyboard
+            var keycode = (event.keyCode ? event.keyCode : event.which);
+            if(keycode == '13') { 
+                send_btn.focus()
+            }
+        }); 
+
+        send_btn.show()
     }
+
+    verifycode_field.keypress(function(event) {
+        // If the user presses the "Enter" key on the keyboard
+        var keycode = (event.keyCode ? event.keyCode : event.which);
+        if(keycode == '13') { 
+            if (verifycode_field.val().trim()) {
+                action = "verify_code"
+                disable_btns()
+            } else {
+                verifycode_failed()
+            }
+            continue_btn.hide()
+        }
+    }); 
     //attach a click event in the end to control the page 
     send_btn.click(function(){
         if (email_field.val().trim()) {
@@ -221,10 +264,15 @@ $(document).ready(function () {
         disable_btns()
     })
 
+    if (email_readonly) {
+        send_btn.click()
+    }
 })
 $.ajaxSetup({
     beforeSend:function(xhr,settings) {
+        email_field.prop("disabled",false)
         xhr.url = settings.url
+
     }
 })
 $(document).ajaxComplete(function(event,xhr,options) {
@@ -244,6 +292,9 @@ $(document).ajaxComplete(function(event,xhr,options) {
         }
     } else {
         var res = xhr.responseJSON
+        if (!res) {
+            return
+        }
         status = parseInt(res.status)
         if (status >=200 && status < 300) {
             if (action == "send_code") {

@@ -20,7 +20,6 @@ def get_processinfo():
     return (processcreatetime,"{}-{}-{}".format(socket.gethostname(),processcreatetime,os.getpid()))
 
 processcreatetime,processname = get_processinfo()
-print("Worker process({}) is ready to process request".format(processname))
 
 def _get_processingstep(index):
     if not index:

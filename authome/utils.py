@@ -9,22 +9,164 @@ import qrcode
 import socket
 import psutil
 import logging
+import traceback
+import threading
 from datetime import timedelta,datetime
 
 from django.utils import timezone
 from django.contrib.auth import REDIRECT_FIELD_NAME
+from django.db import connections
+from django.core.cache import caches
+from django.contrib import messages
+from django_redis.cache import RedisCache
+
+from django_redis import get_redis_connection
 
 __version__ = '1.0.0'
 
 logger = logging.getLogger(__name__)
 
+LB_HASH_KEY_DIGEST_SIZE=8
+
 _processid = None
 def get_processid():
     global _processid
     if not _processid:
-        processcreatetime = timezone.make_aware(datetime.fromtimestamp(psutil.Process(os.getpid()).create_time())).strftime("%Y-%m-%d %H:%M:%S.%f")
-        _processid = "{}-{}-{}".format(socket.gethostname(),processcreatetime,os.getpid())
+        _processid = "{}-{}-{}".format(socket.gethostname(),os.getpid(),get_process_starttime())
     return _processid
+
+_process_starttime = None
+def get_process_starttime():
+    global _process_starttime
+    if not _process_starttime:
+        _process_starttime = timezone.make_aware(datetime.fromtimestamp(psutil.Process(os.getpid()).create_time())).strftime("%Y-%m-%dT%H:%M:%S.%f")
+    return _process_starttime
+
+
+def build_cookie_value(lb_hash_key,clusterid,signature,session_key,cookie_domain):
+    from django.conf import settings
+    if cookie_domain:
+        if clusterid:
+            return "{}|{}|{}|{}{}{}".format(lb_hash_key,clusterid,signature,session_key,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,cookie_domain)
+        else:
+            return "{}{}{}".format(session_key,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,cookie_domain)
+    else:
+        if clusterid:
+            return "{}|{}|{}|{}".format(lb_hash_key,clusterid,signature,session_key)
+        else:
+            return session_key
+
+
+_process_data = threading.local()
+def attach_request(request):
+    _process_data.request = request
+
+def send_message(msg,level=messages.INFO):
+    try:
+        messages.add_message(_process_data.request, level, msg)
+        return True
+    except:
+        return False
+def get_useragent(request=None):
+    try:
+        if request:
+            return request.META.get('HTTP_USER_AGENT')
+        else:
+            return _process_data.request.META.get('HTTP_USER_AGENT')
+    except:
+        return None
+
+def get_source_session_cookie(request=None):
+    from django.conf import settings
+    if not request:
+        request = _process_data.request
+    if not request:
+        return None
+    return request.COOKIES.get(settings.SESSION_COOKIE_NAME)
+
+def get_source_cookie_domain(request=None):
+    cookie = get_source_session_cookie(request)
+    return get_cookie_domain(cookie)
+
+def get_cookie_domain(cookie):
+    if not cookie:
+        return None
+    if settings.SESSION_COOKIE_DOMAIN_SEPATATOR in cookie:
+        return cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)[1]
+    else:
+        return None
+
+def get_source_session_key(request=None):
+    cookie = get_source_session_cookie(request)
+    return get_session_key(cookie)
+
+def get_session_key(cookie):
+    from django.conf import settings
+    if not cookie:
+        return None
+    return cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)[0].rsplit("|",1)[-1]
+
+def get_source_clusterid(request=None):
+    cookie = get_source_session_cookie(request)
+    return get_clusterid(cookie)
+
+def get_clusterid(cookie):
+    if not cookie:
+        return None
+    cookie_components = cookie.split("|",3)
+    if len(cookie_components) < 4:
+        return None
+    else:
+        return cookie_components[1]
+
+def get_source_lb_hash_key(request=None):
+    cookie = get_source_session_cookie(request)
+    return get_lb_hash_key(cookie)
+
+def get_lb_hash_key(cookie):
+    if not cookie:
+        return None
+    cookie_components = cookie.split("|",3)
+    if len(cookie_components) < 4:
+        return None
+    else:
+        return cookie_components[0]
+
+def get_request_path(request=None):
+    try:
+        if request:
+            path = request.headers.get("x-upstream-request-uri")
+        else:
+            path = _process_data.request.headers.get("x-upstream-request-uri")
+        if not path:
+            #can't get the original path, use request path directly
+            path = _process_data.request.get_full_path()
+
+        return "{}{}".format(get_host( _process_data.request), path)
+    except:
+        return None
+
+def get_request_pathinfo(request=None):
+    try:
+        if request:
+            path = request.headers.get("x-upstream-request-uri")
+        else:
+            path = _process_data.request.headers.get("x-upstream-request-uri")
+        if path:
+            #get the original request path
+            #remove the query string
+            try:
+                path = path[:path.index("?")]
+            except:
+                pass
+        else:
+            #can't get the original path, use request path directly
+            path = _process_data.request.path_info
+
+        return "{}{}".format(get_host( _process_data.request), path)
+    except:
+        return None
+
 
 def _convert(key,value, default=None, required=False, value_type=None,subvalue_type=None):
     """
@@ -225,6 +367,22 @@ def get_digest_function(algorithm):
 def format_datetime(dt):
     return timezone.localtime(dt).strftime("%Y-%m-%d %H:%M:%S") if dt else None
 
+def parse_datetime(dt):
+    return timezone.make_aware(datetime.strptime(dt,"%Y-%m-%d %H:%M:%S")) if dt else None
+
+def encode_datetime(dt):
+    return timezone.localtime(dt).strftime("%Y-%m-%dT%H:%M:%S") if dt else None
+
+def decode_datetime(dt):
+    return timezone.make_aware(datetime.strptime(dt,"%Y-%m-%dT%H:%M:%S")) if dt else None
+
+def encode_timedelta(df):
+    return (df.days * 86400 + df.seconds) if df else None
+
+def decode_timedelta(df):
+    return timedetla(seconds=df) if df else None
+
+
 def format_timedelta(td,unit="s"):
     days = 0
     hours = 0
@@ -295,6 +453,123 @@ def _get_host2(request):
 
 get_host = _get_host
 
+def sign_session_cookie(hash_key,clusterid,session_key,secretkey):
+    h = hashlib.blake2b(digest_size=LB_HASH_KEY_DIGEST_SIZE)
+    h.update("{}{}{}{}".format(hash_key,clusterid,session_key,secretkey).encode())
+    return h.hexdigest()
 
+def add_to_list(l,o):
+    """
+    Add a object or list or tuple to list object, if list object is None, create a new list
+    return the list object
+    """
+    if l is None:
+        if isinstance(o,list):
+            return o
+        else:
+            return [o]
+    elif isinstance(o,list):
+        for m in o:
+            l.append(m)
+        return l
+    else:
+        l.append(o)
+        return l
+
+def add_to_map(m,k,v):
+    """
+    Add object to map object, if map object is None, create a new map
+    return the list object
+    """
+    if m is None:
+        return {k:v}
+    else:
+        m[k] = v
+        return m
+
+def ping_database(dbalias):
+    msg = "OK"
+    healthy = True
+    with connections[dbalias].cursor() as cursor:
+        try:
+            cursor.execute("select 1")
+            v = cursor.fetchone()[0]
+            if v != 1:
+                healthy = False
+                msg = "Not Available"
+        except Exception as ex:
+            healthy = False
+            msg = str(ex)
+    return (healthy,msg)
+
+redis_re = re.compile("^\s*(?P<protocol>[a-zA-Z]+)://((?P<user>[^:@]+)?(:(?P<password>[^@]+))?@)?(?P<server>\S+)\s*$")
+def print_redisserver(server):
+    """
+    Return a printable redis server url
+    """
+    if isinstance(server,RedisCache):
+        server = server._server
+    elif not isinstance(server,str):
+        return str(server)
+
+    try:
+        m = redis_re.search(server)
+        return "{0}://xxx:xxx@{1}".format(m.group("protocol"),m.group("server"))
+    except:
+        return "xxxxxx"
+
+    
+def ping_redisserver(serveralias):
+    try:
+        with get_redis_connection(serveralias) as conn:
+            data = conn.info("server")
+            serverinfo = {}
+            if data.get("uptime_in_seconds"):
+                serverinfo["starttime"] = timezone.localtime() - timedelta(seconds=data.get("uptime_in_seconds"))
+            else:
+                serverinfo["starttime"] = "N/A"
+
+            return (True, "OK" ,serverinfo)
+    except Exception as ex:
+        return (False,str(ex),{})
+
+
+def ping_cacheserver(serveralias):
+    try:
+        caches[serveralias].set("PING","PONG")
+        return (True, "OK")
+    except Exception as ex:
+        return (False,str(ex))
+
+
+def print_cookies(request):
+    msg = "All request cookies"
+    for k,v in request.COOKIES.items():
+        msg = "{}\n\t{} = {}".format(msg,k,v)
+
+    logger.debug(msg)
+
+def print_headers(request,headers=None):
+    msg = "Request headers"
+    if headers:
+        for k in headers:
+            k = k.upper()
+            msg = "{}\n\t{} = {}".format(msg,k,request.headers.get(k) or "")
+    else:
+        for k,v in request.headers.items():
+            msg = "{}\n\t{} = {}".format(msg,k,v)
+    logger.debug(msg)
+
+def print_request_meta(request):
+    msg = "Request meta data"
+    for k,v in request.META.items():
+        msg = "{}\n\t{} = {}".format(msg,k,v)
+    logger.debug(msg)
+
+
+def create_secret_key(length=64):
+    from django.utils.crypto import  get_random_string
+    import string
+    return get_random_string(length, string.digits + string.ascii_letters + "`~!@$%^&*()_+-={}|[]:;,./<>?")
 
 
