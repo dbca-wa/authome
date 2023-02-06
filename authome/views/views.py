@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden, JsonResponse,HttpResponseNotAllowed,HttpResponseBadRequest,HttpResponseNotFound
 from django.template.response import TemplateResponse
 from django.contrib.auth import logout
@@ -615,6 +617,31 @@ get_sendcode_number_key = lambda email:settings.GET_CACHE_KEY("sendcodenumber:{}
 get_verifycode_number_key = lambda email:settings.GET_CACHE_KEY("verifycodenumber:{}".format(email))
 get_codeid = lambda :"{}.{}".format(timezone.localtime().timestamp(),get_random_string(10,VALID_TOKEN_CHARS))
 
+get_expire_key = lambda key:"{}_expireat".format(key)
+
+def set_expirable_session_data(session,key,value,timeout,now=None):
+    now = now or timezone.localtime()
+    session[key] = value
+    session[get_expire_key(key)] = now + timedelta(seconds=timeout)
+
+def get_expirable_session_data(session,key,default=None,now=None):
+    now = now or timezone.localtime()
+    expireat = session.get(get_expire_key(key))
+    if expireat and now <= expireat:
+        return session.get(key) or default
+    else:
+        return default
+
+def del_expirable_session_data(session,key):
+    try:
+        del session[get_expire_key(key)]
+    except KeyError:
+        pass
+    try:
+        del session[key]
+    except KeyError:
+        pass
+
 def auth_local(request):
     """
     auth_local feature can be triggered from any domain, but if the request's domain is not the subdomain of the session cookie domain, auth2 will redirect the request to auth2 domain 
@@ -646,10 +673,7 @@ def auth_local(request):
 
     context = {"body":page_layout,"extracss":extracss,"domain":next_url_domain,"next":next_url,"expiretime":utils.format_timedelta(settings.PASSCODE_AGE,unit='s')}
 
-    if not defaultcache:
-        context["messages"] = [("error","Auth_local is disabled because the default cache is not configured.")]
-        return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
-
+    now = timezone.localtime()
     if request.method == "GET":
         if utils.get_host(request).endswith(settings.SESSION_COOKIE_DOMAIN):
             #request is sent from session cookie domain, show the page to input email 
@@ -689,13 +713,13 @@ def auth_local(request):
             verifycode_number_key = get_verifycode_number_key(email)
             if codeid:
                 #a verifycode has already been sent before. reuse it if possible.
-                verifycode_number = int(defaultcache.get(verifycode_number_key) or 0)
+                verifycode_number = request.session.get(verifycode_number_key) or 0
                 if verifycode_number >= settings.PASSCODE_TRY_TIMES:
                     #The limits of verifying the current code was reached, generate a new one.
                     code = None
                     codeid = None
                 else:
-                    code = defaultcache.get(codekey)
+                    code = get_expirable_session_data(request.session,codekey,None,now)
                     if code and code.startswith(codeid + "="):
                         #codeid is matched, reuse the existing code
                         context["messages"] = [("info","Verification code has already been sent to {}; Please entery the verification code.".format(email))]
@@ -706,20 +730,26 @@ def auth_local(request):
                         codeid = None
             if not codeid:
                 sendcode_number_key = get_sendcode_number_key(email)
-                sendcode_number = int(defaultcache.get(sendcode_number_key) or 0)
+                if defaultcache:
+                    sendcode_number = int(defaultcache.get(sendcode_number_key,0) or 0)
+                else:
+                    sendcode_number = get_expirable_session_data(request.session,sendcode_number_key,0,now)
+
                 if sendcode_number >= settings.PASSCODE_DAILY_LIMIT:
                     #The daily limits of sending veriy code was reached.
                     context["messages"] = [("error","You have exceeded the number of code generation attempts allowed.")]
                     return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
 
                 codeid = get_codeid()
-                now = timezone.localtime()
                 seconds = now.hour * 60 * 60 + now.minute * 60 + now.second
-                defaultcache.set(sendcode_number_key,sendcode_number + 1,timeout=86400 - seconds)
+                if defaultcache:
+                    defaultcache.set(sendcode_number_key,sendcode_number + 1,timeout=86400 - seconds)
+                else:
+                    set_expirable_session_data(request.session,sendcode_number_key , sendcode_number + 1 , 86400 - seconds , now)
 
                 code = get_random_string(settings.PASSCODE_LENGTH,VALID_CODE_CHARS)
-                defaultcache.set(codekey,"{}={}".format(codeid,code),timeout=settings.PASSCODE_AGE)
-                defaultcache.set(verifycode_number_key,0,timeout=settings.PASSCODE_AGE)
+                set_expirable_session_data(request.session,codekey,"{}={}".format(codeid,code),settings.PASSCODE_AGE,now)
+                request.session[verifycode_number_key] = 0
                 context["otp"] = code
 
                 #initialized the userflow if required
@@ -760,7 +790,7 @@ def auth_local(request):
             verifycode_number_key = get_verifycode_number_key(email)
             
             codekey = get_verifycode_key(email)
-            code = defaultcache.get(codekey)
+            code = get_expirable_session_data(request.session,codekey,None,now)
             if not code:
                 context["messages"] = [("error","The verification code has expired. Send a new code")]
                 return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
@@ -768,7 +798,7 @@ def auth_local(request):
                 context["messages"] = [("error","The verfication code was sent by other device,please resend the code again.")]
                 return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
             else:
-                verifycode_number = int(defaultcache.get(verifycode_number_key) or 0)
+                verifycode_number = request.session.get(verifycode_number_key) or 0
                 if verifycode_number >= settings.PASSCODE_TRY_TIMES:
                     #The limits of verifying the current code was reached,.
                     context["messages"] = [("error","You have exceeded the number({}) of retries allowed.".format(settings.PASSCODE_TRY_TIMES))]
@@ -776,7 +806,7 @@ def auth_local(request):
                 elif code[len(codeid) + 1:] != inputcode:
                     #code is invalid.
                     #increase the failed verifing times.
-                    defaultcache.set(verifycode_number_key,verifycode_number + 1,timeout=settings.PASSCODE_AGE)
+                    request.session[verifycode_number_key] = verifycode_number + 1
                     context["messages"] = [("error","The input code is invalid, please check the email and verify again.")]
                     return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
                 
@@ -784,10 +814,32 @@ def auth_local(request):
             user = models.User.objects.filter(email=email).first()
             if user:
                 idp,created = models.IdentityProvider.objects.get_or_create(idp=models.IdentityProvider.AUTH_EMAIL_VERIFY[0],defaults={"name":models.IdentityProvider.AUTH_EMAIL_VERIFY[1]})
-                user.last_idp = idp
-                user.last_login = timezone.localtime()
-                user.save(update_fields=["last_idp","last_login"])
+                update_fields = ["last_login"]
+                user.last_login = now
+
+                if user.last_idp != idp:
+                    user.last_idp = idp
+                    update_fields.append("last_idp")
+
+                dbcagroup = models.UserGroup.dbca_group()
+                usergroups = models.UserGroup.find_groups(email)[0]
+                if any(group.is_group(dbcagroup) for group in usergroups ):
+                    is_staff = True
+                    is_superuser = models.can_access(email,settings.AUTH2_DOMAIN,"/admin/")
+                else:
+                    is_staff = False
+                    is_superuser = False
+                if user.is_staff != is_staff:
+                    user.is_staff = is_staff
+                    update_fields.append("is_staff")
+                if user.is_superuser != is_superuser:
+                    user.is_superuser = is_superuser
+                    update_fields.append("is_superuser")
+
+                user.save(update_fields=update_fields)
                 if user.is_active:
+                    del_expirable_session_data(request.session,codekey)
+                    del request.session[verifycode_number_key]
                     request.session["idp"] = idp.idp
                     login(request,user,'django.contrib.auth.backends.ModelBackend')
 
@@ -797,8 +849,6 @@ def auth_local(request):
                     if timeout:
                         request.session["session_timeout"] = timeout
 
-                    defaultcache.delete(codekey)
-                    defaultcache.delete(verifycode_number_key)
                     if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                         return HttpResponseRedirect(next_url)
                     else:
@@ -808,11 +858,12 @@ def auth_local(request):
             else:
                 #Userr does not exist, signup
                 token = get_random_string(settings.SIGNUP_TOKEN_LENGTH,VALID_TOKEN_CHARS)
-                defaultcache.set(get_signuptoken_key(email),token,timeout=settings.SIGNUP_TOKEN_AGE)
+                set_expirable_session_data(request.session,get_signuptoken_key(email),token,settings.SIGNUP_TOKEN_AGE,now)
                 context["token"] = token
                 return TemplateResponse(request,"authome/signin_signup.html",context=context)
         elif action == "signup":
-            defaultcache.delete(get_verifycode_key(email))
+            del_expirable_session_data(request.session,get_verifycode_key(email))
+            del request.session[get_verifycode_number_key(email)]
             if not email:
                 context["codeid"] = get_codeid()
                 context["messages"] = [("error","Email is missing.")]
@@ -828,7 +879,7 @@ def auth_local(request):
                 return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
 
             tokenkey = get_signuptoken_key(email)
-            token = defaultcache.get(tokenkey)
+            token = get_expirable_session_data(request.session,tokenkey,None,now)
             if not token:
                 context["codeid"] = get_codeid()
                 context["messages"] = [("error","The signup token is expired, please signin again.")]
@@ -857,13 +908,16 @@ def auth_local(request):
             usergroups = models.UserGroup.find_groups(email)[0]
             if any(group.is_group(dbcagroup) for group in usergroups ):
                 is_staff = True
+                is_superuser = models.can_access(email,settings.AUTH2_DOMAIN,"/admin/")
             else:
                 is_staff = False
+                is_superuser = False
 
             idp,created = models.IdentityProvider.objects.get_or_create(idp=models.IdentityProvider.AUTH_EMAIL_VERIFY[0],defaults={"name":models.IdentityProvider.AUTH_EMAIL_VERIFY[1]})
-            user,created = models.User.objects.update_or_create(email=email,username=email,defaults={"is_staff":is_staff,"last_idp":idp,"last_login":timezone.localtime(),"first_name":firstname,"last_name":lastname})
+            user,created = models.User.objects.update_or_create(email=email,username=email,defaults={"is_staff":is_staff,"last_idp":idp,"last_login":now,"first_name":firstname,"last_name":lastname,"is_superuser":is_superuser})
 
             request.session["idp"] = idp.idp
+            del_expirable_session_data(tokenkey)
             login(request,user,'django.contrib.auth.backends.ModelBackend')
 
             request.session["idp"] = idp.idp
@@ -871,8 +925,6 @@ def auth_local(request):
             if timeout:
                 request.session["session_timeout"] = timeout
 
-            defaultcache.delete(tokenkey)
-        
             if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                 return HttpResponseRedirect(next_url)
             else:
