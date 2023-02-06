@@ -12,10 +12,13 @@ from . import views
 from .. import models
 from .. import utils
 from ..sessionstore.sessionstore import SessionStore 
+from ..serializers import JSONEncoder
+from .. import trafficdata
 
 if settings.AUTH2_CLUSTER_ENABLED:
     from ..sessionstore.clustersessionstore import SessionStore as ClusterSessionStore
     from ..sessionstore.clustersessionstore import StandaloneSessionStore
+from ..management.commands import process_trafficdata
 
 logger = logging.getLogger(__name__)
 
@@ -201,4 +204,30 @@ def get_session(request):
     except Exception as ex:
         logger.error("Failed to get session({}) from cache.{} ".format(session_cookie,str(ex)))
         raise
+
+def flush_trafficdata(requests):
+    batchid = trafficdata.save2db()
+    data = []
+    for d in models.TrafficData.objects.filter(batchid=batchid).defer("cluster"):
+        data.append({
+            "clusterid" : d.clusterid,
+            "servers" : d.servers,
+            "start_time" : d.start_time,
+            "end_time" : d.end_time,
+            "batchid" : d.batchid,
+            "requests" : d.requests,
+            "total_time" : d.total_time,
+            "min_time" : d.min_time,
+            "max_time" : d.max_time,
+            "avg_time" : d.avg_time,
+            "get_remote_sessions" : d.get_remote_sessions,
+            "delete_remote_sessions" : d.delete_remote_sessions,
+            "status" : d.status,
+            "domains" : d.domains
+        })
+
+    return JsonResponse({"data":data,"status":200},status=200,encoder=JSONEncoder)
+
+    
+
 

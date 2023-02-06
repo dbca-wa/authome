@@ -9,15 +9,16 @@ from .. import views
 from ..cache import cache
 from ..admin import admin_site
 from .base import traffic_monitor
+from .base import traffic_monitor_debug
 
 logger = logging.getLogger(__name__)
 
 urlpatterns = [
     path('sso/auth_logout', views.logout_view, name='logout'),
     path('sso/auth_local', views.auth_local, name='auth_local'),
-    path('sso/auth', traffic_monitor("auth",views.auth), name='auth'),
-    path('sso/auth_optional', traffic_monitor("auth_optional",views.auth_optional), name='auth_optional'),
-    path('sso/auth_basic', traffic_monitor("auth_basic",views.auth_basic), name='auth_basic'),
+    path('sso/auth', traffic_monitor_debug("auth",views.auth), name='auth'),
+    path('sso/auth_optional', traffic_monitor_debug("auth_optional",views.auth_optional), name='auth_optional'),
+    path('sso/auth_basic', traffic_monitor_debug("auth_basic",views.auth_basic), name='auth_basic'),
     path('sso/login_domain', csrf_exempt(views.login_domain), name='login_domain'),
     path('sso/profile', views.profile, name='profile'),
     path('sso/signedout', views.signedout, name='signedout'),
