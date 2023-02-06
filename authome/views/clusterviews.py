@@ -11,6 +11,7 @@ from ..sessionstore import SessionStore,StandaloneSessionStore
 from .. import models
 from . import views
 from .. import utils
+from ..serializers import JSONEncoder
 
 logger = logging.getLogger(__name__)
 
@@ -111,9 +112,9 @@ def get_remote_session(request):
         else:
             ttl = None
         if ttl:
-            return JsonResponse({"session":session_data,"ttl":ttl},status=200)
+            return JsonResponse({"session":session_data,"ttl":ttl},status=200,encoder=JSONEncoder)
         else:
-            return JsonResponse({"session":session_data},status=200)
+            return JsonResponse({"session":session_data},status=200,encoder=JSONEncoder)
     else:
         return views.response_not_found_factory(request)
 
