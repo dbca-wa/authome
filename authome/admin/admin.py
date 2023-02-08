@@ -106,6 +106,14 @@ class DatetimeMixin(object):
             return timezone.localtime(obj.batchid).strftime("%Y-%m-%d %H:%M:%S")
     _batchid.short_description = "Batchid"
 
+    def _secretkey_expireat(self,obj):
+        if not obj or not obj.secretkey_expireat :
+            return ""
+        else:
+            return timezone.localtime(obj.secretkey_expireat).strftime("%Y-%m-%d %H:%M:%S")
+    _secretkey_expireat.short_description = "Secret Key Expire At"
+
+
     def _start_time(self,obj):
         if not obj or not obj.start_time :
             return ""
@@ -646,10 +654,10 @@ def {}(self,request,queryset):
     setattr(getattr(SystemUserAccessTokenAdmin,method_name),"short_description",'Create {}days Token'.format(token_lifetime) if token_lifetime > 0 else 'Create Permanent Token')
 
 class IdentityProviderAdmin(CacheableListTitleMixin,DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmin):
-    list_display = ('idp','name','userflow','logout_method','logout_url','_modified','_created')
+    list_display = ('idp','name','userflow','logout_method','logout_url','secretkey_expiretime','_modified','_created')
     readonly_fields = ('idp','_modified','_created')
     form = forms.IdentityProviderForm
-    fields = ('idp','name','userflow','logout_method','logout_url','_modified','_created')
+    fields = ('idp','name','userflow','logout_method','logout_url','secretkey_expireat','_modified','_created')
     ordering = ('name','idp',)
 
     def has_add_permission(self, request, obj=None):

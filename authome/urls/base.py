@@ -25,7 +25,7 @@ def traffic_monitor(name,func):
         
         
     return _monitor if settings.TRAFFIC_MONITOR_LEVEL > 0 else func
-
+"""
 _requests = 0
 def traffic_monitor_debug(name,func):
     def _monitor(request):
@@ -52,4 +52,4 @@ def traffic_monitor_debug(name,func):
         
         
     return _monitor if settings.TRAFFIC_MONITOR_LEVEL > 0 else func
-
+"""
