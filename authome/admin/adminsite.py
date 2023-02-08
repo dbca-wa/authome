@@ -20,9 +20,10 @@ class Auth2AdminSite(djangoadmin.AdminSite):
         def _view(request, *args, **kwargs):
             utils.attach_request(request)
             try:
-                url_name = resolve(request.path_info).url_name
-                if url_name in ("index","app_list"):
-                    signals.global_warning.send(sender=object,request=request)
+                if models.can_access(request.user.email,settings.AUTH2_DOMAIN,'/admin/authome/tools/'):
+                    url_name = resolve(request.path_info).url_name
+                    if url_name in ("index","app_list"):
+                        signals.global_warning.send(sender=object,request=request)
             except:
                 pass
 
