@@ -1,5 +1,4 @@
 import jwt
-import time
 import traceback
 import logging
 import re
@@ -62,8 +61,8 @@ def renew_apple_secretkey(request):
             
             now = timezone.localtime()
             expireat = now + timedelta(days=180)
-            timestamp_now = int(time.mktime(now.timetuple()))
-            timestamp_exp = int(time.mktime(expireat.timetuple()))
+            timestamp_now = int(now.timestamp())
+            timestamp_exp = int(expireat.timestamp())
             data = {
                     "iss": teamid,
                     "iat": timestamp_now,
