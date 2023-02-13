@@ -52,6 +52,12 @@ logger = logging.getLogger(__name__)
 
 django_engine = engines['django']
 
+MFA_METHOD_MAPPING = {
+    "totp" : "Authenticator App",
+    "phone" : "Phone",
+    "email" : "Email",
+}
+
 RESPONSE_NOT_FOUND = HttpResponseNotFound()
 def response_not_found_factory(request):
     if request.session.cookie_changed or request.session.is_empty():
