@@ -7,7 +7,6 @@ from django.utils import timezone
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.handlers import exception
-from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 
 from social_core.exceptions import AuthException
 
@@ -191,14 +190,22 @@ def get_response_for_exception():
         if isinstance(exc, AuthException):
             return views.handler400(request,exc)
         else:
-            DebugLog.warning(
-                DebugLog.ERROR,utils.get_source_lb_hash_key(request),
-                utils.get_source_clusterid(request),
-                utils.get_source_session_key(request),
-                utils.get_source_session_cookie(request),
-                userid=request.session.get(USER_SESSION_KEY),
-                message="Failed to process request.{}".format("\n".join(traceback.format_exception(type(exc),exc,exc.__traceback__)))
-            )
+            try:
+                useremail = request.user.email
+            except:
+                useremail = None
+            try:
+                DebugLog.warning(
+                    DebugLog.ERROR,utils.get_source_lb_hash_key(request),
+                    utils.get_source_clusterid(request),
+                    utils.get_source_session_key(request),
+                    utils.get_source_session_cookie(request),
+                    useremail=useremail,
+                    message="Failed to process request.{}".format("\n".join(traceback.format_exception(type(exc),exc,exc.__traceback__)))
+                )
+            except:
+                logger.error("Failed to log the exception message to DebugLog.{}".format(traceback.format_exc()))
+            
             return original_handler(request,exc)
     return _response_for_exception
 
