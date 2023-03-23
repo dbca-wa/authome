@@ -135,7 +135,7 @@ def _get_next_url(request):
         domain = utils.get_domain(next_url) 
         if not domain:
             domain = utils.get_host(request)
-            next_url = get_absolute_url(next_url,domain)
+        next_url = get_absolute_url(next_url,domain)
         logger.debug("Found next url '{}'".format(next_url))
     else:
         #next url is not found, use default next url
@@ -923,7 +923,7 @@ def auth_local(request):
             user,created = models.User.objects.update_or_create(email=email,username=email,defaults={"is_staff":is_staff,"last_idp":idp,"last_login":now,"first_name":firstname,"last_name":lastname,"is_superuser":is_superuser})
 
             request.session["idp"] = idp.idp
-            del_expirable_session_data(tokenkey)
+            del_expirable_session_data(request.session,tokenkey)
             login(request,user,'django.contrib.auth.backends.ModelBackend')
 
             request.session["idp"] = idp.idp
