@@ -850,7 +850,6 @@ def auth_local(request):
                     login(request,user,'django.contrib.auth.backends.ModelBackend')
 
                     request.session["idp"] = idp.idp
-                    usergroups = models.UserGroup.find_groups(email)[0]
                     timeout = models.UserGroup.get_session_timeout(usergroups)
                     if timeout:
                         request.session["session_timeout"] = timeout
