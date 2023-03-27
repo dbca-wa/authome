@@ -18,7 +18,6 @@ from .. import trafficdata
 if settings.AUTH2_CLUSTER_ENABLED:
     from ..sessionstore.clustersessionstore import SessionStore as ClusterSessionStore
     from ..sessionstore.clustersessionstore import StandaloneSessionStore
-from ..management.commands import process_trafficdata
 
 logger = logging.getLogger(__name__)
 
