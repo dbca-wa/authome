@@ -198,7 +198,7 @@
             </ClaimType>
 
             <ClaimType Id="email">
-                <DisplayName></DisplayName>
+                <DisplayName>Your Email Address</DisplayName>
                 <DataType>string</DataType>
                 <DefaultPartnerClaimTypes>
                     <Protocol Name="OpenIdConnect" PartnerClaimType="email"/>
@@ -379,14 +379,14 @@
             </ClaimType>
 
             <ClaimType Id="readonlyEmail">
-                <DisplayName>E-mail Address</DisplayName>
+                <DisplayName></DisplayName>
                 <DataType>string</DataType>
                 <UserInputType>Readonly</UserInputType>
             </ClaimType>
 
             <!-- The app code user provided-->
             <ClaimType Id="totpCode">
-                <DisplayName>Enter one-time passcode from authenticator app</DisplayName>
+                <DisplayName>Code from authenticator app</DisplayName>
                 <DataType>string</DataType>
                 <UserInputType>TextBox</UserInputType>
             </ClaimType>
@@ -700,6 +700,25 @@
                     <Item Key="DisplayName">Verify user email</Item>
                 </Metadata>
             </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.emailverify.signup">
+                <LoadUri>~/tenant/templates/AzureBlue/selfAsserted.cshtml</LoadUri>
+                <RecoveryUri>~/common/default_page_error.html</RecoveryUri>
+                <DataUri>urn:com:microsoft:aad:b2c:elements:contract:selfasserted:2.1.0</DataUri>
+                <Metadata>
+                    <Item Key="DisplayName">Verify user email</Item>
+                </Metadata>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.emailverify.resetpassword">
+                <LoadUri>~/tenant/templates/AzureBlue/selfAsserted.cshtml</LoadUri>
+                <RecoveryUri>~/common/default_page_error.html</RecoveryUri>
+                <DataUri>urn:com:microsoft:aad:b2c:elements:contract:selfasserted:2.1.0</DataUri>
+                <Metadata>
+                    <Item Key="DisplayName">Verify user email</Item>
+                </Metadata>
+            </ContentDefinition>
+
 
             <ContentDefinition Id="api.selfasserted.useremailverify">
                 <LoadUri>~/tenant/templates/AzureBlue/selfAsserted.cshtml</LoadUri>
@@ -1202,7 +1221,7 @@
                     <DisplayName>Email Address Verification For Local Account</DisplayName>
                     <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"/>
                     <Metadata>
-                        <Item Key="ContentDefinitionReferenceId">api.selfasserted.emailverify</Item>
+                        <Item Key="ContentDefinitionReferenceId">api.selfasserted.emailverify.signup</Item>
                         <Item Key="language.button_continue">Signup</Item>
                     </Metadata>
                     <InputClaims>
@@ -1491,6 +1510,15 @@
                     <OutputClaims>
                         <OutputClaim ClaimTypeReferenceId="identityProvider" DefaultValue="local_passwordless" AlwaysUseDefaultValue="true"/>
                     </OutputClaims>
+                    <IncludeTechnicalProfile ReferenceId="SelfAsserted-LocalAccountDiscoveryUsingEmail"/>
+                </TechnicalProfile>
+
+                <!--passwordless signin with email-->
+                <TechnicalProfile Id="SelfAsserted-LocalAccountDiscoveryUsingEmail-ResetPassword">
+                    <DisplayName>Reset password</DisplayName>
+                    <Metadata>
+                        <Item Key="ContentDefinitionReferenceId">api.selfasserted.emailverify.resetpassword</Item>
+                    </Metadata>
                     <IncludeTechnicalProfile ReferenceId="SelfAsserted-LocalAccountDiscoveryUsingEmail"/>
                 </TechnicalProfile>
 
@@ -2194,6 +2222,6 @@
             </TechnicalProfile>
           </TechnicalProfiles>
         </ClaimsProvider>
-        
+
     </ClaimsProviders>
 </TrustFrameworkPolicy>

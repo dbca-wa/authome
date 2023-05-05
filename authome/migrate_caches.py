@@ -10,7 +10,7 @@ from datetime import datetime,timedelta
 from django.conf import settings
 from django.utils import timezone
 from django.core.cache.backends.memcached import MemcachedCache
-from django.core.cache import _create_cache
+from django.core.cache import caches
 from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 
 from django_redis import get_redis_connection
@@ -31,9 +31,9 @@ process_seq_key_v1_re = re.compile("^((?P<auth2_prefix>[a-zA-Z0-9_\-]+):)?(?P<ke
 #session cache key used by django session store implementation
 session_key_v1_re = re.compile("^(?P<session_prefix>django.contrib.sessions.cache)(?P<key>[a-z0-9]{32})$")
 #auth2 session cache key , include three parts separated by '-': auth2_prefix(Optional), 'session', session key(process_prefix plus random generated key)
-session_key_v2_re = re.compile("^((?P<auth2_prefix>[a-zA-Z0-9_\-]+)\-)?(?P<session_prefix>session)\-(?P<key>([A-Z0-9]+\-)?[a-z0-9]{32})$")
+session_key_v2_re = re.compile("^((?P<auth2_prefix>[a-zA-Z0-9_\-]+)\-)?(?P<session_prefix>session)\-(?P<key>[a-z0-9\-]+)$")
 #auth2 session cache key , include three parts separated by ':': auth2_prefix(Optional), 'session', session key(process_prefix plus random generated key)
-session_key_v3_re = re.compile("^((?P<auth2_prefix>[^:]+):)?(?P<session_prefix>session):(?P<key>([A-Z0-9]+\-)?[a-z0-9]{32})$")
+session_key_v3_re = re.compile("^((?P<auth2_prefix>[^:]+):)?(?P<session_prefix>session):(?P<key>[a-z0-9\-]+)$")
 
 #User key used by dedicated user cache, include two parts separated by '-': auth2_prefix(optional), user id
 user_key_v1_re1 = re.compile("^((?P<auth2_prefix>.+)\_)?(?P<key>\-?[0-9]+)$")
@@ -45,6 +45,11 @@ user_key_v2_re1 = re.compile("^((?P<auth2_prefix>[^:]+):)?(?P<key>\-?[0-9]+)$")
 #User key used by dedicated user cache, include three parts separated by ':': auth2_prefix(optional), 'user' ,user id
 user_key_v2_re2 = re.compile("^((?P<auth2_prefix>[^:]+):)?(?P<user_prefix>user):(?P<key>\-?[0-9]+)$")
 
+#User token key used by dedicated user cache, include two parts separated by ':': auth2_prefix(optional), user id
+usertoken_key_v2_re1 = re.compile("^((?P<auth2_prefix>[^:]+):)?(?P<key>\-?[0-9]+)$")
+#User token key used by dedicated user cache, include three parts separated by ':': auth2_prefix(optional), 'user' ,user id
+usertoken_key_v2_re2 = re.compile("^((?P<auth2_prefix>[^:]+):)?(?P<token_prefix>token):(?P<key>\-?[0-9]+)$")
+
 #General data key without any prefix
 data_key_v1_re = re.compile("^(?P<key>.+)$")
 #General data key,include two parts separated by '_': auth2_prefix, key
@@ -52,18 +57,23 @@ data_key_v2_re = re.compile("^((?P<auth2_prefix>.+)\_)(?P<key>.+)$")
 #General data key,include two parts separated by ':': auth2_prefix, key
 data_key_v3_re = re.compile("^((?P<auth2_prefix>[^:]+):)?(?P<key>.+)$")
 
+def _create_cache(name):
+    caches[name] = caches.create_connection(name)
+    return caches[name]
 
-def migrate_caches(source_caches,default_cache_key_re,user_cache_key_re,session_cache_key_re,process_seq_key_re=process_seq_key_v1_re):
+
+def migrate_caches(source_caches,session_cache_key_re,default_cache_key_re=None,user_cache_key_re=None,usertoken_cache_key_re=None,process_seq_key_re=process_seq_key_v1_re):
     """
     Migrate the cache data from source cache servers to current cache servers
     Only support memcached and redis
     """
     empty_keys = []
     expired_keys = []
-    unrecognized_keys = []
+    ignored_keys = 0
     session_keys = 0
     guest_session_keys = 0
     user_keys = 0
+    usertoken_keys = 0
     data_keys = 0
     process_seq_keys = 0
     processed_keys = 0
@@ -76,7 +86,8 @@ def migrate_caches(source_caches,default_cache_key_re,user_cache_key_re,session_
         try:
             for cachekey,value,expireat in cache_server_client.items():
                 try:
-                    if expireat and expireat < timezone.now():
+                    print("key="+cachekey)
+                    if expireat and expireat < timezone.localtime():
                         #key is expired, ignore
                         expired_keys.append("{}={}, expireat:{}".format(cachekey,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
                         continue
@@ -85,7 +96,7 @@ def migrate_caches(source_caches,default_cache_key_re,user_cache_key_re,session_
                         empty_keys.append("{} expireat:{}".format(cachekey,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
                         continue
     
-                    m = session_cache_key_re.search(cachekey)
+                    m = session_cache_key_re.search(cachekey) if session_cache_key_re else None
                     if m:
                         #session key
                         key = m.group("key")
@@ -96,32 +107,39 @@ def migrate_caches(source_caches,default_cache_key_re,user_cache_key_re,session_
                             guest_session_keys += 1
 
                         continue
-                    m = user_cache_key_re.search(cachekey)
+                    m = user_cache_key_re.search(cachekey) if user_cache_key_re else None
                     if m:
                         #user key
                         key = m.group("key")
                         _save_user(key,value,expireat)
                         user_keys += 1
                         continue
-                    m =  process_seq_key_re.search(cachekey)
+                    m = usertoken_cache_key_re.search(cachekey) if usertoken_cache_key_re else None
+                    if m:
+                        #user key
+                        key = m.group("key")
+                        _save_usertoken(key,value,expireat)
+                        usertoken_keys += 1
+                        continue
+                    m =  process_seq_key_re.search(cachekey) if process_seq_key_re else None
                     if m:
                         #process seq key
                         key = m.group("key")
                         _save_process_seq(key,value,expireat)
                         process_seq_keys += 1
                         continue
-                    m = default_cache_key_re.search(cachekey)
+                    m = default_cache_key_re.search(cachekey) if default_cache_key_re else None
                     if m:
                         #general data key
                         key = m.group("key")
                         _save_data(key,value,expireat)
                         data_keys += 1
                         continue
-                    unrecognized_keys.append("{}={}, expireat:{}".format(cachekey,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
+                    ignored_keys += 1
                 finally:
                     processed_keys += 1
                     if processed_keys % 1000 == 0:
-                        print("Processed {} keys, Session Keys : {} , Guest Session Keys : {} ,  User Keys : {} , Process Seq Keys : {} , Data Keys : {}".format(processed_keys,session_keys,guest_session_keys,user_keys,process_seq_keys,data_keys))
+                        print("Processed {} keys, Session Keys : {} , Guest Session Keys : {} ,  User Keys : {} ,  User Token Keys : {} , Process Seq Keys : {} , Data Keys : {}".format(processed_keys,session_keys,guest_session_keys,user_keys,usertoken_keys,process_seq_keys,data_keys))
         finally:
             cache_server_client.close()
 
@@ -130,9 +148,11 @@ def migrate_caches(source_caches,default_cache_key_re,user_cache_key_re,session_
     Migrated Session Keys      : {}
     Ignored Guest Session Keys : {}
     Migrated User Keys         : {}
+    Migrated User Token Keys   : {}
     Migrated Data Keys         : {}
     Migrated Process Seq Keys  : {}
-""".format(processed_keys,session_keys,guest_session_keys,user_keys,data_keys,process_seq_keys))
+    Ignored Keys               : {}  
+""".format(processed_keys,session_keys,guest_session_keys,user_keys,usertoken_keys,data_keys,process_seq_keys,ignored_keys))
     if expired_keys:
         print("    =========================================================================")
         print("    Expired Keys")
@@ -145,16 +165,11 @@ def migrate_caches(source_caches,default_cache_key_re,user_cache_key_re,session_
         for key in empty_keys:
             print("        {}".format(key))
 
-    if unrecognized_keys:
-        print("    =========================================================================")
-        print("    Unrecognized Keys")
-        for key in unrecognized_keys:
-            print("        {}".format(key))
-
 def export_caches(source_caches,
-    default_cache_key_re ,
-    user_cache_key_re ,
     session_cache_key_re ,
+    default_cache_key_re = None ,
+    user_cache_key_re = None ,
+    usertoken_cache_key_re = None ,
     exported_dir="./cached_data",
     process_seq_key_re =  process_seq_key_v1_re
 ):
@@ -177,10 +192,11 @@ def export_caches(source_caches,
 
     print("Source caches = {}".format(source_caches))
 
-    unrecognized_keys = []
+    ignored_keys = 0
     session_keys = 0
     guest_session_keys = 0
     user_keys = 0
+    usertoken_keys = 0
     data_keys = 0
     process_seq_keys = 0
     empty_keys = []
@@ -196,6 +212,9 @@ def export_caches(source_caches,
 
     user_cache_dir = os.path.join(exported_dir,"user")
     os.mkdir(user_cache_dir)
+
+    usertoken_cache_dir = os.path.join(exported_dir,"usertoken")
+    os.mkdir(usertoken_cache_dir)
 
     data_cache_dir = os.path.join(exported_dir,"data")
     os.mkdir(data_cache_dir)
@@ -214,6 +233,13 @@ def export_caches(source_caches,
             "MAX_ENTRIES":40000000
         }
     }
+    settings.CACHES["__exported_usertoken"] = {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': usertoken_cache_dir,
+        "OPTIONS":{
+            "MAX_ENTRIES":40000000
+        }
+    }
     settings.CACHES["__exported_data"] = {
         'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
         'LOCATION': data_cache_dir,
@@ -223,6 +249,7 @@ def export_caches(source_caches,
     }
     session_cache = _create_cache("__exported_session")
     user_cache = _create_cache("__exported_user")
+    usertoken_cache = _create_cache("__exported_usertoken")
     data_cache = _create_cache("__exported_data")
 
     processed_keys = 0
@@ -240,7 +267,7 @@ def export_caches(source_caches,
                             empty_keys.append("{} expireat:{}".format(cachekey,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
                             continue
     
-                        m = session_cache_key_re.search(cachekey)
+                        m = session_cache_key_re.search(cachekey) if session_cache_key_re else None
                         if m:
                             if value.get(USER_SESSION_KEY):
                                 f.write(json.dumps(["session",m.groupdict(),expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None]))
@@ -249,10 +276,12 @@ def export_caches(source_caches,
                                     raise Exception("Failed to save the key({}) to file system cache.".format(m.group("key")))
                                 session_keys += 1
                             else:
+                                #ignore the guest session
                                 guest_session_keys += 1
 
                             continue
-                        m = user_cache_key_re.search(cachekey)
+
+                        m = user_cache_key_re.search(cachekey) if user_cache_key_re else None
                         if m:
                             f.write(json.dumps(["user",m.groupdict(),expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None]))
                             f.write("\n")
@@ -260,7 +289,15 @@ def export_caches(source_caches,
                                 raise Exception("Failed to save the key({}) to file system cache.".format(m.group("key")))
                             user_keys += 1
                             continue
-                        m =  process_seq_key_re.search(cachekey)
+                        m = usertoken_cache_key_re.search(cachekey) if usertoken_cache_key_re else None
+                        if m:
+                            f.write(json.dumps(["usertoken",m.groupdict(),expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None]))
+                            f.write("\n")
+                            if not usertoken_cache.add(m.group("key"),value,timeout=None):
+                                raise Exception("Failed to save the key({}) to file system cache.".format(m.group("key")))
+                            usertoken_keys += 1
+                            continue
+                        m =  process_seq_key_re.search(cachekey) if process_seq_key_re else None
                         if m:
                             f.write(json.dumps(["process_seq",m.groupdict(),expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None]))
                             f.write("\n")
@@ -268,7 +305,7 @@ def export_caches(source_caches,
                                 raise Exception("Failed to save the key({}) to file system cache.".format(m.group("key")))
                             process_seq_keys += 1
                             continue
-                        m = default_cache_key_re.search(cachekey)
+                        m = default_cache_key_re.search(cachekey) if default_cche_key_re else None
                         if m:
                             f.write(json.dumps(["data",m.groupdict(),expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None]))
                             f.write("\n")
@@ -276,11 +313,11 @@ def export_caches(source_caches,
                                 raise Exception("Failed to save the key({}) to file system cache.".format(m.group("key")))
                             data_keys += 1
                             continue
-                        unrecognized_keys.append("{}={}, expireat:{}".format(cachekey,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f") if expireat else None))
+                        ignored_keys += 1
                     finally:
                         processed_keys += 1
                         if processed_keys % 1000 == 0:
-                            print("Processed {} keys, Session Keys : {} , Guest Session Keys : {} ,  User Keys : {} , Process Seq Keys : {} , Data Keys : {}".format(processed_keys,session_keys,guest_session_keys,user_keys,process_seq_keys,data_keys))
+                            print("Processed {} keys, Session Keys : {} , Guest Session Keys : {} ,  User Keys : {} , User Token Keys : {} , Process Seq Keys : {} , Data Keys : {}".format(processed_keys,session_keys,guest_session_keys,user_keys,usertoken_keys,process_seq_keys,data_keys))
             finally:
                 cache_server_client.close()
 
@@ -290,20 +327,16 @@ def export_caches(source_caches,
     Exported Session Keys      : {}
     Ignored Guest Session Keys : {}
     Exported User Keys         : {}
+    Exported User Token Keys   : {}
     Exported Data Keys         : {}
     Exported Process Seq Keys  : {}
+    Ignored Keys               : {}
     
-""".format(processed_keys,session_keys,guest_session_keys,user_keys,data_keys,process_seq_keys))
+""".format(processed_keys,session_keys,guest_session_keys,user_keys,usertoken_keys,data_keys,process_seq_keys,ignored_keys))
     if empty_keys:
         print("    =========================================================================")
         print("    Empty Keys")
         for key in empty_keys:
-            print("        {}".format(key))
-
-    if unrecognized_keys:
-        print("    =========================================================================")
-        print("    Unrecognized Keys")
-        for key in unrecognized_keys:
             print("        {}".format(key))
 
 def import_caches(import_dir="./cached_data"):
@@ -315,6 +348,8 @@ def import_caches(import_dir="./cached_data"):
     session_cache_dir = os.path.join(import_dir,"session")
 
     user_cache_dir = os.path.join(import_dir,"user")
+
+    usertoken_cache_dir = os.path.join(import_dir,"usertoken")
 
     data_cache_dir = os.path.join(import_dir,"data")
  
@@ -332,6 +367,13 @@ def import_caches(import_dir="./cached_data"):
             "MAX_ENTRIES":40000000
         }
     }
+    settings.CACHES["__import_usertoken"] = {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': usertoken_cache_dir,
+        "OPTIONS":{
+            "MAX_ENTRIES":40000000
+        }
+    }
     settings.CACHES["__import_data"] = {
         'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
         'LOCATION': data_cache_dir,
@@ -341,12 +383,14 @@ def import_caches(import_dir="./cached_data"):
     }
     session_cache = _create_cache("__import_session")
     user_cache = _create_cache("__import_user")
+    usertoken_cache = _create_cache("__import_usertoken")
     data_cache = _create_cache("__import_data")
  
     expired_keys = []
     session_keys = 0
     guest_session_keys = 0
     user_keys = 0
+    usertoken_keys = 0
     data_keys = 0
     process_seq_keys = 0
 
@@ -363,7 +407,7 @@ def import_caches(import_dir="./cached_data"):
                     #print("Processing key:{}".format(data))
                     datatype,cachekey,expireat = json.loads(data)
                     expireat =  timezone.make_aware(datetime.strptime(expireat,"%Y-%m-%d %H:%M:%S.%f")) if expireat else None
-                    if expireat and expireat < timezone.now():
+                    if expireat and expireat < timezone.localtime():
                         expired_keys.append("{}={}, expireat".format(cachekey,value,expireat.strftime("%Y-%m-%d %H:%M:%S.%f")))
                         continue
                     value = None
@@ -387,6 +431,10 @@ def import_caches(import_dir="./cached_data"):
                         value = user_cache.get(cachekey["key"])
                         _save_user(cachekey["key"],value,expireat)
                         user_keys += 1
+                    elif datatype == "usertoken":
+                        value = usertoken_cache.get(cachekey["key"])
+                        _save_usertoken(cachekey["key"],value,expireat)
+                        usertoken_keys += 1
                     elif datatype == "data":
                         value = data_cache.get(cachekey["key"])
                         _save_data(cachekey["key"],value,expireat)
@@ -410,10 +458,11 @@ def import_caches(import_dir="./cached_data"):
     Imported Session Keys      : {}
     Ignored Guest Session Keys : {}
     Imported User Keys         : {}
+    Imported User Token Keys   : {}
     Imported Data Keys         : {}
     Imported Process Seq Keys  : {}
     Imported Expired Keys      : {}
-""".format(processed_keys,session_keys,guest_session_keys,user_keys,data_keys,process_seq_keys,len(expired_keys)))
+""".format(processed_keys,session_keys,guest_session_keys,user_keys,usertoken_keys,data_keys,process_seq_keys,len(expired_keys)))
     print("    =========================================================================")
     print("    Expired Session Keys : {}".format(session_keys))
     for k,v in session_report.items():
@@ -437,6 +486,10 @@ def _save_user(key,value,expireat):
     userid = int(key)
     _save(get_usercache(userid),settings.GET_USER_KEY(userid),value,expireat)
 
+def _save_usertoken(key,value,expireat):
+    userid = int(key)
+    _save(get_usercache(userid),settings.GET_USERTOKEN_KEY(userid),value,expireat)
+
 def _save_data(key,value,expireat):
     _save(defaultcache,settings.GET_CACHE_KEY(key),value,expireat)
 
@@ -448,8 +501,8 @@ def _save(cache,key,value,expireat):
         cache.set(key,value,timeout=None)
     elif value is None:
         return
-    elif timezone.now() < expireat:
-        if not cache.add(key,value,timeout=int((expireat - timezone.now()).total_seconds())):
+    elif timezone.localtime() < expireat:
+        if not cache.add(key,value,timeout=int((expireat - timezone.localtime()).total_seconds())):
             raise Exception("Failed to save the item({}={}) to current cache server".format(key,value))
 
 
@@ -508,7 +561,7 @@ class MemCachedServerClient(CacheServerClient):
             if not m:
                 continue
             #because minimum time unit is seconds instead of milliseconds, minus one second from the uptime secods to guarantee self._uptime is a little bitter later than the actual uptime. 
-            self._uptime = timezone.now() - timedelta(seconds=(int(m.group("seconds")) - 1) )
+            self._uptime = timezone.localtime() - timedelta(seconds=(int(m.group("seconds")) - 1) )
             break
 
         if not self._uptime:
@@ -626,7 +679,7 @@ class RedisServerClient(CacheServerClient):
                 milliseconds = 0
                 days = seconds / 86400
                 seconds = seconds % 86400
-                expireat = timezone.now() + timedelta(days=days,seconds=seconds,milliseconds=milliseconds)
+                expireat = timezone.localtime() + timedelta(days=days,seconds=seconds,milliseconds=milliseconds)
             else:
                 expireat = None
             value = self.get(cache_key)

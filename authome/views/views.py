@@ -1,4 +1,6 @@
-from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden, JsonResponse,HttpResponseNotAllowed,HttpResponseBadRequest
+from datetime import timedelta
+
+from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden, JsonResponse,HttpResponseNotAllowed,HttpResponseBadRequest,HttpResponseNotFound
 from django.template.response import TemplateResponse
 from django.contrib.auth import logout
 from django.urls import reverse
@@ -15,63 +17,100 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 from django.utils.http import http_date
-
-from django_redis import get_redis_connection
+from django.utils.html import mark_safe
 
 from social_django.utils import psa
 from social_core.actions import do_auth, do_complete
+from social_core.exceptions import AuthException
 
 from importlib import import_module
 from ipware.ip import get_client_ip
 import json
-import psutil
 import base64
 import re
 import traceback
 import logging
 import urllib.parse
 import string
-from collections import OrderedDict
 from pyotp.totp import TOTP
 import time
 
-from . import models
-from .cache import cache,get_defaultcache
-from . import utils
-from . import emails
-from .exceptions import HttpResponseException,UserDoesNotExistException
-from .patch import load_user,anonymoususer,load_usertoken
+from .. import models
+from ..cache import cache,get_defaultcache
+from .. import utils
+from .. import emails
+from ..exceptions import HttpResponseException,UserDoesNotExistException
+from ..patch import load_user,anonymoususer,load_usertoken
+from ..sessionstore import SessionStore
+from ..models import DebugLog
 
-from . import performance
+from .. import performance
 
 defaultcache = get_defaultcache()
 
 logger = logging.getLogger(__name__)
+
 django_engine = engines['django']
 
-#pre created succeed response,status = 200
+MFA_METHOD_MAPPING = {
+    "totp" : "Authenticator App",
+    "phone" : "Phone",
+    "email" : "Email",
+}
+
+RESPONSE_NOT_FOUND = HttpResponseNotFound()
+def response_not_found_factory(request):
+    if request.session.cookie_changed or request.session.is_empty():
+        return HttpResponseNotFound()
+    else:
+        return RESPONSE_NOT_FOUND
+
 SUCCEED_RESPONSE = HttpResponse(content='Succeed',status=200)
+def succeed_response_factory(request):
+    if request.session.cookie_changed or request.session.is_empty():
+        return HttpResponse(content='Succeed',status=200)
+    else:
+        return SUCCEED_RESPONSE
 
-#pre created forbidden response, status = 403
 FORBIDDEN_RESPONSE = HttpResponseForbidden()
+def forbidden_response_factory(request):
+    if request.session.cookie_changed or request.session.is_empty():
+        return HttpResponseForbidden()
+    else:
+        return FORBIDDEN_RESPONSE
 
-#pre created conflict response, status=409
-CONFLICT_RESPONSE = HttpResponse(content="Failed",status=409)
 
-#pre creaed authentication required response, status=401
+#creae authentication required response, status=401
 AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
 AUTH_REQUIRED_RESPONSE.content = "Authentication required"
+def auth_required_response_factory(request):
+    if request.session.cookie_changed or request.session.is_empty():
+        res = HttpResponse(status=401)
+        res.content = "Authentication required"
+        return res
+    else:
+        return AUTH_REQUIRED_RESPONSE
 
-#pre creaed authentication not required response used by auth_optional,status = 204
 AUTH_NOT_REQUIRED_RESPONSE = HttpResponse(content="Succeed",status=204)
+def auth_not_required_response_factory(request):
+    if request.session.cookie_changed or request.session.is_empty():
+        return HttpResponse(content="Succeed",status=204)
+    else:
+        return AUTH_NOT_REQUIRED_RESPONSE
 
-#pre created basic auth required response,status = 401
+#create basic auth required response,status = 401
 BASIC_AUTH_REQUIRED_RESPONSE = HttpResponse(status=401)
 BASIC_AUTH_REQUIRED_RESPONSE["WWW-Authenticate"] = 'Basic realm="Please login with your email address and access token"'
 BASIC_AUTH_REQUIRED_RESPONSE.content = "Basic auth required"
-
-#pre created not authorised response,status = 403
-NOT_AUTHORIZED_RESPONSE = HttpResponseForbidden()
+def basic_auth_required_response_factory(request):
+    if request.session.cookie_changed or request.session.is_empty():
+        res = HttpResponse(status=401)
+        res["WWW-Authenticate"] = 'Basic realm="Please login with your email address and access token"'
+        res.content = "Basic auth required"
+        return res
+    else:
+        return BASIC_AUTH_REQUIRED_RESPONSE
+    return res
 
 def _get_next_url(request):
     """
@@ -96,7 +135,7 @@ def _get_next_url(request):
         domain = utils.get_domain(next_url) 
         if not domain:
             domain = utils.get_host(request)
-            next_url = get_absolute_url(next_url,domain)
+        next_url = get_absolute_url(next_url,domain)
         logger.debug("Found next url '{}'".format(next_url))
     else:
         #next url is not found, use default next url
@@ -157,7 +196,7 @@ def check_authorization(request,useremail,domain=None,path=None):
         return None
     else:
         logger.debug("User({}) can't access https://{}{}".format(useremail,domain,path))
-        return NOT_AUTHORIZED_RESPONSE
+        return forbidden_response_factory(request)
 
 def get_absolute_url(url,domain):
     """
@@ -363,14 +402,14 @@ def _auth(request):
             #get the reponse from cache
             user = request.user
             auth_key = request.session.session_key
-            response = cache.get_auth(user,auth_key,user.modified)
+            response = None if (request.session.cookie_changed or request.session.is_empty()) else cache.get_auth(user,auth_key,user.modified)
     
             if response and models.UserGroup.find_groups(user.email)[1] == response["X-groups"]:
                 #response cached
                 return response
             else:
                 #reponse not cached or outdated, populate one and cache it.
-                return _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
+                return _populate_response(request,cache.set_auth,auth_key,user,request.session.cookie_value)
         finally:
             performance.end_processingstep("create_response")
             pass
@@ -395,7 +434,7 @@ def auth(request):
         return res
     else:
         #not authenticated
-        return AUTH_REQUIRED_RESPONSE
+        return auth_required_response_factory(request)
 
 @csrf_exempt
 def auth_optional(request):
@@ -407,13 +446,38 @@ def auth_optional(request):
         403 reponse: authenticated,but not authorized
     """
     request.session.modified = False
-    res = _auth(request)
-    if res:
-        #authenticated, but can be authorized or not authorized
-        return res
-    else:
-        #not authenticated
-        return AUTH_NOT_REQUIRED_RESPONSE
+
+    try:
+        performance.start_processingstep("auth")
+        performance.start_processingstep("authentication")
+        try:
+            if not request.user.is_authenticated or not request.user.is_active:
+                #not authenticated or user is inactive
+                return auth_not_required_response_factory(request)
+        finally:
+            performance.end_processingstep("authentication")
+            pass
+
+        performance.start_processingstep("create_response")
+        try:
+            #get the reponse from cache
+            user = request.user
+            auth_key = request.session.session_key
+            response = None if (request.session.cookie_changed or request.session.is_empty()) else cache.get_auth(user,auth_key,user.modified)
+    
+            if response and models.UserGroup.find_groups(user.email)[1] == response["X-groups"]:
+                #response cached
+                return response
+            else:
+                #reponse not cached or outdated, populate one and cache it.
+                return _populate_response(request,cache.set_auth,auth_key,user,request.session.cookie_value)
+        finally:
+            performance.end_processingstep("create_response")
+            pass
+
+    finally:
+        performance.end_processingstep("auth")
+        pass
 
 def is_usertoken_valid(user,token):
     """
@@ -439,15 +503,21 @@ def auth_basic(request):
             return res
         else:
             #not authenticated, return basic auth required response
-            return BASIC_AUTH_REQUIRED_RESPONSE
+            return basic_auth_required_response_factory(request)
 
     #get the user name and user toke by parsing the basic auth data
     try:
         useremail, token = _parse_basic(auth_basic)
     except:
         #failed to parse the basic auth data from request
-        return BASIC_AUTH_REQUIRED_RESPONSE
-
+        #fallback to normal authentication session
+        res = _auth(request)
+        if res:
+            #already authenticated
+            return res
+        else:
+            #not authenticated, return basic auth required response
+            return basic_auth_required_response_factory(request)
 
     #try to get the reponse from cache with useremail and token
     auth_basic_key = cache.get_basic_auth_key(useremail,token)
@@ -467,7 +537,7 @@ def auth_basic(request):
                 if not user.is_active :
                     logger.debug("The user({}) is inactive.".format(useremail))
                     cache.delete_basic_auth(auth_basic_key)
-                    return BASIC_AUTH_REQUIRED_RESPONSE
+                    return basic_auth_required_response_factory(request)
                 elif not is_usertoken_valid(user,token):
                     #token is invalid, remove the cached response
                     cache.delete_basic_auth(auth_basic_key)
@@ -480,7 +550,7 @@ def auth_basic(request):
                     else:
                         #not authenticated, return basic auth required reponse
                         logger.debug("Failed to authenticate the user({}) with token".format(useremail))
-                        return BASIC_AUTH_REQUIRED_RESPONSE
+                        return basic_auth_required_response_factory(request)
     
             request.session.modified = False
             #check authorization
@@ -526,7 +596,7 @@ def auth_basic(request):
                 return response
         elif not user.is_active :
             logger.debug("The user({}) is inactive.".format(useremail))
-            return BASIC_AUTH_REQUIRED_RESPONSE
+            return basic_auth_required_response_factory(request)
         else:
             #user token is invalid; fallback to user session authentication
             res = _auth(request)
@@ -537,11 +607,11 @@ def auth_basic(request):
             else:
                 #Not authenticated, return basic auth required response
                 logger.debug("Failed to authenticate the user({}) with token".format(useremail))
-                return BASIC_AUTH_REQUIRED_RESPONSE
+                return basic_auth_required_response_factory(request)
 
     except Exception as e:
         #return basi auth required response if any exception occured.
-        return BASIC_AUTH_REQUIRED_RESPONSE
+        return basic_auth_required_response_factory(request)
 
 email_re = re.compile("^[a-zA-Z0-9\.!#\$\%\&’'\*\+\/\=\?\^_`\{\|\}\~\-]+@[a-zA-Z0-9\-]+(\.[a-zA-Z0-9-]+)*$")
 VALID_CODE_CHARS = string.digits if settings.PASSCODE_DIGITAL else (string.ascii_uppercase + string.digits)
@@ -551,7 +621,32 @@ get_verifycode_key = lambda email:settings.GET_CACHE_KEY("verifycode:{}".format(
 get_signuptoken_key = lambda email:settings.GET_CACHE_KEY("signuptoken:{}".format(email))
 get_sendcode_number_key = lambda email:settings.GET_CACHE_KEY("sendcodenumber:{}".format(email))
 get_verifycode_number_key = lambda email:settings.GET_CACHE_KEY("verifycodenumber:{}".format(email))
-get_codeid = lambda :"{}.{}".format(timezone.now().timestamp(),get_random_string(10,VALID_TOKEN_CHARS))
+get_codeid = lambda :"{}.{}".format(timezone.localtime().timestamp(),get_random_string(10,VALID_TOKEN_CHARS))
+
+get_expire_key = lambda key:"{}_expireat".format(key)
+
+def set_expirable_session_data(session,key,value,timeout,now=None):
+    now = now or timezone.localtime()
+    session[key] = value
+    session[get_expire_key(key)] = now + timedelta(seconds=timeout)
+
+def get_expirable_session_data(session,key,default=None,now=None):
+    now = now or timezone.localtime()
+    expireat = session.get(get_expire_key(key))
+    if expireat and now <= expireat:
+        return session.get(key) or default
+    else:
+        return default
+
+def del_expirable_session_data(session,key):
+    try:
+        del session[get_expire_key(key)]
+    except KeyError:
+        pass
+    try:
+        del session[key]
+    except KeyError:
+        pass
 
 def auth_local(request):
     """
@@ -578,16 +673,13 @@ def auth_local(request):
             return HttpResponseRedirect(next_url)
         else:
             #The domain of next url is not the session cookie domain, login to domain first
-            return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
+            return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.cookie_value,"next_url":next_url,"domain":next_url_domain})
 
     page_layout,extracss = _get_userflow_pagelayout(request,next_url_domain)
 
     context = {"body":page_layout,"extracss":extracss,"domain":next_url_domain,"next":next_url,"expiretime":utils.format_timedelta(settings.PASSCODE_AGE,unit='s')}
 
-    if not defaultcache:
-        context["messages"] = [("error","Auth_local is disabled because the default cache is not configured.")]
-        return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
-
+    now = timezone.localtime()
     if request.method == "GET":
         if utils.get_host(request).endswith(settings.SESSION_COOKIE_DOMAIN):
             #request is sent from session cookie domain, show the page to input email 
@@ -627,13 +719,13 @@ def auth_local(request):
             verifycode_number_key = get_verifycode_number_key(email)
             if codeid:
                 #a verifycode has already been sent before. reuse it if possible.
-                verifycode_number = int(defaultcache.get(verifycode_number_key) or 0)
+                verifycode_number = request.session.get(verifycode_number_key) or 0
                 if verifycode_number >= settings.PASSCODE_TRY_TIMES:
                     #The limits of verifying the current code was reached, generate a new one.
                     code = None
                     codeid = None
                 else:
-                    code = defaultcache.get(codekey)
+                    code = get_expirable_session_data(request.session,codekey,None,now)
                     if code and code.startswith(codeid + "="):
                         #codeid is matched, reuse the existing code
                         context["messages"] = [("info","Verification code has already been sent to {}; Please entery the verification code.".format(email))]
@@ -644,20 +736,26 @@ def auth_local(request):
                         codeid = None
             if not codeid:
                 sendcode_number_key = get_sendcode_number_key(email)
-                sendcode_number = int(defaultcache.get(sendcode_number_key) or 0)
+                if defaultcache:
+                    sendcode_number = int(defaultcache.get(sendcode_number_key,0) or 0)
+                else:
+                    sendcode_number = get_expirable_session_data(request.session,sendcode_number_key,0,now)
+
                 if sendcode_number >= settings.PASSCODE_DAILY_LIMIT:
                     #The daily limits of sending veriy code was reached.
                     context["messages"] = [("error","You have exceeded the number of code generation attempts allowed.")]
                     return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
 
                 codeid = get_codeid()
-                now = timezone.now()
                 seconds = now.hour * 60 * 60 + now.minute * 60 + now.second
-                defaultcache.set(sendcode_number_key,sendcode_number + 1,timeout=86400 - seconds)
+                if defaultcache:
+                    defaultcache.set(sendcode_number_key,sendcode_number + 1,timeout=86400 - seconds)
+                else:
+                    set_expirable_session_data(request.session,sendcode_number_key , sendcode_number + 1 , 86400 - seconds , now)
 
                 code = get_random_string(settings.PASSCODE_LENGTH,VALID_CODE_CHARS)
-                defaultcache.set(codekey,"{}={}".format(codeid,code),timeout=settings.PASSCODE_AGE)
-                defaultcache.set(verifycode_number_key,0,timeout=settings.PASSCODE_AGE)
+                set_expirable_session_data(request.session,codekey,"{}={}".format(codeid,code),settings.PASSCODE_AGE,now)
+                request.session[verifycode_number_key] = 0
                 context["otp"] = code
 
                 #initialized the userflow if required
@@ -698,7 +796,7 @@ def auth_local(request):
             verifycode_number_key = get_verifycode_number_key(email)
             
             codekey = get_verifycode_key(email)
-            code = defaultcache.get(codekey)
+            code = get_expirable_session_data(request.session,codekey,None,now)
             if not code:
                 context["messages"] = [("error","The verification code has expired. Send a new code")]
                 return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
@@ -706,7 +804,7 @@ def auth_local(request):
                 context["messages"] = [("error","The verfication code was sent by other device,please resend the code again.")]
                 return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
             else:
-                verifycode_number = int(defaultcache.get(verifycode_number_key) or 0)
+                verifycode_number = request.session.get(verifycode_number_key) or 0
                 if verifycode_number >= settings.PASSCODE_TRY_TIMES:
                     #The limits of verifying the current code was reached,.
                     context["messages"] = [("error","You have exceeded the number({}) of retries allowed.".format(settings.PASSCODE_TRY_TIMES))]
@@ -714,7 +812,7 @@ def auth_local(request):
                 elif code[len(codeid) + 1:] != inputcode:
                     #code is invalid.
                     #increase the failed verifing times.
-                    defaultcache.set(verifycode_number_key,verifycode_number + 1,timeout=settings.PASSCODE_AGE)
+                    request.session[verifycode_number_key] = verifycode_number + 1
                     context["messages"] = [("error","The input code is invalid, please check the email and verify again.")]
                     return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
                 
@@ -722,35 +820,55 @@ def auth_local(request):
             user = models.User.objects.filter(email=email).first()
             if user:
                 idp,created = models.IdentityProvider.objects.get_or_create(idp=models.IdentityProvider.AUTH_EMAIL_VERIFY[0],defaults={"name":models.IdentityProvider.AUTH_EMAIL_VERIFY[1]})
-                user.last_idp = idp
-                user.last_login = timezone.now()
-                user.save(update_fields=["last_idp","last_login"])
+                update_fields = ["last_login"]
+                user.last_login = now
+
+                if user.last_idp != idp:
+                    user.last_idp = idp
+                    update_fields.append("last_idp")
+
+                dbcagroup = models.UserGroup.dbca_group()
+                usergroups = models.UserGroup.find_groups(email)[0]
+                if any(group.is_group(dbcagroup) for group in usergroups ):
+                    is_staff = True
+                    is_superuser = models.can_access(email,settings.AUTH2_DOMAIN,"/admin/")
+                else:
+                    is_staff = False
+                    is_superuser = False
+                if user.is_staff != is_staff:
+                    user.is_staff = is_staff
+                    update_fields.append("is_staff")
+                if user.is_superuser != is_superuser:
+                    user.is_superuser = is_superuser
+                    update_fields.append("is_superuser")
+
+                user.save(update_fields=update_fields)
                 if user.is_active:
+                    del_expirable_session_data(request.session,codekey)
+                    del request.session[verifycode_number_key]
                     request.session["idp"] = idp.idp
                     login(request,user,'django.contrib.auth.backends.ModelBackend')
 
                     request.session["idp"] = idp.idp
-                    usergroups = models.UserGroup.find_groups(email)[0]
                     timeout = models.UserGroup.get_session_timeout(usergroups)
                     if timeout:
                         request.session["session_timeout"] = timeout
 
-                    defaultcache.delete(codekey)
-                    defaultcache.delete(verifycode_number_key)
                     if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                         return HttpResponseRedirect(next_url)
                     else:
-                        return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
+                        return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.cookie_value,"next_url":next_url,"domain":next_url_domain})
                 else:
                     return signout(request,relogin_url=next_url,message="Your account is disabled.",localauth=True)
             else:
                 #Userr does not exist, signup
                 token = get_random_string(settings.SIGNUP_TOKEN_LENGTH,VALID_TOKEN_CHARS)
-                defaultcache.set(get_signuptoken_key(email),token,timeout=settings.SIGNUP_TOKEN_AGE)
+                set_expirable_session_data(request.session,get_signuptoken_key(email),token,settings.SIGNUP_TOKEN_AGE,now)
                 context["token"] = token
                 return TemplateResponse(request,"authome/signin_signup.html",context=context)
         elif action == "signup":
-            defaultcache.delete(get_verifycode_key(email))
+            del_expirable_session_data(request.session,get_verifycode_key(email))
+            del request.session[get_verifycode_number_key(email)]
             if not email:
                 context["codeid"] = get_codeid()
                 context["messages"] = [("error","Email is missing.")]
@@ -766,7 +884,7 @@ def auth_local(request):
                 return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
 
             tokenkey = get_signuptoken_key(email)
-            token = defaultcache.get(tokenkey)
+            token = get_expirable_session_data(request.session,tokenkey,None,now)
             if not token:
                 context["codeid"] = get_codeid()
                 context["messages"] = [("error","The signup token is expired, please signin again.")]
@@ -795,13 +913,16 @@ def auth_local(request):
             usergroups = models.UserGroup.find_groups(email)[0]
             if any(group.is_group(dbcagroup) for group in usergroups ):
                 is_staff = True
+                is_superuser = models.can_access(email,settings.AUTH2_DOMAIN,"/admin/")
             else:
                 is_staff = False
+                is_superuser = False
 
             idp,created = models.IdentityProvider.objects.get_or_create(idp=models.IdentityProvider.AUTH_EMAIL_VERIFY[0],defaults={"name":models.IdentityProvider.AUTH_EMAIL_VERIFY[1]})
-            user,created = models.User.objects.update_or_create(email=email,username=email,defaults={"is_staff":is_staff,"last_idp":idp,"last_login":timezone.now(),"first_name":firstname,"last_name":lastname})
+            user,created = models.User.objects.update_or_create(email=email,username=email,defaults={"is_staff":is_staff,"last_idp":idp,"last_login":now,"first_name":firstname,"last_name":lastname,"is_superuser":is_superuser})
 
             request.session["idp"] = idp.idp
+            del_expirable_session_data(request.session,tokenkey)
             login(request,user,'django.contrib.auth.backends.ModelBackend')
 
             request.session["idp"] = idp.idp
@@ -809,12 +930,10 @@ def auth_local(request):
             if timeout:
                 request.session["session_timeout"] = timeout
 
-            defaultcache.delete(tokenkey)
-        
             if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                 return HttpResponseRedirect(next_url)
             else:
-                return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
+                return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.cookie_value,"next_url":next_url,"domain":next_url_domain})
         else:
             context["messages"] = [("error","Action({}) Not Support".format(action))]
             context["codeid"] = get_codeid()
@@ -827,7 +946,7 @@ def logout_view(request):
     """
     View method for path '/sso/auth_logout'
     """
-    from .backends import AzureADB2COAuth2
+    from ..backends import AzureADB2COAuth2
     host = utils.get_host(request)
     if not host.endswith(settings.SESSION_COOKIE_DOMAIN):
         #request's domain is not a subdomain of session cookie; only need to delete to cookie ; and redirect to auth2.dbca to finish the logout procedure.
@@ -837,14 +956,10 @@ def logout_view(request):
         parameters["relogin"] = relogin_url
         querystring = "&".join( "{}={}".format(k,(urllib.parse.quote(v) if isinstance(v,str) else v)) for k,v in parameters.items())
         url = "https://{}/sso/auth_logout?{}".format(settings.AUTH2_DOMAIN,querystring)
-        res = HttpResponseRedirect(url)
-        res.delete_cookie(
-            settings.SESSION_COOKIE_NAME,
-            path=settings.SESSION_COOKIE_PATH,
-            domain=settings.GET_SESSION_COOKIE_DOMAIN(host),
-            samesite=settings.SESSION_COOKIE_SAMESITE,
-        )
-        return res
+        #delete the session cookie from browser via setting the session_key to None
+        request.session._session_key = None
+        request.session.clear()
+        return HttpResponseRedirect(url)
     #get post logout url
     post_logout_url = get_post_b2c_logout_url(request,encode=False)
     if "localauth" in request.GET:
@@ -863,40 +978,33 @@ def login_domain(request):
     """
     Login to other domain
     """
-    session_key = request.POST.get("session")
+    session_cookie = request.POST.get("session")
     next_url = request.POST.get("next_url")
     if not next_url:
         next_url = "https://{}".format(request.get_host())
 
-    if not session_key:
+    if not session_cookie:
         #missing session key, login again
         return HttpResponse(content="session is missing",status=400)
 
-    session = SessionStore(session_key)
-    userid = session.get(USER_SESSION_KEY)
-    if not userid:
-        #missing user id, login again
-        return HttpResponse(content="User is not authenticated",status=400)
-
-    user = load_user(int(userid))
-    if not user.is_authenticated:
-        return HttpResponse(content="User does not exist",status=400)
-
     res = HttpResponseRedirect(next_url) 
-    max_age = session.get_expiry_age()
+    max_age = request.session.get_session_cookie_age(session_cookie)
     expires_time = time.time() + max_age
     expires = http_date(expires_time)
+    host = request.get_host()
+    domain = settings.GET_SESSION_COOKIE_DOMAIN(request.get_host())
     res.set_cookie(
         settings.SESSION_COOKIE_NAME,
-        session_key, 
+        "{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host), 
         max_age=max_age,
         expires=expires, 
         path=settings.SESSION_COOKIE_PATH,
-        domain=settings.GET_SESSION_COOKIE_DOMAIN(request.get_host()),
+        domain=domain,
         secure=settings.SESSION_COOKIE_SECURE or None,
         httponly=settings.SESSION_COOKIE_HTTPONLY or None,
         samesite=settings.SESSION_COOKIE_SAMESITE,
     )
+    DebugLog.log(DebugLog.CREATE_COOKIE,utils.get_lb_hash_key(session_cookie),utils.get_clusterid(session_cookie),utils.get_session_key(session_cookie),session_cookie,message="Return a new session cookie({}) for domain({})".format("{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host),domain or host),userid=None,target_session_cookie="{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host),request=request)
     return res
     
 
@@ -962,6 +1070,10 @@ def home(request):
             url = reverse('social:begin', args=['azuread-b2c-oauth2'])
             if next_url:
                 #has next_url, add next url to authentication url as url parameter
+                next_url_domain = utils.get_domain(next_url)
+                if next_url_domain and not next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
+                    #crosss domain authentication
+                    next_url = "https://{}?{}".format(settings.AUTH2_DOMAIN,urlencode({'next': next_url}))
                 url = '{}?{}'.format(url,urlencode({'next': next_url}))
             else:
                 #no next_url, clean the next url  from session
@@ -1020,7 +1132,7 @@ def home(request):
             return HttpResponseRedirect(next_url) 
         else:
             #other domain, login to that before redirecting to the original url
-            return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.session_key,"next_url":next_url,"domain":next_url_domain})
+            return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.cookie_value,"next_url":next_url,"domain":next_url_domain})
 
 def loginstatus(request):
     """
@@ -1050,10 +1162,10 @@ def profile(request):
         #not authenticated
         return HttpResponse(content=json.dumps({"authenticated":False}),content_type="application/json")
     auth_key = request.session.session_key
-    response = cache.get_auth(user,auth_key,user.modified)
+    response = None if (request.session.cookie_changed or request.session.is_empty()) else cache.get_auth(user,auth_key,user.modified)
 
     if not response:
-        response = _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
+        response = _populate_response(request,cache.set_auth,auth_key,user,request.session.cookie_value)
 
     #populte the profile from response headers
     content = {"authenticated":True}
@@ -1092,110 +1204,6 @@ def profile(request):
  
     content = json.dumps(content)
     return HttpResponse(content=content,content_type="application/json")
-
-MFA_METHOD_MAPPING = {
-    "totp" : "Authenticator App",
-    "phone" : "Phone",
-    "email" : "Email",
-}
-def user_setting(request):
-    #get the auth response
-    user = request.user
-    auth_key = request.session.session_key
-    response = cache.get_auth(user,auth_key,user.modified)
-    back_url = request.GET.get("back") or request.POST.get("back")
-    logout_url = request.GET.get("logout") or request.POST.get("logout")
-    domain = utils.get_host(request)
-    next_url = "https://{}/sso/setting".format(domain)
-    parameters = None
-    if not back_url:
-        if domain != settings.AUTH2_DOMAIN:
-            back_url = "https://{}".format(domain)
-    else:
-        back_url = get_absolute_url(back_url,domain)
-        parameters = "back={}".format(urllib.parse.quote(back_url))
-
-    if not logout_url:
-        logout_url = "https://{}/sso/auth_logout".format(domain)
-    else:
-        logout_url = get_absolute_url(logout_url,domain)
-        if parameters: 
-            parameters = "{}&logout={}".format(parameters,urllib.parse.quote(logout_url))
-        else:
-            parameters = "logout={}".format(urllib.parse.quote(logout_url))
-
-    if parameters:
-        next_url = "https://{}/sso/setting?{}".format(domain,parameters)
-    else:
-        next_url = "https://{}/sso/setting".format(domain)
-    next_url = urllib.parse.quote(next_url)
-
-    if not response:
-        response = _populate_response(request,cache.set_auth,auth_key,user,request.session.session_key)
-
-    #populte the profile from response headers
-    context = {}
-    for key,value in response.items():
-        if key.startswith("X-"):
-            key = key[2:].replace("-","_")
-            context[key] = value
-
-    context["back_url"] = back_url
-    context["logout_url"] = logout_url
-    context["next_url"] = next_url
-
-    current_ip,routable = get_client_ip(request)
-    context['client_logon_ip'] = current_ip
-    #populate the user token property
-    try:
-        token = models.UserToken.objects.filter(user = user).first()
-        if token and token.enabled and token.token:
-            context["access_token"] = token.token
-            context["access_token_created"] = timezone.localtime(token.created).strftime("%Y-%m-%d %H:%M:%S")
-            if token.expired:
-                context["access_token_expireat"] = token.expired.strftime("%Y-%m-%d")
-            context["access_token_expired"] = token.is_expired
-    except Exception as ex:
-        pass
-    context["mfa_enabled"] = False
-    context["password_reset_enabled"] = False
-    context["mfa_method"] = ""
-    if request.session.get("mfa_method"):
-        context["mfa_method"] = MFA_METHOD_MAPPING.get(request.session["mfa_method"],request.session["mfa_method"])
-    if request.session.get("idp"):
-        idp = models.IdentityProvider.objects.filter(idp=request.session["idp"]).first()
-        if idp:
-            context["idp"] = idp.name
-            if idp.idp == "local":
-                context["mfa_enabled"] = True
-            if idp.idp.startswith("local"):
-                context["password_reset_enabled"] = True
-
-
-    context["is_active"] = request.user.is_active
-    context["is_staff"] = request.user.is_staff
-    context["is_superuser"] = request.user.is_superuser
-
- 
-    domain = utils.get_host(request)
-    page_layout,extracss = _get_userflow_pagelayout(request,domain)
-
-    groups = models.UserGroup.find_groups(context["email"])[0]
-    context["groups"] = " , ".join(g.name for g in groups)
-    session_timeout = models.UserGroup.get_session_timeout(groups)
-    context["session_timeout"] = utils.format_timedelta(session_timeout)
-    if not session_timeout:
-        expireat  = request.session.expireat
-        if expireat:
-            context["session_expireat"]  =  utils.format_datetime(expireat)
-        else:
-            context["session_age"]  =  utils.format_timedelta(request.session.get_session_cookie_age(),unit='s')
-
-
-    context["body"] = page_layout
-
-    return TemplateResponse(request,"authome/setting.html",context=context)
-
 
 def signedout(request):
     """
@@ -1381,14 +1389,17 @@ def domain_related_page(request,template,domain,title,container_class=None,heade
 def forbidden(request):
     """
     View method for path '/sso/forbidden'
+    can also be called from other view method
     Provide a consistent,customized forbidden page.
     """
-    domain = utils.get_host(request)
-    path = request.headers.get("x-upstream-request-uri") or request.path
+    url = get_absolute_url(request.GET.get("path") or request.get_full_path(),utils.get_host(request))
+    parsed_url = utils.parse_url(url)
+    domain = parsed_url["domain"]
+    path = parsed_url["path"]
 
     page_layout,extracss = _get_userflow_pagelayout(request,domain)
 
-    context = {"body":page_layout,"extracss":extracss,"path":path,"url":"https://{}{}".format(domain,path),"domain":domain}
+    context = {"body":page_layout,"extracss":extracss,"path":path,"url":url.format(domain,path),"domain":domain}
 
     return TemplateResponse(request,"authome/forbidden.html",context=context)
 
@@ -1606,7 +1617,7 @@ def verify_code_via_email(request):
     #authenticate the request
     if not _auth_bearer(request):
         #not authenticated
-        return FORBIDDEN_RESPONSE
+        return forbidden_response_factory(request)
 
     #get the domain from request url parameters
     domain = request.GET.get('domain', None)
@@ -1623,7 +1634,7 @@ def verify_code_via_email(request):
     #send email
     emails.send_email(userflow.verifyemail_from,data["email"],userflow.verifyemail_subject,verifyemail_body)
     logger.debug("Successfully send verification email to '{}',domain is '{}'".format(data["email"],domain))
-    return SUCCEED_RESPONSE
+    return succeed_response_factory(request)
 
 user_totp_key_chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'
 @never_cache
@@ -1669,7 +1680,7 @@ def totp_generate(request):
         user_totp.prefix = (settings.TOTP_PREFIX or settings.TOTP_ISSUER).replace(" ","-")
         user_totp.digits = settings.TOTP_DIGITS
         user_totp.algorithm = settings.TOTP_ALGORITHM
-        user_totp.created = timezone.now()
+        user_totp.created = timezone.localtime()
         user_totp.verified = None
         user_totp.last_verified_code = None
 
@@ -1737,10 +1748,10 @@ def totp_verify(request):
     if totp.verify(totpcode,valid_window=settings.TOTP_VALIDWINDOW):
         #verified
         user_totp.last_verified_code = totpcode
-        user_totp.last_verified = timezone.now()
+        user_totp.last_verified = timezone.localtime()
         user_totp.save(update_fields=["last_verified","last_verified_code"])
         logger.debug("Succeed to verify totp code.{}".format(data))
-        return SUCCEED_RESPONSE
+        return succeed_response_factory(request)
     else:
         #verify failed.
         logger.debug("Failed to verify totp code.{}".format(data))
@@ -1756,91 +1767,41 @@ def handler400(request,exception,**kwargs):
     """
     if isinstance(exception,UserDoesNotExistException):
         if request.path == "/sso/auth":
-            return AUTH_REQUIRED_RESPONSE
+            return auth_required_response_factory(request)
         elif request.path == "/sso/auth_optional":
-            return AUTH_NOT_REQUIRED_RESPONSE
+            return auth_not_required_response_factory(request)
         else:
             request.user = anonymoususer
             return logout_view(request)
-
     elif isinstance(exception,HttpResponseException):
         res = exception.get_response(request)
         if res:
             return res
+        elif settings.DEBUG:
+            message = str(exception)
+        else:
+            if request.session.get(REDIRECT_FIELD_NAME):
+                message = mark_safe("Sign in session is expired, please click <a = href='{}'>here</a> to sign in again.".format(request.session.get(REDIRECT_FIELD_NAME)))
+            else:
+                message = mark_safe("Sign in session is expired, please signin again.")
+    elif isinstance(exception,AuthException):
+        if request.session.get(REDIRECT_FIELD_NAME):
+            message = mark_safe("Sign in session is expired, please click <a = href='{}'>here</a> to sign in again.".format(request.session.get(REDIRECT_FIELD_NAME)))
+        else:
+            message = mark_safe("Sign in session is expired, please signin again.")
+    else:
+        message = str(exception)
 
     domain = request.headers.get("x-upstream-server-name") or utils.get_domain(request.session.get(utils.REDIRECT_FIELD_NAME)) or request.get_host()
     page_layout,extracss = _get_userflow_pagelayout(request,domain)
 
-    context = {"body":page_layout,"extracss":extracss,"message":str(exception),"title":"Authentication failed." if request.path.startswith("/sso/") else "Error","domain":domain}
+    context = {"body":page_layout,"extracss":extracss,"message":message,"title":"Authentication failed." if request.path.startswith("/sso/") else "Error","domain":domain}
 
     code = exception.http_code if (hasattr(exception,"http_code") and exception.http_code) else 400
-    return TemplateResponse(request,"authome/message.html",context=context,status=code)
+    resp = TemplateResponse(request,"authome/message.html",context=context,status=code)
+    resp.render()
+    return resp
  
-def get_active_redis_connections(cachename):
-    r = get_redis_connection(cachename) 
-    connection_pool = r.connection_pool
-    return connection_pool._created_connections
-
-def status(request):
-    content = OrderedDict()
-
-    content["serverid"] = utils.get_processid()
-    content["healthy"],msgs = cache.healthy
-    if not content["healthy"] :
-        content["warning"] = msgs
-
-    content["memory"] = "{}MB".format(round(psutil.Process().memory_info().rss / (1024 * 1024),2))
-    redis_servers = OrderedDict()
-    content["redis server"] = redis_servers
-    if settings.CACHE_USER_SERVER:
-        if settings.USER_CACHES  == 1:
-            if settings.CACHE_USER_SERVER[0].lower().startswith("redis"):
-                name = "user"
-                r = get_redis_connection(name) 
-                connection_pool = r.connection_pool
-                redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_USER_SERVER[0],get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
-        else:
-            for i in range(settings.USER_CACHES):
-                if not settings.CACHE_USER_SERVER[i].lower().startswith("redis"):
-                    continue
-                name = "user{}".format(i)
-                r = get_redis_connection(name) 
-                connection_pool = r.connection_pool
-                redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_USER_SERVER[i],get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
-
-    if settings.CACHE_SESSION_SERVER:
-        if settings.SESSION_CACHES  == 1:
-            if settings.CACHE_SESSION_SERVER[0].lower().startswith("redis"):
-                name = "session"
-                r = get_redis_connection(name) 
-                connection_pool = r.connection_pool
-                redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_SESSION_SERVER[0],get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
-        else:
-            for i in range(settings.SESSION_CACHES):
-                if not settings.CACHE_SESSION_SERVER[i].lower().startswith("redis"):
-                    continue
-                name = "session{}".format(i)
-                r = get_redis_connection(name) 
-                connection_pool = r.connection_pool
-                redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_SESSION_SERVER[i],get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
-
-    if settings.CACHE_SERVER and settings.CACHE_SERVER.lower().startswith("redis"):
-        name = "default"
-        r = get_redis_connection(name) 
-        connection_pool = r.connection_pool
-        redis_servers[name] = "server:{} , connections:{} , max connections: {}".format(settings.CACHE_SERVER,get_active_redis_connections(name),settings.CACHE_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"))
-
-    content["memorycache"] = cache.status
-    content = json.dumps(content)
-    return HttpResponse(content=content,content_type="application/json")
-
-def healthcheck(request):
-    healthy,msgs = cache.healthy
-    if healthy:
-        return HttpResponse("ok")
-    else:
-        return HttpResponse(status=503,content="\n".join(msgs))
-
 def checkauthorization(request):
     if request.method == "GET":
         return TemplateResponse(request, "authome/check_authorization.html", {"users":"","opts":None})
@@ -1910,53 +1871,3 @@ def checkauthorization(request):
         traceback.print_exc()
         return HttpResponse(status=400,content=str(ex))
 
-def echo(request):
-    data = OrderedDict()
-    data["url"] = "https://{}{}".format(utils.get_host(request),request.get_full_path())
-    data["method"] = request.method
-    
-    keys = [k for k in request.GET.keys()]
-    keys.sort()
-    if keys:
-        data["parameters"] = OrderedDict()
-    for k in keys:
-        v = request.GET.getlist(k)
-        if not v:
-            data["parameters"][k] = v
-        elif len(v) == 1:
-            data["parameters"][k] = v[0]
-        else:
-            data["parameters"][k] = v
-
-    keys = [k for k in request.COOKIES.keys()]
-    keys.sort()
-    if keys:
-        data["cookies"] = OrderedDict()
-    for k in keys:
-        v = request.COOKIES[k]
-        data["cookies"][k] = v
-
-
-    keys = [k for k in request.headers.keys()]
-    keys.sort()
-    if keys:
-        data["headers"] = OrderedDict()
-    for k in keys:
-        v = request.headers[k]
-        data["headers"][k.lower()] = v
-
-    if request.method == "POST":
-        data["body"] = OrderedDict()
-        keys = [k for k in request.POST.keys()]
-        keys.sort()
-        for k in keys:
-            v = request.POST.getlist(k)
-            if not v:
-                data["body"][k] = v
-            elif len(v) == 1:
-                data["body"][k] = v[0]
-            else:
-                data["body"][k] = v
-
-    return JsonResponse(data,status=200)
-    

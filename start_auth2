@@ -1,0 +1,108 @@
+#!/bin/bash
+shopt -s nocasematch;
+PORT=""
+runtype="server"
+
+if [[ "$1" == "" ]] 
+then
+    envfile=".env.standalone"
+    backend="false"
+elif [[ -f ".env.$1" ]]
+then
+    envfile=".env.$1"
+    if [[ "$2" == "" ]] 
+    then
+        backend="false"
+    elif [[ "$2" =~ ^(true|false)$ ]]
+    then
+        backend=$2
+    else
+        backend="false"
+    fi
+elif [[ "$1" =~ ^[0-9]+$ ]]
+then  
+    PORT=$1
+    if [[ "$2" == "" ]] 
+    then
+        envfile=".env.standalone"
+        backend="false"
+    elif [[ "$2" =~ ^(true|false)$ ]]
+    then
+        backend=$2
+        envfile=".env.standalone"
+    else
+        envfile=".env.$2"
+        if [[ "$3" == "" ]] 
+        then
+            backend="false"
+        else
+            backend=$3
+        fi
+    fi
+elif [[ "$1" =~ ^(true|false)$ ]]
+then 
+    backend=$1
+    envfile=".env.standalone"
+
+else
+    envfile=".env.$1"
+    backend="false"
+    runtype="command"
+    command="$1"
+    if [[ "$2" == "" ]] 
+    then
+        envfile=".env.standalone"
+    else
+        envfile=".env.$2"
+    fi
+fi
+
+
+#cp .env.server .env
+set -a
+source $envfile
+
+if [[ "$runtype" == "command" ]]
+then
+    backend="false"
+    echo "envfile=${envfile}"
+else
+    if [[ "$PORT" == "" ]]
+    then
+        PORT=8060
+    fi
+    echo "port=${PORT}, backend=${backend}, envfile=${envfile}"
+fi
+
+if [[ "$backend" =~ ^true$ ]]
+then
+    if [[ "$envfile" == ".env.standalone" ]]
+    then
+        echo 'Running auth2 server in background'
+    else
+        echo 'Running auth2 cluster in background'
+    fi
+    poetry run gunicorn authome.wsgi --bind=:$PORT --config=gunicorn-dev.py  >./logs/auth2_${PORT}.log 2>&1 &
+    #poetry run python manage.py runserver 0.0.0.0:$PORT >./logs/auth2_${PORT}.log 2>&1 &
+    pid=$!
+    echo ${pid} > ./logs/auth2_${PORT}.pid
+elif [[ "$runtype" == "command"  ]]
+then
+    if [[ "$envfile" == ".env.standalone" ]]
+    then
+        echo 'Running auth2 shell in foreground'
+    else
+        echo 'Running auth2 cluster shell in foreground'
+    fi
+    poetry run python manage.py $command
+else
+    if [[ "$envfile" == ".env.standalone" ]]
+    then
+        echo 'Running auth2 server in foreground'
+    else
+        echo 'Running auth2 cluster in foreground'
+    fi
+    poetry run python manage.py runserver 0.0.0.0:$PORT
+fi
+
+

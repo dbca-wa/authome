@@ -8,14 +8,23 @@ from django.conf import settings
 from django.contrib.auth import login, logout
 from django.http import HttpResponseForbidden,HttpResponseRedirect
 from django.contrib.auth import REDIRECT_FIELD_NAME
+from django.urls import reverse
 
-from .models import IdentityProvider,UserGroup
+from .models import IdentityProvider,UserGroup,can_access
 from .views import signout
 from .cache import get_usercache
 from . import utils
+from . import exceptions
 
 logger = logging.getLogger(__name__)
 
+
+_profile_edit_url = None
+def profile_edit_url():
+    global _profile_edit_url
+    if not _profile_edit_url:
+        _profile_edit_url = reverse("selfservice:profile_edit")
+    return _profile_edit_url
 
 def email_lowercase(backend,details, user=None,*args, **kwargs):
     """
@@ -42,8 +51,8 @@ def check_idp_and_usergroup(backend,details, user=None,*args, **kwargs):
         usergroups = UserGroup.find_groups(email)[0]
         if any(group.is_group(dbcagroup) for group in usergroups ):
             details["is_staff"] = True
-            if not user:
-                details["is_superuser"] = False
+            #set is_superuser based on whether the user can access module '/admin'
+            details["is_superuser"] = can_access(email,settings.AUTH2_DOMAIN,"/admin/")
         else:
             details["is_staff"] = False
             details["is_superuser"] = False
@@ -134,15 +143,18 @@ def user_details(strategy, details, user=None, *args, **kwargs):
         nexturl = strategy.request.session.get(REDIRECT_FIELD_NAME)
         if nexturl:
             nexturl_parsed = utils.parse_url(nexturl)
-            if nexturl_parsed["path"] != "/sso/profile/edit":
-                nexturl = "/sso/profile/edit?{}={}".format(REDIRECT_FIELD_NAME,urllib.parse.quote(nexturl))
+            if nexturl_parsed["path"] != profile_edit_url():
+                nexturl = "{}?{}={}".format(profile_edit_url(),REDIRECT_FIELD_NAME,urllib.parse.quote(nexturl))
         else:
-            nexturl = "/sso/profile/edit"
+            nexturl = profile_edit_url()
         strategy.request.session[REDIRECT_FIELD_NAME] = nexturl
 
     if changed:
         strategy.storage.user.changed(user)
-        usercache = get_usercache(user.id)
-        if usercache:
-            usercache.set(settings.GET_USER_KEY(user.id),user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
-            logger.debug("Cache the user({}) data to usercache".format(user.email))
+    
+    #save the user to cache if user is changed or in multiple cluster env.
+    usercache = get_usercache(user.id)
+    if usercache:
+        usercache.set(settings.GET_USER_KEY(user.id),user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
+
+        

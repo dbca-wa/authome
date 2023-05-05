@@ -21,7 +21,7 @@
                     <ClaimsProviderSelections>
                         <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
                         <ClaimsProviderSelection TargetClaimsExchangeId="MicrosoftAccountExchange"/>
-                        <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
+                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
                         <ClaimsProviderSelection TargetClaimsExchangeId="AppleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->
@@ -41,7 +41,7 @@
                     <ClaimsProviderSelections>
                         <ClaimsProviderSelection TargetClaimsExchangeId="DBCAM365Exchange"/>
                         <ClaimsProviderSelection TargetClaimsExchangeId="MicrosoftAccountExchange"/>
-                        <!--ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/-->
+                        <ClaimsProviderSelection TargetClaimsExchangeId="FacebookExchange"/>
                         <ClaimsProviderSelection TargetClaimsExchangeId="GoogleExchange"/>
                         <ClaimsProviderSelection TargetClaimsExchangeId="AppleExchange"/>
                         <!--ClaimsProviderSelection TargetClaimsExchangeId="GitHubExchange" /-->

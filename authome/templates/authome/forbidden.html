@@ -17,5 +17,8 @@
 {% endblock extrapagecss %}
 
 {% block realcontent %}
-<h4>You are not allowed to access this page</h4>
+<div>
+<h4>You are not allowed to access this resource.</h4>
+ <h5>Log in with a different account, click <a href="/sso/auth_logout?relogin={{url}}">here</A> to log out first.</h5>
+</div>
 {% endblock realcontent %}

@@ -10,15 +10,29 @@ from django.db import models, transaction
 from django.contrib.postgres.fields import ArrayField
 from django.db.models.signals import pre_delete, pre_save, post_save, post_delete
 from django.dispatch import receiver
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser,UserManager
+from django.utils.html import mark_safe
+from django.contrib import messages
 
 import hashlib
 
-from .cache import cache,get_defaultcache,get_usercache
+from ..cache import cache,get_defaultcache,get_usercache
+from ..  import exceptions
+from .. import signals
+from .. import utils
 
 logger = logging.getLogger(__name__)
 
 defaultcache = get_defaultcache()
+
+UP_TO_DATE = 1
+OUTDATED = -1
+OUT_OF_SYNC = -2
+CACHE_STATUS_NAME = {
+    UP_TO_DATE : "Up to date",
+    OUTDATED : "Outdated",
+    OUT_OF_SYNC : "Out of sync"
+}
 
 help_text_users = """
 List all possible user emails in this group separated by new line character.
@@ -83,6 +97,10 @@ class DbObjectMixin(object):
         logger.debug("Try to save the changed {}({})".format(self.__class__.__name__,self))
         with transaction.atomic():
             super().save(update_fields=update_fields,*args,**kwargs)
+
+    def delete(self,*args,**kwargs):
+        with transaction.atomic():
+            super().delete(*args,**kwargs)
 
     def is_changed(self,update_fields=None):
         if self.id is None:
@@ -244,6 +262,10 @@ class CacheableMixin(object):
         return cls.get_model_change_cls().is_changed()
 
     @classmethod
+    def cache_status(cls):
+        return cls.get_model_change_cls().status()
+
+    @classmethod
     def get_cachetime(cls):
         return cls.get_model_change_cls().get_cachetime()
 
@@ -280,7 +302,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
 
     LOCAL_PROVIDER = 'local'
 
-    _editable_columns = ("name","userflow","logout_url","logout_method")
+    _editable_columns = ("name","userflow","logout_url","logout_method","secretkey_expireat")
 
     #meaningful name set in auth2, this name will be used in some other place, so change it only if necessary
     name = models.CharField(max_length=64,unique=True,null=True)
@@ -292,8 +314,12 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     logout_url = models.CharField(max_length=512,blank=True,null=True)
     #the way to logout from idp
     logout_method = models.PositiveSmallIntegerField(choices=LOGOUT_METHODS,blank=True,null=True)
+    secretkey_expireat = models.DateTimeField(null=True,editable=True)
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
+
+    class Meta:
+        verbose_name_plural = "{}Identity Providers".format(" " * 4)
 
     @classmethod
     def get_model_change_cls(self):
@@ -311,19 +337,15 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
         Popuate the data and save them to cache
         """
         logger.debug("Refresh idp cache")
-        modified = None
-        refreshtime = timezone.now()
+        refreshtime = timezone.localtime()
         size = 0
         idps = {}
         for obj in cls.objects.all():
             size += 1
             idps[obj.idp] = obj
             idps[obj.id] = obj
-            if not modified:
-                modified = obj.modified
-            elif modified < obj.modified:
-                modified = obj.modified
         cache.idps = (idps,size,refreshtime)
+        return refreshtime
 
     @classmethod
     def get_idp(cls,idpid):
@@ -343,11 +365,22 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
         else:
             return None
 
+    @property
+    def secretkey_expiretime(self):
+        if not self.secretkey_expireat:
+            return ""
+        else:
+            now = timezone.localtime()
+            t = utils.format_datetime(self.secretkey_expireat)
+            if now > self.secretkey_expireat:
+                return mark_safe("<span style='background-color:darkred;color:white;padding:0px 20px 0px 20px;'>{}</span>".format(t))
+            elif now + settings.SECRETKEY_EXPIREDAYS_WARNING >= self.secretkey_expireat:
+                return mark_safe("<span style='background-color:#ff9966;color:white;padding:0px 20px 0px 20px;'>{}</span>".format(t))
+            else:
+                return mark_safe("<span style='background-color:green;color:white;padding:0px 20px 0px 20px;'>{}</span>".format(t))
+
     def __str__(self):
         return self.name or self.idp
-
-    class Meta:
-        verbose_name_plural = " Identity Providers"
 
 class CustomizableUserflow(CacheableMixin,DbObjectMixin,models.Model):
     """
@@ -492,6 +525,9 @@ Email: enquiries@dbca.wa.gov.au
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
+    class Meta:
+        verbose_name_plural = "{}Customizable Userflows".format(" " * 5)
+
     @classmethod
     def get_model_change_cls(self):
         return CustomizableUserflowChange
@@ -573,19 +609,13 @@ Email: enquiries@dbca.wa.gov.au
         logger.debug("Refresh Customizable Userflow cache")
         userflows = []
         defaultuserflow = None
-        last_modified = None
-        refreshtime = timezone.now()
+        refreshtime = timezone.localtime()
         size = 0
         for o in cls.objects.all().order_by(sortkey_c.asc()):
             if o.is_default:
                 defaultuserflow = o
 
             userflows.append(o)
-
-            if not last_modified:
-                last_modified = o.modified
-            elif last_modified < o.modified:
-                last_modified = o.modified
 
             size += 1
 
@@ -605,6 +635,7 @@ Email: enquiries@dbca.wa.gov.au
                 o.defaultuserflow = None
 
         cache.userflows = (userflows,defaultuserflow,size,refreshtime)
+        return refreshtime
 
 
 class UserEmail(object):
@@ -755,14 +786,18 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     _editable_columns = ("users","parent_group","excluded_users","identity_provider","groupid","session_timeout")
 
     name = models.CharField(max_length=32,unique=True,null=False)
-    groupid = models.SlugField(max_length=32,null=False)
+    groupid = models.SlugField(max_length=32,null=False,blank=True)
     parent_group = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
     users = _ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
     excluded_users = _ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
-    identity_provider = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,null=True,blank=True)
+    identity_provider = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,null=True,blank=True,limit_choices_to=~models.Q(idp__exact=IdentityProvider.AUTH_EMAIL_VERIFY[0]))
     session_timeout = models.PositiveSmallIntegerField(null=True,editable=True,blank=True,help_text="Session timeout in seconds, 0 means never timeout")
     modified = models.DateTimeField(editable=False,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
+
+    class Meta:
+        unique_together = [["users","excluded_users"]]
+        verbose_name_plural = "{}User Groups".format(" " * 7)
 
 
     @property
@@ -815,7 +850,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     def is_changed(self,update_fields=None):
         changed = super().is_changed(update_fields)
         if changed:
-            self.modified = timezone.now()
+            self.modified = timezone.localtime()
             return True
         else:
             return self.name != self.db_obj.name
@@ -975,11 +1010,6 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
         return False
 
-    def delete(self,*args,**kwargs):
-        logger.debug("Try to delete the usergroup {}({})".format(self.__class__.__name__,self))
-        with transaction.atomic():
-            super().delete(*args,**kwargs)
-
     def get_useremails(self,users):
         if users:
             user_emails = []
@@ -1019,8 +1049,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     def refresh_cache(cls):
         logger.debug("Refresh UserGroup cache")
         group_trees = {}
-        modified = None
-        refreshtime = timezone.now()
+        refreshtime = timezone.localtime()
         size = 0
         dbca_group = None
         public_group = None
@@ -1034,10 +1063,6 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
             if group.users == ["*"] and group.excluded_users is None:
                 public_group = group
 
-            if not modified:
-                modified = group.modified
-            elif modified < group.modified:
-                modified = group.modified
         if not public_group and group_trees:
             raise Exception("Missing user group 'Public User'")
         #build the tree
@@ -1047,6 +1072,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                 group_trees[group.parent_group_id][1].append(val)
         group_trees = [v for v in group_trees.values() if not v[0].parent_group_id]
         cache.usergrouptree = (group_trees,groups,public_group,dbca_group,size,refreshtime)
+        return refreshtime
 
     @classmethod
     def get_grouptree(cls):
@@ -1158,10 +1184,6 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
         return None
 
-    class Meta:
-        unique_together = [["users","excluded_users"]]
-        verbose_name_plural = "     User Groups"
-
 class RequestPath(object):
     match_all = False
 
@@ -1261,11 +1283,14 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
     _editable_columns = ("domain","paths","excluded_paths")
 
     domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
-    paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
+    paths = _ArrayField(models.CharField(max_length=512,null=False),null=True,blank=True,help_text=help_text_paths)
     excluded_paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
     sortkey = models.CharField(max_length=128,editable=False)
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
+
+    class Meta:
+        abstract = True
 
     @property
     def allow_all(self):
@@ -1467,9 +1492,6 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
 
         return matched_authorizations
 
-    class Meta:
-        abstract = True
-
 def check_authorization(email,domain,path):
     """
     Return True if the user(email) can access domain/path; otherwise return False
@@ -1524,6 +1546,10 @@ def can_access(email,domain,path):
 class UserAuthorization(CacheableMixin,AuthorizationMixin):
     user = models.EmailField(max_length=64)
 
+    class Meta:
+        unique_together = [["user","domain"]]
+        verbose_name_plural = "{}User Authorizations".format(" " * 2)
+
     @classmethod
     def get_model_change_cls(self):
         return UserAuthorizationChange
@@ -1540,14 +1566,9 @@ class UserAuthorization(CacheableMixin,AuthorizationMixin):
         userauthorization = {}
         previous_user = None
         size = 0
-        modified = None
-        refreshtime = timezone.now()
+        refreshtime = timezone.localtime()
         for authorization in UserAuthorization.objects.all().order_by("user",sortkey_c.asc()):
             size += 1
-            if not modified:
-                modified = authorization.modified
-            elif modified < authorization.modified:
-                modified = authorization.modified
 
             if not previous_user:
                 userauthorization[authorization.user] = [authorization]
@@ -1559,6 +1580,7 @@ class UserAuthorization(CacheableMixin,AuthorizationMixin):
                 previous_user = authorization.user
 
         cache.userauthorization = (userauthorization,size,refreshtime)
+        return refreshtime
 
     @classmethod
     def get_authorizations(cls,useremail):
@@ -1567,12 +1589,12 @@ class UserAuthorization(CacheableMixin,AuthorizationMixin):
     def __str__(self):
         return self.user
 
-    class Meta:
-        unique_together = [["user","domain"]]
-        verbose_name_plural = "    User Authorizations"
-
 class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
     usergroup = models.ForeignKey(UserGroup, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = [["usergroup","domain"]]
+        verbose_name_plural = "{}User Group Authorizations".format(" " * 6)
 
     @classmethod
     def get_model_change_cls(self):
@@ -1584,14 +1606,9 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
         usergroupauthorization = {}
         previous_usergroup = None
         size = 0
-        modified = None
-        refreshtime = timezone.now()
+        refreshtime = timezone.localtime()
         for authorization in UserGroupAuthorization.objects.all().order_by("usergroup","sortkey"):
             size += 1
-            if not modified:
-                modified = authorization.modified
-            elif modified < authorization.modified:
-                modified = authorization.modified
 
             if not previous_usergroup:
                 usergroupauthorization[authorization.usergroup] = [authorization]
@@ -1603,6 +1620,7 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
                 previous_usergroup = authorization.usergroup
 
         cache.usergroupauthorization = (usergroupauthorization,size,refreshtime)
+        return refreshtime
 
     @classmethod
     def get_authorizations(cls,usergroup):
@@ -1611,14 +1629,24 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
     def __str__(self):
         return str(self.usergroup)
 
-    class Meta:
-        unique_together = [["usergroup","domain"]]
-        verbose_name_plural = "   User Group Authorizations"
+class SystemUserManager(UserManager):
+    def get_queryset(self):
+        return super().get_queryset().filter(systemuser=True)
+
+class NormalUserManager(UserManager):
+    def get_queryset(self):
+        return super().get_queryset().filter(systemuser=False)
 
 class User(AbstractUser):
     last_idp = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,editable=False,null=True)
     systemuser = models.BooleanField(default=False,editable=False)
     modified = models.DateTimeField(auto_now=timezone.now)
+
+    class Meta(AbstractUser.Meta):
+        swappable = 'AUTH_USER_MODEL'
+        db_table = "auth_user"
+        verbose_name_plural = "{}Users".format(" " * 9)
+        unique_together = [["email"]]
 
     def clean(self):
         super().clean()
@@ -1638,11 +1666,8 @@ class User(AbstractUser):
         if dbcagroup and any(usergroup.is_group(dbcagroup) for usergroup in usergroups):
             self.is_staff = True
 
-    class Meta(AbstractUser.Meta):
-        swappable = 'AUTH_USER_MODEL'
-        db_table = "auth_user"
-        verbose_name_plural = "        User"
-        unique_together = [["email"]]
+    def __str__(self):
+        return self.email
 
 class UserToken(models.Model):
     DISABLED = -1
@@ -1661,18 +1686,44 @@ class UserToken(models.Model):
     expired = models.DateField(null=True,editable=False)
     modified = models.DateTimeField(editable=False,db_index=True,auto_now=True)
 
+    class Meta:
+        verbose_name_plural = "{}Access Tokens".format(" " * 3)
+
+    def __str__(self):
+        return self.user.email
+
     @classmethod
     def generate_user_secret(cls):
         return "".join(cls.RANDOM_CHARS[random.randint(0,cls.RANDOM_CHARS_MAX_INDEX)] for i in range(0,32))
 
     @property
     def is_expired(self):
-        if not self.enabled or not self.token:
+        if not self.token:
             return True
         elif self.expired:
             return timezone.localdate() > self.expired
         else:
             return False
+    @property
+    def html_statusname(self):
+        if not self.enabled:
+            return mark_safe("<span style='background-color:darkred;color:white;padding:0px 20px 0px 20px;'>Disabled</span>")
+        elif not self.token:
+            return ""
+        elif not self.expired:
+            return mark_safe("<span style='background-color:green;color:white;padding:0px 20px 0px 20px;'>Expired at : 2099-12-31</span>")
+        else:
+            today = timezone.localdate()
+            t = self.expired.strftime("%Y-%m-%d")
+            if today > self.expired:
+                return mark_safe("<span style='background-color:darkred;color:white;padding:0px 20px 0px 20px;'>Expired at : {}</span>".format(t))
+            elif not settings.USER_ACCESS_TOKEN_WARNING:
+                return mark_safe("<span style='background-color:green;color:white;padding:0px 20px 0px 20px;'>Expired at : {}</span>".format(t))
+            elif today + settings.USER_ACCESS_TOKEN_WARNING >= self.expired:
+                return mark_safe("<span style='background-color:#ff9966;color:white;padding:0px 20px 0px 20px;'>Expired at : {}</span>".format(t))
+            else:
+                return mark_safe("<span style='background-color:green;color:white;padding:0px 20px 0px 20px;'>Expired at : {}</span>".format(t))
+
 
     @property
     def status(self):
@@ -1718,9 +1769,6 @@ class UserToken(models.Model):
         with transaction.atomic():
             super().save(*args,**kwargs)
 
-    class Meta:
-        verbose_name_plural = "       User Access Tokens"
-
 class UserTOTP(models.Model):
     email = models.CharField(max_length=64,null=False,editable=False,unique=True)
     secret_key = models.CharField(max_length=512,null=False,editable=False)
@@ -1733,6 +1781,9 @@ class UserTOTP(models.Model):
     last_verified_code = models.CharField(max_length=16,null=True,editable=False)
     last_verified = models.DateTimeField(null=True,editable=False)
     created = models.DateTimeField(null=False,editable=False)
+
+    class Meta:
+        verbose_name_plural = "{}User TOTPs".format(" " * 3)
 
 class UserListener(object):
     @staticmethod
@@ -1792,10 +1843,11 @@ class UserGroupListener(object):
 
 if defaultcache:
     class ModelChange(object):
+        model = None
         key = None
         @classmethod
         def change(cls,timeout=None):
-            defaultcache.set(cls.key,timezone.now(),timeout=timeout)
+            defaultcache.set(cls.key,timezone.localtime(),timeout=timeout)
 
         @classmethod
         def get_cachetime(cls):
@@ -1808,6 +1860,44 @@ if defaultcache:
         @classmethod
         def get_next_refreshtime(cls):
             return None
+
+        @classmethod
+        def status(cls):
+            last_refreshed = cls.get_cachetime()
+            last_synced = defaultcache.get(cls.key)
+            if not last_synced:
+                if last_refreshed:
+                    return (UP_TO_DATE,last_refreshed)
+                else:
+                    return (OUTDATED,last_refreshed)
+
+
+            count =  cls.model.objects.all().count()
+            if count != cls.get_cachesize():
+                #cache is outdated
+                if last_synced > last_refreshed:
+                    return (OUTDATED,last_refreshed)
+                else:
+                    return (OUT_OF_SYNC,last_refreshed)
+
+            if count == 0:
+                return (UP_TO_DATE,last_refreshed)
+
+            o = cls.model.objects.all().order_by("-modified").first()
+            if o:
+                if last_refreshed and last_refreshed >= o.modified:
+                    return (UP_TO_DATE,last_refreshed)
+                elif o.modified > last_synced:
+                    return (OUT_OF_SYNC,last_refreshed)
+            else:
+                return (UP_TO_DATE,last_refreshed)
+
+            if not last_refreshed:
+                return (OUTDATED,last_refreshed)
+            elif last_synced > last_refreshed:
+                return (OUTDATED,last_refreshed)
+            else:
+                return (UP_TO_DATE,last_refreshed)
 
         @classmethod
         def is_changed(cls):
@@ -1828,6 +1918,7 @@ if defaultcache:
 
     class IdentityProviderChange(ModelChange):
         key = settings.GET_CACHE_KEY("idp_last_modified")
+        model = IdentityProvider
 
         @classmethod
         def get_cachetime(cls):
@@ -1857,6 +1948,7 @@ if defaultcache:
 
     class CustomizableUserflowChange(ModelChange):
         key = settings.GET_CACHE_KEY("customizableuserflow_last_modified")
+        model = CustomizableUserflow
 
         @classmethod
         def get_cachetime(cls):
@@ -1886,6 +1978,7 @@ if defaultcache:
 
     class UserGroupChange(ModelChange):
         key = settings.GET_CACHE_KEY("usergroup_last_modified")
+        model = UserGroup
 
         @classmethod
         def get_cachetime(cls):
@@ -1901,7 +1994,8 @@ if defaultcache:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            if cache._authorization_cache_check_time.can_run():
+            next_refreshtime = cls.get_next_refreshtime()
+            if not next_refreshtime or  timezone.localtime() >= next_refreshtime:
                 cache.refresh_usergroups()
 
         @staticmethod
@@ -1916,6 +2010,7 @@ if defaultcache:
 
     class UserAuthorizationChange(ModelChange):
         key = settings.GET_CACHE_KEY("userauthorization_last_modified")
+        model = UserAuthorization
 
         @classmethod
         def get_cachetime(cls):
@@ -1931,7 +2026,8 @@ if defaultcache:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            if cache._authorization_cache_check_time.can_run():
+            next_refreshtime = cls.get_next_refreshtime()
+            if not next_refreshtime or  timezone.localtime() >= next_refreshtime:
                 cache.refresh_userauthorization()
 
         @staticmethod
@@ -1946,6 +2042,7 @@ if defaultcache:
 
     class UserGroupAuthorizationChange(ModelChange):
         key = settings.GET_CACHE_KEY("usergroupauthorization_last_modified")
+        model = UserGroupAuthorization
 
         @classmethod
         def get_cachetime(cls):
@@ -1961,7 +2058,8 @@ if defaultcache:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            if cache._authorization_cache_check_time.can_run():
+            next_refreshtime = cls.get_next_refreshtime()
+            if not next_refreshtime or  timezone.localtime() >= next_refreshtime:
                 cache.refresh_usergroupauthorization()
 
         @staticmethod
@@ -1985,6 +2083,25 @@ else:
         @classmethod
         def get_cachesize(cls):
             return None
+
+        @classmethod
+        def status(cls):
+            last_refreshed = cls.get_cachetime()
+            count =  cls.model.objects.all().count()
+            if count != cls.get_cachesize():
+                return (OUTDATED,last_refreshed)
+
+            if count == 0:
+                return (UP_TO_DATE,last_refreshed)
+
+            o = cls.model.objects.all().order_by("-modified").first()
+            if o:
+                if o.modified > last_refreshed:
+                    return (OUTDATED,last_refreshed)
+                else:
+                    return (UP_TO_DATE,last_refreshed)
+            else:
+                return (UP_TO_DATE,last_refreshed)
 
         @classmethod
         def is_changed(cls):
@@ -2054,7 +2171,9 @@ else:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            cache.refresh_usergroups()
+            next_refreshtime = cls.get_next_refreshtime()
+            if not next_refreshtime or  timezone.localtime() >= next_refreshtime:
+                cache.refresh_usergroups()
 
     class UserAuthorizationChange(ModelChange):
         model = UserAuthorization
@@ -2073,7 +2192,9 @@ else:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            cache.refresh_userauthorization()
+            next_refreshtime = cls.get_next_refreshtime()
+            if not next_refreshtime or  timezone.localtime() >= next_refreshtime:
+                cache.refresh_userauthorization()
 
     class UserGroupAuthorizationChange(ModelChange):
         model = UserGroupAuthorization
@@ -2092,4 +2213,24 @@ else:
 
         @classmethod
         def refresh_cache_if_required(cls):
-            cache.refresh_usergroupauthorization()
+            next_refreshtime = cls.get_next_refreshtime()
+            if not next_refreshtime or  timezone.localtime() >= next_refreshtime:
+                cache.refresh_usergroupauthorization()
+
+
+@receiver(signals.global_warning,sender=object)
+def secretkey_expireat_warning(sender,request,**kwargs):
+    if not cache.idps :
+        return
+    now = timezone.localtime()
+    for k,o in cache.idps.items() :
+        if not isinstance(k,int):
+            continue
+        if not o.secretkey_expireat:
+            continue
+        if o.secretkey_expireat <= now:
+            messages.error(request, 'The secret key used by identity provider "{}" has been expired  at "{}"'.format(o.name or o.idp,utils.format_datetime(o.secretkey_expireat)))
+        elif o.secretkey_expireat - now < settings.SECRETKEY_EXPIREDAYS_WARNING:
+            messages.warning(request, 'The secret key used by identity provider "{}" will be expired  at "{}"'.format(o.name or o.idp,utils.format_datetime(o.secretkey_expireat)))
+
+    

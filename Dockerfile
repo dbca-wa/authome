@@ -28,14 +28,20 @@ RUN export IGNORE_LOADING_ERROR=True ; python manage.py collectstatic --noinput 
 RUN cp -rf /app/release /app/dev
 
 #comment out logger.debug to improve perfornace in production environment.
-RUN find ./ -type f -iname '*.py' -exec sed -i 's/logger.debug/#logger.debug/g' "{}" +;
-RUN find ./ -type f -iname '*.py' -exec sed -i 's/from . import performance/#from . import performance/g' "{}" +;
-RUN find ./ -type f -iname '*.py' -exec sed -i 's/performance.start_processingstep/#performance.start_processingstep/g' "{}" +;
-RUN find ./ -type f -iname '*.py' -exec sed -i 's/performance.end_processingstep/#performance.end_processingstep/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -i 's/logger\.debug/#logger.debug/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -i 's/from \. import performance/#from . import performance/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -i 's/from \.\. import performance/#from .. import performance/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -i 's/performance\.start_processingstep/#performance.start_processingstep/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -i 's/performance\.end_processingstep/#performance.end_processingstep/g' "{}" +;
+
+RUN find ./ -type f -iname '*.py' -exec sed -i 's/from \.models import DebugLog/#from .models import DebugLog/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -i 's/from \.\.models import DebugLog/#from ..models import DebugLog/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -i 's/DebugLog\.log/#DebugLog.log/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -i 's/DebugLog\.attach_request/#DebugLog.attach_request/g' "{}" +;
 
 WORKDIR /app
 RUN echo "#!/bin/bash \n\
-if [[ \"\$DEBUG\" == \"True\" || -n \"\${LOGLEVEL}\" ]]; then \n\
+if [[ \"\$DEBUG\" == \"True\" || \"\${LOGLEVEL}\" == \"DEBUG\" ]]; then \n\
     echo \"Running in dev mode\" \n\
     cd /app/dev && gunicorn authome.wsgi --bind=:8080 --config=gunicorn.py \n\
 else \n\
@@ -45,6 +51,19 @@ fi \n\
 " > start_app
 
 RUN chmod 555 start_app
+
+RUN echo "#!/bin/bash \n\
+if [[ \"\$DEBUG\" == \"True\" || \"\${LOGLEVEL}\" == \"DEBUG\" ]]; then \n\
+    echo \"Running in dev mode\" \n\
+    cd /app/dev && python manage.py \"\$@\" \n\
+else \n\
+    echo \"Running in release mode\" \n\
+    cd /app/release && python manage.py \"\$@\" \n\
+fi \n\
+" > run_command
+
+RUN chmod 555 run_command
+
 
 # Run the application as the www-data user.
 USER www-data

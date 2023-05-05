@@ -1,12 +1,15 @@
 import logging
+import json
 from datetime import datetime, timedelta
 from collections import OrderedDict
 
 from django.conf import settings
 from django.utils import timezone
 from django.core.cache import caches
+from django.urls import reverse
 
-from .utils import format_datetime
+from .. import utils
+
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +194,15 @@ class MemoryCache(object):
         #the map between (groups,domain) and  authorization
         self._groups_authorization_map = OrderedDict() 
         self._groups_authorization_map_ts = None
+
+        self._traffic_data = None
+        now = timezone.localtime()
+        today = datetime(now.year,now.month,now.day,tzinfo=now.tzinfo)
+        seconds_in_day = (now - today).seconds
+        self._traffic_data_ts = today + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
+        self._traffic_data_next_ts = self._traffic_data_ts + settings.TRAFFIC_MONITOR_INTERVAL
+        self.log_request = getattr(self,"_log_request_{}".format(settings.TRAFFIC_MONITOR_LEVEL)) if settings.TRAFFIC_MONITOR_LEVEL > 0 else None
+        self._client = defaultcache.client.get_client() if defaultcache else None
     
         #The runable task to clean authenticaton map and basic authenticaton map
         self._auth_cache_clean_time = HourListTaskRunable("authentication cache",settings.AUTH_CACHE_CLEAN_HOURS)
@@ -203,6 +215,17 @@ class MemoryCache(object):
 
         #The runable task to check IdentityProvider cache
         self._idp_cache_check_time = IntervalTaskRunable("idp cache",settings.IDP_CACHE_CHECK_INTERVAL) if settings.IDP_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("idp cache",settings.IDP_CACHE_CHECK_HOURS)
+
+    _traffic_data_key = None
+    @property
+    def traffic_data_key(self):
+        if not self._traffic_data_key:
+            self._traffic_data_key = settings.GET_CACHE_KEY("traffic-data")
+        return self._traffic_data_key
+
+    @property
+    def traffic_data_key_pattern(self):
+        return settings.GET_CACHE_KEY("traffic-data-level{}-{}-{{}}".format(settings.TRAFFIC_MONITOR_LEVEL,settings.TRAFFIC_MONITOR_INTERVAL.seconds))
 
     @property
     def usergrouptree(self):
@@ -361,7 +384,7 @@ class MemoryCache(object):
         """
         data = self._staff_auth_map.get(key) if user.is_staff else self._auth_map.get(key)
         if data:
-            if timezone.now() <= data[2] and (not last_modified or data[1] >= last_modified):
+            if timezone.localtime() <= data[2] and (not last_modified or data[1] >= last_modified):
                 return data[0]
             elif user.is_staff:
                 del self._staff_auth_map[key]
@@ -374,9 +397,9 @@ class MemoryCache(object):
 
     def set_auth(self,user,key,response):
         """
-        cache the auth response content and return the populated http response
+        cache the auth response content 
         """
-        now = timezone.now()
+        now = timezone.localtime()
         if user.is_staff:
             self._staff_auth_map[key] = [response,now,now + settings.STAFF_AUTH_CACHE_EXPIRETIME ]
             self._enforce_maxsize("staff auth map",self._staff_auth_map,settings.STAFF_AUTH_CACHE_SIZE)
@@ -385,6 +408,32 @@ class MemoryCache(object):
             self._enforce_maxsize("auth map",self._auth_map,settings.AUTH_CACHE_SIZE)
 
         self.clean_auth_cache()
+
+    def del_auth(self,user,key):
+        if not user:
+            #try to delete the data from staff cache
+            try:
+                del self._staff_auth_map[key]
+            except KeyError as ex:
+                #Can't find the data in staff cache
+                #try to delete the data from auth cache
+                try:
+                    del self._auth_map[key]
+                except KeyError as ex:
+                    pass
+
+        elif user.is_staff:
+            try:
+                del self._staff_auth_map[key]
+            except KeyError as ex:
+                pass
+        else:
+            try:
+                del self._auth_map[key]
+            except KeyError as ex:
+                pass
+
+
 
     def get_basic_auth_key(self,name_or_email,token):
         return (name_or_email,token)
@@ -395,7 +444,7 @@ class MemoryCache(object):
         """
         data = self._basic_auth_map.get(key[0])
         if data:
-            if data[1] == key[1] and timezone.now() <= data[2]:
+            if data[1] == key[1] and timezone.localtime() <= data[2]:
                 #token is matched and not expired
                 return data[0]
             else:
@@ -410,7 +459,7 @@ class MemoryCache(object):
         """
         cache the auth token response content and return the populated http response
         """
-        self._basic_auth_map[key[0]] = [(user.id,response),key[1],timezone.now() + settings.AUTH_BASIC_CACHE_EXPIRETIME]
+        self._basic_auth_map[key[0]] = [(user.id,response),key[1],timezone.localtime() + settings.AUTH_BASIC_CACHE_EXPIRETIME]
 
         self._enforce_maxsize("token auth map",self._basic_auth_map,settings.BASIC_AUTH_CACHE_SIZE)
         self.clean_auth_cache()
@@ -434,11 +483,11 @@ class MemoryCache(object):
     def _remove_expireddata(self,name,cache):
         #clean the expired data
         cleaned_datas = 0
-        now = timezone.now()
+        now = timezone.localtime()
         more_expired_data = True
         expired_keys =[]
         index = 0
-        now = timezone.now()
+        now = timezone.localtime()
         for k,v in cache.items():
             if now > v[-1]:
                 index += 1
@@ -459,58 +508,299 @@ class MemoryCache(object):
             self._auth_map.clear()
             self._basic_auth_map.clear()
 
-            self._auth_cache_ts = timezone.now()
+            self._auth_cache_ts = timezone.localtime()
 
     def refresh_usergroups(self,force=False):
-        from .models import UserGroupChange,UserGroup
+        from ..models import UserGroupChange,UserGroup
         if (force or not self._usergrouptree or UserGroupChange.is_changed()):
             logger.debug("UserGroup was changed, clean cache usergroupptree and user_requests_map")
             self._groups_authorization_map.clear()
-            self._groups_authorization_map_ts = timezone.now()
+            self._groups_authorization_map_ts = timezone.localtime()
             self._email_groups_map.clear()
             self._public_email_groups_map.clear()
             self._groups_map.clear()
-            self._emailgroups_ts = timezone.now()
+            self._emailgroups_ts = timezone.localtime()
             self._groupskey_map.clear()
             #reload group trees
             UserGroup.refresh_cache()
 
     def refresh_usergroupauthorization(self,force=False):
-        from .models import UserGroupAuthorizationChange,UserGroupAuthorization
+        from ..models import UserGroupAuthorizationChange,UserGroupAuthorization
         if (force or not self._usergroupauthorization or UserGroupAuthorizationChange.is_changed()):
             logger.debug("UserGroupAuthorization was changed, clean cache usergroupauthorization and user_requests_map")
             self._groups_authorization_map.clear()
-            self._groups_authorization_map_ts = timezone.now()
+            self._groups_authorization_map_ts = timezone.localtime()
             #reload user group requests
             UserGroupAuthorization.refresh_cache()
 
     def refresh_authorization_cache(self,force=False):
-        if self._authorization_cache_check_time.can_run() or force:
+        if self._authorization_cache_check_time.can_run() or force or not self._usergrouptree:
             self.refresh_usergroups(force)
             #self.refresh_userauthorization(force)
             self.refresh_usergroupauthorization(force)
 
     def refresh_idp_cache(self,force=False):
         if not self._idps:
-            from .models import IdentityProvider
+            from ..models import IdentityProvider
             self._idp_cache_check_time.can_run()
             IdentityProvider.refresh_cache()
         elif self._idp_cache_check_time.can_run() or force:
-            from .models import IdentityProviderChange,IdentityProvider
+            from ..models import IdentityProviderChange,IdentityProvider
             if IdentityProviderChange.is_changed():
                 IdentityProvider.refresh_cache()
 
 
     def refresh_userflow_cache(self,force=False):
         if not self._userflows:
-            from .models import CustomizableUserflow
+            from ..models import CustomizableUserflow
             self._userflow_cache_check_time.can_run()
             CustomizableUserflow.refresh_cache()
         elif self._userflow_cache_check_time.can_run() or force:
-            from .models import CustomizableUserflowChange,CustomizableUserflow
+            from ..models import CustomizableUserflowChange,CustomizableUserflow
             if CustomizableUserflowChange.is_changed():
                 CustomizableUserflow.refresh_cache()
 
+    def _save_traffic_data(self,start):
+        data_starttime = utils.format_datetime(self._traffic_data_ts)
+        data_endtime = utils.format_datetime(self._traffic_data_next_ts)
+        seconds = (start - self._traffic_data_next_ts).seconds
+        self._traffic_data_ts = self._traffic_data_next_ts + timedelta(seconds = seconds - seconds % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
+        self._traffic_data_next_ts = self._traffic_data_ts + settings.TRAFFIC_MONITOR_INTERVAL
+        if self._traffic_data :
+            self._traffic_data["starttime"] = data_starttime
+            self._traffic_data["endtime"] = data_endtime
+            try:
+                length = self._client.rpush(self.traffic_data_key,json.dumps(self._traffic_data))
+            except:
+                self._client = defaultcache.client.get_client()
+                length = self._client.rpush(self.traffic_data_key,json.dumps(self._traffic_data))
+
+    def _log_request_1(self,name,host,start,status_code):
+        if start >= self._traffic_data_next_ts:
+            self._save_traffic_data(start)
+            if self._traffic_data:
+                for data in self._traffic_data.values():
+                    if not isinstance(data,dict):
+                        continue
+                    for key in data.keys():
+                        if key == "status":
+                            for domain in data[key].keys():
+                                data[key][domain] = 0
+                        else:
+                            data[key] = 0
+
+        ptime = round((timezone.localtime() - start).total_seconds() * 1000,2)
+        try:
+            data = self._traffic_data[name]
+        except KeyError as ex:
+            # name not in _traffic_data
+            self._traffic_data[name] = {
+                "requests":1,
+                "totaltime":ptime,
+                "mintime":ptime,
+                "maxtime":ptime,
+                "status":{
+                    status_code:1
+                }
+            }
+            return ptime
+        except:
+            #_traffic_data is None
+            self._traffic_data= {
+                "serverid":utils.get_processid(),
+                name: {
+                    "requests":1,
+                    "totaltime":ptime,
+                    "mintime":ptime,
+                    "maxtime":ptime,
+                    "status":{
+                       status_code:1
+                    }
+                }
+            }
+            return ptime
+        data["requests"] += 1
+        data["totaltime"] += ptime
+        if not data["mintime"]  or data["mintime"] > ptime:
+            data["mintime"] = ptime
+        if data["maxtime"] < ptime:
+            data["maxtime"] = ptime
+        data["status"][status_code] = data["status"].get(status_code,0) + 1
+        return ptime
+
+    def _log_request_2(self,name,host,start,status_code):
+        if start >= self._traffic_data_next_ts:
+            self._save_traffic_data(start)
+            if self._traffic_data:
+                for data in self._traffic_data.values():
+                    if not isinstance(data,dict):
+                        continue
+                    for key in data.keys():
+                        if key == "domains":
+                            for domain in [d for d,v in data[key].items() if v == 0]:
+                                del data[key][domain]
+                            for domain in data[key].keys():
+                                data[key][domain] = 0
+                        elif key in ("status",):
+                            for domain in data[key].keys():
+                                data[key][domain] = 0
+                        else:
+                            data[key] = 0
+
+        ptime = round((timezone.localtime() - start).total_seconds() * 1000,2)
+        try:
+            data = self._traffic_data[name]
+        except KeyError as ex:
+            # name not in _traffic_data
+            self._traffic_data[name] = {
+                "requests":1,
+                "totaltime":ptime,
+                "mintime":ptime,
+                "maxtime":ptime,
+                "status":{
+                    status_code:1
+                },
+                "domains": {
+                    host : 1
+                }
+            }
+            return ptime
+        except:
+            #_traffic_data is None
+            self._traffic_data = {
+                "serverid":utils.get_processid(),
+                name: {
+                    "requests":1,
+                    "totaltime":ptime,
+                    "mintime":ptime,
+                    "maxtime":ptime,
+                    "status":{
+                        status_code:1
+                    },
+                    "domains": {
+                        host : 1
+                    }
+                }
+            }
+            return ptime
+        data["requests"] += 1
+        data["totaltime"] += ptime
+        if not data["mintime"]  or data["mintime"] > ptime:
+            data["mintime"] = ptime
+        if data["maxtime"] < ptime:
+            data["maxtime"] = ptime
+        data["status"][status_code] = data["status"].get(status_code,0) + 1
+        data["domains"][host] = data["domains"].get(host,0) + 1
+        return ptime
+
+    def _log_request_3(self,name,host,start,status_code):
+        if start >= self._traffic_data_next_ts:
+            self._save_traffic_data(start)
+            if self._traffic_data:
+                for data in self._traffic_data.values():
+                    if not isinstance(data,dict):
+                        continue
+                    for key in data.keys():
+                        if key == "status":
+                            for k in data[key].keys():
+                                data[key][k] = 0
+                        elif key ==  "domains":
+                            for domain in [d for d,v in data[key].items() if v["requests"] == 0]:
+                                del data[key][domain]
+                            for domain_data in data[key].values():
+                                for k in domain_data.keys():
+                                    if k == "status":
+                                        for k1 in domain_data[k].keys():
+                                            domain_data[k][k1] = 0
+                                    else:
+                                        domain_data[k] = 0
+                        else:
+                            data[key] = 0
+            
+
+        ptime = round((timezone.localtime() - start).total_seconds() * 1000,2)
+        try:
+            data = self._traffic_data[name]
+        except KeyError as ex:
+            # name not in _traffic_data
+            self._traffic_data[name] = {
+                "requests":1,
+                "totaltime":ptime,
+                "mintime":ptime,
+                "maxtime":ptime,
+                "status":{
+                    status_code:1
+                },
+                "domains": {
+                    host : {
+                        "requests":1,
+                        "totaltime":ptime,
+                        "mintime":ptime,
+                        "maxtime":ptime,
+                        "status":{
+                            status_code:1
+                        }
+                    }
+                }
+            }
+            return ptime
+        except:
+            # _traffic_data is None
+            self._traffic_data = {
+                "serverid":utils.get_processid(),
+                name: {
+                    "requests":1,
+                    "totaltime":ptime,
+                    "mintime":ptime,
+                    "maxtime":ptime,
+                    "status":{
+                        status_code:1
+                    },
+                    "domains": {
+                        host : {
+                            "requests":1,
+                            "totaltime":ptime,
+                            "mintime":ptime,
+                            "maxtime":ptime,
+                            "status":{
+                                status_code:1
+                            }
+                        }
+                    }
+                }
+            }
+            return ptime
+
+        data["requests"] += 1
+        data["totaltime"] += ptime
+        if not data["mintime"]  or data["mintime"] > ptime:
+            data["mintime"] = ptime
+        if data["maxtime"] < ptime:
+            data["maxtime"] = ptime
+        data["status"][status_code] = data["status"].get(status_code,0) + 1
+
+        try:
+            domain_data = data["domains"][host]
+            domain_data["requests"] += 1
+            domain_data["totaltime"] += ptime
+            if not domain_data["mintime"]  or domain_data["mintime"] > ptime:
+                domain_data["mintime"] = ptime
+            if domain_data["maxtime"] < ptime:
+                domain_data["maxtime"] = ptime
+            domain_data["status"][status_code] = domain_data["status"].get(status_code,0) + 1
+        except:
+            domain_data = {
+                "requests":1,
+                "totaltime":ptime,
+                "mintime":ptime,
+                "maxtime":ptime,
+                "status":{
+                    status_code:1
+                }
+            }
+            data["domains"][host] = domain_data
+
+        return ptime
 
     @property
     def status(self):
@@ -520,36 +810,36 @@ class MemoryCache(object):
             "group_cache_size":None if self.usergroups is None else len(self.usergroups),
             "dbcagroup":str(self.dbca_group),
             "publicgroup":str(self.public_group),
-            "latest_refresh_time":format_datetime(self._usergrouptree_ts),
-            "next_check_time":format_datetime(self._authorization_cache_check_time.next_runtime)
+            "latest_refresh_time":utils.format_datetime(self._usergrouptree_ts),
+            "next_check_time":utils.format_datetime(self._authorization_cache_check_time.next_runtime)
         }
     
         result["UserGroupAuthorization"] = {
             "cache_size":None if self.usergroupauthorization is None else len(self.usergroupauthorization),
-            "latest_refresh_time":format_datetime(self._usergroupauthorization_ts),
-            "next_check_time":format_datetime(self._authorization_cache_check_time.next_runtime)
+            "latest_refresh_time":utils.format_datetime(self._usergroupauthorization_ts),
+            "next_check_time":utils.format_datetime(self._authorization_cache_check_time.next_runtime)
         }
     
         result["CustomizableUserflow"] = {
             "userflow_cache_size":None if self.userflows is None else len(self.userflows),
             "defaultuserflow":str(self._defaultuserflow),
             "domain2userflow_cache_size":None if self._userflows_map is None else len(self._userflows_map),
-            "latest_refresh_time":format_datetime(self._userflows_ts),
-            "next_check_time":format_datetime(self._userflow_cache_check_time.next_runtime)
+            "latest_refresh_time":utils.format_datetime(self._userflows_ts),
+            "next_check_time":utils.format_datetime(self._userflow_cache_check_time.next_runtime)
         }
     
     
         result["IdentityProvider"] = {
             "cache_size":None if self.idps is None else len(self.idps),
-            "latest_refresh_time":format_datetime(self._idps_ts),
-            "next_check_time":format_datetime(self._idp_cache_check_time.next_runtime)
+            "latest_refresh_time":utils.format_datetime(self._idps_ts),
+            "next_check_time":utils.format_datetime(self._idp_cache_check_time.next_runtime)
         }
     
         result["groupsauthorization"] = {
             "cache_size":None if self._groups_authorization_map is None else len(self._groups_authorization_map),
             "cache_maxsize":settings.GROUPS_AUTHORIZATION_CACHE_SIZE,
-            "latest_clean_time":format_datetime(self._groups_authorization_map_ts),
-            "next_check_time":format_datetime(self._authorization_cache_check_time.next_runtime)
+            "latest_clean_time":utils.format_datetime(self._groups_authorization_map_ts),
+            "next_check_time":utils.format_datetime(self._authorization_cache_check_time.next_runtime)
         }
 
         auth_responses = {}
@@ -558,21 +848,21 @@ class MemoryCache(object):
         auth_responses["external_user"] = {
             "cache_size":None if self._auth_map is None else len(self._auth_map),
             "cache_maxsize":settings.AUTH_CACHE_SIZE,
-            "latest_clean_time":format_datetime(self._auth_cache_ts),
-            "next_clean_time":format_datetime(self._auth_cache_clean_time.next_runtime)
+            "latest_clean_time":utils.format_datetime(self._auth_cache_ts),
+            "next_clean_time":utils.format_datetime(self._auth_cache_clean_time.next_runtime)
         }
         auth_responses["staff"] = {
             "cache_size":None if self._staff_auth_map is None else len(self._staff_auth_map),
             "cache_maxsize":settings.STAFF_AUTH_CACHE_SIZE,
-            "latest_clean_time":format_datetime(self._auth_cache_ts),
-            "next_clean_time":format_datetime(self._auth_cache_clean_time.next_runtime)
+            "latest_clean_time":utils.format_datetime(self._auth_cache_ts),
+            "next_clean_time":utils.format_datetime(self._auth_cache_clean_time.next_runtime)
         }
     
         auth_responses["basic_auth"] = {
             "cache_size":None if self._basic_auth_map is None else len(self._basic_auth_map),
             "cache_maxsize":settings.BASIC_AUTH_CACHE_SIZE,
-            "latest_clean_time":format_datetime(self._auth_cache_ts),
-            "next_clean_time":format_datetime(self._auth_cache_clean_time.next_runtime)
+            "latest_clean_time":utils.format_datetime(self._auth_cache_ts),
+            "next_clean_time":utils.format_datetime(self._auth_cache_clean_time.next_runtime)
         }
     
         result["usergroups"] = {
@@ -581,8 +871,8 @@ class MemoryCache(object):
             "publicusergroups_cache_size":None if self._public_email_groups_map is None else len(self._public_email_groups_map),
             "publicusergroups_cache_maxsize":settings.PUBLIC_EMAIL_GROUPS_CACHE_SIZE,
             "groupsmap_size":None if self._groups_map is None else len(self._groups_map),
-            "latest_clean_time":format_datetime(self._emailgroups_ts),
-            "next_check_time":format_datetime(self._authorization_cache_check_time.next_runtime)
+            "latest_clean_time":utils.format_datetime(self._emailgroups_ts),
+            "next_check_time":utils.format_datetime(self._authorization_cache_check_time.next_runtime)
         }
     
         return result
@@ -655,4 +945,3 @@ class MemoryCache(object):
     
         return (False,msgs) if msgs else (True,["ok"])
 
-cache = MemoryCache()
