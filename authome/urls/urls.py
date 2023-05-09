@@ -12,6 +12,9 @@ from .base import traffic_monitor
 
 logger = logging.getLogger(__name__)
 
+admin_urls = admin_site.urls
+admin_urls[0].insert(0,path('authome/tools/apple/secretkey/renew', views.renew_apple_secretkey,name="renew_apple_secretkey"))
+
 urlpatterns = [
     path('sso/auth_logout', views.logout_view, name='logout'),
     path('sso/auth_local', views.auth_local, name='auth_local'),
@@ -52,7 +55,7 @@ urlpatterns = [
     path('ping',views.ping,name="ping"),
 
     path('sso/', include('social_django.urls', namespace='social')),
-    path('admin/', admin_site.urls),
+    path('admin/', admin_urls),
     path('', views.home, name='home'),
 
     path("favicon.ico",RedirectView.as_view(url="{}images/favicon.ico".format(settings.STATIC_URL)))

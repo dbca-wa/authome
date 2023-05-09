@@ -35,6 +35,9 @@ def get_processid():
         _processid = "{}-{}-{}".format(socket.gethostname(),os.getpid(),get_process_starttime())
     return _processid
 
+def get_threadid():
+    return "{}.{}".format(get_processid(),id(threading.current_thread()))
+
 _process_starttime = None
 def get_process_starttime():
     global _process_starttime

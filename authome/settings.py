@@ -485,4 +485,11 @@ SESSION_COOKIE_DOMAIN_SEPATATOR=":"
 AUTH2_INTERCONNECTION_TIMEOUT = env('AUTH2_INTERCONNECTION_TIMEOUT',default=5000)#timeout for interconnection among auth2 clusters, in milliseconds
 AUTH2_INTERCONNECTION_TIMEOUT = round(AUTH2_INTERCONNECTION_TIMEOUT/1000,3)# convert AUTH2_INTERCONNECTION_TIMEOUT from milliseconds to seconds
 
+AUTH_TOO_SLOW_THRESHOLD = env('AUTH_TOO_SLOW_THRESHOLD',default=5000)#timeout for user authentication, in milliseconds
+
+SECRETKEY_EXPIREDAYS_WARNING=env('SECRETKEY_EXPIREDAYS_WARNING',default=14) #warning the user when the remaining lifetime is less than the configured days
+if SECRETKEY_EXPIREDAYS_WARNING > 0:
+    SECRETKEY_EXPIREDAYS_WARNING = timedelta(days=SECRETKEY_EXPIREDAYS_WARNING)
+else:
+    SECRETKEY_EXPIREDAYS_WARNING = timedelta(days=14)
 

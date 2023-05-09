@@ -603,7 +603,7 @@ class MemoryCache(object):
                     status_code:1
                 }
             }
-            return
+            return ptime
         except:
             #_traffic_data is None
             self._traffic_data= {
@@ -618,7 +618,7 @@ class MemoryCache(object):
                     }
                 }
             }
-            return
+            return ptime
         data["requests"] += 1
         data["totaltime"] += ptime
         if not data["mintime"]  or data["mintime"] > ptime:
@@ -626,6 +626,7 @@ class MemoryCache(object):
         if data["maxtime"] < ptime:
             data["maxtime"] = ptime
         data["status"][status_code] = data["status"].get(status_code,0) + 1
+        return ptime
 
     def _log_request_2(self,name,host,start,status_code):
         if start >= self._traffic_data_next_ts:
@@ -663,7 +664,7 @@ class MemoryCache(object):
                     host : 1
                 }
             }
-            return
+            return ptime
         except:
             #_traffic_data is None
             self._traffic_data = {
@@ -681,7 +682,7 @@ class MemoryCache(object):
                     }
                 }
             }
-            return
+            return ptime
         data["requests"] += 1
         data["totaltime"] += ptime
         if not data["mintime"]  or data["mintime"] > ptime:
@@ -690,6 +691,7 @@ class MemoryCache(object):
             data["maxtime"] = ptime
         data["status"][status_code] = data["status"].get(status_code,0) + 1
         data["domains"][host] = data["domains"].get(host,0) + 1
+        return ptime
 
     def _log_request_3(self,name,host,start,status_code):
         if start >= self._traffic_data_next_ts:
@@ -741,7 +743,7 @@ class MemoryCache(object):
                     }
                 }
             }
-            return
+            return ptime
         except:
             # _traffic_data is None
             self._traffic_data = {
@@ -767,7 +769,7 @@ class MemoryCache(object):
                     }
                 }
             }
-            return
+            return ptime
 
         data["requests"] += 1
         data["totaltime"] += ptime
@@ -797,6 +799,8 @@ class MemoryCache(object):
                 }
             }
             data["domains"][host] = domain_data
+
+        return ptime
 
     @property
     def status(self):

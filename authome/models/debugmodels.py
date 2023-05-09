@@ -30,6 +30,7 @@ class DebugLog(models.Model):
 
     WARNING = 100
     INTERCONNECTION_TIMEOUT = 101
+    AUTH_TOO_SLOW = 102
 
     ERROR = 200
     LB_HASH_KEY_NOT_MATCH = 201
@@ -55,6 +56,7 @@ class DebugLog(models.Model):
 
         (AUTH2_CLUSTER_NOTAVAILABLE , "Auth2 Cluster Not Available"),
         (INTERCONNECTION_TIMEOUT, "Auth2 Interconnection Timeout"),
+        (AUTH_TOO_SLOW, "Authentication Too Slow"),
 
         (LB_HASH_KEY_NOT_MATCH , "LB key not match"),
         (DOMAIN_NOT_MATCH, "Domain not match"),
@@ -131,7 +133,7 @@ class DebugLog(models.Model):
             cls.warning_if_true(condition,category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=target_session_cookie,userid=userid,request=request)
 
     @classmethod
-    def warning(cls,category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=None,userid=None,request=None):
+    def warning(cls,category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=None,userid=None,request=None,useremail=None):
         log = DebugLog(
             lb_hash_key = lb_hash_key,
             clusterid = settings.AUTH2_CLUSTERID if settings.AUTH2_CLUSTER_ENABLED else None,
@@ -141,7 +143,7 @@ class DebugLog(models.Model):
             target_session_cookie = target_session_cookie,
             message = message,
             category=category,
-            email = cls.get_email(userid),
+            email = useremail if useremail else cls.get_email(userid),
             request=utils.get_request_path(request)[:255],
             useragent=utils.get_useragent(request)
         )

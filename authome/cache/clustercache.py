@@ -1,4 +1,5 @@
 import logging
+import json
 import requests
 import traceback
 
@@ -6,6 +7,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.urls import reverse
 
+from ..serializers import JSONDecoder
 from .. import utils
 from . import cache,get_usercache
 from ..exceptions import Auth2ClusterException
@@ -365,7 +367,7 @@ class MemoryCache(cache.MemoryCache):
             return requests.post("{}{}".format(cluster.endpoint,reverse('cluster:get_session')),data={"session":session,"clusterid":clusterid},headers=self._get_headers(request),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
         try:
             res = self._get_remote_session(request,target_clusterid,_send_request)
-            return res.json()
+            return json.loads(res.text,cls=JSONDecoder)
         except Auth2ClusterException as ex:
             from  ..models import DebugLog
             DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,target_clusterid,session,utils.get_source_session_cookie(),message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)),request=request)

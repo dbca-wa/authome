@@ -375,14 +375,16 @@ def _sum(d1,d2,excluded_keys=None,included_keys=None):
             if k not in d1:
                d1[k] = {}
             elif not isinstance(d1[k],dict):
-                d1[k] = {}
+                d1[k] = {"requests":d1[k]}
             _sum(d1[k],v)
+        elif k not in d1:
+            d1[k] = v
+        elif isinstance(d1[k],dict):
+            _sum(d1[k],{"requests":v})
         elif not isinstance(v,(int,float,complex)):
             continue
         elif v <= 0:
             continue
-        elif k not in d1:
-            d1[k] = v
         elif k.startswith("min"):
             if d1[k] <= 0 or d1[k] > v:
                 d1[k] = v
@@ -495,7 +497,7 @@ def _save_trafficdata(batchid):
                 method_traffic_data.save()
         #change the traffic_data process status
         if settings.AUTH2_CLUSTER_ENABLED:
-            models.TrafficDataProcessStatus.objects.update_or_create(cluster=cache.current_auth2_cluster,clusterid=settings.AUTH2_CLUSTERID,defaults={"last_saved_batchid":batchid})
+            models.TrafficDataProcessStatus.objects.update_or_create(clusterid=settings.AUTH2_CLUSTERID,defaults={"last_saved_batchid":batchid,"cluster":cache.current_auth2_cluster})
         else:
             models.TrafficDataProcessStatus.objects.update_or_create(cluster__isnull=True,clusterid__isnull=True,defaults={"last_saved_batchid":batchid})
         #remove the saved data from cache

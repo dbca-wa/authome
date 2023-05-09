@@ -12,11 +12,14 @@ from django.db.models.signals import pre_delete, pre_save, post_save, post_delet
 from django.dispatch import receiver
 from django.contrib.auth.models import AbstractUser,UserManager
 from django.utils.html import mark_safe
+from django.contrib import messages
 
 import hashlib
 
 from ..cache import cache,get_defaultcache,get_usercache
 from ..  import exceptions
+from .. import signals
+from .. import utils
 
 logger = logging.getLogger(__name__)
 
@@ -299,7 +302,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
 
     LOCAL_PROVIDER = 'local'
 
-    _editable_columns = ("name","userflow","logout_url","logout_method")
+    _editable_columns = ("name","userflow","logout_url","logout_method","secretkey_expireat")
 
     #meaningful name set in auth2, this name will be used in some other place, so change it only if necessary
     name = models.CharField(max_length=64,unique=True,null=True)
@@ -311,6 +314,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     logout_url = models.CharField(max_length=512,blank=True,null=True)
     #the way to logout from idp
     logout_method = models.PositiveSmallIntegerField(choices=LOGOUT_METHODS,blank=True,null=True)
+    secretkey_expireat = models.DateTimeField(null=True,editable=True)
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
@@ -360,6 +364,20 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
             return idp.logout_url
         else:
             return None
+
+    @property
+    def secretkey_expiretime(self):
+        if not self.secretkey_expireat:
+            return ""
+        else:
+            now = timezone.localtime()
+            t = utils.format_datetime(self.secretkey_expireat)
+            if now > self.secretkey_expireat:
+                return mark_safe("<span style='background-color:darkred;color:white;padding:0px 20px 0px 20px;'>{}</span>".format(t))
+            elif now + settings.SECRETKEY_EXPIREDAYS_WARNING >= self.secretkey_expireat:
+                return mark_safe("<span style='background-color:#ff9966;color:white;padding:0px 20px 0px 20px;'>{}</span>".format(t))
+            else:
+                return mark_safe("<span style='background-color:green;color:white;padding:0px 20px 0px 20px;'>{}</span>".format(t))
 
     def __str__(self):
         return self.name or self.idp
@@ -2198,3 +2216,21 @@ else:
             next_refreshtime = cls.get_next_refreshtime()
             if not next_refreshtime or  timezone.localtime() >= next_refreshtime:
                 cache.refresh_usergroupauthorization()
+
+
+@receiver(signals.global_warning,sender=object)
+def secretkey_expireat_warning(sender,request,**kwargs):
+    if not cache.idps :
+        return
+    now = timezone.localtime()
+    for k,o in cache.idps.items() :
+        if not isinstance(k,int):
+            continue
+        if not o.secretkey_expireat:
+            continue
+        if o.secretkey_expireat <= now:
+            messages.error(request, 'The secret key used by identity provider "{}" has been expired  at "{}"'.format(o.name or o.idp,utils.format_datetime(o.secretkey_expireat)))
+        elif o.secretkey_expireat - now < settings.SECRETKEY_EXPIREDAYS_WARNING:
+            messages.warning(request, 'The secret key used by identity provider "{}" will be expired  at "{}"'.format(o.name or o.idp,utils.format_datetime(o.secretkey_expireat)))
+
+    

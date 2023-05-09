@@ -15,6 +15,7 @@ urlpatterns = [
     path('echo/auth_basic',views.echo,name="echo_auth_basic"),
     path('echo/auth_optional',views.echo,name="echo_auth_optional"),
     path('session/get',views.get_session,name="get_session"),
-    path('settings/get',views.get_settings,name="get_settings")
+    path('settings/get',views.get_settings,name="get_settings"),
+    path('trafficdata/flush',views.flush_trafficdata,name="flush_trafficdata")
 ]
 

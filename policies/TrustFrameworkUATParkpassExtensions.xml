@@ -1,0 +1,166 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TrustFrameworkPolicy
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+ xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
+ PolicySchemaVersion="0.3.0.0"
+ TenantId="dbcab2c.onmicrosoft.com"
+ PolicyId="B2C_1A_TrustFrameworkUATParkpassExtensions"
+ PublicPolicyUri="http://dbcab2c.onmicrosoft.com/B2C_1A_TrustFrameworkUATParkpassExtensions">
+
+    <BasePolicy>
+        <TenantId>dbcab2c.onmicrosoft.com</TenantId>
+        <PolicyId>B2C_1A_TrustFrameworkUATExternalIDPs</PolicyId>
+    </BasePolicy>
+
+    <BuildingBlocks>
+
+        <ClaimsSchema>
+            <ClaimType Id="extension_totpRegisteredUAT">
+                <DisplayName>Totp registered</DisplayName>
+                <DataType>boolean</DataType>
+                <UserInputType>Readonly</UserInputType>
+            </ClaimType>
+
+            <ClaimType Id="extension_mfaMethodUAT">
+                <DisplayName>Please select your preferred MFA method</DisplayName>
+                <DataType>string</DataType>
+                <UserInputType>RadioSingleSelect</UserInputType>
+                <Restriction>
+                    <Enumeration Text="Totp Token" Value="totp" SelectByDefault="true"/>
+                    <Enumeration Text="Phone" Value="phone" SelectByDefault="false"/>
+                    <Enumeration Text="Email" Value="email" SelectByDefault="false"/>
+                    <!--Enumeration Text="None " Value="none" SelectByDefault="false"/-->
+                </Restriction>
+            </ClaimType>
+        </ClaimsSchema>
+
+        <ContentDefinitions>
+
+            <!-- This content definition is to render an error page that displays unhandled errors. -->
+            <ContentDefinition Id="api.error">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/unified.html?domain=parkpass.dbca.wa.gov.au%26title=Error</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.idpselections">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/unified.html?domain=parkpass.dbca.wa.gov.au%26title=Sign%2520in%2520to%2520DBCA</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.idpselections.signup">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/unified.html?domain=parkpass.dbca.wa.gov.au%26title=Sign%2520in%2520to%2520DBCA</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.signuporsignin">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/b2c_signuporsignin.html?domain=parkpass.dbca.wa.gov.au%26title=Sign%2520in%2520to%2520DBCA%26class=unified_container</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?domain=parkpass.dbca.wa.gov.au%26title=User%2520profile</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.emailverify.signup">
+                <LoadUri>
+                    https://auth2-uat.dbca.wa.gov.au/sso/b2c_verifyemail.html?domain=parkpass.dbca.wa.gov.au%26title=Verify%2520email%26class=self_asserted_container%26header=Sign%2520up%2520for%2520a%2520new%2520account%2520with%2520Department%2520of%2520Biodiversity,%2520Conservation%2520and%2520Attractions%2520using%2520a%2520verification%2520code%2520sent%2520to%2520your%2520email.
+            </LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.emailverify">
+                <LoadUri>
+                    https://auth2-uat.dbca.wa.gov.au/sso/b2c_verifyemail.html?domain=parkpass.dbca.wa.gov.au%26title=Verify%2520email%26class=self_asserted_container%26header=Sign%2520in%2520to%2520your%2520Department%2520of%2520Biodiversity,%2520Conservation%2520and%2520Attractions%2520account%2520with%2520a%2520verification%2520code%2520sent%2520to%2520your%2520account%2520email%2520address.
+                </LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.emailverify.resetpassword">
+                <LoadUri>
+                    https://auth2-uat.dbca.wa.gov.au/sso/b2c_verifyemail.html?domain=parkpass.dbca.wa.gov.au%26title=Verify%2520email%26class=self_asserted_container%26header=Reset%2520the%2520password%2520of%2520your%2520Department%2520of%2520Biodiversity,%2520Conservation%2520and%2520Attractions%2520account%2520using%2520a%2520verification%2520code%2520sent%2520to%2520your%2520account%2520email%2520address.
+                </LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.useremailverify">
+                <LoadUri>
+                    https://auth2-uat.dbca.wa.gov.au/sso/b2c_verifyuseremail.html?domain=parkpass.dbca.wa.gov.au%26title=Verify%2520email%26class=self_asserted_container%26header=Sign%2520in%2520to%2520your%2520Department%2520of%2520Biodiversity,%2520Conservation%2520and%2520Attractions%2520account%2520with%2520a%2520verification%2520code%2520sent%2520to%2520your%2520account%2520email%2520address.
+                </LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.SignUpStep2-UserProperties">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/b2c_signup_userprofile.html?domain=parkpass.dbca.wa.gov.au%26title=User%2520profile%26class=self_asserted_container</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.selectMfaMethod">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?domain=parkpass.dbca.wa.gov.au%26title=Select%2520multi-factor%2520authentication%2520method</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.profileupdate">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?domain=parkpass.dbca.wa.gov.au%26title=Update%2520your%2520profile</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.localaccountsignup">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?domain=parkpass.dbca.wa.gov.au%26title=Local%2520ccount%2520signup</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.localaccountpasswordreset">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?domain=parkpass.dbca.wa.gov.au%26title=Set%2520password</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.phonefactor">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?domain=parkpass.dbca.wa.gov.au%26title=Multi-factor%2520authentication%2520via%2520phone%26header=Verify%2520your%2520mobile%2520phone</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.totpfactor.registration">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/b2c_totp_register.html?domain=parkpass.dbca.wa.gov.au%26class=self_asserted_container%26header=Register%2520with%2520your%2520authenticator%2520app</LoadUri>
+            </ContentDefinition>
+
+            <ContentDefinition Id="api.selfasserted.totpfactor.verify">
+                <LoadUri>https://auth2-uat.dbca.wa.gov.au/sso/self_asserted.html?domain=parkpass.dbca.wa.gov.au%26header=Verify%2520authenticator%2520code</LoadUri>
+            </ContentDefinition>
+
+        </ContentDefinitions>
+    </BuildingBlocks>
+
+    <ClaimsProviders>
+
+        <ClaimsProvider>
+            <DisplayName>Verify Email Sending Provider</DisplayName>
+            <TechnicalProfiles>
+                <TechnicalProfile Id="AUTH2-SendOtpViaEmail">
+                    <Metadata>
+                        <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/verifycode?domain=parkpass.dbca.wa.gov.au</Item>
+                    </Metadata>
+                    <CryptographicKeys>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
+                    </CryptographicKeys>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AUTH2-SendOtpViaUserEmail">
+                    <Metadata>
+                        <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/verifycode?domain=parkpass.dbca.wa.gov.au</Item>
+                    </Metadata>
+                    <CryptographicKeys>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
+                    </CryptographicKeys>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AUTH2-GenerateTOTPQRCode-NoSession">
+                    <Metadata>
+                        <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/totp/generate</Item>
+                    </Metadata>
+                    <CryptographicKeys>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
+                    </CryptographicKeys>
+                </TechnicalProfile>
+
+                <TechnicalProfile Id="AUTH2-VerifyTOTPCode">
+                    <Metadata>
+                        <Item Key="ServiceUrl">https://auth2-uat.dbca.wa.gov.au/sso/totp/verify</Item>
+                    </Metadata>
+                    <CryptographicKeys>
+                        <Key Id="BearerAuthenticationToken" StorageReferenceId="B2C_1A_Auth2UATSecret"/>
+                    </CryptographicKeys>
+                </TechnicalProfile>
+
+            </TechnicalProfiles>
+        </ClaimsProvider>
+
+    </ClaimsProviders>
+
+</TrustFrameworkPolicy>

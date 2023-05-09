@@ -1,5 +1,6 @@
 import subprocess
 import os
+import json
 import signal
 import time
 import requests
@@ -8,6 +9,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from . import  utils
+from .serializers import JSONDecoder
 
 class StartServerMixin(object):
     TESTED_SERVER = "http://127.0.0.1:{}"
@@ -83,6 +85,10 @@ class StartServerMixin(object):
         return "{}{}".format(cls.get_baseurl(servername),url)
 
     @classmethod
+    def get_flush_trafficdata_url(cls,servername="standalone"):
+        return "{}/test/trafficdata/flush".format(cls.get_baseurl(servername))
+
+    @classmethod
     def get_settings(cls,names,servername="standalone"):
         """
         Return session data if found, otherwise return None
@@ -112,6 +118,16 @@ class StartServerMixin(object):
         else:
             res.raise_for_status()
         return res.json()
+
+    @classmethod
+    def flush_traffic_data(cls,session_cookie,servername="standalone"):
+        """
+        Save and return the traffic data
+        """
+        res = requests.get("{}?session={}".format(cls.get_flush_trafficdata_url(servername),session_cookie),headers=cls.cluster_headers)
+        res.raise_for_status()
+        return json.loads(res.text,cls=JSONDecoder)["data"]
+
 
     @classmethod
     def is_session_deleted(cls,session_cookie,servername="standalone"):

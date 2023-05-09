@@ -7,9 +7,11 @@ from django.conf import settings
 from django.urls import reverse
 from django.contrib import admin as djangoadmin
 from django.contrib import auth
+from django.urls import resolve
 
 from .. import models
 from .. import utils
+from .. import signals
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +19,14 @@ class Auth2AdminSite(djangoadmin.AdminSite):
     def admin_view(self, view, cacheable=False):
         def _view(request, *args, **kwargs):
             utils.attach_request(request)
+            try:
+                if models.can_access(request.user.email,settings.AUTH2_DOMAIN,'/admin/authome/tools/'):
+                    url_name = resolve(request.path_info).url_name
+                    if url_name in ("index","app_list"):
+                        signals.global_warning.send(sender=object,request=request)
+            except:
+                pass
+
             return view(request,*args,**kwargs)
 
         return super().admin_view(_view,cacheable)
@@ -87,6 +97,18 @@ class Auth2AdminSite(djangoadmin.AdminSite):
                     'has_module_perms': has_module_perms,
                     'models': [model_dict],
                 }
+        #add others app
+        if models.can_access(request.user.email,settings.AUTH2_DOMAIN,'/admin/authome/tools/'):
+            app_label = models.UserGroup._meta.app_label
+            if app_label in app_dict:
+                app_dict[app_label]["models"].append({
+                    'name': "Renew Apple Secret Key",
+                    'object_name': "Renew Apple Secret Key",
+                    'perms': [],
+                    'admin_url': reverse("admin:renew_apple_secretkey"),
+                    'add_url': None,
+                })
+
 
         if label:
             return app_dict.get(label)

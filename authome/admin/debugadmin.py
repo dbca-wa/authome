@@ -32,6 +32,7 @@ class DebugLogAdmin(djangoadmin.ModelAdmin):
         models.DebugLog.AUTH2_CLUSTER_NOTAVAILABLE : "#4000ff",
 
         models.DebugLog.INTERCONNECTION_TIMEOUT : "#ff00ff",
+        models.DebugLog.AUTH_TOO_SLOW : "#ff00ff",
     
         models.DebugLog.LB_HASH_KEY_NOT_MATCH : "red",
         models.DebugLog.DOMAIN_NOT_MATCH: "coral",

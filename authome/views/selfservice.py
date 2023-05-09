@@ -13,15 +13,10 @@ from ipware.ip import get_client_ip
 from .. import models
 from ..cache import cache
 from .. import utils
-from .views  import get_absolute_url, _populate_response,_get_userflow_pagelayout,_get_next_url
+from .views  import get_absolute_url, _populate_response,_get_userflow_pagelayout,_get_next_url,MFA_METHOD_MAPPING
 
 logger = logging.getLogger(__name__)
 
-MFA_METHOD_MAPPING = {
-    "totp" : "Authenticator App",
-    "phone" : "Phone",
-    "email" : "Email",
-}
 def user_setting(request):
     #get the auth response
     user = request.user

@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 from django.contrib import auth
 from django.utils import timezone
@@ -9,9 +10,10 @@ from django.core.handlers import exception
 
 from social_core.exceptions import AuthException
 
-from ..models import User,UserToken
+from ..models import User,UserToken,DebugLog
 from ..cache import get_usercache
 from ..exceptions import UserDoesNotExistException
+from .. import utils
 
 from .. import performance
 
@@ -188,6 +190,22 @@ def get_response_for_exception():
         if isinstance(exc, AuthException):
             return views.handler400(request,exc)
         else:
+            try:
+                useremail = request.user.email
+            except:
+                useremail = None
+            try:
+                DebugLog.warning(
+                    DebugLog.ERROR,utils.get_source_lb_hash_key(request),
+                    utils.get_source_clusterid(request),
+                    utils.get_source_session_key(request),
+                    utils.get_source_session_cookie(request),
+                    useremail=useremail,
+                    message="Failed to process request.{}".format("\n".join(traceback.format_exception(type(exc),exc,exc.__traceback__)))
+                )
+            except:
+                logger.error("Failed to log the exception message to DebugLog.{}".format(traceback.format_exc()))
+            
             return original_handler(request,exc)
     return _response_for_exception
 
