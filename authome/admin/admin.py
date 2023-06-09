@@ -668,7 +668,7 @@ class CustomizableUserflowAdmin(PermissionCheckMixin,CacheableListTitleMixin,Dat
     list_display = ('domain','fixed','default','mfa_set',"mfa_reset",'password_reset','_modified','_created')
     readonly_fields = ('_modified','_created')
     form = forms.CustomizableUserflowForm
-    fields = ('domain','fixed','default','mfa_set',"mfa_reset",'password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body","sortkey",'_modified','_created')
+    fields = ('domain','fixed','default','mfa_set',"mfa_reset",'password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body","signedout_url","relogin_url","signout_body","sortkey",'_modified','_created')
     ordering = (models.sortkey_c.asc(),)
     search_fields=("domain",)
 

@@ -1,4 +1,5 @@
 from datetime import timedelta
+from collections import ChainMap
 
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden, JsonResponse,HttpResponseNotAllowed,HttpResponseBadRequest,HttpResponseNotFound
 from django.template.response import TemplateResponse
@@ -112,6 +113,7 @@ def basic_auth_required_response_factory(request):
         return BASIC_AUTH_REQUIRED_RESPONSE
     return res
 
+encode_url_parameters = lambda parameters,selected_params=None:"&".join("{}={}".format(k,urllib.parse.quote(v) if isinstance(v,str) else v) for k,v in parameters.items() if not selected_params or k in selected_params) if parameters else None
 def _get_next_url(request):
     """
     Get the non-null absolute next url .
@@ -213,43 +215,7 @@ def get_absolute_url(url,domain):
         #absoulte url without protocol
         return "https://{}".format(url)
 
-def _get_relogin_url(request):
-    """
-    Get non-null absolute relogin url from request or session; 
-    if can't found, return default url
-    """
-    #try to get relogin url from request url parameters
-    relogin_url = request.GET.get("relogin")
-    request_host = utils.get_host(request)
-    if not relogin_url:
-        #not found in request url parameters, try to use the property 'next' from session as relogin url
-        relogin_url = request.session.get("next")
-        if not relogin_url:
-            #still can't get the relogin url, use the home page of the domain as relogin url
-            if request_host == settings.AUTH2_DOMAIN:
-                return "https://{}/sso/setting".format(request_host)
-            else:
-                return "https://{}".format(request_host)
-    
-    host = utils.get_domain(relogin_url)
-    if not host:
-        host = request_host
-        relogin_url = get_absolute_url(relogin_url,host)
-    elif request_host != settings.AUTH2_DOMAIN and host != request_host:
-        #request's domain is not the domain of the relogin url, change the relogin url to home url of request's domain
-        return "https://{}".format(request_host)
-
-    #reset relogin url to default url if relogin url is signed out url
-    if any(relogin_url.endswith(p) for p in ["/sso/auth_logout","/sso/signedout"]):
-        if host == settings.AUTH2_DOMAIN:
-            return "https://{}/sso/setting".format(host)
-        else:
-            return "https://{}".format(host)
-
-    return relogin_url
-
-
-def get_post_b2c_logout_url(request,encode=True,message=None):
+def get_post_b2c_logout_url(request,encode=True):
     """
     Get post b2c logout url which will be redirect to by dbcab2c after log out from dbca b2c.
     The logout url is based on idp's logout method.
@@ -266,8 +232,9 @@ def get_post_b2c_logout_url(request,encode=True,message=None):
         encode: encode the url if True;
     Return 	quoted post logout url
     """
-    if not message:
-        message = request.GET.get("message")
+    host = request.GET.get("domain") or utils.get_host(request)
+
+    message = request.GET.get("message")
     #get the idp and idepid
     idpid = None
     idp = None
@@ -287,46 +254,69 @@ def get_post_b2c_logout_url(request,encode=True,message=None):
             else:
                 idppk = idp.id
 
-
-    relogin_url = _get_relogin_url(request)
-    domain = utils.get_domain(relogin_url)
-
-    #get the absolute signedout url
-    post_b2c_logout_url = "https://{}/sso/signedout".format(domain)
-
-    if relogin_url:
-        #if relogin_url is not None, encode it
-        relogin_url = urllib.parse.quote(relogin_url)
-
-    #add relogin_url and idpid as url parameters to post_b2c_logout_url
-    params = None
-    if relogin_url:
-        params = "relogin={}".format(relogin_url)
-
-    if idpid:
-        if params:
-            params = "{}&idp={}".format(params,idppk)
+    next_url = request.GET.get("next")
+    relogin_url = None
+    if next_url:
+        domain,next_url= utils.get_domain_path(next_url) 
+        domain = domain or host
+        next_url = next_url or "/"
+    else:
+        relogin_url = request.GET.get("relogin") 
+        if relogin_url:
+            domain,relogin_url= utils.get_domain_path(relogin_url)
+            domain = domain or host
         else:
-            params = "idp={}".format(idppk)
+            domain = host
+        
+    params = {}
+    userflow_signout =  _get_userflow_signout(request,domain)
+    if userflow_signout.signedout_url:
+        signedout_url = userflow_signout.signedout_url
+    else:
+        signedout_url = "/sso/signedout"
+
+    if next_url:
+        params["relogin"] = next_url
+    elif userflow_signout.relogin_url:
+        params["relogin"] = userflow_signout.relogin_url
+    elif relogin_url:
+        params["relogin"] = relogin_url
+    elif domain == settings.AUTH2_DOMAIN:
+        params["relogin"] = "/sso/setting"
+    else:
+        params["relogin"] = "/"
 
     if message:
-        if params:
-            params = "{}&message={}".format(params,urllib.parse.quote(message))
+        params["message"] = message
+
+
+    #get the absolute signedout url
+    if idp and idp.logout_url:
+        if idp.logout_method == models.IdentityProvider.AUTO_LOGOUT_WITH_POPUP_WINDOW:
+            params["idp"] = idp.name or idp.idp
+            params["idplogout"] = idp.logout_url
+            params["signedout"] = signedout_url
+                
+            post_b2c_logout_url = "https://{}/sso/signout_socialmedia?{}".format(domain,encode_url_parameters(params))
+        elif idp.logout_method == models.IdentityProvider.AUTO_LOGOUT:
+            if params:
+                post_b2c_logout_url = "https://{}{}?{}".format(domain,signedout_url,encode_url_parameters(params))
+            else:
+                post_b2c_logout_url = "https://{}{}".format(domain,signedout_url)
+
+            post_b2c_logout_url = idp.logout_url.format(urllib.parse.quote(post_b2c_logout_url))
         else:
-            params = "message={}".format(urllib.parse.quote(message))
-
-
-    if params:
-        post_b2c_logout_url = "{}?{}".format(post_b2c_logout_url,params)
-
-    if idp and idp.logout_url and idp.logout_method == models.IdentityProvider.AUTO_LOGOUT:
-        #idp with automatically logout method
-        idp_logout_url = idp.logout_url.format(urllib.parse.quote(post_b2c_logout_url))
-
-        return urllib.parse.quote(idp_logout_url) if encode else idp_logout_url
+            params["idp"] = idp.name or idp.idp
+            params["idplogout"] = idp.logout_url
+            post_b2c_logout_url = "https://{}{}?{}".format(domain,signedout_url,encode_url_parameters(params))
     else:
-        #return econded or non-encoded post_b2c_logout_url based on parameter 'encode'
-        return urllib.parse.quote(post_b2c_logout_url) if encode else post_b2c_logout_url
+        if params:
+            post_b2c_logout_url = "https://{}{}?{}".format(domain,signedout_url,encode_url_parameters(params))
+        else:
+            post_b2c_logout_url = "https://{}{}".format(domain,signedout_url)
+
+    #return econded or non-encoded post_b2c_logout_url based on parameter 'encode'
+    return urllib.parse.quote(post_b2c_logout_url) if encode else post_b2c_logout_url
 
 def _populate_response(request,f_cache,cache_key,user,session_key=None):
     """
@@ -859,7 +849,7 @@ def auth_local(request):
                     else:
                         return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.cookie_value,"next_url":next_url,"domain":next_url_domain})
                 else:
-                    return signout(request,relogin_url=next_url,message="Your account is disabled.",localauth=True)
+                    return signout(request,next_url=next_url,message="Your account is disabled.",localauth=True)
             else:
                 #Userr does not exist, signup
                 token = get_random_string(settings.SIGNUP_TOKEN_LENGTH,VALID_TOKEN_CHARS)
@@ -950,11 +940,9 @@ def logout_view(request):
     host = utils.get_host(request)
     if not host.endswith(settings.SESSION_COOKIE_DOMAIN):
         #request's domain is not a subdomain of session cookie; only need to delete to cookie ; and redirect to auth2.dbca to finish the logout procedure.
-        relogin_url = _get_relogin_url(request)
-        #delete the cookie 
         parameters = dict(request.GET.items())
-        parameters["relogin"] = relogin_url
-        querystring = "&".join( "{}={}".format(k,(urllib.parse.quote(v) if isinstance(v,str) else v)) for k,v in parameters.items())
+        parameters["domain"] = host
+        querystring = encode_url_parameters(parameters)
         url = "https://{}/sso/auth_logout?{}".format(settings.AUTH2_DOMAIN,querystring)
         #delete the session cookie from browser via setting the session_key to None
         request.session._session_key = None
@@ -1031,7 +1019,7 @@ def home(request):
         next_path = next_url
     #check whether rquest is authenticated and authorized
     if not request.user.is_authenticated or not request.user.is_active:
-        if next_path and any(next_path.endswith(p) for p in ["/sso/auth_logout","/sso/signedout"]):
+        if next_path and any(next_path.endswith(p) for p in ["/sso/auth_logout","/sso/signedout","/sso/signout_socialmedia"]):
             #next path is signout url
             #if have relogin parameter, try to use relogin url as next_url
             relogin_url = None
@@ -1205,6 +1193,47 @@ def profile(request):
     content = json.dumps(content)
     return HttpResponse(content=content,content_type="application/json")
 
+def signout_socialmedia(request):
+    """
+    View method for path '/sso/signout_socialmedia'
+    Return a consistent signedout page
+    """
+    if request.user.is_authenticated:
+        #this is not a normal request, must send by user manually.
+        #still authenticated, sigout first
+        return logout_view(request)
+
+    domain = utils.get_host(request)
+    page_layout,extracss = _get_userflow_pagelayout(request,domain)
+
+    context = {
+        "body":page_layout,
+        "extracss":extracss,
+        "domain":domain,
+        "signedout":  request.GET.get("signedout") or "/sso/signedout",
+        "message":request.GET.get("message") or ""
+    }
+    context["idp"] = request.GET.get("idp")
+    context["idplogout"] = request.GET.get("idplogout")
+
+    if context["message"]:
+        context["failed_message"] = "{}\r\nFailed to logout from the social media '{}' because popup window was blocked".format(context["message"],context["idp"])
+    else:
+        context["failed_message"] = "Failed to logout from the social media '{}' because popup window was blocked".format(context["idp"])
+
+    if request.GET.get("relogin"):
+        context["relogin"] = request.GET.get("relogin")
+    else:
+        userflow_signout =  _get_userflow_signout(request,domain)
+        if userflow_signout.relogin_url:
+            context["relogin"] = userflow_signout.relogin_url
+        elif domain == settings.AUTH2_DOMAIN:
+            context["relogin"] = "/sso/setting"
+        else:
+            context["relogin"] = "/"
+
+    return TemplateResponse(request,"authome/signout_socialmedia.html",context=context)
+
 def signedout(request):
     """
     View method for path '/sso/signedout'
@@ -1215,41 +1244,71 @@ def signedout(request):
         #still authenticated, sigout first
         return logout_view(request)
 
-    relogin_url = _get_relogin_url(request)
-    domain = utils.get_domain(relogin_url)
-
-    #get idp to trigger a backend logout flow
-    idppk = request.GET.get("idp")
-    if idppk:
-        idp = models.IdentityProvider.get_idp(int(idppk))
-    else:
-        idp  = None
-
+    domain = utils.get_host(request)
     page_layout,extracss = _get_userflow_pagelayout(request,domain)
+    userflow_signout =  _get_userflow_signout(request,domain)
 
     context = {
         "body":page_layout,
         "extracss":extracss,
-        "relogin":relogin_url,
-        "auto_logout": False,
         "domain":domain,
         "message":request.GET.get("message") 
     }
-    if idp and idp.logout_url:
-        context["idp_name"] = idp.name
-        context["idp_logout_url"] = idp.logout_url
-        context["auto_logout"] = True if idp.logout_method == models.IdentityProvider.AUTO_LOGOUT_WITH_POPUP_WINDOW else False
+    if request.GET.get("idp"):
+        context["idp"] = request.GET.get("idp")
+        context["idplogout"] = request.GET.get("idplogout")
+
+    if request.GET.get("relogin"):
+        context["relogin"] = request.GET.get("relogin")
+    else:
+        if userflow_signout.relogin_url:
+            context["relogin"] = userflow_signout.relogin_url
+        elif domain == settings.AUTH2_DOMAIN:
+            context["relogin"] = "/sso/setting"
+        else:
+            context["relogin"] = "/"
+
+    signout_body = userflow_signout.signout_body_template.render(
+        context=context,
+        request=request
+    )
+    context["signout_content"] = signout_body
 
     return TemplateResponse(request,"authome/signedout.html",context=context)
 
-def signout(request,relogin_url=None,message=None,idp=None,localauth=False):
+def signout(request,next_url=None,message=None,idp=None,localauth=False):
     """
     Called by pipeline to automatically logout the user beceause some errors occured druing authentication.
     """
     parameters = {}
-    if not relogin_url:
-        relogin_url =_get_relogin_url(request)
-    parameters["relogin"] = relogin_url
+    domain = utils.get_host(request)
+
+    if not next_url:
+        #next url is empty,try to find the next url from session
+        next_url = request.session.get("next")
+
+    if next_url:
+        url_map = utils.parse_url(next_url)
+        if url_map["domain"] == settings.AUTH2_DOMAIN and (url_map["path"] == "" or url_map["path"] == "/"):
+            #is auth2 home path, try to find the real next url
+            if url_map["parameters"]:
+                parameters = dict([ (p.split("=",1) if "=" in p else (p,"")) for p in url_map["parameters"].split("&") if p.strip()])
+                if parameters.get("next"):
+                    next_url = urllib.parse.unquote(parameters.get("next"))
+
+    if next_url:
+        url_domain,next_url = utils.get_domain_path(next_url)
+        if url_domain:
+            domain = url_domain
+    else:
+        #still can't get the relogin url, use the home page of the domain as relogin url
+        if domain == settings.AUTH2_DOMAIN:
+            next_url = "/sso/setting"
+        else:
+            next_url = "/"
+
+    parameters["next"] = next_url
+
     if idp:
         parameters["idp"] = idp.id
     else:
@@ -1264,28 +1323,36 @@ def signout(request,relogin_url=None,message=None,idp=None,localauth=False):
 
     if localauth:
         parameters["localauth"] = ""
+
     logout(request)
-    querystring = "&".join("{}={}".format(k,urllib.parse.quote(v) if isinstance(v,str) else v) for k,v in parameters.items())
-    return HttpResponseRedirect("https://{}/sso/auth_logout?{}".format(utils.get_host(request),querystring))
+
+    querystring = encode_url_parameters(parameters)
+    if querystring:
+        return HttpResponseRedirect("https://{}/sso/auth_logout?{}".format(domain,querystring))
+    else:
+        return HttpResponseRedirect("https://{}/sso/auth_logout".format(domain))
 
 
 def _init_userflow_pagelayout(request,userflow,container_class):
     """
     Initialize the pagelayout for the custmizable userflow and container_class
     """
-    if hasattr(userflow,container_class):
-        #already initialized
-        return
     logger.debug("Initialize user flow page layout; userflow={}, container_class={}".format(userflow,container_class))
     #initialize the page layout for the user userflow and container class
-    if not userflow.page_layout:
-        #page_layout is not configured, use default userflow's page_layout
-        #initialize default userflow
-        _init_userflow_pagelayout(request,userflow.defaultuserflow,container_class)
-        #set userflow's page layout to default userflow's page layout
-        setattr(userflow,container_class,getattr(userflow.defaultuserflow,container_class))
-        userflow.inited_extracss = userflow.defaultuserflow.inited_extracss
-    else:
+
+    if userflow.pagelayout_customized == False:
+        #no customization
+        return
+    elif userflow.pagelayout_customized and hasattr(userflow,container_class):
+        #initied for the container class
+        return
+
+    if userflow.pagelayout_customized is None and userflow.defaultuserflow and not userflow.page_layout and not userflow.extracss:
+        #no customization
+        userflow.pagelayout_customized = False
+        return
+
+    if userflow.page_layout:
         #page_layout is configured, init page_layout using template engine
         context={"container_class":container_class}
         page_layout = userflow.page_layout
@@ -1295,27 +1362,51 @@ def _init_userflow_pagelayout(request,userflow,container_class):
             request=request
         )
         setattr(userflow,container_class,page_layout)
+    else:
+         #page_layout is not configured, use default userflow's page_layout
+         #initialize default userflow
+        _init_userflow_pagelayout(request,userflow.defaultuserflow,container_class)
+        #set userflow's page layout to default userflow's page layout
+        setattr(userflow,container_class,getattr(userflow.defaultuserflow,container_class))
 
-        if not hasattr(userflow,"inited_extracss"):
+    if not userflow.pagelayout_customized:
+        #only need to init once
+        if userflow.extracss or not userflow.defaultuserflow:
             #init extracss using template engine
             extracss = userflow.extracss or ""
             userflow.inited_extracss = django_engine.from_string(extracss).render(
                 context=context,
                 request=request
             )
+
+        else:
+            _init_userflow_pagelayout(request,userflow.defaultuserflow,container_class)
+            userflow.inited_extracss = userflow.defaultuserflow.inited_extracss
+
+        userflow.pagelayout_customized = True
+
 def _get_userflow_pagelayout(request,domain,container_class="self_asserted_container"):
-    userflow = models.CustomizableUserflow.get_userflow(domain)
-    _init_userflow_pagelayout(request,userflow,container_class)
+    userflows = models.CustomizableUserflow.find_userflows(domain)
+    for userflow in userflows:
+        _init_userflow_pagelayout(request,userflow,container_class)
 
-    return (getattr(userflow,container_class),userflow.inited_extracss)
-
+        if userflow.pagelayout_customized:
+            return (getattr(userflow,container_class),userflow.inited_extracss)
 
 def _init_userflow_verifyemail(request,userflow):
     """
     Initialize the verifyemail for customizable userflow object
     """
-    if hasattr(userflow,"verifyemail_body_template"):
-        #already initialized
+    if userflow.verifyemail_customized == False:
+        #no customization
+        return
+    elif userflow.verifyemail_customized:
+        #initied 
+        return
+
+    if userflow.verifyemail_customized is None and userflow.defaultuserflow and not userflow.verifyemail_from and not userflow.verifyemail_subject and not userflow.verifyemail_body:
+        #no customization
+        userflow.verifyemail_customized = False
         return
 
     #initialize verifyemail related properties
@@ -1337,10 +1428,59 @@ def _init_userflow_verifyemail(request,userflow):
         _init_userflow_verifyemail(request,userflow.defaultuserflow)
         userflow.verifyemail_body_template = userflow.defaultuserflow.verifyemail_body_template
 
+    userflow.verifyemail_customized = True
+
 def _get_userflow_verifyemail(request,domain):
-    userflow = models.CustomizableUserflow.get_userflow(domain)
-    _init_userflow_verifyemail(request,userflow)
-    return userflow
+    userflows = models.CustomizableUserflow.find_userflows(domain)
+    for userflow in userflows:
+        _init_userflow_verifyemail(request,userflow)
+        if userflow.verifyemail_customized:
+            return userflow
+
+def _init_userflow_signout(request,userflow):
+    """
+    Initialize the verifyemail for customizable userflow object
+    """
+    if userflow.signout_customized == False:
+        #no customization
+        return
+    elif userflow.signout_customized:
+        #initied 
+        return
+
+    if userflow.signout_customized is None and userflow.defaultuserflow and not userflow.signedout_url and not userflow.relogin_url and not userflow.signout_body:
+        #no customization
+        userflow.signout_customized = False
+        return
+
+    #initialize verifyemail related properties
+    if not userflow.signedout_url and userflow.defaultuserflow:
+        #verifyemail_from is not configured, get it from default userflow
+        _init_userflow_signout(request,userflow.defaultuserflow)
+        userflow.signedout_url = userflow.defaultuserflow.signedout_url
+
+    if not userflow.relogin_url and userflow.defaultuserflow:
+        #verifyemail_subject is not configured, get it from default userflow
+        _init_userflow_signout(request,userflow.defaultuserflow)
+        userflow.relogin_url = userflow.defaultuserflow.relogin_url
+
+    if userflow.signout_body:
+        #verifyemail_body is configured, get it from template
+        userflow.signout_body_template = django_engine.from_string(userflow.signout_body)
+    else:
+        #verifyemail_body is not configured, get it from default userflow
+        _init_userflow_signout(request,userflow.defaultuserflow)
+        userflow.signout_body_template = userflow.defaultuserflow.signout_body_template
+
+    userflow.signout_customized = True
+
+
+def _get_userflow_signout(request,domain):
+    userflows = models.CustomizableUserflow.find_userflows(domain)
+    for userflow  in userflows:
+        _init_userflow_signout(request,userflow)
+        if userflow.signout_customized:
+            return userflow
 
 def adb2c_view(request,template,**kwargs):
     """
