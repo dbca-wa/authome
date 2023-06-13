@@ -144,7 +144,7 @@
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>mfaMethod</Value>
-                            <Value>phone</Value>
+                            <Value>phone_disabled</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
@@ -163,7 +163,7 @@
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>mfaMethod</Value>
-                            <Value>phone</Value>
+                            <Value>phone_disabled</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimsExist" ExecuteActionsIf="false">
@@ -184,9 +184,9 @@
                             <Value>false</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
-                        <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>mfaMethod</Value>
-                            <Value>email</Value>
+                            <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
@@ -208,9 +208,9 @@
                             <Value>false</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
-                        <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>mfaMethod</Value>
-                            <Value>email</Value>
+                            <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
@@ -451,7 +451,7 @@
                         <!--Sample: If the preferred MFA method is not 'phone' skip this orchestration step-->
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>mfaMethod</Value>
-                            <Value>phone</Value>
+                            <Value>phone_disabled</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
@@ -470,7 +470,7 @@
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>mfaMethod</Value>
-                            <Value>phone</Value>
+                            <Value>phone_disabled</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
@@ -705,7 +705,7 @@
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>mfaMethod</Value>
-                            <Value>phone</Value>
+                            <Value>phone_disabled</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
@@ -724,7 +724,7 @@
                         </Precondition>
                         <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
                             <Value>mfaMethod</Value>
-                            <Value>phone</Value>
+                            <Value>phone_disabled</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
@@ -741,9 +741,9 @@
                             <Value>false</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
-                        <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
+                        <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
                             <Value>mfaMethod</Value>
-                            <Value>email</Value>
+                            <Value>totp</Value>
                             <Action>SkipThisOrchestrationStep</Action>
                         </Precondition>
                     </Preconditions>
