@@ -538,9 +538,9 @@ Email: enquiries@dbca.wa.gov.au
     verifyemail_subject = models.CharField(max_length=512,null=True,blank=True)
     verifyemail_body = models.TextField(null=True,blank=True)
 
-    signedout_url = models.CharField(max_length=256,null=True,blank=True,help_text="Redirect to this url after signout from sso")
-    relogin_url = models.CharField(max_length=256,null=True,blank=True,help_text="A link used in default signout page to let user relogin to the system after signout from sso, ignore this setting if signedout_url is configured.")
-    signout_body = models.TextField(null=True,blank=True,help_text="The body template used in the signedout page")
+    signedout_url = models.CharField(max_length=256,null=True,blank=True,help_text="Redirect to this url after sign out from sso")
+    relogin_url = models.CharField(max_length=256,null=True,blank=True,help_text="A link can be used in signed out page to let user relogin to the system after signout from sso.")
+    signout_body = models.TextField(null=True,blank=True,help_text="The body template used in the signed out page")
 
     sortkey = models.CharField(max_length=128,editable=True,help_text="A sorting string consisted with a 2 digitals and string separated by ':', the sorting string is auto generated if the digitals is in {}".format(RequestDomain.all_base_sort_keys()))
 
