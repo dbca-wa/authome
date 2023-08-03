@@ -163,7 +163,7 @@ class UserAdmin(SyncObjectChangeMixin,admin.UserAdmin):
             if failed_clusters:
                 self.message_user(
                     request, 
-                    "Failed to send change event of the user({1}<{0}>) to some cluseters.{2} ".format(obj.id,obj.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters]),
+                    "Failed to send change event of the user({1}<{0}>) to some clusters.{2} ".format(obj.id,obj.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters]),
                     level=messages.ERROR
                 )
         return result
