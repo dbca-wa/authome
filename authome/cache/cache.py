@@ -304,6 +304,30 @@ class MemoryCache(object):
         self.refresh_userflow_cache()
         return self._userflows
 
+    def _find_userflows(self,domain):
+        userflows = self._userflows_map.get(domain)
+        if not userflows:
+            userflows = []
+            for o in self._userflows:
+                if o.request_domain.match(domain):
+                    userflows.append(o)
+            if not userflows:
+                userflows.append(self._defaultuserflow)
+            self._userflows_map[domain] = userflows
+        logger.debug("Find the userflow({1}) for domain '{0}'".format(domain,userflows))
+        return userflows
+
+    def find_userflows(self,domain=None):
+        """
+        find matched userflows, if can't find, return default userflow
+        if domain is None, return default userflow
+        """
+        self.refresh_userflow_cache()
+        if domain:
+            return self._find_userflows(domain)
+        else:
+            return [self._defaultuserflow]
+
     def get_userflow(self,domain=None):
         """
         Get the userflow configured for that domain, if can't find, return default userflow
@@ -311,16 +335,7 @@ class MemoryCache(object):
         """
         self.refresh_userflow_cache()
         if domain:
-            userflow = self._userflows_map.get(domain)
-            if not userflow:
-                for o in self._userflows:
-                    if o.request_domain.match(domain):
-                        userflow = o
-                        break
-                userflow = userflow or self._defaultuserflow
-                self._userflows_map[domain] = userflow
-            logger.debug("Find the userflow({1}) for domain '{0}'".format(domain,userflow.domain))
-            return userflow
+            return self._find_userflows(domain)[0]
         else:
             return self._defaultuserflow
 

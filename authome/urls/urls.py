@@ -23,6 +23,7 @@ urlpatterns = [
     path('sso/auth_basic', traffic_monitor("auth_basic",views.auth_basic), name='auth_basic'),
     path('sso/login_domain', csrf_exempt(views.login_domain), name='login_domain'),
     path('sso/profile', views.profile, name='profile'),
+    path('sso/signout_socialmedia', views.signout_socialmedia, name='signout_socialmedia'),
     path('sso/signedout', views.signedout, name='signedout'),
     path('sso/forbidden', views.forbidden, name='forbidden'),
     path('sso/loginstatus', views.loginstatus, name='loginstatus'),

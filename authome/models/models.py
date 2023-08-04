@@ -313,7 +313,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     logout_url = models.CharField(max_length=512,blank=True,null=True)
     #the way to logout from idp
     logout_method = models.PositiveSmallIntegerField(choices=LOGOUT_METHODS,blank=True,null=True)
-    secretkey_expireat = models.DateTimeField(null=True,editable=True)
+    secretkey_expireat = models.DateTimeField(null=True,editable=True,blank=True)
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
 
@@ -386,6 +386,10 @@ class CustomizableUserflow(CacheableMixin,DbObjectMixin,models.Model):
     Customize userflow for domain.
     The domain '*' is the default settings.
     """
+    pagelayout_customized = None
+    verifyemail_customized = None
+    signout_customized = None
+
     _request_domain = None
     default_layout="""{% load i18n static %}
 <table id="header" style="background:#2D2F32;width:100%;"><tr><td style="width:34%">
@@ -421,8 +425,10 @@ Email: enquiries@dbca.wa.gov.au
 </div>
 </td></tr></table>
     """
+    default_verifyemail_from = "noreply@dbca.wa.gov.au"
+    default_verifyemail_subject = "Email verification code from the Department of Biodiversity, Conservation and Attractions"
 
-    default_verify_email_body="""<html lang="en-gb" >
+    default_verifyemail_body="""<html lang="en-gb" >
 <head>
     <title>Email verification code</title>
 </head>
@@ -503,7 +509,19 @@ Email: enquiries@dbca.wa.gov.au
 </body>
 </html>"""
 
-    _editable_columns = ("default","mfa_set","mfa_reset","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body","sortkey")
+    default_signout_body="""{% load i18n static %}
+<h4>{% if message %}{{message}}<br>{% endif %}You have signed out from Department of Biodiversity, Conservation and Attractions.
+{% if idplogout %} 
+    <br><br>You are still logged into the social media '{{idp}}'.
+    <br><br>Please click <a href="{{idplogout}}">here</A> to log out from {{idp}} if you want.
+{% endif %}
+{% if relogin %} 
+<br><br>If you want to log in again, please click <a href="{{relogin}}">here</A>.
+{% endif %}
+</h4>
+"""
+
+    _editable_columns = ("default","mfa_set","mfa_reset","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body","signedout_url","relogin_url","signout_body","sortkey")
 
     domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
     fixed = models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
@@ -518,6 +536,10 @@ Email: enquiries@dbca.wa.gov.au
     verifyemail_from = models.EmailField(null=True,blank=True)
     verifyemail_subject = models.CharField(max_length=512,null=True,blank=True)
     verifyemail_body = models.TextField(null=True,blank=True)
+
+    signedout_url = models.CharField(max_length=256,null=True,blank=True,help_text="Redirect to this url after sign out from sso")
+    relogin_url = models.CharField(max_length=256,null=True,blank=True,help_text="A link can be used in signed out page to let user relogin to the system after signout from sso.")
+    signout_body = models.TextField(null=True,blank=True,help_text="The body template used in the signed out page")
 
     sortkey = models.CharField(max_length=128,editable=True,help_text="A sorting string consisted with a 2 digitals and string separated by ':', the sorting string is auto generated if the digitals is in {}".format(RequestDomain.all_base_sort_keys()))
 
@@ -578,7 +600,13 @@ Email: enquiries@dbca.wa.gov.au
                 self.page_layout = self.default_layout
             if not self.verifyemail_body:
                 #set the verify email body to the default body if it is emtpy
-                self.verifyemail_body = self.default_verify_email_body
+                self.verifyemail_body = self.default_verifyemail_body
+            if not self.verifyemail_from:
+                self.verifyemail_from = self.default_verifyemail_from
+            if not self.verifyemail_subject:
+                self.verifyemail_subject = self.default_verifyemail_subject
+            if not self.signout_body:
+                self.signout_body = self.default_signout_body
 
             #check the required fields
             invalid_columns = []
@@ -601,6 +629,13 @@ Email: enquiries@dbca.wa.gov.au
         return cache.get_userflow(domain)
 
     @classmethod
+    def find_userflows(cls,domain):
+        """
+        Find matched userflows in order from the cache
+        """
+        return cache.find_userflows(domain)
+
+    @classmethod
     def refresh_cache(cls):
         """
         Populate the cached data and save them to cache
@@ -620,8 +655,21 @@ Email: enquiries@dbca.wa.gov.au
 
         if not defaultuserflow :
             raise Exception("The default customizable userflow configuration is missing.")
-        elif not defaultuserflow.page_layout:
-            defaultuserflow.page_layout = cls.default_layout
+        else:
+            if not defaultuserflow.page_layout:
+                defaultuserflow.page_layout = cls.default_layout
+            if not defaultuserflow.extracss is None:
+                defaultuserflow.extracss = ""
+
+            if not defaultuserflow.verifyemail_body:
+                defaultuserflow.verifyemail_body = cls.default_verifyemail_body
+            if not defaultuserflow.verifyemail_from:
+                defaultuserflow.verifyemail_from = cls.default_verifyemail_from
+            if not defaultuserflow.verifyemail_subject:
+                defaultuserflow.verifyemail_subject = cls.default_verifyemail_subject
+
+            if not defaultuserflow.signout_body:
+                defaultuserflow.signout_body = cls.default_signout_body
 
         for o in userflows:
             if o != defaultuserflow:

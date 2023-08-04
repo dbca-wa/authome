@@ -150,6 +150,24 @@ class CustomizableUserflowAdmin(SyncConfigChangeMixin,admin.CustomizableUserflow
 class UserAdmin(SyncObjectChangeMixin,admin.UserAdmin):
     def _sync_change(self,objids):
         return cache.users_changed(objids,True)
+
+    def save_model(self, request, obj, form, change):
+        """
+        Given a model instance save it to the database.
+        """
+        userid = obj.id
+        result = super().save_model(request,obj,form,change)
+        if userid:
+            #update existing user
+            changed_clusters,not_changed_clusters,failed_clusters = cache.user_changed(userid)
+            if failed_clusters:
+                self.message_user(
+                    request, 
+                    "Failed to send change event of the user({1}<{0}>) to some clusters.{2} ".format(obj.id,obj.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters]),
+                    level=messages.ERROR
+                )
+        return result
+
         
 class UserAccessTokenAdmin(SyncObjectChangeMixin,admin.UserAccessTokenAdmin):
     def _sync_change(self,objids):
