@@ -1,7 +1,7 @@
 import re
 import logging
 import random
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -17,7 +17,6 @@ from django.contrib import messages
 import hashlib
 
 from ..cache import cache,get_defaultcache,get_usercache
-from ..  import exceptions
 from .. import signals
 from .. import utils
 
@@ -2233,4 +2232,4 @@ def secretkey_expireat_warning(sender,request,**kwargs):
         elif o.secretkey_expireat - now < settings.SECRETKEY_EXPIREDAYS_WARNING:
             messages.warning(request, 'The secret key used by identity provider "{}" will be expired  at "{}"'.format(o.name or o.idp,utils.format_datetime(o.secretkey_expireat)))
 
-    
+

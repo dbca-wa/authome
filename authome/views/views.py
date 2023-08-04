@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden, JsonResponse,HttpResponseNotAllowed,HttpResponseBadRequest,HttpResponseNotFound
+from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden, JsonResponse,HttpResponseNotAllowed,HttpResponseNotFound
 from django.template.response import TemplateResponse
 from django.contrib.auth import logout
 from django.urls import reverse
@@ -8,14 +8,11 @@ from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.http import urlencode
 from django.utils import timezone
-from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import never_cache
 from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.template import engines
 from django.utils.crypto import get_random_string
-from django.contrib import messages
 from django.contrib.auth import login
-from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 from django.utils.http import http_date
 from django.utils.html import mark_safe
 
@@ -132,7 +129,7 @@ def _get_next_url(request):
 
     if next_url:
         #found next url, build its absolute url
-        domain = utils.get_domain(next_url) 
+        domain = utils.get_domain(next_url)
         if not domain:
             domain = utils.get_host(request)
         next_url = get_absolute_url(next_url,domain)
@@ -215,7 +212,7 @@ def get_absolute_url(url,domain):
 
 def _get_relogin_url(request):
     """
-    Get non-null absolute relogin url from request or session; 
+    Get non-null absolute relogin url from request or session;
     if can't found, return default url
     """
     #try to get relogin url from request url parameters
@@ -230,7 +227,7 @@ def _get_relogin_url(request):
                 return "https://{}/sso/setting".format(request_host)
             else:
                 return "https://{}".format(request_host)
-    
+
     host = utils.get_domain(relogin_url)
     if not host:
         host = request_host
@@ -382,7 +379,7 @@ def _auth(request):
             performance.end_processingstep("authentication")
             pass
 
-      
+
         performance.start_processingstep("authorization")
         try:
             #authenticated
@@ -395,7 +392,7 @@ def _auth(request):
             performance.end_processingstep("authorization")
             pass
 
-    
+
         performance.start_processingstep("create_response")
         try:
             #authorized
@@ -403,7 +400,7 @@ def _auth(request):
             user = request.user
             auth_key = request.session.session_key
             response = None if (request.session.cookie_changed or request.session.is_empty()) else cache.get_auth(user,auth_key,user.modified)
-    
+
             if response and models.UserGroup.find_groups(user.email)[1] == response["X-groups"]:
                 #response cached
                 return response
@@ -417,7 +414,7 @@ def _auth(request):
     finally:
         performance.end_processingstep("auth")
         pass
-        
+
 @csrf_exempt
 def auth(request):
     """
@@ -464,7 +461,7 @@ def auth_optional(request):
             user = request.user
             auth_key = request.session.session_key
             response = None if (request.session.cookie_changed or request.session.is_empty()) else cache.get_auth(user,auth_key,user.modified)
-    
+
             if response and models.UserGroup.find_groups(user.email)[1] == response["X-groups"]:
                 #response cached
                 return response
@@ -551,7 +548,7 @@ def auth_basic(request):
                         #not authenticated, return basic auth required reponse
                         logger.debug("Failed to authenticate the user({}) with token".format(useremail))
                         return basic_auth_required_response_factory(request)
-    
+
             request.session.modified = False
             #check authorization
             res = check_authorization(request,useremail)
@@ -650,7 +647,7 @@ def del_expirable_session_data(session,key):
 
 def auth_local(request):
     """
-    auth_local feature can be triggered from any domain, but if the request's domain is not the subdomain of the session cookie domain, auth2 will redirect the request to auth2 domain 
+    auth_local feature can be triggered from any domain, but if the request's domain is not the subdomain of the session cookie domain, auth2 will redirect the request to auth2 domain
     and sigin in to auth2 domain first and then signin to other domain via login_domain.
     """
     if request.method == "GET":
@@ -682,7 +679,7 @@ def auth_local(request):
     now = timezone.localtime()
     if request.method == "GET":
         if utils.get_host(request).endswith(settings.SESSION_COOKIE_DOMAIN):
-            #request is sent from session cookie domain, show the page to input email 
+            #request is sent from session cookie domain, show the page to input email
             return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
         else:
             #request is sent from other domain, redirect to auth2 to let user login to session cookie domain first.
@@ -703,7 +700,7 @@ def auth_local(request):
         elif action == "cancel":
             return HttpResponseRedirect(next_url)
         elif action == "changeemail":
-            context["codeid"] = request.POST.get("codeid") 
+            context["codeid"] = request.POST.get("codeid")
             return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
         elif action in ( "sendcode","resendcode"):
             if not email:
@@ -769,7 +766,7 @@ def auth_local(request):
                 #send email
                 emails.send_email(userflow.verifyemail_from,context["email"],userflow.verifyemail_subject,verifyemail_body)
                 context["messages"] = [("info","Verification code has been sent to {}; Please enter the verification code.".format(email))]
-                logger.debug("Verification code has been sent to {}.".format(context["email"])) 
+                logger.debug("Verification code has been sent to {}.".format(context["email"]))
             context["codeid"] = codeid
             return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
         elif action == "verifycode":
@@ -794,7 +791,7 @@ def auth_local(request):
             context["code"] = inputcode
 
             verifycode_number_key = get_verifycode_number_key(email)
-            
+
             codekey = get_verifycode_key(email)
             code = get_expirable_session_data(request.session,codekey,None,now)
             if not code:
@@ -815,7 +812,7 @@ def auth_local(request):
                     request.session[verifycode_number_key] = verifycode_number + 1
                     context["messages"] = [("error","The input code is invalid, please check the email and verify again.")]
                     return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
-                
+
             #verify successfully
             user = models.User.objects.filter(email=email).first()
             if user:
@@ -893,7 +890,7 @@ def auth_local(request):
                 context["codeid"] = get_codeid()
                 context["messages"] = [("error","The signup token is invalid, please signin again")]
                 return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
-                
+
             firstname = request.POST.get("firstname","").strip()
             lastname = request.POST.get("lastname","").strip()
             context["firstname"] = firstname
@@ -903,12 +900,12 @@ def auth_local(request):
                 context["token"] = token
                 context["messages"] = [("error","First name is required")]
                 return TemplateResponse(request,"authome/signin_signup.html",context=context)
-            
+
             if not lastname:
                 context["token"] = token
                 context["messages"] = [("error","Last name is required")]
                 return TemplateResponse(request,"authome/signin_signup.html",context=context)
-            
+
             dbcagroup = models.UserGroup.dbca_group()
             usergroups = models.UserGroup.find_groups(email)[0]
             if any(group.is_group(dbcagroup) for group in usergroups ):
@@ -951,7 +948,7 @@ def logout_view(request):
     if not host.endswith(settings.SESSION_COOKIE_DOMAIN):
         #request's domain is not a subdomain of session cookie; only need to delete to cookie ; and redirect to auth2.dbca to finish the logout procedure.
         relogin_url = _get_relogin_url(request)
-        #delete the cookie 
+        #delete the cookie
         parameters = dict(request.GET.items())
         parameters["relogin"] = relogin_url
         querystring = "&".join( "{}={}".format(k,(urllib.parse.quote(v) if isinstance(v,str) else v)) for k,v in parameters.items())
@@ -987,7 +984,7 @@ def login_domain(request):
         #missing session key, login again
         return HttpResponse(content="session is missing",status=400)
 
-    res = HttpResponseRedirect(next_url) 
+    res = HttpResponseRedirect(next_url)
     max_age = request.session.get_session_cookie_age(session_cookie)
     expires_time = time.time() + max_age
     expires = http_date(expires_time)
@@ -995,9 +992,9 @@ def login_domain(request):
     domain = settings.GET_SESSION_COOKIE_DOMAIN(request.get_host())
     res.set_cookie(
         settings.SESSION_COOKIE_NAME,
-        "{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host), 
+        "{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host),
         max_age=max_age,
-        expires=expires, 
+        expires=expires,
         path=settings.SESSION_COOKIE_PATH,
         domain=domain,
         secure=settings.SESSION_COOKIE_SECURE or None,
@@ -1006,7 +1003,7 @@ def login_domain(request):
     )
     DebugLog.log(DebugLog.CREATE_COOKIE,utils.get_lb_hash_key(session_cookie),utils.get_clusterid(session_cookie),utils.get_session_key(session_cookie),session_cookie,message="Return a new session cookie({}) for domain({})".format("{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host),domain or host),userid=None,target_session_cookie="{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host),request=request)
     return res
-    
+
 
 def home(request):
     """
@@ -1017,7 +1014,7 @@ def home(request):
     """
     next_url = request.GET.get('next', None)
     if next_url:
-        #build an absolute url 
+        #build an absolute url
         if not next_url.startswith("http"):
             if next_url[0] == "/":
                 host = utils.get_host(request)
@@ -1060,9 +1057,9 @@ def home(request):
 
             request.session["next"]=next_url
             return logout_view(request)
-        
+
         if (not request.user.is_authenticated and request.session.expired_session_key) or (request.user.is_authenticated and not request.user.is_active):
-            #session expired or user is inactive, logout from backend 
+            #session expired or user is inactive, logout from backend
             request.session["next"]=next_url
             return logout_view(request)
         else:
@@ -1129,7 +1126,7 @@ def home(request):
         next_url_domain = utils.get_domain(next_url)
         if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
             #in the same session domain, redirect to the orignal url directly
-            return HttpResponseRedirect(next_url) 
+            return HttpResponseRedirect(next_url)
         else:
             #other domain, login to that before redirecting to the original url
             return TemplateResponse(request,"authome/login_domain.html",context={"session_key":request.session.cookie_value,"next_url":next_url,"domain":next_url_domain})
@@ -1147,8 +1144,8 @@ def loginstatus(request):
     context = {"body":page_layout,"extracss":extracss,"message":"You {} signed in".format("have already" if res else "haven't"),"title":"Login Status","domain":domain}
 
     return TemplateResponse(request,"authome/message.html",context=context)
- 
- 
+
+
 
 def profile(request):
     """
@@ -1201,7 +1198,7 @@ def profile(request):
     if request.session.get("idp"):
         content["idp"] = models.IdentityProvider.objects.get(idp=request.session["idp"]).name
 
- 
+
     content = json.dumps(content)
     return HttpResponse(content=content,content_type="application/json")
 
@@ -1233,7 +1230,7 @@ def signedout(request):
         "relogin":relogin_url,
         "auto_logout": False,
         "domain":domain,
-        "message":request.GET.get("message") 
+        "message":request.GET.get("message")
     }
     if idp and idp.logout_url:
         context["idp_name"] = idp.name
@@ -1433,7 +1430,7 @@ def profile_edit(request):
                 context = _get_context(next_url)
                 context["messages"] = [("error","Last name is empty")]
                 return TemplateResponse(request,"authome/profile_edit.html",context=context)
-    
+
             if request.user.first_name != first_name or request.user.last_name != last_name:
                 request.user.first_name = first_name
                 request.user.last_name = last_name
@@ -1464,7 +1461,7 @@ def profile_edit_b2c(request,backend):
     called after user authentication
     """
     next_url = _get_next_url(request)
-    domain = utils.get_domain(next_url) 
+    domain = utils.get_domain(next_url)
 
     request.session[REDIRECT_FIELD_NAME] = next_url
     request.policy = models.CustomizableUserflow.get_userflow(domain).profile_edit
@@ -1502,7 +1499,7 @@ def password_reset(request,backend):
     Triggered by hyperlink 'Forgot your password' in idp selection page
     """
     next_url = _get_next_url(request)
-    domain = utils.get_domain(next_url) 
+    domain = utils.get_domain(next_url)
 
     request.session[REDIRECT_FIELD_NAME] = next_url
     request.policy = models.CustomizableUserflow.get_userflow(domain).password_reset
@@ -1534,7 +1531,7 @@ def mfa_set(request,backend):
     called after user authentication
     """
     next_url = _get_next_url(request)
-    domain = utils.get_domain(next_url) 
+    domain = utils.get_domain(next_url)
 
     request.session[REDIRECT_FIELD_NAME] = next_url
     request.policy = models.CustomizableUserflow.get_userflow(domain).mfa_set
@@ -1566,7 +1563,7 @@ def mfa_reset(request,backend):
     called after user authentication
     """
     next_url = _get_next_url(request)
-    domain = utils.get_domain(next_url) 
+    domain = utils.get_domain(next_url)
 
     request.session[REDIRECT_FIELD_NAME] = next_url
     request.policy = models.CustomizableUserflow.get_userflow(domain).mfa_reset
@@ -1654,7 +1651,7 @@ def totp_generate(request):
         result["userMessage"] = "Authorization failed."
         return JsonResponse(result,status=400)
 
-    #get the user email 
+    #get the user email
     data = json.loads(request.body.decode())
     user_email = data.get("email")
     if not user_email:
@@ -1755,7 +1752,7 @@ def totp_verify(request):
     else:
         #verify failed.
         logger.debug("Failed to verify totp code.{}".format(data))
-        
+
         result["status"] = 409
         result["userMessage"] = "Verification code is incorrect."
         return JsonResponse(result,status=409)
@@ -1801,7 +1798,7 @@ def handler400(request,exception,**kwargs):
     resp = TemplateResponse(request,"authome/message.html",context=context,status=code)
     resp.render()
     return resp
- 
+
 def checkauthorization(request):
     if request.method == "GET":
         return TemplateResponse(request, "authome/check_authorization.html", {"users":"","opts":None})
@@ -1818,12 +1815,12 @@ def checkauthorization(request):
             urls = [u.strip() for u in urls.split(",") if u.strip()]
         if users:
             users = [u.strip() for u in users.split(",") if u.strip() and "@"  in u]
-    
+
         if not urls:
             return HttpResponse(status=400,content="URL is empty")
         if not users:
             return HttpResponse(status=400,content="User is empty")
-    
+
         urls = [ utils.parse_url(u) for u in urls]
         for url in urls:
             if not url["domain"]:
@@ -1841,7 +1838,7 @@ def checkauthorization(request):
                     #check result is a tupe (Allow?,[(usergroup,checkgroup,allow?),]), change the usergroup to the name of user group
                     for i in range(len(check_result[1])):
                         check_result[1][i] = [check_result[1][i][0].name if check_result[1][i][0] else None,check_result[1][i][1].name if check_result[1][i][1] else None,check_result[1][i][2]]
-                    
+
                     result.append([user,url["url"],url["checked_url"],check_result])
                 elif url["path"].startswith("/sso/"):
                     result.append([user,url["url"],url["checked_url"],True ])
@@ -1856,7 +1853,7 @@ def checkauthorization(request):
                         #check result is a tupe (Allow?,[(usergroup,checkgroup,allow?),]), change the usergroup to the name of user group
                         for i in range(len(check_result[1])):
                             check_result[1][i] = [check_result[1][i][0].name if check_result[1][i][0] else None,check_result[1][i][1].name if check_result[1][i][1] else None,check_result[1][i][2]]
-                    
+
                         userresult[url["url"]] = [url["checked_url"],check_result]
                     elif url["path"].startswith("/sso/"):
                         userresult[url["url"]] = [url["checked_url"],True]

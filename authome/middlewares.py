@@ -1,16 +1,13 @@
 import logging
-import re
 
 from django.utils.deprecation import MiddlewareMixin
-from django.conf  import settings
-from django.http import HttpResponseForbidden,HttpResponseRedirect
-from django.contrib.auth import login, logout
-
-from .models import UserGroup,IdentityProvider
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
 _max_age = 100 * 365 * 24 * 60 * 60
+
+
 class PreferedIDPMiddleware(MiddlewareMixin):
     """
     The middleware to set/clean the prefered idp cookie
