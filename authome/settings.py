@@ -1,9 +1,7 @@
 import os
 
-from django.utils import timezone
-
 from .utils import env, get_digest_function
-from datetime import timedelta,datetime
+from datetime import timedelta
 import dj_database_url
 
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
@@ -290,9 +288,9 @@ SWITCH_TO_AUTH_LOCAL=env('SWITCH_TO_AUTH_LOCAL',default=False) #Switch to magic 
 
 PASSCODE_DAILY_LIMIT = env("PASSCODE_DAILY_LIMIT",100)
 PASSCODE_TRY_TIMES = env("PASSCODE_TRY_TIMES",3)
-PASSCODE_LENGTH=env('PASSCODE_LENGTH',default=6) 
+PASSCODE_LENGTH=env('PASSCODE_LENGTH',default=6)
 PASSCODE_AGE=env('PASSCODE_AGE',default=300) #the age of verify code, in seconds
-SIGNUP_TOKEN_LENGTH=env('SIGNUP_TOKEN_LENGTH',default=64) 
+SIGNUP_TOKEN_LENGTH=env('SIGNUP_TOKEN_LENGTH',default=64)
 SIGNUP_TOKEN_AGE=env('SIGNUP_TOKEN_AGE',default=3600) #the age of signup token, in seconds
 
 PASSCODE_DIGITAL=env('PASSCODE_DIGITAL',default=True)

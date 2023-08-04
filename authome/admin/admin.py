@@ -8,7 +8,6 @@ from django.conf import settings
 from django.contrib import messages, auth
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils.html import mark_safe
-from django.templatetags.static import static
 from django.db.models import Q
 from django.contrib.admin.views.main import ChangeList
 from django.urls import reverse
@@ -16,7 +15,6 @@ from django.template.response import TemplateResponse
 
 from .. import models
 from .. import forms
-from ..cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +25,7 @@ class CatchModelExceptionMixin(object):
         except Exception as ex:
             self.message_user(request, str(ex),level=messages.ERROR)
             return HttpResponseRedirect(request.get_full_path())
-            
+
 class ExtraToolsChangeList(ChangeList):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -51,7 +49,7 @@ class PermissionCheckMixin(object):
             return qs
         else:
             qs = qs.only("id")
-            ids = [o.id for o in qs if models.can_access(request.user.email,settings.AUTH2_DOMAIN,reverse(self.object_change_url_name, args=(o.id,)))] 
+            ids = [o.id for o in qs if models.can_access(request.user.email,settings.AUTH2_DOMAIN,reverse(self.object_change_url_name, args=(o.id,)))]
             return self.model.objects.filter(id__in=ids)
 
     def has_add_permission(self, request, obj=None):
