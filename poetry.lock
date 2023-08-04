@@ -1110,27 +1110,28 @@ files = [
 
 [[package]]
 name = "social-auth-app-django"
-version = "5.0.0"
+version = "5.2.0"
 description = "Python Social Authentication, Django integration."
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.7"
 files = [
-    {file = "social-auth-app-django-5.0.0.tar.gz", hash = "sha256:b6e3132ce087cdd6e1707aeb1b588be41d318408fcf6395435da0bc6fe9a9795"},
-    {file = "social_auth_app_django-5.0.0-py3-none-any.whl", hash = "sha256:52241a25445a010ab1c108bafff21fc5522d5c8cd0d48a92c39c7371824b065d"},
+    {file = "social-auth-app-django-5.2.0.tar.gz", hash = "sha256:4a5dae406f3874b4003708ff120c02cb1a4c8eeead56cd163646347309fcd0f8"},
+    {file = "social_auth_app_django-5.2.0-py3-none-any.whl", hash = "sha256:0347ca4cd23ea9d15a665da9d22950552fb66b95600e6c2ebae38ca883b3a4ed"},
 ]
 
 [package.dependencies]
-social-auth-core = ">=4.1.0"
+Django = ">=3.2"
+social-auth-core = ">=4.4.1"
 
 [[package]]
 name = "social-auth-core"
-version = "4.2.0"
+version = "4.4.2"
 description = "Python social authentication made simple."
 optional = false
 python-versions = ">=3.6"
 files = [
-    {file = "social-auth-core-4.2.0.tar.gz", hash = "sha256:af6fc7d9ee39f0aa697cd953121add638fc32a49816341a9838a67904c39e034"},
-    {file = "social_auth_core-4.2.0-py3-none-any.whl", hash = "sha256:08fe6645b98950cff9d6970b6704345f821d78729df0164bca0002c624b001e1"},
+    {file = "social-auth-core-4.4.2.tar.gz", hash = "sha256:9791d7c7aee2ac8517fe7a2ea2f942a8a5492b3a4ccb44a9b0dacc87d182f2aa"},
+    {file = "social_auth_core-4.4.2-py3-none-any.whl", hash = "sha256:ea7a19c46b791b767e95f467881b53c5fd0d1efb40048d9ed3dbc46daa05c954"},
 ]
 
 [package.dependencies]
@@ -1143,11 +1144,11 @@ requests = ">=2.9.1"
 requests-oauthlib = ">=0.6.1"
 
 [package.extras]
-all = ["cryptography (>=2.1.1)", "lxml (<4.7)", "python-jose (>=3.0.0)", "python3-saml (>=1.2.1)"]
-allpy3 = ["cryptography (>=2.1.1)", "lxml (<4.7)", "python-jose (>=3.0.0)", "python3-saml (>=1.2.1)"]
+all = ["cryptography (>=2.1.1)", "python-jose (>=3.0.0)", "python3-saml (>=1.5.0)"]
+allpy3 = ["cryptography (>=2.1.1)", "python-jose (>=3.0.0)", "python3-saml (>=1.5.0)"]
 azuread = ["cryptography (>=2.1.1)"]
 openidconnect = ["python-jose (>=3.0.0)"]
-saml = ["lxml (<4.7)", "python3-saml (>=1.2.1)"]
+saml = ["python3-saml (>=1.5.0)"]
 
 [[package]]
 name = "sqlparse"
@@ -1262,4 +1263,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "~3.7"
-content-hash = "9860d010612b6c1c7414e8f71d21fbe7b4d1107578b457dba0fcf05b13737d1f"
+content-hash = "500c50a2062e4ca8fe74fbf774d5b145f15de80aa6470ce7e940b208e9ee10ea"
