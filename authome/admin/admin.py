@@ -638,6 +638,15 @@ class SystemUserAccessTokenAdmin(PermissionCheckMixin,AccessTokenAdmin):
     object_change_url_name = 'admin:{}_{}_change'.format(SystemUserToken._meta.app_label,SystemUserToken._meta.model_name)
     object_delete_url_name = 'admin:{}_{}_delete'.format(SystemUserToken._meta.app_label,SystemUserToken._meta.model_name)
 
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 for token_lifetime in settings.USER_ACCESS_TOKEN_LIFETIME:
     method_name = 'create_{}days_token'.format(token_lifetime) if token_lifetime > 0 else 'create_permenent_token'
