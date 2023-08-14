@@ -95,6 +95,9 @@ class CustomizableUserflowForm(djangoforms.ModelForm):
             'extracss': djangoforms.Textarea(attrs={'style':'width:80%;height:100px'}),
             'page_layout': djangoforms.Textarea(attrs={'style':'width:80%;height:500px'}),
             'verifyemail_body': djangoforms.Textarea(attrs={'style':'width:80%;height:500px'}),
-            'verifyemail_subject': djangoforms.TextInput(attrs={'style':'width:80%;'})
+            'verifyemail_subject': djangoforms.TextInput(attrs={'style':'width:80%;'}),
+            'signedout_url': djangoforms.TextInput(attrs={'style':'width:80%;'}),
+            'relogin_url': djangoforms.TextInput(attrs={'style':'width:80%;'}),
+            'signout_body': djangoforms.Textarea(attrs={'style':'width:80%;height:500px'})
         }
 

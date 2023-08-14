@@ -354,7 +354,7 @@
                 <UserInputType>RadioSingleSelect</UserInputType>
                 <Restriction>
                     <Enumeration Text="Authenticator application (e.g. Google Authenticator)" Value="totp" SelectByDefault="true"/>
-                    <Enumeration Text="Phone Call or Passcode sent via SMS" Value="phone" SelectByDefault="false"/>
+                    <!--Enumeration Text="Phone Call or Passcode sent via SMS" Value="phone" SelectByDefault="false"/-->
                     <Enumeration Text="Passcode sent via email" Value="email" SelectByDefault="false"/>
                     <!--Enumeration Text="None " Value="none" SelectByDefault="false"/-->
                 </Restriction>

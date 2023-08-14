@@ -1,0 +1,36 @@
+{% extends "authome/default.html" %}
+{% load i18n static %}
+
+<title>You have been signed out.</title>
+
+{% block extrapagecss %}
+<style>
+.self_asserted_container .col-lg-6 {
+    max-width:800px;
+    width:auto;
+    text-align:left;
+}
+.self_asserted_container .row .panel-default .panel-body {
+    max-width:none;
+}
+</style>
+{% endblock extrapagecss %}
+
+{% block realcontent %}
+    <div id="signedout_content" >
+        <h4>Please wait to sign out from social media '{{idp}}'... </h4>
+    </div>
+    <script type="text/javascript">
+        var logout_window = window.open('{{idplogout}}',"DBCA SSO Auth Logout","location=no,menubar=no,resizable=no,scrollbars=no,status=no,titlebar=no,toolbar=no,width=1,height=1,top=1,left=1")
+        if (logout_window) {
+            logout_window.blur()
+            window.focus()
+            setTimeout(function(){
+                logout_window.close();
+                window.location = "{{signedout}}?message={{message|urlencode}}"
+            },3000)
+        } else {
+                window.location = "{{signedout}}?message={{failed_message|urlencode}}&idp={{idp|urlencode}}&idplogout={{idplogout|urlencode}}"
+        }
+    </script>
+{% endblock realcontent %}

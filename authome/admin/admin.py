@@ -8,7 +8,6 @@ from django.conf import settings
 from django.contrib import messages, auth
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils.html import mark_safe
-from django.templatetags.static import static
 from django.db.models import Q
 from django.contrib.admin.views.main import ChangeList
 from django.urls import reverse
@@ -16,7 +15,6 @@ from django.template.response import TemplateResponse
 
 from .. import models
 from .. import forms
-from ..cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +25,7 @@ class CatchModelExceptionMixin(object):
         except Exception as ex:
             self.message_user(request, str(ex),level=messages.ERROR)
             return HttpResponseRedirect(request.get_full_path())
-            
+
 class ExtraToolsChangeList(ChangeList):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -51,7 +49,7 @@ class PermissionCheckMixin(object):
             return qs
         else:
             qs = qs.only("id")
-            ids = [o.id for o in qs if models.can_access(request.user.email,settings.AUTH2_DOMAIN,reverse(self.object_change_url_name, args=(o.id,)))] 
+            ids = [o.id for o in qs if models.can_access(request.user.email,settings.AUTH2_DOMAIN,reverse(self.object_change_url_name, args=(o.id,)))]
             return self.model.objects.filter(id__in=ids)
 
     def has_add_permission(self, request, obj=None):
@@ -640,6 +638,15 @@ class SystemUserAccessTokenAdmin(PermissionCheckMixin,AccessTokenAdmin):
     object_change_url_name = 'admin:{}_{}_change'.format(SystemUserToken._meta.app_label,SystemUserToken._meta.model_name)
     object_delete_url_name = 'admin:{}_{}_delete'.format(SystemUserToken._meta.app_label,SystemUserToken._meta.model_name)
 
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 for token_lifetime in settings.USER_ACCESS_TOKEN_LIFETIME:
     method_name = 'create_{}days_token'.format(token_lifetime) if token_lifetime > 0 else 'create_permenent_token'
@@ -668,7 +675,7 @@ class CustomizableUserflowAdmin(PermissionCheckMixin,CacheableListTitleMixin,Dat
     list_display = ('domain','fixed','default','mfa_set',"mfa_reset",'password_reset','_modified','_created')
     readonly_fields = ('_modified','_created')
     form = forms.CustomizableUserflowForm
-    fields = ('domain','fixed','default','mfa_set',"mfa_reset",'password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body","sortkey",'_modified','_created')
+    fields = ('domain','fixed','default','mfa_set',"mfa_reset",'password_reset','extracss','page_layout',"verifyemail_from","verifyemail_subject","verifyemail_body","signedout_url","relogin_url","signout_body","sortkey",'_modified','_created')
     ordering = (models.sortkey_c.asc(),)
     search_fields=("domain",)
 
