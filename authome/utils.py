@@ -18,9 +18,6 @@ from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.db import connections
 from django.core.cache import caches
 from django.contrib import messages
-from django_redis.cache import RedisCache
-
-from django_redis import get_redis_connection
 
 __version__ = '1.0.0'
 
@@ -525,38 +522,6 @@ def ping_database(dbalias):
             healthy = False
             msg = str(ex)
     return (healthy,msg)
-
-redis_re = re.compile("^\s*(?P<protocol>[a-zA-Z]+)://((?P<user>[^:@]+)?(:(?P<password>[^@]+))?@)?(?P<server>\S+)\s*$")
-def print_redisserver(server):
-    """
-    Return a printable redis server url
-    """
-    if isinstance(server,RedisCache):
-        server = server._server
-    elif not isinstance(server,str):
-        return str(server)
-
-    try:
-        m = redis_re.search(server)
-        return "{0}://xxx:xxx@{1}".format(m.group("protocol"),m.group("server"))
-    except:
-        return "xxxxxx"
-
-    
-def ping_redisserver(serveralias):
-    try:
-        with get_redis_connection(serveralias) as conn:
-            data = conn.info("server")
-            serverinfo = {}
-            if data.get("uptime_in_seconds"):
-                serverinfo["starttime"] = timezone.localtime() - timedelta(seconds=data.get("uptime_in_seconds"))
-            else:
-                serverinfo["starttime"] = "N/A"
-
-            return (True, "OK" ,serverinfo)
-    except Exception as ex:
-        return (False,str(ex),{})
-
 
 def ping_cacheserver(serveralias):
     try:

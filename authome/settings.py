@@ -329,12 +329,26 @@ LOGGING = {
 
 def GET_CACHE_CONF(server,options={}):
     if server.lower().startswith('redis'):
-        options["CLIENT_CLASS"] = "django_redis.client.DefaultClient"
-        return {
-            "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": server,
-            "OPTIONS": options
-        }
+        if "max_connections" not in options:
+            options["max_connections"] = 2
+        if not REDIS_CLUSTER_ENABLED:
+            return {
+                "BACKEND": "authome.redis.RedisCache",
+                "LOCATION": server,
+                "OPTIONS": options
+            }
+        elif REDIS_MASTER_AUTOSWITCH_IF_FAILED:
+            return {
+                "BACKEND": "authome.redis.RedisClusterCache",
+                "LOCATION": server,
+                "OPTIONS": options
+            }
+        else:
+            return {
+                "BACKEND": "authome.redis.RedisClusterCache",
+                "LOCATION": server,
+                "OPTIONS": options
+            }
     else:
         return {
             'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
@@ -355,6 +369,9 @@ CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
 CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
 PREVIOUS_CACHE_SESSION_SERVER = env("PREVIOUS_CACHE_SESSION_SERVER")
 PREVIOUS_CACHE_SESSION_SERVER_OPTIONS = env("PREVIOUS_CACHE_SESSION_SERVER_OPTIONS",default={})
+
+REDIS_CLUSTER_ENABLED=env("REDIS_CLUSTER_ENABLED",default=False)
+REDIS_MASTER_AUTOSWITCH_IF_FAILED=env("EDIS_MASTER_AUTOSWITCH_IF_FAILED",default=True)
 
 CACHE_USER_SERVER = env("CACHE_USER_SERVER")
 CACHE_USER_SERVER_OPTIONS = env("CACHE_USER_SERVER_OPTIONS",default={})

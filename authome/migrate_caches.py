@@ -13,8 +13,6 @@ from django.core.cache.backends.memcached import MemcachedCache
 from django.core.cache import caches
 from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 
-from django_redis import get_redis_connection
-
 from authome.cache import get_defaultcache,get_usercache
 from authome.cachesessionstore import get_firstsessioncache,SessionStore,process_seq_key
 

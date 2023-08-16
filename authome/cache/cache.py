@@ -202,7 +202,7 @@ class MemoryCache(object):
         self._traffic_data_ts = today + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
         self._traffic_data_next_ts = self._traffic_data_ts + settings.TRAFFIC_MONITOR_INTERVAL
         self.log_request = getattr(self,"_log_request_{}".format(settings.TRAFFIC_MONITOR_LEVEL)) if settings.TRAFFIC_MONITOR_LEVEL > 0 else None
-        self._client = defaultcache.client.get_client() if defaultcache else None
+        self._client = defaultcache.redis_client if defaultcache else None
     
         #The runable task to clean authenticaton map and basic authenticaton map
         self._auth_cache_clean_time = HourListTaskRunable("authentication cache",settings.AUTH_CACHE_CLEAN_HOURS)

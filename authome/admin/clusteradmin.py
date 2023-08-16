@@ -21,7 +21,7 @@ from .. import forms
 from ..cache import cache,get_defaultcache
 from . import admin
 from .. import utils
-from ..views.monitorviews import _get_localhealthcheck,_clusterstatus
+from ..views.monitorviews import _check_localhealth,_clusterstatus
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +207,7 @@ class Auth2ClusterAdmin(admin.ExtraToolsMixin,admin.DeleteMixin,admin.DatetimeMi
             return f_name(obj.cache_status.get(key,default)) if f_name else obj.cache_status.get(key,default)
         except AttributeError as ex:
             if obj.clusterid == settings.AUTH2_CLUSTERID:
-                healthcheck =  _get_localhealthcheck()
+                healthcheck =  _check_localhealth()
                 data = {}
                 for cls in (models.UserGroup,models.UserGroupAuthorization,models.CustomizableUserflow,models.IdentityProvider):
                     cls.refresh_cache_if_required()

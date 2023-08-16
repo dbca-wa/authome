@@ -2,9 +2,7 @@ from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
-
-from django_redis import get_redis_connection
-
+from django.core.cache import caches
 
 import json
 import psutil
@@ -22,11 +20,6 @@ from .. import utils
 defaultcache = get_defaultcache()
 
 logger = logging.getLogger(__name__)
-
-def get_active_redis_connections(cachename):
-    r = get_redis_connection(cachename) 
-    connection_pool = r.connection_pool
-    return connection_pool._created_connections
 
 def _get_localstatus():
     content = OrderedDict()
@@ -56,105 +49,64 @@ def _get_localstatus():
     if settings.CACHE_SERVER:
         name = "default"
         if settings.CACHE_SERVER.lower().startswith("redis"):
-            cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
-            if serverinfo:
-                info = " , {}".format(" , ".join("{}={}".format(k,utils.format_datetime(v) if isinstance(v,datetime) else v) for k,v in serverinfo.items()))
-            else:
-                info = ""
-
-            r = get_redis_connection(name) 
-            connection_pool = r.connection_pool
-
-            cache_servers[name] = "server = {} , connections = {} , max connections = {}{}, status = {}".format(utils.print_redisserver(settings.CACHE_SERVER),get_active_redis_connections(name),settings.CACHE_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),info,cache_msg)
+            cache_healthy,cache_servers[name] = caches[name].server_status
         else:
             cache_healthy,cache_msg = utils.ping_cacheserver(name)
             cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_SERVER,cache_msg)
         if not cache_healthy:
             healthy = False
-            msgs = utils.add_to_list(msgs,cache_msg)
+            msgs = utils.add_to_list(msgs,cache_servers[name])
 
     if settings.CACHE_USER_SERVER:
         if settings.USER_CACHES  == 1:
             name = "user"
             if settings.CACHE_USER_SERVER[0].lower().startswith("redis"):
-                cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
-                if serverinfo:
-                    info = " , {}".format(" , ".join("{}={}".format(k,utils.format_datetime(v) if isinstance(v,datetime) else v) for k,v in serverinfo.items()))
-                else:
-                    info = ""
-
-                r = get_redis_connection(name) 
-                connection_pool = r.connection_pool
-                cache_servers[name] = "server = {} , connections = {} , max connections = {}{} , status = {}".format(utils.print_redisserver(settings.CACHE_USER_SERVER[0]),get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),info,cache_msg)
+                cache_healthy,cache_servers[name] = caches[name].server_status
             else:
                 cache_healthy,cache_msg = utils.ping_cacheserver(name)
                 cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_USER_SERVER[0],cache_msg)
 
             if not cache_healthy:
                 healthy = False
-                msgs = utils.add_to_list(msgs,cache_msg)
+                msgs = utils.add_to_list(msgs,cache_servers[name])
         else:
             for i in range(settings.USER_CACHES):
                 name = "user{}".format(i)
                 if settings.CACHE_USER_SERVER[i].lower().startswith("redis"):
-                    cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
-                    if serverinfo:
-                        info = " , {}".format(" , ".join("{}={}".format(k,utils.format_datetime(v) if isinstance(v,datetime) else v) for k,v in serverinfo.items()))
-                    else:
-                        info = ""
-
-                    r = get_redis_connection(name) 
-                    connection_pool = r.connection_pool
-                    cache_servers[name] = "server = {} , connections = {} , max connections = {}{} , status = {}".format(utils.print_redisserver(settings.CACHE_USER_SERVER[i]),get_active_redis_connections(name),settings.CACHE_USER_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),info,cache_msg)
+                    cache_healthy,cache_servers[name] = caches[name].server_status
                 else:
                     cache_healthy,cache_msg = utils.ping_cacheserver(name)
                     cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_USER_SERVER[i],cache_msg)
 
                 if not cache_healthy:
                     healthy = False
-                    msgs = utils.add_to_list(msgs,cache_msg)
+                    msgs = utils.add_to_list(msgs,cache_servers[name])
 
     if settings.CACHE_SESSION_SERVER:
         if settings.SESSION_CACHES  == 1:
             name = "session"
             if settings.CACHE_SESSION_SERVER[0].lower().startswith("redis"):
-                cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
-                if serverinfo:
-                    info = " , {}".format(" , ".join("{}={}".format(k,utils.format_datetime(v) if isinstance(v,datetime) else v) for k,v in serverinfo.items()))
-                else:
-                    info = ""
-
-                r = get_redis_connection(name) 
-                connection_pool = r.connection_pool
-                cache_servers[name] = "server = {} , connections = {} , max connections = {}{} ,  status = {}".format(utils.print_redisserver(settings.CACHE_SESSION_SERVER[0]),get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured") ,info, cache_msg)
+                cache_healthy,cache_servers[name] = caches[name].server_status
             else:
                 cache_healthy,cache_msg = utils.ping_cacheserver(name)
                 cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_SESSION_SERVER[0],cache_msg)
 
             if not cache_healthy:
                 healthy = False
-                msgs = utils.add_to_list(msgs,cache_msg)
+                msgs = utils.add_to_list(msgs,cache_servers[name])
 
         else:
             for i in range(settings.SESSION_CACHES):
                 name = "session{}".format(i)
                 if settings.CACHE_SESSION_SERVER[i].lower().startswith("redis"):
-                    cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
-                    if serverinfo:
-                        info = " , {}".format(" , ".join("{}={}".format(k,utils.format_datetime(v) if isinstance(v,datetime) else v) for k,v in serverinfo.items()))
-                    else:
-                        info = ""
-
-                    r = get_redis_connection(name) 
-                    connection_pool = r.connection_pool
-                    cache_servers[name] = "server:{} , connections:{} , max connections: {}{} , status = {}".format(utils.print_redisserver(settings.CACHE_SESSION_SERVER[i]),get_active_redis_connections(name),settings.CACHE_SESSION_SERVER_OPTIONS.get("CONNECTION_POOL_KWARGS",{}).get("max_connections","Not Configured"),info,cache_msg)
+                    cache_healthy,cache_servers[name] = caches[name].server_status
                 else:
                     cache_healthy,cache_msg = utils.ping_cacheserver(name)
                     cache_servers[name] = "server = {} ,  status = {}".format(CACHE_SESSION_SERVER[i],cache_msg)
 
                 if not cache_healthy:
                     healthy = False
-                    msgs = utils.add_to_list(msgs,cache_msg)
+                    msgs = utils.add_to_list(msgs,cache_servers[name])
 
     cache_healthy,cache_msgs = cache.healthy
     healthy = healthy and cache_healthy
@@ -185,7 +137,7 @@ def _localstatus(request):
     content = _get_localstatus()
     return JsonResponse(content,status=200)
 
-def _clusterstatus(request):
+def _get_clusterstatus():
     content = OrderedDict()
     healthy = True
     msgs = {}
@@ -206,6 +158,10 @@ def _clusterstatus(request):
             
 
     content["clusters"] = clusters_data
+    return content
+
+def _clusterstatus(request):
+    content = _get_clusterstatus()
     return JsonResponse(content,status=200)
 
 def statusfactory(t=None):
@@ -221,7 +177,7 @@ def statusfactory(t=None):
         return  _localstatus
 
 
-def _get_localhealthcheck():
+def _check_localhealth():
     healthy = True
     msgs = []
 
@@ -234,7 +190,7 @@ def _get_localhealthcheck():
     if settings.CACHE_SERVER:
         name = "default"
         if settings.CACHE_SERVER.lower().startswith("redis"):
-            cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
+            cache_healthy,cache_msg = caches[name].ping()
         else:
             cache_healthy,cache_msg = utils.ping_cacheserver(name)
         if not cache_healthy:
@@ -245,7 +201,7 @@ def _get_localhealthcheck():
         if settings.USER_CACHES  == 1:
             name = "user"
             if settings.CACHE_USER_SERVER[0].lower().startswith("redis"):
-                cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
+                cache_healthy,cache_msg = caches[name].ping()
             else:
                 cache_healthy,cache_msg = utils.ping_cacheserver(name)
 
@@ -256,7 +212,7 @@ def _get_localhealthcheck():
             for i in range(settings.USER_CACHES):
                 name = "user{}".format(i)
                 if settings.CACHE_USER_SERVER[i].lower().startswith("redis"):
-                    cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
+                    cache_healthy,cache_msg = caches[name].ping()
                 else:
                     cache_healthy,cache_msg = utils.ping_cacheserver(name)
 
@@ -268,7 +224,7 @@ def _get_localhealthcheck():
         if settings.SESSION_CACHES  == 1:
             name = "session"
             if settings.CACHE_SESSION_SERVER[0].lower().startswith("redis"):
-                cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
+                cache_healthy,cache_msg = caches[name].ping()
             else:
                 cache_healthy,cache_msg = utils.ping_cacheserver(name)
 
@@ -280,7 +236,7 @@ def _get_localhealthcheck():
             for i in range(settings.SESSION_CACHES):
                 name = "session{}".format(i)
                 if settings.CACHE_SESSION_SERVER[i].lower().startswith("redis"):
-                    cache_healthy,cache_msg,serverinfo = utils.ping_redisserver(name)
+                    cache_healthy,cache_msg = caches[name].ping()
                 else:
                     cache_healthy,cache_msg = utils.ping_cacheserver(name)
 
@@ -291,26 +247,26 @@ def _get_localhealthcheck():
     return (healthy,msgs)
 
 def _localhealthcheck(request):
-    healthy,msgs = _get_localhealthcheck()
+    healthy,msgs = _check_localhealth()
     if healthy:
         return HttpResponse("OK")
     else:
         return HttpResponse(status=503,content="\n".join(msgs))
 
 def _remotehealthcheck(request):
-    healthy,msgs = _get_localhealthcheck()
+    healthy,msgs = _check_localhealt()
     data = {"healthy":healthy}
     if not healthy:
         data["errors"] = msgs
     return JsonResponse(data,status=200)
 
-def _clusterhealthcheck(request):
+def _check_clusterhealth():
     healthy = True
     msgs = {}
     content = {}
     for cluster in models.Auth2Cluster.objects.only("clusterid").order_by("clusterid"):
         if cluster.clusterid == settings.AUTH2_CLUSTERID:
-            cluster_healthy,cluster_msg = _get_localhealthcheck()
+            cluster_healthy,cluster_msg = _check_localhealth()
         else:
             cluster_healthy,cluster_msg = cache.cluster_healthcheck(cluster.clusterid)
         if not cluster_healthy:
@@ -320,8 +276,11 @@ def _clusterhealthcheck(request):
     content["healthy"] = healthy
     if not healthy:
         content["errors"] = msgs
-            
 
+    return content
+
+def _clusterhealthcheck(request):
+    content = _check_clusterhealth()
     return JsonResponse(content,status=200)
 
 def ping(request):
