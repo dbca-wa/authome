@@ -65,7 +65,6 @@ fi \n\
 
 RUN chmod 555 run_command
 
-
 # Run the application as the www-data user.
 USER www-data
 EXPOSE 8080
