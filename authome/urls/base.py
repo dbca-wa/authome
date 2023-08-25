@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from ..cache import cache
 from .. import utils
-from ..models import DebugLog
+from authome.models import DebugLog
 
 logger = logging.getLogger(__name__)
 

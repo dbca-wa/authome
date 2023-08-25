@@ -331,6 +331,9 @@ def GET_CACHE_CONF(server,options={}):
     if server.lower().startswith('redis'):
         if "max_connections" not in options:
             options["max_connections"] = 2
+        if "require_full_coverage" not in options:
+            options["require_full_coverage"] = False
+
         if not REDIS_CLUSTER_ENABLED:
             return {
                 "BACKEND": "authome.redis.RedisCache",

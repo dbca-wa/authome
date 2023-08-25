@@ -473,7 +473,7 @@ class MemoryCache(cache.MemoryCache):
     @property
     def healthy(self):
         health,msgs = super().healthy
-        if not self._auth2_clusters:
+        if not self._auth2_clusters and not self._default_auth2_cluster:
             if health:
                 health = False
                 msgs = ["Auth2 cluster cache is empty"]

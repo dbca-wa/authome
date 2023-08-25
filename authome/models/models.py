@@ -1,5 +1,6 @@
 import re
 import logging
+import traceback
 import random
 from datetime import timedelta
 
@@ -19,6 +20,7 @@ import hashlib
 from ..cache import cache,get_defaultcache,get_usercache
 from .. import signals
 from .. import utils
+from .debugmodels import DebugLog
 
 logger = logging.getLogger(__name__)
 
@@ -1894,7 +1896,10 @@ if defaultcache:
         key = None
         @classmethod
         def change(cls,timeout=None):
-            defaultcache.set(cls.key,timezone.localtime(),timeout=timeout)
+            try:
+                defaultcache.set(cls.key,timezone.localtime(),timeout=timeout)
+            except Exception as ex:
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,traceback.format_exc(ex))
 
         @classmethod
         def get_cachetime(cls):
@@ -1910,56 +1915,66 @@ if defaultcache:
 
         @classmethod
         def status(cls):
-            last_refreshed = cls.get_cachetime()
-            last_synced = defaultcache.get(cls.key)
-            if not last_synced:
-                if last_refreshed:
+            try:
+                last_refreshed = cls.get_cachetime()
+                last_synced = defaultcache.get(cls.key)
+                if not last_synced:
+                    if last_refreshed:
+                        return (UP_TO_DATE,last_refreshed)
+                    else:
+                        return (OUTDATED,last_refreshed)
+
+
+                count =  cls.model.objects.all().count()
+                if count != cls.get_cachesize():
+                    #cache is outdated
+                    if last_synced > last_refreshed:
+                        return (OUTDATED,last_refreshed)
+                    else:
+                        return (OUT_OF_SYNC,last_refreshed)
+    
+                if count == 0:
                     return (UP_TO_DATE,last_refreshed)
+    
+                o = cls.model.objects.all().order_by("-modified").first()
+                if o:
+                    if last_refreshed and last_refreshed >= o.modified:
+                        return (UP_TO_DATE,last_refreshed)
+                    elif o.modified > last_synced:
+                        return (OUT_OF_SYNC,last_refreshed)
                 else:
-                    return (OUTDATED,last_refreshed)
-
-
-            count =  cls.model.objects.all().count()
-            if count != cls.get_cachesize():
-                #cache is outdated
-                if last_synced > last_refreshed:
-                    return (OUTDATED,last_refreshed)
-                else:
-                    return (OUT_OF_SYNC,last_refreshed)
-
-            if count == 0:
-                return (UP_TO_DATE,last_refreshed)
-
-            o = cls.model.objects.all().order_by("-modified").first()
-            if o:
-                if last_refreshed and last_refreshed >= o.modified:
                     return (UP_TO_DATE,last_refreshed)
-                elif o.modified > last_synced:
-                    return (OUT_OF_SYNC,last_refreshed)
-            else:
-                return (UP_TO_DATE,last_refreshed)
-
-            if not last_refreshed:
-                return (OUTDATED,last_refreshed)
-            elif last_synced > last_refreshed:
-                return (OUTDATED,last_refreshed)
-            else:
+    
+                if not last_refreshed:
+                    return (OUTDATED,last_refreshed)
+                elif last_synced > last_refreshed:
+                    return (OUTDATED,last_refreshed)
+                else:
+                    return (UP_TO_DATE,last_refreshed)
+            except:
+                #Failed, assume it is up to date
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,traceback.format_exc())
                 return (UP_TO_DATE,last_refreshed)
 
         @classmethod
         def is_changed(cls):
-            last_modified = defaultcache.get(cls.key)
-            if not last_modified:
-                #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
-                return False
-            elif not cls.get_cachetime():
-                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
-                return True
-            elif last_modified > cls.get_cachetime():
-                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
-                return True
-            else:
-                #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+            try:
+                last_modified = defaultcache.get(cls.key)
+                if not last_modified:
+                    #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+                    return False
+                elif not cls.get_cachetime():
+                    logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
+                    return True
+                elif last_modified > cls.get_cachetime():
+                    logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
+                    return True
+                else:
+                    #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+                    return False
+            except :
+                #Failed, assume it is not changed
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,traceback.format_exc())
                 return False
 
 

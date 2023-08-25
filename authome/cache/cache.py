@@ -1,4 +1,5 @@
 import logging
+import traceback
 import json
 from datetime import datetime, timedelta
 from collections import OrderedDict
@@ -587,8 +588,13 @@ class MemoryCache(object):
             try:
                 length = self._client.rpush(self.traffic_data_key,json.dumps(self._traffic_data))
             except:
-                self._client = defaultcache.client.get_client()
-                length = self._client.rpush(self.traffic_data_key,json.dumps(self._traffic_data))
+                try:
+                    self._client = defaultcache.redis_client
+                    length = self._client.rpush(self.traffic_data_key,json.dumps(self._traffic_data))
+                except :
+                    from authome.models import DebugLog
+                    DebugLog.warning(DebugLog.ERROR,None,None,None,None,traceback.format_exc())
+                    pass
 
     def _log_request_1(self,name,host,start,status_code):
         if start >= self._traffic_data_next_ts:
