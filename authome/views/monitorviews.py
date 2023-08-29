@@ -373,7 +373,7 @@ def _del_no_requests_data(d):
 
 sso_requests_keys = {"auth","auth_basic","auth_optional"}
 def _save_trafficdata(batchid):
-    client = defaultcache.client.get_client()
+    client = defaultcache.redis_client
     trafficdata_key = cache.traffic_data_key
 
     pdatas = client.lrange(trafficdata_key,0,-1)

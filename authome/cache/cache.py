@@ -221,12 +221,12 @@ class MemoryCache(object):
     @property
     def traffic_data_key(self):
         if not self._traffic_data_key:
-            self._traffic_data_key = settings.GET_CACHE_KEY("traffic-data")
+            self._traffic_data_key = settings.GET_DEFAULT_CACHE_KEY("traffic-data")
         return self._traffic_data_key
 
     @property
     def traffic_data_key_pattern(self):
-        return settings.GET_CACHE_KEY("traffic-data-level{}-{}-{{}}".format(settings.TRAFFIC_MONITOR_LEVEL,settings.TRAFFIC_MONITOR_INTERVAL.seconds))
+        return settings.GET_DEFAULT_CACHE_KEY("traffic-data-level{}-{}-{{}}".format(settings.TRAFFIC_MONITOR_LEVEL,settings.TRAFFIC_MONITOR_INTERVAL.seconds))
 
     @property
     def usergrouptree(self):
@@ -588,13 +588,9 @@ class MemoryCache(object):
             try:
                 length = self._client.rpush(self.traffic_data_key,json.dumps(self._traffic_data))
             except:
-                try:
-                    self._client = defaultcache.redis_client
-                    length = self._client.rpush(self.traffic_data_key,json.dumps(self._traffic_data))
-                except :
-                    from authome.models import DebugLog
-                    DebugLog.warning(DebugLog.ERROR,None,None,None,None,traceback.format_exc())
-                    pass
+                from authome.models import DebugLog
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,traceback.format_exc())
+                pass
 
     def _log_request_1(self,name,host,start,status_code):
         if start >= self._traffic_data_next_ts:

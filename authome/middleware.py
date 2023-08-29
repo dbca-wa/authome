@@ -82,7 +82,7 @@ class SessionMiddleware(MiddlewareMixin):
 
             DebugLog.attach_request(request)
             if session_cookie:
-                values = session_cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)
+                values = session_cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPARATOR,1)
                 if len(values) == 1:
                     cookie_domain = None
                     values = values[0]
@@ -173,6 +173,7 @@ class SessionMiddleware(MiddlewareMixin):
                         httponly=settings.SESSION_COOKIE_HTTPONLY or None,
                         samesite=settings.SESSION_COOKIE_SAMESITE
                     )
+                    print("cookie = {}".format(request.session.cookie_value))
                     #Only record authenticated session
                     DebugLog.log_if_true("-" in (request.session.session_key or request.session.expired_session_key) and utils.get_source_session_key(request) == (request.session.session_key or request.session.expired_session_key),DebugLog.UPDATE_COOKIE,DebugLog.get_lb_hash_key(request.session),utils.get_source_clusterid(request),request.session.session_key,utils.get_source_session_cookie(request),message="Return an updated session cookie({})".format(request.session.cookie_value),userid=request.session.get(USER_SESSION_KEY),target_session_cookie=request.session.cookie_value,request=request)
 
@@ -196,7 +197,7 @@ class ClusterSessionMiddleware(SessionMiddleware):
                 values = session_cookie.split("|",3)
                 length = len(values)
                 if length == 1:
-                    values = session_cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)
+                    values = session_cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPARATOR,1)
                     if len(values) == 1:
                         cookie_domain = None
                         session_key = values[0]
@@ -212,7 +213,7 @@ class ClusterSessionMiddleware(SessionMiddleware):
                 elif length == 4:
                     try:
                         lb_hash_key,auth2_clusterid,signature,session_key = values
-                        values = session_key.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)
+                        values = session_key.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPARATOR,1)
                         if len(values) == 1:
                             cookie_domain = None
                             session_key = values[0]
@@ -227,6 +228,7 @@ class ClusterSessionMiddleware(SessionMiddleware):
                             DebugLog.warning(DebugLog.DOMAIN_NOT_MATCH,nginx_lb_hash_key,auth2_clusterid,session_key,session_cookie,message="The domain({1}) of the session cookie({0}) does not match the required domain({2}) . request={3}, cookies={4}".format(session_cookie,cookie_domain,self.SessionStore.get_cookie_domain(request),"{}{}".format(utils.get_host(request),request.path_info),request.headers.get("cookie")),request=request)
                             return
                         elif nginx_lb_hash_key != lb_hash_key:
+                            print("{} : {} != {}".format(session_cookie,nginx_lb_hash_key,lb_hash_key))
                             #load balance hash key does not match the lb hash key in session cookie, or cookie domain does not match the required domain
                             #this is a abnormal scenario, logout and let user login again
                             request.session = self.SessionStore(nginx_lb_hash_key,None,None,request=request,cookie_domain=cookie_domain)
@@ -260,8 +262,8 @@ class ClusterSessionMiddleware(SessionMiddleware):
                         request.session = self.SessionStore(nginx_lb_hash_key,None,None,request=request,cookie_domain=cookie_domain)
                         return
                 else:
-                    if settings.SESSION_COOKIE_DOMAIN_SEPATATOR in session_cookie:
-                        cookie_domain = session_cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)[-1]
+                    if settings.SESSION_COOKIE_DOMAIN_SEPARATOR in session_cookie:
+                        cookie_domain = session_cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPARATOR,1)[-1]
                     else:
                         cookie_domain = None
                     #invalid session key

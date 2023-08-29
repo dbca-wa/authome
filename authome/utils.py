@@ -47,9 +47,9 @@ def build_cookie_value(lb_hash_key,clusterid,signature,session_key,cookie_domain
     from django.conf import settings
     if cookie_domain:
         if clusterid:
-            return "{}|{}|{}|{}{}{}".format(lb_hash_key,clusterid,signature,session_key,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,cookie_domain)
+            return "{}|{}|{}|{}{}{}".format(lb_hash_key,clusterid,signature,session_key,settings.SESSION_COOKIE_DOMAIN_SEPARATOR,cookie_domain)
         else:
-            return "{}{}{}".format(session_key,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,cookie_domain)
+            return "{}{}{}".format(session_key,settings.SESSION_COOKIE_DOMAIN_SEPARATOR,cookie_domain)
     else:
         if clusterid:
             return "{}|{}|{}|{}".format(lb_hash_key,clusterid,signature,session_key)
@@ -91,8 +91,8 @@ def get_source_cookie_domain(request=None):
 def get_cookie_domain(cookie):
     if not cookie:
         return None
-    if settings.SESSION_COOKIE_DOMAIN_SEPATATOR in cookie:
-        return cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)[1]
+    if settings.SESSION_COOKIE_DOMAIN_SEPARATOR in cookie:
+        return cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPARATOR,1)[1]
     else:
         return None
 
@@ -104,7 +104,7 @@ def get_session_key(cookie):
     from django.conf import settings
     if not cookie:
         return None
-    return cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)[0].rsplit("|",1)[-1]
+    return cookie.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPARATOR,1)[0].rsplit("|",1)[-1]
 
 def get_source_clusterid(request=None):
     cookie = get_source_session_cookie(request)

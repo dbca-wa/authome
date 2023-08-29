@@ -602,10 +602,10 @@ email_re = re.compile("^[a-zA-Z0-9\.!#\$\%\&’'\*\+\/\=\?\^_`\{\|\}\~\-]+@[a-zA
 VALID_CODE_CHARS = string.digits if settings.PASSCODE_DIGITAL else (string.ascii_uppercase + string.digits)
 VALID_TOKEN_CHARS = string.ascii_uppercase + string.digits
 
-get_verifycode_key = lambda email:settings.GET_CACHE_KEY("verifycode:{}".format(email))
-get_signuptoken_key = lambda email:settings.GET_CACHE_KEY("signuptoken:{}".format(email))
-get_sendcode_number_key = lambda email:settings.GET_CACHE_KEY("sendcodenumber:{}".format(email))
-get_verifycode_number_key = lambda email:settings.GET_CACHE_KEY("verifycodenumber:{}".format(email))
+get_verifycode_key = lambda email:"verifycode:{}".format(email)
+get_signuptoken_key = lambda email:"signuptoken:{}".format(email)
+get_sendcode_number_key = lambda email:"sendcodenumber:{}".format(email)
+get_verifycode_number_key = lambda email:"verifycodenumber:{}".format(email)
 get_codeid = lambda :"{}.{}".format(timezone.localtime().timestamp(),get_random_string(10,VALID_TOKEN_CHARS))
 
 get_expire_key = lambda key:"{}_expireat".format(key)
@@ -978,7 +978,7 @@ def login_domain(request):
     domain = settings.GET_SESSION_COOKIE_DOMAIN(request.get_host())
     res.set_cookie(
         settings.SESSION_COOKIE_NAME,
-        "{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host),
+        "{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPARATOR,domain or host),
         max_age=max_age,
         expires=expires,
         path=settings.SESSION_COOKIE_PATH,
@@ -987,7 +987,7 @@ def login_domain(request):
         httponly=settings.SESSION_COOKIE_HTTPONLY or None,
         samesite=settings.SESSION_COOKIE_SAMESITE,
     )
-    DebugLog.log(DebugLog.CREATE_COOKIE,utils.get_lb_hash_key(session_cookie),utils.get_clusterid(session_cookie),utils.get_session_key(session_cookie),session_cookie,message="Return a new session cookie({}) for domain({})".format("{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host),domain or host),userid=None,target_session_cookie="{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,domain or host),request=request)
+    DebugLog.log(DebugLog.CREATE_COOKIE,utils.get_lb_hash_key(session_cookie),utils.get_clusterid(session_cookie),utils.get_session_key(session_cookie),session_cookie,message="Return a new session cookie({}) for domain({})".format("{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPARATOR,domain or host),domain or host),userid=None,target_session_cookie="{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPARATOR,domain or host),request=request)
     return res
 
 

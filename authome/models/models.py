@@ -1979,7 +1979,7 @@ if defaultcache:
 
 
     class IdentityProviderChange(ModelChange):
-        key = settings.GET_CACHE_KEY("idp_last_modified")
+        key = "idp_last_modified"
         model = IdentityProvider
 
         @classmethod
@@ -2009,7 +2009,7 @@ if defaultcache:
             IdentityProviderChange.change()
 
     class CustomizableUserflowChange(ModelChange):
-        key = settings.GET_CACHE_KEY("customizableuserflow_last_modified")
+        key = "customizableuserflow_last_modified"
         model = CustomizableUserflow
 
         @classmethod
@@ -2039,7 +2039,7 @@ if defaultcache:
             CustomizableUserflowChange.change()
 
     class UserGroupChange(ModelChange):
-        key = settings.GET_CACHE_KEY("usergroup_last_modified")
+        key = "usergroup_last_modified"
         model = UserGroup
 
         @classmethod
@@ -2071,7 +2071,7 @@ if defaultcache:
             UserGroupChange.change()
 
     class UserAuthorizationChange(ModelChange):
-        key = settings.GET_CACHE_KEY("userauthorization_last_modified")
+        key = "userauthorization_last_modified"
         model = UserAuthorization
 
         @classmethod
@@ -2103,7 +2103,7 @@ if defaultcache:
             UserAuthorizationChange.change()
 
     class UserGroupAuthorizationChange(ModelChange):
-        key = settings.GET_CACHE_KEY("usergroupauthorization_last_modified")
+        key = "usergroupauthorization_last_modified"
         model = UserGroupAuthorization
 
         @classmethod

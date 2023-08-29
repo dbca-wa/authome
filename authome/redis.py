@@ -13,14 +13,35 @@ from . import utils
 
 logger = logging.getLogger(__name__)
 
+def is_cluster(url):
+    ex = None
+    for redisurl in url.split(";"):
+        redisurl = redisurl.strip()
+        if not redisurl:
+            continue
+        client = None
+        try:
+            client = redis.Redis.from_url(url)
+            data = client.info("cluster")
+            logger.debug("Redis server({}) is cluster {}".format(redisurl,"enabled" if data["cluster_enabled"] else "disabled"))
+            return True if data["cluster_enabled"] else False
+        except Exception as e:
+            if client:
+                client.close()
+            ex = e
+    if ex:
+        raise Exception("No available redis server.{}".format(str(ex)))
+    else: 
+        raise Exception("No available redis server.")
+
 redis_re = re.compile("^\s*((?P<protocol>[a-zA-Z]+)://((?P<user>[^:@]+)?(:(?P<password>[^@]+))?@)?)?(?P<host>[^:/]+)(:(?P<port>[0-9]+))?(/(?P<db>[0-9]+))?\s*$")
 class CacheMixin(object):
     _parsed_servers = {}
     _instances = {}
-    _inited = False
+    cacheid = None
 
     def __new__(cls,server,params):
-        cacheid = id(server)
+        cacheid = params["CACHEID"]
         try:
             return cls._instances[cacheid]
         except KeyError as ex:
@@ -133,7 +154,14 @@ class CacheMixin(object):
         except Exception as ex:
             return (False,str(ex))
     
-class RedisCacheClient(django_redis.RedisCacheClient):
+class BaseRedisCacheClient(django_redis.RedisCacheClient):
+    def __init__(self, servers, **options ):
+        retry = options.pop('retry',0)
+        if retry >= 1:
+            options["retry"] = redis.retry.Retry(redis.backoff.NoBackoff(),retry)
+        super().__init__(servers,**options)
+           
+class RedisCacheClient(BaseRedisCacheClient):
     _redisclient = None
     def get_client(self, key=None, *, write=False):
         # key is used so that the method signature remains the same and custom
@@ -153,7 +181,7 @@ class RedisCacheClient(django_redis.RedisCacheClient):
         # the server, e.g. sharding.
         return self.get_client()
 
-class MultiRedisCacheClient(django_redis.RedisCacheClient):
+class MultiRedisCacheClient(BaseRedisCacheClient):
     _redisclients = {}
     def get_client(self, key=None, *, write=False):
         # key is used so that the method signature remains the same and custom
@@ -181,9 +209,9 @@ class MultiRedisCacheClient(django_redis.RedisCacheClient):
 class RedisCache(CacheMixin,django_redis.RedisCache):
     _redis_client = None
     def __init__(self, server, params):
-        if self._inited:
+        if self.cacheid:
             return
-        self._inited = True
+        self.cacheid = params.pop("CACHEID")
         super().__init__(server,params)
         if len(self._servers) == 1:
             self._class = RedisCacheClient
@@ -226,8 +254,8 @@ class RedisCache(CacheMixin,django_redis.RedisCache):
         else:
             return [(self._servers[i],self._cache.get_client_by_index(i)) for i in range(len(self._servers))]
 
-class AutoSwitchRedisCluster(redis.RedisCluster):
-    def switch_master(self,*args):
+class AutoFailoverRedisCluster(redis.RedisCluster):
+    def master_failover(self,*args):
         """
         Return True if switch succeed; otherwise return False
         """
@@ -293,18 +321,18 @@ class AutoSwitchRedisCluster(redis.RedisCluster):
             return super().execute_command(*args,**kwargs)
         except Exception as ex:
             if type(ex) in self.__class__.ERRORS_ALLOW_RETRY:
-                self.switch_master(*args)
+                self.master_failover(*args)
                 return super().execute_command(*args,**kwargs)
             else:
                 raise
             
 class RedisClusterCacheClient(django_redis.RedisCacheClient):
     _redisclient = None
-    def __init__(self, *args,auto_switch=False,**kwargs):
+    def __init__(self, *args,auto_failover=False,**kwargs):
         super().__init__(*args,**kwargs)
-        if auto_switch:
-            logger.debug("Auto switching redis master feature is enabled. ")
-            self._client = AutoSwitchRedisCluster
+        if auto_failover:
+            logger.debug("Redis cluster master auto failover feature is enabled. ")
+            self._client = AutoFailoverRedisCluster
         else:
             self._client = redis.RedisCluster
         
@@ -333,9 +361,9 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
     _failed_cluster_nodes = []
 
     def __init__(self, server, params):
-        if self._inited:
+        if self.cacheid:
             return
-        self._inited = True
+        self.cacheid = params.pop("CACHEID")
         server = server.strip(" ;")
         super().__init__(server,params)
         self._class = RedisClusterCacheClient

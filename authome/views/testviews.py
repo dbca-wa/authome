@@ -173,7 +173,7 @@ def get_session(request):
         values = session_cookie.split("|")
         if len(values) == 1:
             session_key = values[0]
-            values = session_key.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)
+            values = session_key.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPARATOR,1)
             if len(values) == 1:
                 cookie_domain = None
                 session_key = values[0]
@@ -185,7 +185,7 @@ def get_session(request):
                 sessionstore = SessionStore(session_key,cookie_domain=cookie_domain)
         else:
             lb_hash_key,auth2_clusterid,signature,session_key = values
-            values = session_key.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)
+            values = session_key.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPARATOR,1)
             if len(values) == 1:
                 cookie_domain = None
                 session_key = values[0]

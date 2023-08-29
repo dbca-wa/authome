@@ -489,7 +489,7 @@ def _save_usertoken(key,value,expireat):
     _save(get_usercache(userid),settings.GET_USERTOKEN_KEY(userid),value,expireat)
 
 def _save_data(key,value,expireat):
-    _save(defaultcache,settings.GET_CACHE_KEY(key),value,expireat)
+    _save(defaultcache,key,value,expireat)
 
 def _save_process_seq(key,value,expireat):
     _save(firstsessioncache,process_seq_key,value,expireat)
