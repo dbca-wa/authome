@@ -390,7 +390,9 @@ def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
         if "max_connections" not in options:
             options["max_connections"] = 2
 
-        cluster = redis.is_cluster(server)
+        cluster = options.pop("cluster",None)
+        if cluster is None:
+            cluster = redis.is_cluster(server)
 
         if cluster:
             if "require_full_coverage" not in options:

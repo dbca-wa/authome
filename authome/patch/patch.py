@@ -10,7 +10,8 @@ from django.core.handlers import exception
 
 from social_core.exceptions import AuthException
 
-from ..models import User,UserToken,DebugLog
+from ..models import User,UserToken
+from authome.models import DebugLog
 from ..cache import get_usercache
 from ..exceptions import UserDoesNotExistException
 from .. import utils
@@ -42,7 +43,7 @@ if settings.USER_CACHE_ALIAS:
             try:
                 user = usercache.get(userkey)
             except:
-                pass
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to load the user from cache .{}".format(traceback.format_exc()))
             finally:
                 performance.end_processingstep("get_user_from_cache")
                 pass
@@ -60,7 +61,7 @@ if settings.USER_CACHE_ALIAS:
                 try:
                     usercache.set(userkey,user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
                 except:
-                    pass
+                    DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to set the user to cache .{}".format(traceback.format_exc()))
                 finally:
                     performance.end_processingstep("set_user_to_cache")
                     pass
@@ -194,17 +195,14 @@ def get_response_for_exception():
                 useremail = request.user.email
             except:
                 useremail = None
-            try:
-                DebugLog.warning(
-                    DebugLog.ERROR,utils.get_source_lb_hash_key(request),
-                    utils.get_source_clusterid(request),
-                    utils.get_source_session_key(request),
-                    utils.get_source_session_cookie(request),
-                    useremail=useremail,
-                    message="Failed to process request.{}".format("\n".join(traceback.format_exception(type(exc),exc,exc.__traceback__)))
-                )
-            except:
-                logger.error("Failed to log the exception message to DebugLog.{}".format(traceback.format_exc()))
+            DebugLog.warning(
+                DebugLog.ERROR,utils.get_source_lb_hash_key(request),
+                utils.get_source_clusterid(request),
+                utils.get_source_session_key(request),
+                utils.get_source_session_cookie(request),
+                useremail=useremail,
+                message="Failed to process request.{}".format("\n".join(traceback.format_exception(type(exc),exc,exc.__traceback__)))
+            )
             
             return original_handler(request,exc)
     return _response_for_exception

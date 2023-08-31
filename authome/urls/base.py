@@ -25,18 +25,15 @@ def traffic_monitor(name,func):
                         useremail = request.user.email
                     except:
                         useremail = None
-                    try:
-                        DebugLog.warning(
-                            DebugLog.AUTH_TOO_SLOW,
-                            utils.get_source_lb_hash_key(request),
-                            utils.get_source_clusterid(request),
-                            utils.get_source_session_key(request),
-                            utils.get_source_session_cookie(request),
-                            useremail=useremail,
-                            message="Authentication method({}) is too slow.process time = {}/{} milliseconds, status code = {}" .format(name,ptime,settings.AUTH_TOO_SLOW_THRESHOLD,res.status_code if res else 500)
-                        )
-                    except:
-                        logger.error("Failed to log the timeout message to DebugLog.{}".format(traceback.format_exc()))
+                    DebugLog.warning(
+                        DebugLog.AUTH_TOO_SLOW,
+                        utils.get_source_lb_hash_key(request),
+                        utils.get_source_clusterid(request),
+                        utils.get_source_session_key(request),
+                        utils.get_source_session_cookie(request),
+                        useremail=useremail,
+                        message="Authentication method({}) is too slow.process time = {}/{} milliseconds, status code = {}" .format(name,ptime,settings.AUTH_TOO_SLOW_THRESHOLD,res.status_code if res else 500)
+                    )
 
             except:
                 logger.error("Failed to log the request.{}".format(traceback.format_exc()))

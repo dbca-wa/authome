@@ -509,7 +509,7 @@ def add_to_map(m,k,v):
         return m
 
 def ping_database(dbalias):
-    msg = "OK"
+    error = None
     healthy = True
     with connections[dbalias].cursor() as cursor:
         try:
@@ -517,18 +517,18 @@ def ping_database(dbalias):
             v = cursor.fetchone()[0]
             if v != 1:
                 healthy = False
-                msg = "Not Available"
+                error = "Not Accessible"
         except Exception as ex:
             healthy = False
-            msg = str(ex)
-    return (healthy,msg)
+            error = str(ex)
+    return (healthy,error)
 
 def ping_cacheserver(serveralias):
     try:
         caches[serveralias].set("PING","PONG")
-        return (True, "OK")
+        return (True, None)
     except Exception as ex:
-        return (False,str(ex))
+        return (False,"Not Accessible".format(str(ex)))
 
 
 def print_cookies(request):

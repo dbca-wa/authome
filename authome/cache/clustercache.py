@@ -135,7 +135,7 @@ class MemoryCache(cache.MemoryCache):
                     retry_clusters = utils.add_to_list(retry_clusters,(o,ex))
                 else:
                     if isinstance(ex,requests.Timeout):
-                        from  authome.models import DebugLog
+                        from authome.models import DebugLog
                         DebugLog.warning(DebugLog.INTERCONNECTION_TIMEOUT,None,o.clusterid,None,None,message="Accessing auth2 cluster({1}) times out({0} seconds),{2}".format(settings.AUTH2_INTERCONNECTION_TIMEOUT,o.clusterid,str(ex)),request=request)
                     failed_clusters = utils.add_to_list(failed_clusters,(o,ex))
 
@@ -148,7 +148,7 @@ class MemoryCache(cache.MemoryCache):
                     continue
                 elif o.endpoint == cluster.endpoint:
                     if isinstance(ex,requests.Timeout):
-                        from  authome.models import DebugLog
+                        from authome.models import DebugLog
                         DebugLog.warning(DebugLog.INTERCONNECTION_TIMEOUT,None,cluster.clusterid,None,None,message="Accessing auth2 cluster({1}) times out({0} seconds),{2}".format(settings.AUTH2_INTERCONNECTION_TIMEOUT,cluster.clusterid,str(ex)),request=request)
                     failed_clusters = utils.add_to_list(failed_clusters,(cluster,ex))
                     continue
@@ -160,7 +160,7 @@ class MemoryCache(cache.MemoryCache):
                     else:
                         changed_clusters.append(cluster)
                 except requests.Timeout as ex:
-                    from  authome.models import DebugLog
+                    from authome.models import DebugLog
                     DebugLog.warning(DebugLog.INTERCONNECTION_TIMEOUT,None,cluster.clusterid,None,None,message="Accessing auth2 cluster({1}) times out({0} seconds),{2}".format(settings.AUTH2_INTERCONNECTION_TIMEOUT,cluster.clusterid,str(ex)),request=request)
                     failed_clusters = utils.add_to_list(failed_clusters,(cluster,ex))
                 except Exception as ex:
@@ -199,19 +199,19 @@ class MemoryCache(cache.MemoryCache):
                     res.raise_for_status()
                     return res
                 elif isinstance(exception,requests.Timeout):
-                    from  authome.models import DebugLog
+                    from authome.models import DebugLog
                     DebugLog.warning(DebugLog.INTERCONNECTION_TIMEOUT,None,clusterid,None,None,message="Accessing auth2 cluster({1}) times out({0} seconds),{2}".format(settings.AUTH2_INTERCONNECTION_TIMEOUT,clusterid,str(exception)),request=request)
             except Exception as ex:
                 if isinstance(ex,KeyError):
                     raise Auth2ClusterException("Auth2 cluster({}) doesn't exist".format(clusterid),ex)
                 elif isinstance(ex,requests.Timeout):
-                    from  authome.models import DebugLog
+                    from authome.models import DebugLog
                     DebugLog.warning(DebugLog.INTERCONNECTION_TIMEOUT,None,clusterid,None,None,message="Accessing auth2 cluster({1}) times out({0} seconds),{2}".format(settings.AUTH2_INTERCONNECTION_TIMEOUT,clusterid,str(ex)),request=request)
                     exception = ex
                 else:
                     exception = ex
         elif isinstance(exception,requests.Timeout):
-            from  authome.models import DebugLog
+            from authome.models import DebugLog
             DebugLog.warning(DebugLog.INTERCONNECTION_TIMEOUT,None,clusterid,None,None,message="Accessing auth2 cluster({1}) times out({0} seconds),{2}".format(settings.AUTH2_INTERCONNECTION_TIMEOUT,clusterid,str(exception)),request=request)
 
         raise Auth2ClusterException("Failed to access cluster({}).{}".format(clusterid,str(exception)),exception)
@@ -369,14 +369,14 @@ class MemoryCache(cache.MemoryCache):
             res = self._get_remote_session(request,target_clusterid,_send_request)
             return json.loads(res.text,cls=JSONDecoder)
         except Auth2ClusterException as ex:
-            from  ..models import DebugLog
+            from ..models import DebugLog
             DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,target_clusterid,session,utils.get_source_session_cookie(),message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)),request=request)
             if raise_exception:
                 raise
             else:
                 return None
         except Exception as ex:
-            from  authome.models import DebugLog
+            from authome.models import DebugLog
             DebugLog.warning(DebugLog.ERROR,None,target_clusterid,session,utils.get_source_session_cookie(),session,message="Failed to get remote session({1}) from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)))
             logger.error("Failed to get session from auth2 cluster '{}'.{}".format(target_clusterid,str(ex)))
             return None
@@ -395,14 +395,14 @@ class MemoryCache(cache.MemoryCache):
         try:
             self._delete_remote_session(request,target_clusterid,_send_request)
         except Auth2ClusterException as ex:
-            from  ..models import DebugLog
+            from ..models import DebugLog
             DebugLog.log(DebugLog.AUTH2_CLUSTER_NOTAVAILABLE,None,target_clusterid,session,utils.get_source_sessioin_cookie(),message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)),request=request)
             if raise_exception:
                 raise
             else:
                 return
         except Exception as ex:
-            from  authome.models import DebugLog
+            from authome.models import DebugLog
             DebugLog.warning(DebugLog.ERROR,None,target_clusterid,session,utils.get_source_session_cookie(),message="Failed to mark remote session({1}) as migrated from Auth2 cluster({0}).{2}".format(target_clusterid,session,str(ex)))
             logger.error("Failed to mark session as migraed in auth2 cluster '{}'.{}".format(target_clusterid,str(ex)))
             return
@@ -427,7 +427,7 @@ class MemoryCache(cache.MemoryCache):
                 "default_cluster":clusterid == self._default_auth2_cluster and self._default_auth2_cluster.clusterid,
                 "endpoint":self._auth2_clusters.get(clusterid).endpoint if (clusterid in self._auth2_clusters) else "N/A",
                 "healthy":False,
-                "errors":[str(ex)]
+                "errors":str(ex)
             }
 
     def get_model_cachestatus(self,clusterid):
@@ -456,9 +456,9 @@ class MemoryCache(cache.MemoryCache):
         try:
             res = self._send_request_to_cluster(None,clusterid,_send_request)
             data = res.json()
-            return (data["healthy"],data.get("errors","OK"))
+            return (data["working"],data.get("errors",None))
         except Exception as ex:
-            return (False,[str(ex)])
+            return (False,str(ex))
 
     @property
     def status(self):

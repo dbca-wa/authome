@@ -589,7 +589,7 @@ class MemoryCache(object):
                 length = self._client.rpush(self.traffic_data_key,json.dumps(self._traffic_data))
             except:
                 from authome.models import DebugLog
-                DebugLog.warning(DebugLog.ERROR,None,None,None,None,traceback.format_exc())
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to save the traffic data to cache.{}".format(traceback.format_exc()))
                 pass
 
     def _log_request_1(self,name,host,start,status_code):

@@ -34,16 +34,20 @@ def _get_localstatus():
         content["endpoint"] = cache._current_auth2_cluster.endpoint
 
     healthy = True
-    msgs = []
+    errors = OrderedDict()
 
     databases = OrderedDict()
     for n,d in settings.DATABASES.items():
         db = "{}:{}/{}".format(d["HOST"],d["PORT"],d["NAME"])
-        db_healthy,db_msg = utils.ping_database(n)
-        databases[n] = "server = {}:{}/{} , status = {}".format(d["HOST"],d["PORT"],d["NAME"],db_msg)
-        if not db_healthy:
+        db_healthy,db_error = utils.ping_database(n)
+        if db_healthy:
+            databases[n] = "server = {}:{}/{} , status = OK".format(d["HOST"],d["PORT"],d["NAME"])
+        else:
+            databases[n] = "server = {}:{}/{} , error = {}".format(d["HOST"],d["PORT"],d["NAME"],db_error)
             healthy = False
-            msgs = utils.add_to_list(msgs,db_msg)
+            if "databases" not in errors:
+                errors["databases"] = OrderedDict()
+            errors["databases"][n] = utils.add_to_list(errors["databases"].get(n),database[n])
 
     cache_servers = OrderedDict()
     if settings.CACHE_SERVER:
@@ -51,11 +55,17 @@ def _get_localstatus():
         if settings.CACHE_SERVER.lower().startswith("redis"):
             cache_healthy,cache_servers[name] = caches[name].server_status
         else:
-            cache_healthy,cache_msg = utils.ping_cacheserver(name)
-            cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_SERVER,cache_msg)
+            cache_healthy,cache_error = utils.ping_cacheserver(name)
+            if cache_healthy:
+                cache_servers[name] = "server = {} ,  status = OK".format(settings.CACHE_SERVER)
+            else:
+                cache_servers[name] = "server = {} ,  error = {}".format(settings.CACHE_SERVER,cache_error)
+
         if not cache_healthy:
             healthy = False
-            msgs = utils.add_to_list(msgs,cache_servers[name])
+            if "caches" not in errors:
+                errors["caches"] = OrderedDict()
+            errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_servers[name])
 
     if settings.CACHE_USER_SERVER:
         if settings.USER_CACHES  == 1:
@@ -63,24 +73,34 @@ def _get_localstatus():
             if settings.CACHE_USER_SERVER[0].lower().startswith("redis"):
                 cache_healthy,cache_servers[name] = caches[name].server_status
             else:
-                cache_healthy,cache_msg = utils.ping_cacheserver(name)
-                cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_USER_SERVER[0],cache_msg)
+                cache_healthy,cache_error = utils.ping_cacheserver(name)
+                if cache_healthy:
+                    cache_servers[name] = "server = {} ,  status = OK".format(settings.CACHE_USER_SERVER[0])
+                else:
+                    cache_servers[name] = "server = {} ,  error = {}".format(settings.CACHE_USER_SERVER[0],cache_error)
 
             if not cache_healthy:
                 healthy = False
-                msgs = utils.add_to_list(msgs,cache_servers[name])
+                if "caches" not in errors:
+                    errors["caches"] = OrderedDict()
+                errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_servers[name])
         else:
             for i in range(settings.USER_CACHES):
                 name = "user{}".format(i)
                 if settings.CACHE_USER_SERVER[i].lower().startswith("redis"):
                     cache_healthy,cache_servers[name] = caches[name].server_status
                 else:
-                    cache_healthy,cache_msg = utils.ping_cacheserver(name)
-                    cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_USER_SERVER[i],cache_msg)
+                    cache_healthy,cache_error = utils.ping_cacheserver(name)
+                    if cache_healthy:
+                        cache_servers[name] = "server = {} ,  status = OK".format(settings.CACHE_USER_SERVER[i])
+                    else:
+                        cache_servers[name] = "server = {} ,  error = {}".format(settings.CACHE_USER_SERVER[i],cache_error)
 
                 if not cache_healthy:
                     healthy = False
-                    msgs = utils.add_to_list(msgs,cache_servers[name])
+                    if "caches" not in errors:
+                        errors["caches"] = OrderedDict()
+                    errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_servers[name])
 
     if settings.CACHE_SESSION_SERVER:
         if settings.SESSION_CACHES  == 1:
@@ -88,12 +108,17 @@ def _get_localstatus():
             if settings.CACHE_SESSION_SERVER[0].lower().startswith("redis"):
                 cache_healthy,cache_servers[name] = caches[name].server_status
             else:
-                cache_healthy,cache_msg = utils.ping_cacheserver(name)
-                cache_servers[name] = "server = {} ,  status = {}".format(settings.CACHE_SESSION_SERVER[0],cache_msg)
+                cache_healthy,cache_error = utils.ping_cacheserver(name)
+                if cache_healthy:
+                    cache_servers[name] = "server = {} ,  status = OK".format(settings.CACHE_SESSION_SERVER[0])
+                else:
+                    cache_servers[name] = "server = {} ,  error = {}".format(settings.CACHE_SESSION_SERVER[0],cache_error)
 
             if not cache_healthy:
                 healthy = False
-                msgs = utils.add_to_list(msgs,cache_servers[name])
+                if "caches" not in errors:
+                    errors["caches"] = OrderedDict()
+                errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_servers[name])
 
         else:
             for i in range(settings.SESSION_CACHES):
@@ -101,12 +126,17 @@ def _get_localstatus():
                 if settings.CACHE_SESSION_SERVER[i].lower().startswith("redis"):
                     cache_healthy,cache_servers[name] = caches[name].server_status
                 else:
-                    cache_healthy,cache_msg = utils.ping_cacheserver(name)
-                    cache_servers[name] = "server = {} ,  status = {}".format(CACHE_SESSION_SERVER[i],cache_msg)
+                    cache_healthy,cache_error = utils.ping_cacheserver(name)
+                    if cache_healthy:
+                        cache_servers[name] = "server = {} ,  status = OK".format(CACHE_SESSION_SERVER[i])
+                    else:
+                        cache_servers[name] = "server = {} ,  error = {}".format(CACHE_SESSION_SERVER[i],cache_error)
 
                 if not cache_healthy:
                     healthy = False
-                    msgs = utils.add_to_list(msgs,cache_servers[name])
+                    if "caches" not in errors:
+                        errors["caches"] = OrderedDict()
+                    errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_servers[name])
 
     cache_healthy,cache_msgs = cache.healthy
     healthy = healthy and cache_healthy
@@ -114,7 +144,7 @@ def _get_localstatus():
         msgs = utils.add_to_list(msgs,cache_msgs)
     content["healthy"] = healthy
     if not healthy :
-        content["errors"] = msgs
+        content["errors"] = errors
 
     content["memory"] = "{}MB".format(round(psutil.Process().memory_info().rss / (1024 * 1024),2))
 
@@ -126,9 +156,9 @@ def _get_localstatus():
 
     content["databases"] = databases
 
-    content["cache server"] = cache_servers
+    content["caches"] = cache_servers
 
-    content["memorycache"] = cache.status
+    content["auth2 memory cache"] = cache.status
 
     content["serverid"] = utils.get_processid()
     return content
@@ -178,104 +208,145 @@ def statusfactory(t=None):
 
 
 def _check_localhealth():
-    healthy = True
-    msgs = []
+    working = True
+    errors = OrderedDict()
 
     for n,d in settings.DATABASES.items():
-        db_healthy,db_msg = utils.ping_database(n)
-        if not db_healthy:
-            healthy = False
-            msgs = utils.add_to_list(msgs,db_msg)
+        db_working,db_error = utils.ping_database(n)
+        if not db_working:
+            working = False
+        if db_error:
+            if "databases" not in errors:
+                errors["databases"] = OrderedDict()
+            errors["databases"][n] = utils.add_to_list(errors["databases"].get(n),"server = {}:{}/{} , error = {}".format(d["HOST"],d["PORT"],d["NAME"],db_error))
 
     if settings.CACHE_SERVER:
         name = "default"
         if settings.CACHE_SERVER.lower().startswith("redis"):
-            cache_healthy,cache_msg = caches[name].ping()
+            cache_working,cache_error = caches[name].ping()
         else:
-            cache_healthy,cache_msg = utils.ping_cacheserver(name)
-        if not cache_healthy:
-            healthy = False
-            msgs = utils.add_to_list(msgs,cache_msg)
+            cache_working,cache_error = utils.ping_cacheserver(name)
+            if cache_working:
+                cache_error = "server = {} ,  error = {}".format(settings.CACHE_SERVER,cache_error)
+        if not cache_working:
+            working = False
+        if cache_error:
+            if "caches" not in errors:
+                errors["caches"] = OrderedDict()
+            errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_error)
 
     if settings.CACHE_USER_SERVER:
         if settings.USER_CACHES  == 1:
             name = "user"
             if settings.CACHE_USER_SERVER[0].lower().startswith("redis"):
-                cache_healthy,cache_msg = caches[name].ping()
+                cache_working,cache_error = caches[name].ping()
             else:
-                cache_healthy,cache_msg = utils.ping_cacheserver(name)
+                cache_working,cache_error = utils.ping_cacheserver(name)
+                if cache_working:
+                    cache_error = "server = {} ,  error = {}".format(settings.CACHE_SERVER,cache_error)
 
-            if not cache_healthy:
-                healthy = False
-                msgs = utils.add_to_list(msgs,cache_msg)
+            if not cache_working:
+                working = False
+            if cache_error:
+                if "caches" not in errors:
+                    errors["caches"] = OrderedDict()
+                errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_error)
         else:
             for i in range(settings.USER_CACHES):
                 name = "user{}".format(i)
                 if settings.CACHE_USER_SERVER[i].lower().startswith("redis"):
-                    cache_healthy,cache_msg = caches[name].ping()
+                    cache_working,cache_error = caches[name].ping()
                 else:
-                    cache_healthy,cache_msg = utils.ping_cacheserver(name)
+                    cache_working,cache_error = utils.ping_cacheserver(name)
+                    if cache_working:
+                        cache_error = "server = {} ,  error = {}".format(settings.CACHE_SERVER,cache_error)
 
-                if not cache_healthy:
-                    healthy = False
-                    msgs = utils.add_to_list(msgs,cache_msg)
+                if not cache_working:
+                    working = False
+                if cache_error:
+                    if "caches" not in errors:
+                        errors["caches"] = OrderedDict()
+                    errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_error)
 
     if settings.CACHE_SESSION_SERVER:
         if settings.SESSION_CACHES  == 1:
             name = "session"
             if settings.CACHE_SESSION_SERVER[0].lower().startswith("redis"):
-                cache_healthy,cache_msg = caches[name].ping()
+                cache_working,cache_error = caches[name].ping()
             else:
-                cache_healthy,cache_msg = utils.ping_cacheserver(name)
-
-            if not cache_healthy:
-                healthy = False
-                msgs = utils.add_to_list(msgs,cache_msg)
+                cache_working,cache_error = utils.ping_cacheserver(name)
+                if cache_working:
+                    cache_error = "server = {} ,  error = {}".format(settings.CACHE_SERVER,cache_error)
+            if not cache_working:
+                working = False
+            if cache_error:
+                if "caches" not in errors:
+                    errors["caches"] = OrderedDict()
+                errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_error)
 
         else:
             for i in range(settings.SESSION_CACHES):
                 name = "session{}".format(i)
                 if settings.CACHE_SESSION_SERVER[i].lower().startswith("redis"):
-                    cache_healthy,cache_msg = caches[name].ping()
+                    cache_working,cache_error = caches[name].ping()
                 else:
-                    cache_healthy,cache_msg = utils.ping_cacheserver(name)
+                    cache_working,cache_error = utils.ping_cacheserver(name)
+                    if cache_working:
+                        cache_error = "server = {} ,  error = {}".format(settings.CACHE_SERVER,cache_error)
 
-                if not cache_healthy:
-                    healthy = False
-                    msgs = utils.add_to_list(msgs,cache_msg)
+                if not cache_working:
+                    working = False
+                if cache_error:
+                    if "caches" not in errors:
+                        errors["caches"] = OrderedDict()
+                    errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_error)
 
-    return (healthy,msgs)
+    if not working and len(errors) == 1 and "caches" in errors:
+        #only caches are not working
+        if not settings.AUTH2_CLUSTER_ENABLED:
+            working = True
+        elif cache.auth2_clusters:
+            #have multiple auth2 clusters
+            pass
+        else:
+            #only have one auth2 clusters
+            working = True
+
+    return (working,errors)
 
 def _localhealthcheck(request):
-    healthy,msgs = _check_localhealth()
-    if healthy:
-        return HttpResponse("OK")
-    else:
-        return HttpResponse(status=503,content="\n".join(msgs))
+    working,errors = _check_localhealth()
+
+    content = {"working":working}
+    if errors:
+        content["errors"] = errors
+
+    return JsonResponse(content,status=200)
 
 def _remotehealthcheck(request):
-    healthy,msgs = _check_localhealt()
-    data = {"healthy":healthy}
-    if not healthy:
-        data["errors"] = msgs
-    return JsonResponse(data,status=200)
+    working,errors = _check_localhealth()
+    content = {"working":working}
+    if errors:
+        content["errors"] = errors
+    return JsonResponse(content,status=200)
 
 def _check_clusterhealth():
-    healthy = True
-    msgs = {}
-    content = {}
+    working = False
+    content = OrderedDict()
     for cluster in models.Auth2Cluster.objects.only("clusterid").order_by("clusterid"):
         if cluster.clusterid == settings.AUTH2_CLUSTERID:
-            cluster_healthy,cluster_msg = _check_localhealth()
+            cluster_working,cluster_errors = _check_localhealth()
         else:
-            cluster_healthy,cluster_msg = cache.cluster_healthcheck(cluster.clusterid)
-        if not cluster_healthy:
-            healthy = False
-            msgs[cluster.clusterid] =  cluster_msg
+            cluster_working,cluster_errors = cache.cluster_healthcheck(cluster.clusterid)
+        if cluster_working:
+            working = True
+        if cluster_errors:
+            content[cluster.clusterid] =  {"working":cluster_working,"errors":cluster_errors}
+        else:
+            content[cluster.clusterid] =  {"working":cluster_working}
 
-    content["healthy"] = healthy
-    if not healthy:
-        content["errors"] = msgs
+    content["working"] = working
+    content.move_to_end("working",last=False)
 
     return content
 
@@ -284,13 +355,23 @@ def _clusterhealthcheck(request):
     return JsonResponse(content,status=200)
 
 def ping(request):
-    healthy,msgs = _get_localhealthcheck()
-    if healthy:
-        #in healthy status, update heartbeat
-        cache._current_auth2_cluster.register(only_update_heartbeat=True)
-        return HttpResponse("OK")
+    #used by health checker of the kuberneter to monitor the status of auth2 server
+    working,errors = _check_localhealth()
+    content = {"working":working}
+    if errors:
+        content["errors"] = errors
+
+    if working:
+        #in working status, update heartbeat
+        if settings.AUTH2_CLUSTER_ENABLED:
+            #in cluster mode, update the heartbeat
+            cache._current_auth2_cluster.register(only_update_heartbeat=True)
+        if errors:
+            return JsonResponse(content,status=299)
+        else:
+            return JsonResponse(content,status=200)
     else:
-        return HttpResponse(status=503,content="\n".join(msgs))
+        return JsonResponse(content,status=503)
 
 
 def healthcheckfactory(t=None):

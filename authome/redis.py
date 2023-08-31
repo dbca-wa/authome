@@ -34,7 +34,7 @@ def is_cluster(url):
     else: 
         raise Exception("No available redis server.")
 
-redis_re = re.compile("^\s*((?P<protocol>[a-zA-Z]+)://((?P<user>[^:@]+)?(:(?P<password>[^@]+))?@)?)?(?P<host>[^:/]+)(:(?P<port>[0-9]+))?(/(?P<db>[0-9]+))?\s*$")
+redis_re = re.compile("^\s*((?P<protocol>[a-zA-Z]+)://((?P<user>[^:@]+)?(:(?P<password>[^@]+)?)?@)?)?(?P<host>[^:/]+)(:(?P<port>[0-9]+))?(/(?P<db>[0-9]+))?\s*$")
 class CacheMixin(object):
     _parsed_servers = {}
     _instances = {}
@@ -112,18 +112,33 @@ class CacheMixin(object):
         except Exception as ex:
             healthy = False
             msg = str(ex)
+        try:
+            connections = redisclient[1].connection_pool._created_connections
+            max_connections = redisclient[1].connection_pool.max_connections
+            max_connections = max_connections if max_connections and max_connections > 0 else "Not configured"
+            
+            if healthy:
+                return (healthy,"{} : connections = {} , max connections = {} , {} , status = OK".format(
+                            self.get_server4print(redisclient[0]),
+                            connections,
+                            max_connections,
+                            serverinfo
+                        ))
+            else:
+                return (healthy,"{} : connections = {} , max connections = {} , {} , error = {}".format(
+                            self.get_server4print(redisclient[0]),
+                            connections,
+                            max_connections,
+                            serverinfo,
+                            msg
+                        ))
+        except:
+            return (healthy,"{} : {} , error = {}".format(
+                        self.get_server4print(redisclient[0]),
+                        serverinfo,
+                        msg
+                    ))
 
-        connections = redisclient[1].connection_pool._created_connections
-        max_connections = redisclient[1].connection_pool.max_connections
-        max_connections = max_connections if max_connections and max_connections > 0 else "Not configured"
-
-        return (healthy,"{} : connections = {} , max connections = {} , {} , status = {}".format(
-                    self.get_server4print(redisclient[0]),
-                    connections,
-                    max_connections,
-                    serverinfo,
-                    msg
-                ))
 
     @property
     def server_status(self):
@@ -136,6 +151,8 @@ class CacheMixin(object):
                 msgs = []
                 for client in clients:
                     client_status = self._get_server_status(client)
+                    if client_status is None:
+                        continue
                     if not client_status[0]:
                         healthy = False
                     msgs.append(client_status[1])
@@ -148,17 +165,18 @@ class CacheMixin(object):
     def ping_redis(self,redisclient):
         try:
             if redisclient[1].ping():
-                return (True,"{} is running".format(self.get_server4print(redisclient[0])))
+                return (True,None)
             else:
                 return (False,"{} is offline".format(self.get_server4print(redisclient[0])))
         except Exception as ex:
-            return (False,str(ex))
+            return (False,"{} is not accessible.{}".format(self.get_server4print(redisclient[0]),str(ex)))
     
 class BaseRedisCacheClient(django_redis.RedisCacheClient):
     def __init__(self, servers, **options ):
-        retry = options.pop('retry',0)
-        if retry >= 1:
-            options["retry"] = redis.retry.Retry(redis.backoff.NoBackoff(),retry)
+        #config the retry attempts
+        retry_attempts = options.pop('retry_attempts',0)
+        if retry_attempts >= 1:
+            options["retry"] = redis.retry.Retry(redis.backoff.NoBackoff(),retry_attempts)
         super().__init__(servers,**options)
            
 class RedisCacheClient(BaseRedisCacheClient):
@@ -227,7 +245,7 @@ class RedisCache(CacheMixin,django_redis.RedisCache):
         return "system_memory = {} , used_memory = {} , keys = {} , starttime = {} , redis_version = {}".format(
             data.get("total_system_memory_human","N/A"),
             data.get("used_memory_human","N/A"),
-            data.get("db{}".format(self.db),{}).get("keys","N/A") if self.db >= 0 else "N/A",
+            data.get("db{}".format(self.db),{}).get("keys","0") if self.db >= 0 else "N/A",
             utils.format_datetime(timezone.localtime() - timedelta(seconds=data.get("uptime_in_seconds"))) if "uptime_in_seconds" in data else "N/A",
             data.get("redis_version","N/A"),
         )
@@ -236,14 +254,14 @@ class RedisCache(CacheMixin,django_redis.RedisCache):
     def ping(self):
         redisclients = self._redis_server_clients
         if isinstance(redisclients,list):
-            healthy = True
-            msgs = []
+            working = True
+            errors = []
             for redisclient in redisclients:
                 status = self.ping_redis(redisclient)
                 if not status[0]:
-                    healthy = False
-                msgs.append(status[1])
-            return (healthy,msgs)
+                    working = False
+                    errors.append(status[1])
+            return (working,errors)
         else:
             return self.ping_redis(redisclients)
         
@@ -260,13 +278,19 @@ class AutoFailoverRedisCluster(redis.RedisCluster):
         Return True if switch succeed; otherwise return False
         """
         checked_servers = None
+        master = None
+        new_master = None
         for i in range(2):
             slot = self.determine_slot(*args)
-            master = None
             nodes = self.nodes_manager.slots_cache.get(slot) or []
             for node in nodes:
                 if node.server_type == redis.cluster.PRIMARY:
-                    master = node
+                    if not master:
+                        master = node
+                    elif master.name != node.name:
+                        #master node has been changed, no need to change again.
+                        new_master = node
+                        break
                     continue
                 logger.debug("switch cluster master from {} to {}".format(master,node))
                 if checked_servers and node.name in checked_servers:
@@ -288,32 +312,38 @@ class AutoFailoverRedisCluster(redis.RedisCluster):
                         logger.debug("The node '{}' has already been switched to master".format(node))
                         pass
                     else:
-                        raise
+                        #failed to failover, try other node
+                        continue
+
+                new_master = node
+                break
+
+            if new_master:
                 #reinitialize nodes manager
                 if isinstance(self.nodes_manager.startup_nodes,OrderedDict):
-                    logger.debug("Move the node '{}' to the head to fetch the cluster slots".format(node))
-                    self.nodes_manager.startup_nodes.move_to_end(node.name,last=False)
+                    logger.debug("Move the node '{}' to the head to fetch the cluster slots".format(new_master))
+                    self.nodes_manager.startup_nodes.move_to_end(new_master.name,last=False)
                 else:
-                    logger.debug("Change the start_nodes to OrderedMap to fetch the cluster slots from the current node '{}'".format(node))
+                    logger.debug("Change the start_nodes to OrderedMap to fetch the cluster slots from the current node '{}'".format(new_master))
                     nodes = OrderedDict(self.nodes_manager.startup_nodes)
-                    nodes.move_to_end(node.name,last=False)
+                    nodes.move_to_end(new_master.name,last=False)
                     self.nodes_manager.startup_nodes = nodes
 
                 self.nodes_manager.initialize()
                 new_nodes  = self.nodes_manager.slots_cache.get(slot)
                 if not new_nodes:
                     break
-                if new_nodes[0].name == node.name and new_nodes[0].server_type == redis.cluster.PRIMARY:
-                    logger.debug("Succeed to switch the master server for slot '{}' from '{}' to '{}',current master is '{}'".format(slot,master,node,new_nodes[0]))
+                if new_nodes[0].name == new_master.name and new_nodes[0].server_type == redis.cluster.PRIMARY:
+                    logger.debug("Succeed to switch the master server for slot '{}' from '{}' to '{}',current master is '{}'".format(slot,master,new_master,new_nodes[0]))
                     return True
                 else:
-                    logger.warning("Failed to switch the master server for slot '{}' from '{}' to '{}',current master is '{}'".format(slot,master,node,new_nodes[0]))
+                    logger.warning("Failed to switch the master server for slot '{}' from '{}' to '{}',current master is '{}'".format(slot,master,new_master,new_nodes[0]))
                     return False
-            logger.debug("Replica server not found, initialize nodes manager and try again.")
-            self.nodes_manager.initialize()
+            else:
+                logger.debug("Replica server not found, initialize nodes manager and try again.")
+                self.nodes_manager.initialize()
 
         logger.debug("No replica server are available for slot '{}'".format(slot))
-
         return False
 
     def execute_command(self, *args, **kwargs):
@@ -356,7 +386,6 @@ class RedisClusterCacheClient(django_redis.RedisCacheClient):
 
 class RedisClusterCache(CacheMixin,django_redis.RedisCache):
     _server_clients = []
-    _nodes_cache_id = None
     _cluster_nodes = {}
     _failed_cluster_nodes = []
 
@@ -379,7 +408,7 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
             return "system_memory = {} , used_memory = {} , keys = {} , starttime = {} , redis_version = {}".format(
                 data.get("total_system_memory_human","N/A"),
                 data.get("used_memory_human","N/A"),
-                data.get("db{}".format(self.db),{}).get("keys","N/A") if self.db >= 0 else "N/A",
+                data.get("db{}".format(self.db),{}).get("keys","0") if self.db >= 0 else "N/A",
                 utils.format_datetime(timezone.localtime() - timedelta(seconds=data.get("uptime_in_seconds"))) if "uptime_in_seconds" in data else "N/A",
                 data.get("redis_version","N/A"),
             )
@@ -387,7 +416,7 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
             return "system_memory = {} , used_memory = {} , role = master , keys = {} , starttime = {} , redis_version = {}".format(
                 data.get("total_system_memory_human","N/A"),
                 data.get("used_memory_human","N/A"),
-                data.get("db{}".format(self.db),{}).get("keys","N/A") if self.db >= 0 else "N/A",
+                data.get("db{}".format(self.db),{}).get("keys","0") if self.db >= 0 else "N/A",
                 utils.format_datetime(timezone.localtime() - timedelta(seconds=data.get("uptime_in_seconds"))) if "uptime_in_seconds" in data else "N/A",
                 data.get("redis_version","N/A"),
             )
@@ -395,7 +424,7 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
             return "system_memory = {} , used_memory = {} , role = slave , keys = {} , starttime = {} , redis_version = {} , master = {}".format(
                 data.get("total_system_memory_human","N/A"),
                 data.get("used_memory_human","N/A"),
-                data.get("db{}".format(self.db),{}).get("keys","N/A") if self.db >= 0 else "N/A",
+                data.get("db{}".format(self.db),{}).get("keys","0") if self.db >= 0 else "N/A",
                 utils.format_datetime(timezone.localtime() - timedelta(seconds=data.get("uptime_in_seconds"))) if "uptime_in_seconds" in data else "N/A",
                 data.get("redis_version","N/A"),
                 "{}:{}".format(data.get("master_host"),data.get("master_port"))
@@ -403,62 +432,108 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
 
     def ping(self):
         from .cache import cache
-        single_server = not settings.AUTH2_CLUSTER_ENABLED or len(cache.auth2_clusters) < 2
 
         redisclients = self._redis_server_clients
-        msgs = []
-        failed_clients = []
+        errors = []
+
+        for node in self._failed_cluster_nodes:
+            errors.append("{} is offline".format(node["name"]))
+
+        pos = 0
         for redisclient in redisclients:
             status = self.ping_redis(redisclient)
             if not status[0]:
-                msgs.append(status[1])
-                failed_clients.append(redisclient)
-
-        for node in self._failed_cluster_nodes:
-            msgs.append(status[1])
-            failed_clients.append(redisclient)
-
-        for node in self._failed_cluster_nodes:
-            msgs.append("{} is offline".format(node["name"]))
-
-            
-
-        if not failed_clients and not self._failed_cluster_nodes:
-            healthy = True
-        elif len(failed_clients) == len(redisclients):
+                node = self._cluster_nodes.get(redisclient[0])
+                if node:
+                    #add the failed nodes to failed nodes
+                    if node not in self._failed_cluster_nodes:
+                        self._failed_cluster_nodes.append(node)
+                        #not in the failed nodes,insert the message to the right position
+                        errors.insert(pos,status[1])
+                        pos += 1
+                else:
+                    #not in the failed nodes,insert the message to the right position
+                    errors.insert(pos,status[1])
+                    pos += 1
+                    
+        if not self._failed_cluster_nodes:
+            working = True
+        elif len(self._failed_cluster_nodes) >= len(self._cluster_nodes):
             #all redis are offline
-            healthy = False
-        elif single_server:
-            #at least one redis server is online and auth2 only has on server
-            healthy = True
-        elif all(c[2] == redis.cluster.REPLICA for c in failed_clients) and all(c[2] == redis.cluster.REPLICA for c in self._failed_cluster_nodes):
+            working = False
+        elif all(n["server_type"] == redis.cluster.REPLICA for n in self._failed_cluster_nodes):
             #all failed redis server are replica server
-            healthy = True
-        elif all(c[2] == redis.cluster.MASTER for c in failed_clients) and all(c[2] == redis.cluster.MASTER for c in failed_clients):
+            working = True
+        elif all(n["server_type"] == redis.cluster.PRIMARY  for n in self._failed_cluster_nodes):
             #all failed redis server are master server
-            healthy = True
+            working = True
         else:
-            #check whether slots are fully covered.
-            redisclient = self.redis_client
-            redisclient.nodes_manager.initialize()
-            healthy = redisclient.nodes_manager.check_slots_coverage(redisclient.nodes_manager.slots_cache)
+            #check whether at least one master and its slaves are all failed.
+            working = True
+            for n in self._cluster_nodes.values():
+                if n["server_type"] != redis.cluster.PRIMARY:
+                    continue
 
-        return (healthy,msgs)
+                if n not in self._failed_cluster_nodes:
+                    #is working.
+                    continue
+
+                working_slave = None
+                for s in n.get("slaves",[]):
+                    if s not in self._failed_cluster_nodes:
+                        working_slave = s
+                        break
+
+                if not working_slave:
+                    #all slave server are down
+                    working = False
+                    break
+
+        return (working,errors)
 
     def refresh_cluster_nodes(self):
         cluster_nodes = {}
         nodes = self.redis_client.cluster_nodes()
         masters = {}
+        failed_cluster_nodes = []
         for key,node in nodes.items():
-            if node["flags"] == "master":
+            if "master" in node["flags"]:
                 cluster_nodes[key] = {"name":key,"server_type": redis.cluster.PRIMARY,"available":node["connected"]}
                 masters[node["node_id"]] = cluster_nodes[key]
+                if not node["connected"]:
+                    failed_cluster_nodes.append(cluster_nodes[key])
 
         for key,node in nodes.items():
-            if node["flags"] != "master":
-                cluster_nodes[key] = {"name":key,"server_type": redis.cluster.REPLICA,"available":node["connected"],"master":masters.get(node.get("master_id",""),"Unknown")}
+            if "master" not in  node["flags"]:
+                master = masters.get(node.get("master_id",""),None)
+                cluster_nodes[key] = {"name":key,"server_type": redis.cluster.REPLICA,"available":node["connected"],"master":master["name"] if master else "Unknown"}
+                if not node["connected"]:
+                    failed_cluster_nodes.append(cluster_nodes[key])
+                if master:
+                    if "slaves" in master:
+                        master["slaves"].append(cluster_nodes[key])
+                    else:
+                        master["slaves"] = [cluster_nodes[key]]
+
         self._cluster_nodes = cluster_nodes
-        self._failed_cluster_nodes.clear()
+
+        failed_cluster_nodes.sort(key=lambda n:n["name"])
+        self._failed_cluster_nodes = failed_cluster_nodes
+
+    def _get_server_status(self,redisclient):
+        result = super()._get_server_status(redisclient)
+        if not result[0]:
+            node = self._cluster_nodes.get(redisclient[0])
+            if node:
+                if node not in self._failed_cluster_nodes:
+                    logger.debug("{} is not accessible, add it to failed cluster nodes".format(redisclient[0]))
+                    self._failed_cluster_nodes.append(node)
+                else:
+                    logger.debug("{} is not accessible, but it was already in faiiled cluster nodes".format(redisclient[0]))
+                    pass
+                #already in failed cluster nodes, server status will be added later.
+                return None
+        return result
 
     @property
     def server_status(self):
@@ -473,29 +548,27 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
     @property   
     def _redis_server_clients(self):
         redisclient = self.redis_client
-        if len(self._cluster_nodes) != len(redisclient.nodes_manager.nodes_cache) or any("{}:{}".format(n.host,n.port) not in self._cluster_nodes for n in redisclient.nodes_manager.nodes_cache.values()):
+        refreshed = False
+        if self._failed_cluster_nodes :
             #_server clients doesn't match with cluster nodes, refresh cluster node first.
             self.refresh_cluster_nodes()
+            refreshed = True
 
-        if len(self._cluster_nodes) != len(redisclient.nodes_manager.nodes_cache) or any("{}:{}".format(n.host,n.port) not in self._cluster_nodes for n in redisclient.nodes_manager.nodes_cache.values()):
+        if len(self._cluster_nodes) - len(self._failed_cluster_nodes) != len(redisclient.nodes_manager.nodes_cache) :
             #_server clients doesn't match with cluster nodes, refresh server clients first
             redisclient.nodes_manager.initialize()
+            refreshed = True
 
-        if self._nodes_cache_id != id(redisclient.nodes_manager.nodes_cache):
+        if refreshed or not self._server_clients:
             #cached server_clients doesn't match with the nodes_cache
             clients = []
             nodes = redisclient.get_nodes()
+            #create the redis connection if not created before
             redisclient.nodes_manager.create_redis_connections(nodes)
             for node in nodes:
-                clients.append(("{}:{}".format(node.host,node.port),node.redis_connection,node.server_type,id(node)))
+                clients.append(("{}:{}".format(node.host,node.port),node.redis_connection))
             clients.sort(key=lambda c:c[0])
             self._server_clients = clients
-            self._failed_cluster_nodes = None
-
-        if self._failed_cluster_nodes  is None:
-            failed_nodes = [n for n in self._cluster_nodes.values() if n["name"] not in redisclient.nodes_manager.nodes_cache]
-            failed_nodes.sort(key=lambda n:n["name"])
-            self._failed_cluster_nodes = failed_nodes
 
         return self._server_clients
 

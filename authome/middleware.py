@@ -189,7 +189,7 @@ class ClusterSessionMiddleware(SessionMiddleware):
         try:
             session_cookie = request.COOKIES.get(settings.SESSION_COOKIE_NAME)
             nginx_lb_hash_key = request.headers.get("X-lb-hash-key")
-            if not nginx_lb_hash_key and not request.path.startswith("/cluster"):
+            if not nginx_lb_hash_key and not request.path.startswith("/cluster") and request.path != "/ping":
                 return LB_HASH_KEY_MISSING_RESPONSE
             DebugLog.attach_request(request)
             cookie_domain = None

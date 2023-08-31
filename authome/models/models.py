@@ -1899,7 +1899,7 @@ if defaultcache:
             try:
                 defaultcache.set(cls.key,timezone.localtime(),timeout=timeout)
             except Exception as ex:
-                DebugLog.warning(DebugLog.ERROR,None,None,None,None,traceback.format_exc(ex))
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to set the latest change time of the model '{}' to cache.{}".format(cls.__name__,traceback.format_exc(ex)))
 
         @classmethod
         def get_cachetime(cls):
@@ -1953,7 +1953,7 @@ if defaultcache:
                     return (UP_TO_DATE,last_refreshed)
             except:
                 #Failed, assume it is up to date
-                DebugLog.warning(DebugLog.ERROR,None,None,None,None,traceback.format_exc())
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to get the status of the model '{}' from cache.{}".format(cls.__name__,traceback.format_exc()))
                 return (UP_TO_DATE,last_refreshed)
 
         @classmethod
@@ -1974,7 +1974,7 @@ if defaultcache:
                     return False
             except :
                 #Failed, assume it is not changed
-                DebugLog.warning(DebugLog.ERROR,None,None,None,None,traceback.format_exc())
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to check whether the model '{}' is changed or not.{}".format(cls.__name__,traceback.format_exc()))
                 return False
 
 
