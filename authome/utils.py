@@ -134,24 +134,21 @@ def get_lb_hash_key(cookie):
 
 def get_request_path(request=None):
     try:
-        if request:
-            path = request.headers.get("x-upstream-request-uri")
-        else:
-            path = _process_data.request.headers.get("x-upstream-request-uri")
-        if not path:
-            #can't get the original path, use request path directly
-            path = _process_data.request.get_full_path()
+        if not request:
+            request = _process_data.request
 
-        return "{}{}".format(get_host( _process_data.request), path)
+        path = request.headers.get("x-upstream-request-uri") or request.get_full_path()
+
+        return "{}{}".format(request.get_host(), path)
     except:
         return None
 
 def get_request_pathinfo(request=None):
     try:
-        if request:
-            path = request.headers.get("x-upstream-request-uri")
-        else:
-            path = _process_data.request.headers.get("x-upstream-request-uri")
+        if not request:
+            request = _process_data.request
+
+        path = request.headers.get("x-upstream-request-uri")
         if path:
             #get the original request path
             #remove the query string
@@ -161,9 +158,9 @@ def get_request_pathinfo(request=None):
                 pass
         else:
             #can't get the original path, use request path directly
-            path = _process_data.request.path_info
+            path = request.path_info
 
-        return "{}{}".format(get_host( _process_data.request), path)
+        return "{}{}".format(request.get_host(), path)
     except:
         return None
 
@@ -180,7 +177,6 @@ def _convert(key,value, default=None, required=False, value_type=None,subvalue_t
         #sub value type is not specified, if default value is list type, use the first member's type
         if default and isinstance(default,(list,tuple)):
             subvalue_type = default[0].__class__
-
     if value_type is None:
         #Can't find the value type, return value directly
         return value
@@ -268,6 +264,8 @@ def env(key, default=None, required=False, value_type=None,subvalue_type=None):
         if value:
             value = value.strip()
         value = ast.literal_eval(value)
+        if value is None:
+            return value
     except (SyntaxError, ValueError):
         pass
     except KeyError:
@@ -443,37 +441,6 @@ def format_timedelta(td,unit="s"):
 
     return " ".join(d for d in [days,hours,minutes,seconds] if d)
 
-
-def _get_host(request):
-    """
-    Get non-null remote host from request
-    """
-    global get_host
-    if request.headers.get("x-upstream-request-uri"):
-        if request.headers.get("x-upstream-server-name"):
-            #header 'x-upstream-server-name' is used, get the remote host from header 'x-upstream-server-name' first, if not found, get it from request host
-            get_host = _get_host1
-        else:
-            #header 'x-upstream-server-name' is not used, get the remote host from request host directly
-            get_host = _get_host2
-        return get_host(request)
-    else:
-        return request.get_host()
-
-def _get_host1(request):
-    """
-    get the remote host from header 'x-upstream-server-name' first, if not found, get it from request host
-    """
-    return request.headers.get("x-upstream-server-name") or request.get_host()
-
-def _get_host2(request):
-    """
-    get the remote host from request host directly
-    """
-    return request.get_host()
-
-get_host = _get_host
-
 def sign_session_cookie(hash_key,clusterid,session_key,secretkey):
     h = hashlib.blake2b(digest_size=LB_HASH_KEY_DIGEST_SIZE)
     h.update("{}{}{}{}".format(hash_key,clusterid,session_key,secretkey).encode())
@@ -489,13 +456,16 @@ def add_to_list(l,o):
             return o
         else:
             return [o]
-    elif isinstance(o,list):
-        for m in o:
-            l.append(m)
-        return l
     else:
-        l.append(o)
-        return l
+        if not isinstance(l,list):
+            l = [l]
+        if isinstance(o,list):
+            for m in o:
+                l.append(m)
+            return l
+        else:
+            l.append(o)
+            return l
 
 def add_to_map(m,k,v):
     """

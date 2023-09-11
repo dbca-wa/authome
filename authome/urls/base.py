@@ -19,7 +19,7 @@ def traffic_monitor(name,func):
            return res
         finally:
             try:
-                ptime = cache.log_request(name,utils.get_host(request),start,res.status_code if res else 500) 
+                ptime = cache.log_request(name,request.get_host(),start,res.status_code if res else 500) 
                 if ptime > settings.AUTH_TOO_SLOW_THRESHOLD:
                     try:
                         useremail = request.user.email
@@ -53,7 +53,7 @@ def traffic_monitor_debug(name,func):
            return res
         finally:
             try:
-                cache.log_request(name,utils.get_host(request),start,res.status_code if res else 500)
+                cache.log_request(name,request.get_host(),start,res.status_code if res else 500)
             except:
                 logger.error("Failed to log the request.{}".format(traceback.format_exc()))
             data = {}
@@ -63,7 +63,7 @@ def traffic_monitor_debug(name,func):
                 for d,r in v["domains"].items():
                     data[d] = data.get(d,0) + r
 
-            logger.warning("{} - {}: requests={} , request = {}, traffic_data={}".format(utils.format_datetime(start),utils.get_threadid(),_requests,"{}{}".format(utils.get_host(request),request.path),data ))
+            logger.warning("{} - {}: requests={} , request = {}, traffic_data={}".format(utils.format_datetime(start),utils.get_threadid(),_requests,"{}{}".format(request.get_host(),request.path),data ))
         
         
     return _monitor if settings.TRAFFIC_MONITOR_LEVEL > 0 else func

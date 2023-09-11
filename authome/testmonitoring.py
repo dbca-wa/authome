@@ -27,7 +27,7 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
     headers = {}
     cluster_headers = {}
 
-    TEST_USER_NUMBER = utils.env("TEST_USER_NUMBER",default=50)
+    TEST_USER_NUMBER = utils.env("TEST_USER_NUMBER",default=20)
     TEST_USER_BASEID = int(utils.env("TEST_USER_BASEID",default=1))
     TEST_USER_DOMAIN = utils.env("TEST_USER_DOMAIN",default="dbca.wa.gov.au")
     TEST_TIME = utils.env("TEST_TIME",default=100) #in seconds
@@ -36,7 +36,7 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
     REQUEST_INTERVAL = utils.env("REQUEST_INTERVAL",default=500) / 1000 #configured in milliseconds
     TESTED_SERVER = utils.env("TESTED_SERVER",default="https://auth2-dev.dbca.wa.gov.au")
     TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=utils.env("TEST_TRAFFIC_MONITOR_INTERVAL",default=60))
-    TEST_DOMAINS = [s.strip() for s in utils.env("TEST_DOMAINS","auth2-dev.dbca.wa.gov.au,whodis.dbca.wa.gov.au").split(",") if s.strip()]
+    TEST_DOMAINS = [s.strip() for s in utils.env("TEST_DOMAINS","auth2-dev.dbca.wa.gov.au,whoami-dev.dbca.wa.gov.au").split(",") if s.strip()]
 
     TESTING_SERVER = utils.env("TESTING_SERVER" ,default=socket.gethostname())
 
@@ -71,14 +71,15 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.disable_messages()
+
         print("Prepare {} test users".format(cls.TEST_USER_NUMBER))
         testemails = [ "testuser_{:0>4}@{}".format(i,cls.TEST_USER_DOMAIN) for i in range(cls.TEST_USER_BASEID,cls.TEST_USER_BASEID + cls.TEST_USER_NUMBER)]
 
         cls.testusers = []
         cls.postuserindexes = {}
-    
         for testemail in testemails:
-            res = requests.get(cls.get_login_user_url(testemail),headers=cls.headers)
+            res = requests.get(cls.get_login_user_url(testemail),headers=cls.headers,verify=settings.SSL_VERIFY)
             res.raise_for_status()
             userprofile = res.json()
 
@@ -104,7 +105,7 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
     def tearDownClass(cls):
         print("logout all test user sessions")
         for testuser in cls.testusers:
-            res = requests.get(cls.get_logout_url(),headers=cls.headers,cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},allow_redirects=False)
+            res = requests.get(cls.get_logout_url(),headers=cls.headers,cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},allow_redirects=False,verify=settings.SSL_VERIFY)
             res.raise_for_status()
             pass
 
@@ -133,9 +134,9 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
                     cls.tested_requests["requests"] = cls.tested_requests.get("requests",0) + 1
 
                 if post_test:
-                    res = requests.get(cls.get_posttest_url(test_domain),cookies={settings.SESSION_COOKIE_NAME:testuser.session_key})
+                    res = requests.get(cls.get_posttest_url(test_domain),cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},verify=settings.SSL_VERIFY)
                 else:
-                    res = requests.get(cls.get_test_url(test_domain),cookies={settings.SESSION_COOKIE_NAME:testuser.session_key})
+                    res = requests.get(cls.get_test_url(test_domain),cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
 
                 time.sleep(cls.REQUEST_INTERVAL)

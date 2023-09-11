@@ -45,7 +45,7 @@ def traffic_monitor(name,func):
             raise ex
         finally:
             try:
-                self.log_request(name,utils.get_host(request),start,status_code)
+                self.log_request(name,request.get_host(),start,status_code)
             except:
                 logger.error("Failed to log the request.{}".format(traceback.format_exc()))
         
@@ -223,9 +223,9 @@ class MemoryCache(cache.MemoryCache):
         """
         def _send_request(cluster):
             if modified:
-                return requests.get("{}{}?modified={}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__}),modified.strftime("%Y-%m-%d %H:%M:%S.%f")),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
+                return requests.get("{}{}?modified={}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__}),modified.strftime("%Y-%m-%d %H:%M:%S.%f")),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT,verify=settings.SSL_VERIFY)
             else:
-                return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__})),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
+                return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:config_changed', kwargs={'modelname': model_cls.__name__})),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT,verify=settings.SSL_VERIFY)
         return self._send_request_to_other_clusters(None,_send_request,True)
 
     def user_changed(self,userid,include_current_cluster=False):
@@ -234,7 +234,7 @@ class MemoryCache(cache.MemoryCache):
         Return the failed clusters with associated exception
         """
         def _send_request(cluster):
-            return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:user_changed', kwargs={'userid': userid})),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
+            return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:user_changed', kwargs={'userid': userid})),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT,verify=settings.SSL_VERIFY)
 
         if include_current_cluster:
             local_succeed = True
@@ -261,7 +261,7 @@ class MemoryCache(cache.MemoryCache):
         Return the failed clusters with associated exception
         """
         def _send_request(cluster):
-            return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:usertoken_changed', kwargs={'userid': userid})),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
+            return requests.get("{}{}".format(cluster.endpoint,reverse('cluster:usertoken_changed', kwargs={'userid': userid})),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT,verify=settings.SSL_VERIFY)
 
         if include_current_cluster:
             local_succeed = True
@@ -345,7 +345,8 @@ class MemoryCache(cache.MemoryCache):
     def _get_headers(self,request=None):
         if request:
             return {
-                "HOST":utils.get_host(request),
+                "HOST":settings.AUTH2_DOMAIN,
+                "x-upstream-server-name":request.get_host(),
                 "x-upstream-request-uri":request.headers.get("x-upstream-request-uri") or request.get_full_path()
             }
         else:
@@ -417,7 +418,7 @@ class MemoryCache(cache.MemoryCache):
             return requests.get("{}{}".format(
                 cluster.endpoint,
                 reverse('cluster:cluster_status')
-            ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
+            ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT,verify=settings.SSL_VERIFY)
         try:
             res = self._send_request_to_cluster(None,clusterid,_send_request)
             return res.json()
@@ -439,7 +440,7 @@ class MemoryCache(cache.MemoryCache):
             return requests.get("{}{}".format(
                 cluster.endpoint,
                 reverse('cluster:model_cachestatus')
-            ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
+            ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT,verify=settings.SSL_VERIFY)
         res = self._send_request_to_cluster(None,clusterid,_send_request)
         return res.json()
 
@@ -452,7 +453,7 @@ class MemoryCache(cache.MemoryCache):
             return requests.get("{}{}".format(
                 cluster.endpoint,
                 reverse('cluster:cluster_healthcheck')
-            ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT)
+            ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT,verify=settings.SSL_VERIFY)
         try:
             res = self._send_request_to_cluster(None,clusterid,_send_request)
             data = res.json()

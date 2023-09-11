@@ -110,7 +110,7 @@ class SessionMiddleware(MiddlewareMixin):
             else:
                 request.session = self.SessionStore(session_key=None,request=request)
         except Exception as ex:
-            DebugLog.warning(DebugLog.ERROR,utils.get_source_lb_hash_key(request),utils.get_source_clusterid(request),utils.get_source_session_key(request),utils.get_source_session_cookie(request),message="Failed to process request . request={}, cookies={}. {}".format("{}{}".format(utils.get_host(request),request.path_info),request.headers.get("cookie"),str(ex)),request=request)
+            DebugLog.warning(DebugLog.ERROR,utils.get_source_lb_hash_key(request),utils.get_source_clusterid(request),utils.get_source_session_key(request),utils.get_source_session_cookie(request),message="Failed to process request . request={}, cookies={}. {}".format("{}{}".format(request.get_host(),request.path_info),request.headers.get("cookie"),str(ex)),request=request)
             raise ex
 
     def process_response(self, request, response):
@@ -173,14 +173,13 @@ class SessionMiddleware(MiddlewareMixin):
                         httponly=settings.SESSION_COOKIE_HTTPONLY or None,
                         samesite=settings.SESSION_COOKIE_SAMESITE
                     )
-                    print("cookie = {}".format(request.session.cookie_value))
                     #Only record authenticated session
                     DebugLog.log_if_true("-" in (request.session.session_key or request.session.expired_session_key) and utils.get_source_session_key(request) == (request.session.session_key or request.session.expired_session_key),DebugLog.UPDATE_COOKIE,DebugLog.get_lb_hash_key(request.session),utils.get_source_clusterid(request),request.session.session_key,utils.get_source_session_cookie(request),message="Return an updated session cookie({})".format(request.session.cookie_value),userid=request.session.get(USER_SESSION_KEY),target_session_cookie=request.session.cookie_value,request=request)
 
                     DebugLog.log_if_true("-" in (request.session.session_key or request.session.expired_session_key) and utils.get_source_session_key(request) != (request.session.session_key or request.session.expired_session_key),DebugLog.CREATE_COOKIE,DebugLog.get_lb_hash_key(request.session),utils.get_source_clusterid(request),request.session.session_key,utils.get_source_session_cookie(request),message="Return a new session cookie({})".format(request.session.cookie_value),userid=request.session.get(USER_SESSION_KEY),target_session_cookie=request.session.cookie_value,request=request)
             return response
         except Exception as ex:
-            DebugLog.warning(DebugLog.ERROR,utils.get_source_lb_hash_key(request),utils.get_source_clusterid(request),utils.get_source_session_key(request),utils.get_source_session_cookie(request),message="Failed to process request . request={}, cookies={}. {}".format("{}{}".format(utils.get_host(request),request.path_info),request.headers.get("cookie"),str(ex)),request=request)
+            DebugLog.warning(DebugLog.ERROR,utils.get_source_lb_hash_key(request),utils.get_source_clusterid(request),utils.get_source_session_key(request),utils.get_source_session_cookie(request),message="Failed to process request . request={}, cookies={}. {}".format("{}{}".format(request.get_host(),request.path_info),request.headers.get("cookie"),str(ex)),request=request)
             raise ex
 
 
@@ -224,16 +223,16 @@ class ClusterSessionMiddleware(SessionMiddleware):
                             #load balance hash key does not match the lb hash key in session cookie, or cookie domain does not match the required domain
                             #this is a abnormal scenario, logout and let user login again
                             request.session = self.SessionStore(nginx_lb_hash_key,None,None,request=request,cookie_domain=cookie_domain)
-                            logger.warning("The domain({1}) of the session cookie({0}) does not match the required domain({2}) . request={3}, cookies={4}".format(session_cookie,cookie_domain,self.SessionStore.get_cookie_domain(request),"{}{}".format(utils.get_host(request),request.path_info),request.headers.get("cookie")))
-                            DebugLog.warning(DebugLog.DOMAIN_NOT_MATCH,nginx_lb_hash_key,auth2_clusterid,session_key,session_cookie,message="The domain({1}) of the session cookie({0}) does not match the required domain({2}) . request={3}, cookies={4}".format(session_cookie,cookie_domain,self.SessionStore.get_cookie_domain(request),"{}{}".format(utils.get_host(request),request.path_info),request.headers.get("cookie")),request=request)
+                            logger.warning("The domain({1}) of the session cookie({0}) does not match the required domain({2}) . request={3}, cookies={4}".format(session_cookie,cookie_domain,self.SessionStore.get_cookie_domain(request),"{}{}".format(request.get_host(),request.path_info),request.headers.get("cookie")))
+                            DebugLog.warning(DebugLog.DOMAIN_NOT_MATCH,nginx_lb_hash_key,auth2_clusterid,session_key,session_cookie,message="The domain({1}) of the session cookie({0}) does not match the required domain({2}) . request={3}, cookies={4}".format(session_cookie,cookie_domain,self.SessionStore.get_cookie_domain(request),"{}{}".format(request.get_host(),request.path_info),request.headers.get("cookie")),request=request)
                             return
                         elif nginx_lb_hash_key != lb_hash_key:
                             print("{} : {} != {}".format(session_cookie,nginx_lb_hash_key,lb_hash_key))
                             #load balance hash key does not match the lb hash key in session cookie, or cookie domain does not match the required domain
                             #this is a abnormal scenario, logout and let user login again
                             request.session = self.SessionStore(nginx_lb_hash_key,None,None,request=request,cookie_domain=cookie_domain)
-                            logger.warning("The lb hash key({}) in session cookie({}) does not match the request header 'lb-hash-key'({}),maybe more than one session cookies were sent . request={}, cookies={}".format(lb_hash_key,session_cookie,nginx_lb_hash_key,"{}{}".format(utils.get_host(request),request.path_info),request.headers.get("cookie")))
-                            DebugLog.warning(DebugLog.LB_HASH_KEY_NOT_MATCH,nginx_lb_hash_key,auth2_clusterid,session_key,session_cookie,message="The lb hash key({}) in session cookie({}) does not match the request header 'lb-hash-key'({}),maybe more than one session cookies were sent . request={}, cookies={}".format(lb_hash_key,session_cookie,nginx_lb_hash_key,"{}{}".format(utils.get_host(request),request.path_info),request.headers.get("cookie")),request=request)
+                            logger.warning("The lb hash key({}) in session cookie({}) does not match the request header 'lb-hash-key'({}),maybe more than one session cookies were sent . request={}, cookies={}".format(lb_hash_key,session_cookie,nginx_lb_hash_key,"{}{}".format(request.get_host(),request.path_info),request.headers.get("cookie")))
+                            DebugLog.warning(DebugLog.LB_HASH_KEY_NOT_MATCH,nginx_lb_hash_key,auth2_clusterid,session_key,session_cookie,message="The lb hash key({}) in session cookie({}) does not match the request header 'lb-hash-key'({}),maybe more than one session cookies were sent . request={}, cookies={}".format(lb_hash_key,session_cookie,nginx_lb_hash_key,"{}{}".format(request.get_host(),request.path_info),request.headers.get("cookie")),request=request)
                             return
 
                         if auth2_clusterid != settings.AUTH2_CLUSTERID :
@@ -272,6 +271,6 @@ class ClusterSessionMiddleware(SessionMiddleware):
             else:
                 request.session = self.SessionStore(nginx_lb_hash_key,settings.AUTH2_CLUSTERID,None,request=request)
         except Exception as ex:
-            DebugLog.warning(DebugLog.ERROR,utils.get_source_lb_hash_key(request),utils.get_source_clusterid(request),utils.get_source_session_key(request),utils.get_source_session_cookie(request),message="Failed to process request . request={}, cookies={}. {}".format("{}{}".format(utils.get_host(request),request.path_info),request.headers.get("cookie"),str(ex)),request=request)
+            DebugLog.warning(DebugLog.ERROR,utils.get_source_lb_hash_key(request),utils.get_source_clusterid(request),utils.get_source_session_key(request),utils.get_source_session_cookie(request),message="Failed to process request . request={}, cookies={}. {}".format("{}{}".format(request.get_host(),request.path_info),request.headers.get("cookie"),str(ex)),request=request)
             raise ex
 

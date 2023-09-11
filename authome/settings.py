@@ -101,14 +101,21 @@ else:
     if SESSION_COOKIE_DOMAIN:
         SESSION_COOKIE_NAME = (SESSION_COOKIE_DOMAIN + ".sessionid").replace(".", "_")
 
+_samesite_options = {"none":"None","lax":"Lax","strict":"Strict","null":None}
+def _get_samesite(v):
+    return _samesite_options.get(v.lower() if v else None,"Lax")
+
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_HTTPONLY = env('SESSION_COOKIE_HTTPONLY', True)
 SESSION_COOKIE_SECURE = env('SESSION_COOKIE_SECURE', True)
 CSRF_COOKIE_SECURE = env('CSRF_COOKIE_SECURE', True)
 CSRF_COOKIE_HTTPONLY = env('CSRF_COOKIE_HTTPONLY', True)
+CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS",default=["https://{}".format("*.au" if h == '*' else ("*{}".format(h) if h.startswith('.') else h)) for h in ALLOWED_HOSTS])
+CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE","Lax") or None
+CSRF_COOKIE_SAMESITE = _get_samesite(CSRF_COOKIE_SAMESITE)
+
 SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE","Lax") or None
-if SESSION_COOKIE_SAMESITE and SESSION_COOKIE_SAMESITE.lower() in ("none","null") :
-    SESSION_COOKIE_SAMESITE = None
+SESSION_COOKIE_SAMESITE = _get_samesite(SESSION_COOKIE_SAMESITE)
 
 GUEST_SESSION_AGE=env('GUEST_SESSION_AGE',default=3600) #login session timeout in seconds
 SESSION_AGE=env('SESSION_AGE',default=1209600)
@@ -557,4 +564,6 @@ if SECRETKEY_EXPIREDAYS_WARNING > 0:
     SECRETKEY_EXPIREDAYS_WARNING = timedelta(days=SECRETKEY_EXPIREDAYS_WARNING)
 else:
     SECRETKEY_EXPIREDAYS_WARNING = timedelta(days=14)
+
+SSL_VERIFY=env("SSL_VERIFY",default=True)
 

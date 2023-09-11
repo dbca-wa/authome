@@ -167,7 +167,7 @@ class CacheMixin(object):
             if redisclient[1].ping():
                 return (True,None)
             else:
-                return (False,"{} is offline".format(self.get_server4print(redisclient[0])))
+                return (False,"{} is not accessible".format(self.get_server4print(redisclient[0])))
         except Exception as ex:
             return (False,"{} is not accessible.{}".format(self.get_server4print(redisclient[0]),str(ex)))
     
@@ -273,26 +273,57 @@ class RedisCache(CacheMixin,django_redis.RedisCache):
             return [(self._servers[i],self._cache.get_client_by_index(i)) for i in range(len(self._servers))]
 
 class AutoFailoverRedisCluster(redis.RedisCluster):
-    def master_failover(self,*args):
+    def master_failover(self,failed_node=None,host=None,port=None):
         """
         Return True if switch succeed; otherwise return False
         """
         checked_servers = None
-        master = None
+        failed_slot = None
         new_master = None
-        for i in range(2):
-            slot = self.determine_slot(*args)
-            nodes = self.nodes_manager.slots_cache.get(slot) or []
-            for node in nodes:
-                if node.server_type == redis.cluster.PRIMARY:
-                    if not master:
-                        master = node
-                    elif master.name != node.name:
-                        #master node has been changed, no need to change again.
-                        new_master = node
+        
+        #locate the failed node via host and port
+        if not failed_node:
+            for node in self.nodes_manager.nodes_cache:
+                if node.host == host and node.port == port:
+                     failed_node = node
+                     break
+
+        if not failed_node: 
+            #failed node not found
+            return False
+        elif failed_node.server_type != redis.cluster.PRIMARY:
+            #failed node is not a primary node
+            return False
+
+        #locate the related slot to find the replicas
+        for slot,servers in self.nodes_manager.slots_cache.items():
+            try:
+                index = servers.index(failed_node)
+                if index == 0:
+                    #current_node is the primary node
+                    if len(servers) == 1:
+                        #no replica server available
+                        return False
+                    else:
+                        failed_slot = slot
                         break
-                    continue
-                logger.debug("switch cluster master from {} to {}".format(master,node))
+                else:
+                    #current_node is a replica, already switched
+                    return True
+            except:
+                continue
+
+        for i in range(2):
+            new_master = None
+            for node in self.nodes_manager.slots_cache[failed_slot]:
+                if node.server_type == redis.cluster.PRIMARY:
+                    if node != failed_node:
+                        #current primary is not the failed node, already switched
+                        logger.debug("Succeed to switch the master server for slot '{}' from '{}' to '{}',current master is '{}'".format(slot,failed_node,node,node))
+                        return True
+                    else:
+                        continue
+                logger.debug("switch cluster master from {} to {}".format(failed_node,node))
                 if checked_servers and node.name in checked_servers:
                     #already checked
                     continue
@@ -302,6 +333,8 @@ class AutoFailoverRedisCluster(redis.RedisCluster):
                     else:
                         checked_servers = set((node.name,))
                     resp = super()._execute_command(node,"CLUSTER FAILOVER","TAKEOVER")
+                    new_master = node
+                    break
                 except (redis.ConnectionError, redis.TimeoutError) as ex:
                     #node is not available, try another one
                     logger.debug("The node '{}' is not accessable, try another one")
@@ -310,13 +343,11 @@ class AutoFailoverRedisCluster(redis.RedisCluster):
                     if "You should send CLUSTER FAILOVER to a replica" in str(ex):
                         #already switched
                         logger.debug("The node '{}' has already been switched to master".format(node))
-                        pass
+                        new_master = node
+                        break
                     else:
                         #failed to failover, try other node
                         continue
-
-                new_master = node
-                break
 
             if new_master:
                 #reinitialize nodes manager
@@ -330,32 +361,104 @@ class AutoFailoverRedisCluster(redis.RedisCluster):
                     self.nodes_manager.startup_nodes = nodes
 
                 self.nodes_manager.initialize()
-                new_nodes  = self.nodes_manager.slots_cache.get(slot)
+                new_nodes  = self.nodes_manager.slots_cache.get(failed_slot)
                 if not new_nodes:
-                    break
-                if new_nodes[0].name == new_master.name and new_nodes[0].server_type == redis.cluster.PRIMARY:
-                    logger.debug("Succeed to switch the master server for slot '{}' from '{}' to '{}',current master is '{}'".format(slot,master,new_master,new_nodes[0]))
+                    return False
+                if new_nodes[0].name != failed_node.name and new_nodes[0].server_type == redis.cluster.PRIMARY:
+                    logger.debug("Succeed to switch the master server for slot '{}' from '{}' to '{}',current master is '{}'".format(slot,failed_node,new_master,new_nodes[0]))
                     return True
                 else:
-                    logger.warning("Failed to switch the master server for slot '{}' from '{}' to '{}',current master is '{}'".format(slot,master,new_master,new_nodes[0]))
-                    return False
+                    logger.warning("Failed to switch the master server for slot '{}' from '{}' to '{}',current master is '{}'".format(slot,failed_node,new_master,new_nodes[0]))
+                    continue
             else:
                 logger.debug("Replica server not found, initialize nodes manager and try again.")
                 self.nodes_manager.initialize()
 
-        logger.debug("No replica server are available for slot '{}'".format(slot))
         return False
 
     def execute_command(self, *args, **kwargs):
-        try:
-            return super().execute_command(*args,**kwargs)
-        except Exception as ex:
-            if type(ex) in self.__class__.ERRORS_ALLOW_RETRY:
-                self.master_failover(*args)
-                return super().execute_command(*args,**kwargs)
-            else:
-                raise
-            
+        """
+        Wrapper for ERRORS_ALLOW_RETRY error handling.
+
+        It will try the number of times specified by the config option
+        "self.cluster_error_retry_attempts" which defaults to 3 unless manually
+        configured.
+
+        If it reaches the number of times, the command will raise the exception
+
+        Key argument :target_nodes: can be passed with the following types:
+            nodes_flag: PRIMARIES, REPLICAS, ALL_NODES, RANDOM
+            ClusterNode
+            list<ClusterNode>
+            dict<Any, ClusterNode>
+        """
+        target_nodes_specified = False
+        is_default_node = False
+        target_nodes = None
+        passed_targets = kwargs.pop("target_nodes", None)
+        if passed_targets is not None and not self._is_nodes_flag(passed_targets):
+            target_nodes = self._parse_target_nodes(passed_targets)
+            target_nodes_specified = True
+        # If an error that allows retrying was thrown, the nodes and slots
+        # cache were reinitialized. We will retry executing the command with
+        # the updated cluster setup only when the target nodes can be
+        # determined again with the new cache tables. Therefore, when target
+        # nodes were passed to this function, we cannot retry the command
+        # execution since the nodes may not be valid anymore after the tables
+        # were reinitialized. So in case of passed target nodes,
+        # retry_attempts will be set to 0.
+        retry_attempts = (
+            0 if target_nodes_specified else self.cluster_error_retry_attempts
+        )
+        # Add one for the first execution
+        execute_attempts = 1 + retry_attempts
+        current_node = None
+        for failover_times in range(2):
+            retry_attempts = execute_attempts - 1
+            for _ in range(execute_attempts):
+                try:
+                    res = {}
+                    if not target_nodes_specified:
+                        # Determine the nodes to execute the command on
+                        target_nodes = self._determine_nodes(
+                            *args, **kwargs, nodes_flag=passed_targets
+                        )
+                        if not target_nodes:
+                            raise RedisClusterException(
+                                f"No targets were found to execute {args} command on"
+                            )
+                        if (
+                            len(target_nodes) == 1
+                            and target_nodes[0] == self.get_default_node()
+                        ):
+                            is_default_node = True
+                    for node in target_nodes:
+                        current_node = node
+                        res[node.name] = self._execute_command(node, *args, **kwargs)
+                    # Return the processed result
+                    return self._process_result(args[0], res, **kwargs)
+                except Exception as e:
+                    if retry_attempts > 0 and type(e) in self.__class__.ERRORS_ALLOW_RETRY:
+                        if is_default_node:
+                            # Replace the default cluster node
+                            self.replace_default_node()
+                        # The nodes and slots cache were reinitialized.
+                        # Try again with the new cluster setup.
+                        retry_attempts -= 1
+                        continue
+                    elif failover_times:
+                        #already try
+                        raise e
+                    else:
+                        # raise the exception
+                        if target_nodes_specified:
+                            raise e
+                        if not current_node :
+                            raise e
+                        if not self.master_failover(current_node):
+                            #failed to switch the replica to primary
+                            raise e
+                        
 class RedisClusterCacheClient(django_redis.RedisCacheClient):
     _redisclient = None
     def __init__(self, *args,auto_failover=False,**kwargs):
@@ -436,10 +539,6 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
         redisclients = self._redis_server_clients
         errors = []
 
-        for node in self._failed_cluster_nodes:
-            errors.append("{} is offline".format(node["name"]))
-
-        pos = 0
         for redisclient in redisclients:
             status = self.ping_redis(redisclient)
             if not status[0]:
@@ -449,47 +548,67 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
                     if node not in self._failed_cluster_nodes:
                         self._failed_cluster_nodes.append(node)
                         #not in the failed nodes,insert the message to the right position
-                        errors.insert(pos,status[1])
-                        pos += 1
                 else:
                     #not in the failed nodes,insert the message to the right position
-                    errors.insert(pos,status[1])
-                    pos += 1
+                    errors.append(status[1])
+
+        has_offline_master = False
+        failed_slaves = []
+        if self._failed_cluster_nodes:
+            for node in self._cluster_nodes.values():
+                if node["server_type"] == redis.cluster.REPLICA:
+                    continue
+
+                if not node.get("slaves"):
+                    #has no slaves
+                    if node in self._failed_cluster_nodes:
+                        has_offline_master = True
+                        errors = utils.add_to_list(errors,"The master({}) which has no slaves is not accessible".format(node["name"]))
+                    continue
+
+
+                failed_slaves.clear()
+                for s in node.get("slaves",[]):
+                    if s in self._failed_cluster_nodes:
+                        failed_slaves.append(s)
+
+                if node in self._failed_cluster_nodes:
+                    if len(failed_slaves) == len(node.get("slaves",[])):
+                        has_offline_master = True
+                        if len(failed_slaves) == 1:
+                            errors = utils.add_to_list(errors,"Both the master({}) and its only slave({}) are not accessible".format(
+                                node["name"],
+                                failed_slaves[0]["name"]
+                            ))
+                        else:
+                            errors = utils.add_to_list(errors,"Both the master({}) and all slaves({}) are not accessible".format(
+                                node["name"],
+                                ",".join(s["name"] for s in failed_slaves)
+                            ))
+                    elif len(failed_slaves) == 1:
+                        errors = utils.add_to_list(errors,"Both The master({}) and the slave({}) are not accessible".format(
+                            node["name"],
+                            failed_slaves[0]["name"]
+                        ))
+                    elif failed_slaves:
+                        errors = utils.add_to_list(errors,"The master({}) and some slaves({}) are not accessible".format(
+                            node["name"],
+                            ",".join(s["name"] for s in failed_slaves)
+                        ))
+                    else:
+                        errors = utils.add_to_list(errors,"Only the master({}) is not accessible".format(node["name"]))
+                elif len(failed_slaves) == 1:
+                    errors = utils.add_to_list(errors,"The slave({1}) of the master({0}) is not accessible".format(
+                        node["name"],
+                        failed_slaves[0]["name"]
+                    ))
+                elif failed_slaves:
+                    errors = utils.add_to_list(errors,"Some slaves({1}) of the master({0}) are not accessible".format(
+                        node["name"],
+                        ",".join(s["name"] for s in failed_slaves)
+                    ))
                     
-        if not self._failed_cluster_nodes:
-            working = True
-        elif len(self._failed_cluster_nodes) >= len(self._cluster_nodes):
-            #all redis are offline
-            working = False
-        elif all(n["server_type"] == redis.cluster.REPLICA for n in self._failed_cluster_nodes):
-            #all failed redis server are replica server
-            working = True
-        elif all(n["server_type"] == redis.cluster.PRIMARY  for n in self._failed_cluster_nodes):
-            #all failed redis server are master server
-            working = True
-        else:
-            #check whether at least one master and its slaves are all failed.
-            working = True
-            for n in self._cluster_nodes.values():
-                if n["server_type"] != redis.cluster.PRIMARY:
-                    continue
-
-                if n not in self._failed_cluster_nodes:
-                    #is working.
-                    continue
-
-                working_slave = None
-                for s in n.get("slaves",[]):
-                    if s not in self._failed_cluster_nodes:
-                        working_slave = s
-                        break
-
-                if not working_slave:
-                    #all slave server are down
-                    working = False
-                    break
-
-        return (working,errors)
+        return (not has_offline_master,errors)
 
     def refresh_cluster_nodes(self):
         cluster_nodes = {}
@@ -549,7 +668,7 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
     def _redis_server_clients(self):
         redisclient = self.redis_client
         refreshed = False
-        if self._failed_cluster_nodes :
+        if self._failed_cluster_nodes or len(self._cluster_nodes) - len(self._failed_cluster_nodes) != len(redisclient.nodes_manager.nodes_cache):
             #_server clients doesn't match with cluster nodes, refresh cluster node first.
             self.refresh_cluster_nodes()
             refreshed = True

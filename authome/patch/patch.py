@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.handlers import exception
+from django.http import HttpRequest
 
 from social_core.exceptions import AuthException
 
@@ -208,3 +209,27 @@ def get_response_for_exception():
     return _response_for_exception
 
 exception.response_for_exception = get_response_for_exception()
+
+
+def get_host():
+    original_get_host = HttpRequest.get_host
+    def _init_get_host(self):
+        if self.path in ("/sso/auth","/sso/auth_basic","/sso/auth_optional"):
+            host = self.headers.get("x-upstream-server-name")
+            if host:
+                logger.debug("Customize the request method 'get_host' to get the request from request header 'x-upstream-server-name'; if not found, then use the default logic.")
+                HttpRequest.get_host = _get_host
+                return host
+            else:
+                logger.debug("The request method 'get_host' is not customized, reset it to the default logic.")
+                HttpRequest.get_host = original_get_host
+                return original_get_host(self)
+        else:
+            return self.headers.get("x-upstream-server-name") or original_get_host(self)
+
+    def _get_host(self):
+        return self.headers.get("x-upstream-server-name") or original_get_host(self)
+
+    return _init_get_host
+
+HttpRequest.get_host = get_host()

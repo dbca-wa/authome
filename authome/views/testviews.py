@@ -92,7 +92,7 @@ def login_user(request):
 
 def echo(request):
     data = OrderedDict()
-    data["url"] = "https://{}{}".format(utils.get_host(request),request.get_full_path())
+    data["url"] = "https://{}{}".format(request.get_host(),request.get_full_path())
     data["method"] = request.method
     
     keys = [k for k in request.GET.keys()]

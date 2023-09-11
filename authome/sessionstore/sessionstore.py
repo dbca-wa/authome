@@ -30,6 +30,7 @@ else:
 firstsessioncache = get_firstsessioncache()
 
 VALID_DIGITIAL_CHARS = string.digits + string.ascii_letters + "~#?*&^%$/!<>(){}[]"
+#VALID_DIGITIAL_CHARS = string.digits + string.ascii_letters
 VALID_KEY_CHARS = VALID_DIGITIAL_CHARS
 
 def convert_decimal(number,decimal=len(VALID_DIGITIAL_CHARS)):

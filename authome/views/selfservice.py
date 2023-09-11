@@ -23,7 +23,7 @@ def user_setting(request):
     auth_key = request.session.session_key
     back_url = request.GET.get("back") or request.POST.get("back")
     logout_url = request.GET.get("logout") or request.POST.get("logout")
-    domain = utils.get_host(request)
+    domain = request.get_host()
     next_url = "https://{}/sso/setting".format(domain)
     parameters = None
     if not back_url:
@@ -92,7 +92,7 @@ def user_setting(request):
     context["logout_enabled"] = request.user.is_staff and request.get_host() == settings.AUTH2_DOMAIN
 
  
-    domain = utils.get_host(request)
+    domain = request.get_host()
     page_layout,extracss = _get_userflow_pagelayout(request,domain)
 
     groups = models.UserGroup.find_groups(context["email"])[0]
