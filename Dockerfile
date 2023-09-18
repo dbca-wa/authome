@@ -30,13 +30,13 @@ RUN cp -rf /app/release /app/dev
 
 #comment out logger.debug to improve perfornace in production environment.
 RUN find ./ -type f -iname '*.py' -exec sed -i 's/logger\.debug/#logger.debug/g' "{}" +;
-RUN find ./ -type f -iname '*.py' -exec sed -i 's/from \. import performance/#from . import performance/g' "{}" +;
-RUN find ./ -type f -iname '*.py' -exec sed -i 's/from \.\. import performance/#from .. import performance/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -E -i 's/from\s+\.\s+import\s+performance/#from . import performance/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -E -i 's/from\s+\.\.\s+import\s+performance/#from .. import performance/g' "{}" +;
 RUN find ./ -type f -iname '*.py' -exec sed -i 's/performance\.start_processingstep/#performance.start_processingstep/g' "{}" +;
 RUN find ./ -type f -iname '*.py' -exec sed -i 's/performance\.end_processingstep/#performance.end_processingstep/g' "{}" +;
 
-RUN find ./ -type f -iname '*.py' -exec sed -i 's/from \.models import DebugLog/#from .models import DebugLog/g' "{}" +;
-RUN find ./ -type f -iname '*.py' -exec sed -i 's/from \.\.models import DebugLog/#from ..models import DebugLog/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -E -i 's/from\s+\.models\s+import\s+DebugLog/#from .models import DebugLog/g' "{}" +;
+RUN find ./ -type f -iname '*.py' -exec sed -E -i 's/from\s+\.\.models\s+import\s+DebugLog/#from ..models import DebugLog/g' "{}" +;
 RUN find ./ -type f -iname '*.py' -exec sed -i 's/DebugLog\.log/#DebugLog.log/g' "{}" +;
 RUN find ./ -type f -iname '*.py' -exec sed -i 's/DebugLog\.attach_request/#DebugLog.attach_request/g' "{}" +;
 
