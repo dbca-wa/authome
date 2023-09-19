@@ -985,14 +985,14 @@ if settings.TRAFFIC_MONITOR_LEVEL > 0:
         class MemoryCache(_MemoryCacheWithTrafficMonitor):
             def __init__(self):
                 super().__init__()
-                logger.debug("Traffic monitor is running in single thread mode")
+                logger.info("Traffic monitor is running in single thread mode")
     else:
         #running in thread-safe has a big performance penalty
         import threading
         class MemoryCache(_MemoryCacheWithTrafficMonitor):
             def __init__(self):
                 super().__init__()
-                logger.debug("Traffic monitor is running in thread-safe mode")
+                logger.info("Traffic monitor is running in thread-safe mode")
 
             def log_request(self,name,host,start,status_code):
                 logger.debug("Traffic monitor is running in thread-safe mode")

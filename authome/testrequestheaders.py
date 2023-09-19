@@ -32,6 +32,7 @@ class RequestHeaderTestCase(testutils.StartServerMixin,TestCase):
 
     @classmethod
     def setUpClass(cls):
+        super(RequestHeaderTestCase,cls).setUpClass()
         cls.disable_messages()
 
         #login and get the user profile and session cookie; user and access token will be created as required.
@@ -65,6 +66,7 @@ class RequestHeaderTestCase(testutils.StartServerMixin,TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        super(RequestHeaderTestCase,cls).tearDownClass()
         res = requests.get(cls.get_logout_url(),cookies={settings.SESSION_COOKIE_NAME:cls.session_key},allow_redirects=False,verify=settings.SSL_VERIFY)
         res.raise_for_status()
         

@@ -22,6 +22,7 @@ RUN_CASES = -1
 class ClusterTestCase(testutils.StartServerMixin,TestCase):
     @classmethod
     def setUpClass(cls):
+        super(ClusterTestCase,cls).setUpClass()
         cls.disable_messages()
 
     def test_previous_session_cache(self):

@@ -100,6 +100,7 @@ class PerformanceTestCase(testutils.StartServerMixin,TestCase):
 
     @classmethod
     def setUpClass(cls):
+        super(PerformanceTestCase,cls).setUpClass()
         cls.disable_messages()
 
         print("Prepare {} test users".format(cls.TEST_USER_NUMBER))
@@ -119,6 +120,7 @@ class PerformanceTestCase(testutils.StartServerMixin,TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        super(PerformanceTestCase,cls).tearDownClass()
         print("logout all test user sessions")
         for testuser in cls.testusers:
             res = requests.get(cls.get_logout_url(),headers=cls.headers,cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},allow_redirects=False,verify=settings.SSL_VERIFY)

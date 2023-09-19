@@ -118,6 +118,10 @@ class StartServerMixin(object):
         return "{}{}".format(cls.get_baseurl(servername),url)
 
     @classmethod
+    def get_save_trafficdata_url(cls,servername="standalone"):
+        return "{}/test/trafficdata/save".format(cls.get_baseurl(servername))
+
+    @classmethod
     def get_flush_trafficdata_url(cls,servername="standalone"):
         return "{}/test/trafficdata/flush".format(cls.get_baseurl(servername))
 
@@ -154,13 +158,26 @@ class StartServerMixin(object):
         res.raise_for_status()
         return res.json()
 
-    def flush_traffic_data(self,session_cookie,servername="standalone"):
+    def save_traffic_data(self,session_cookie,servername="standalone"):
         """
         Save and return the traffic data
         """
-        res = requests.get("{}?{}".format(self.get_flush_trafficdata_url(servername),urlencode({"session":session_cookie})),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
+        res = requests.get("{}?{}".format(self.get_save_trafficdata_url(servername),urlencode({"session":session_cookie})),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
         res.raise_for_status()
         return json.loads(res.text,cls=JSONDecoder)["data"]
+
+    def flush_traffic_data(self,session_cookie,servername="standalone"):
+        """
+        Flush the traffic data to redis
+        """
+        res = requests.get("{}?{}".format(self.get_flush_trafficdata_url(servername),urlencode({"session":session_cookie})),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
+        res.raise_for_status()
+        data = json.loads(res.text,cls=JSONDecoder)
+        if data["flushed"]:
+            print("Flush the data to redis for server '{}'.".format(data["server"]))
+            return True
+        else:
+            return False
 
 
     def is_session_deleted(self,session_cookie,servername="standalone"):

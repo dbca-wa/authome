@@ -58,11 +58,6 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
         #return "https://{}{}".format(test_domain,random.choice(["/sso/auth"]))
 
     @classmethod
-    def get_posttest_url(cls,test_domain):
-        #return "https://{}{}".format(test_domain,random.choice(["/sso/auth","/sso/auth_optional","/sso/auth_basic"]))
-        return "https://{}/sso/auth_optional".format(test_domain)
-
-    @classmethod
     def get_test_domain(cls):
         if len(cls.TEST_DOMAINS) == 1:
             return cls.TEST_DOMAINS[0]
@@ -71,6 +66,7 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
 
     @classmethod
     def setUpClass(cls):
+        super(MonitoringTestCase,cls).setUpClass()
         cls.disable_messages()
 
         print("Prepare {} test users".format(cls.TEST_USER_NUMBER))
@@ -103,40 +99,31 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        super(MonitoringTestCase,cls).tearDownClass()
         print("logout all test user sessions")
         for testuser in cls.testusers:
             res = requests.get(cls.get_logout_url(),headers=cls.headers,cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},allow_redirects=False,verify=settings.SSL_VERIFY)
             res.raise_for_status()
             pass
 
-    def run_test(self,c_conn,index,test_starttime,test_endtime,test_requests,post_test=False):
+    def run_test(self,c_conn,index,test_starttime,test_endtime,test_requests):
         try:
             cls = self.__class__
             testuser = cls.testusers[index]
             sleep_time = int((test_starttime - timezone.localtime()).total_seconds()) + 1
             if sleep_time and sleep_time > 0:
-                if post_test:
-                    print("{0}: Wait {2} seconds to flush the traffic data of auth2 cluster '{4}' with user '{3}', expected start time '{1}'.".format(utils.format_datetime(timezone.localtime()),utils.format_datetime(test_starttime),sleep_time,testuser,testuser.clusterid))
-                else:
-                    print("{0}: Wait {2} seconds to test the auth2 cluster '{4}' with user '{3}', expected start time '{1}'.".format(utils.format_datetime(timezone.localtime()),utils.format_datetime(test_starttime),sleep_time,testuser,testuser.clusterid))
+                print("{0}: Wait {2} seconds to test the auth2 cluster '{4}' with user '{3}', expected start time '{1}'.".format(utils.format_datetime(timezone.localtime()),utils.format_datetime(test_starttime),sleep_time,testuser,testuser.clusterid))
                 time.sleep(sleep_time)
             total_requests = 0
-            if post_test:
-                print("{0}: Begin to flush the traffic data of the auth2 cluster '{3}' with user '{2}',expected start time '{1}'".format(utils.format_datetime(timezone.localtime()),utils.format_datetime(test_starttime),testuser,testuser.clusterid))
-            else:
-                print("{0}: Begin to test the auth2 cluster '{3}' with user '{2}',expected start time '{1}'".format(utils.format_datetime(timezone.localtime()),utils.format_datetime(test_starttime),testuser,testuser.clusterid))
+            print("{0}: Begin to test the auth2 cluster '{3}' with user '{2}',expected start time '{1}'".format(utils.format_datetime(timezone.localtime()),utils.format_datetime(test_starttime),testuser,testuser.clusterid))
             while (not test_requests and timezone.localtime() < test_endtime) or (test_requests and total_requests < test_requests) :
                 total_requests += 1
                 #print("Begin to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.get_auth_url(),testuser.session.session_key))
                 test_domain = cls.get_test_domain()
-                if not post_test:
-                    cls.tested_requests[test_domain] = cls.tested_requests.get(test_domain,0) + 1
-                    cls.tested_requests["requests"] = cls.tested_requests.get("requests",0) + 1
+                cls.tested_requests[test_domain] = cls.tested_requests.get(test_domain,0) + 1
+                cls.tested_requests["requests"] = cls.tested_requests.get("requests",0) + 1
 
-                if post_test:
-                    res = requests.get(cls.get_posttest_url(test_domain),cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},verify=settings.SSL_VERIFY)
-                else:
-                    res = requests.get(cls.get_test_url(test_domain),cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},verify=settings.SSL_VERIFY)
+                res = requests.get(cls.get_test_url(test_domain),cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
 
                 time.sleep(cls.REQUEST_INTERVAL)
@@ -157,13 +144,11 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
         for k,v in result.items():
             cls.tested_requests[k] = cls.tested_requests.get(k,0) + v
 
-    def merge_trafficdata(self,traffic_data,starttime,endtime):
+    def merge_trafficdata(self,traffic_data):
         result = {"domains":{}}
         dresult = result["domains"]
         
         for data in traffic_data:
-            if data["start_time"] >= endtime or data["end_time"] <= starttime:
-                continue
             result["requests"] = result.get("requests",0) + data["requests"]
             result["total_time"] = result.get("total_time",0) + data["total_time"]
             if "min_time"  not in result or result["min_time"] > data["min_time"]:
@@ -226,6 +211,16 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
                 cls.POST_REQUESTS
             ))
 
+        #send requests to flush the traffic data to redis
+        print("Begin to sent {} requests to auth2 to flush the existing traffic data to redis".format(cls.POST_REQUESTS))
+        for i in range(50):
+            self.flush_traffic_data(cls.testusers[0])
+
+        print("Begin to sent {} requests to auth2 to save the existing traffic data from redis to db".format(cls.POST_REQUESTS))
+        trafficdata = self.save_traffic_data(cls.testusers[0])
+        merged_trafficdata = self.merge_trafficdata(trafficdata)
+        print("The data was saved to db.{}".format(merged_trafficdata))
+
         if self.TEST_USER_NUMBER == 1:
             self.run_test(None,0,test_starttime,test_endtime,cls.TEST_REQUESTS)
         else:
@@ -249,54 +244,31 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
                 raise Exception("\n".join("{}:{}".format(u,e) for u,e in exs))
 
         test_endtime = timezone.localtime()
-        
+
         #send requests to flush the traffic data to redis
         print("Begin to sent {} requests to auth2 to flush the traffic data to redis".format(cls.POST_REQUESTS))
-        post_starttime = self.get_next_monitor_time()
-        if len(cls.postuserindexes) == 1:
-            self.run_test(None,cls.postuserindexes[0],post_starttime,None,cls.POST_REQUESTS,True)
-        else:
-            processes.clear()
-            for i in range(len(cls.postuserindexes)):
-                p_conn, c_conn = Pipe()
-                index = cls.postuserindexes[i]
-                processes.append((cls.testusers[index],p_conn,Process(target=self.run_test,args=(c_conn,index,post_starttime,None,cls.POST_REQUESTS,True))))
-    
-            for testuser,p_conn,p in processes:
-                p.start()
-    
-            exs = []
-            for testuser,p_conn,p in processes:
-                result = p_conn.recv()
-                p.join()
-                if isinstance(result,Exception):
-                    exs.append((testuser,result))
-                    continue
-
-            if exs:
-                raise Exception("\n".join("{}:{}".format(u,e) for u,e in exs))
-
+        for i in range(50):
+            self.flush_traffic_data(cls.testusers[0])
 
         #save and return the traffic data
         print("Sent requests to auth2 to save the traffic data from redis to database")
-        trafficdata = self.flush_traffic_data(cls.testusers[0])
+        trafficdata = self.save_traffic_data(cls.testusers[0])
         print("Get the traffic data from auth2")
         print("\n".join(json.dumps(d,cls=JSONFormater) for d in trafficdata))
-        test_endtime = self.get_next_monitor_time(test_endtime)
-        merged_trafficdata = self.merge_trafficdata(trafficdata,test_starttime,test_endtime)
+        merged_trafficdata = self.merge_trafficdata(trafficdata)
 
         #compare the results
         msgs = []
         for k,v in cls.tested_requests.items():
             if k == "requests":
-                if v != merged_trafficdata["requests"]:
-                    msgs.append("{} - {}: Send {} requests, but auth2 only recorded {} requests".format(utils.format_datetime(test_starttime),utils.format_datetime(test_endtime),v,merged_trafficdata["requests"]))
+                if v != merged_trafficdata.get("requests",0):
+                    msgs.append("{} - {}: Send {} requests, but auth2 only recorded {} requests".format(utils.format_datetime(test_starttime),utils.format_datetime(test_endtime),v,merged_trafficdata.get("requests",0)))
                 else:
-                    print("{} - {}: Send {} requests, auth2 recorded {} requests".format(utils.format_datetime(test_starttime),utils.format_datetime(test_endtime),v,merged_trafficdata["requests"]))
+                    print("{} - {}: Send {} requests, auth2 recorded {} requests".format(utils.format_datetime(test_starttime),utils.format_datetime(test_endtime),v,merged_trafficdata.get("requests",0)))
 
             else:
-                if v != merged_trafficdata["domains"][k]["requests"]:
-                    msgs.append("{0} - {1}: Send {3} requests to domain '{2}', but auth2 only recorded {4} requests".format(utils.format_datetime(test_starttime),utils.format_datetime(test_endtime),k,v,merged_trafficdata["domains"][k]["requests"]))
+                if v != merged_trafficdata.get("domains",{}).get(k,{}).get("requests",0):
+                    msgs.append("{0} - {1}: Send {3} requests to domain '{2}', but auth2 only recorded {4} requests".format(utils.format_datetime(test_starttime),utils.format_datetime(test_endtime),k,v,merged_trafficdata.get("domains",{}).get(k,{}).get("requests",0)))
                 else:
                     print("{0} - {1}: Send {3} requests to domain '{2}', auth2 recorded {4} requests".format(utils.format_datetime(test_starttime),utils.format_datetime(test_endtime),k,v,merged_trafficdata["domains"][k]["requests"]))
 
