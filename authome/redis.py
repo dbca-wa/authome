@@ -351,14 +351,16 @@ class AutoFailoverRedisCluster(redis.RedisCluster):
 
             if new_master:
                 #reinitialize nodes manager
-                if isinstance(self.nodes_manager.startup_nodes,OrderedDict):
-                    logger.debug("Move the node '{}' to the head to fetch the cluster slots".format(new_master))
-                    self.nodes_manager.startup_nodes.move_to_end(new_master.name,last=False)
-                else:
-                    logger.debug("Change the start_nodes to OrderedMap to fetch the cluster slots from the current node '{}'".format(new_master))
-                    nodes = OrderedDict(self.nodes_manager.startup_nodes)
-                    nodes.move_to_end(new_master.name,last=False)
-                    self.nodes_manager.startup_nodes = nodes
+                if new_master.name in self.nodes_manager.startup_nodes:
+                    #the new master is one of the startup nodes, move the new master to the first node of the startup nodes
+                    if isinstance(self.nodes_manager.startup_nodes,OrderedDict):
+                        logger.debug("Move the node '{}' to the head to fetch the cluster slots".format(new_master))
+                        self.nodes_manager.startup_nodes.move_to_end(new_master.name,last=False)
+                    else:
+                        logger.debug("Change the start_nodes to OrderedMap to fetch the cluster slots from the current node '{}'".format(new_master))
+                        nodes = OrderedDict(self.nodes_manager.startup_nodes)
+                        nodes.move_to_end(new_master.name,last=False)
+                        self.nodes_manager.startup_nodes = nodes
 
                 self.nodes_manager.initialize()
                 new_nodes  = self.nodes_manager.slots_cache.get(failed_slot)
