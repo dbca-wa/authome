@@ -1,5 +1,6 @@
 import re
 import logging
+import traceback
 import random
 from datetime import timedelta
 
@@ -19,6 +20,7 @@ import hashlib
 from ..cache import cache,get_defaultcache,get_usercache
 from .. import signals
 from .. import utils
+from .debugmodels import DebugLog
 
 logger = logging.getLogger(__name__)
 
@@ -1894,7 +1896,10 @@ if defaultcache:
         key = None
         @classmethod
         def change(cls,timeout=None):
-            defaultcache.set(cls.key,timezone.localtime(),timeout=timeout)
+            try:
+                defaultcache.set(cls.key,timezone.localtime(),timeout=timeout)
+            except Exception as ex:
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to set the latest change time of the model '{}' to cache.{}".format(cls.__name__,traceback.format_exc(ex)))
 
         @classmethod
         def get_cachetime(cls):
@@ -1910,61 +1915,71 @@ if defaultcache:
 
         @classmethod
         def status(cls):
-            last_refreshed = cls.get_cachetime()
-            last_synced = defaultcache.get(cls.key)
-            if not last_synced:
-                if last_refreshed:
+            try:
+                last_refreshed = cls.get_cachetime()
+                last_synced = defaultcache.get(cls.key)
+                if not last_synced:
+                    if last_refreshed:
+                        return (UP_TO_DATE,last_refreshed)
+                    else:
+                        return (OUTDATED,last_refreshed)
+
+
+                count =  cls.model.objects.all().count()
+                if count != cls.get_cachesize():
+                    #cache is outdated
+                    if last_synced > last_refreshed:
+                        return (OUTDATED,last_refreshed)
+                    else:
+                        return (OUT_OF_SYNC,last_refreshed)
+    
+                if count == 0:
                     return (UP_TO_DATE,last_refreshed)
+    
+                o = cls.model.objects.all().order_by("-modified").first()
+                if o:
+                    if last_refreshed and last_refreshed >= o.modified:
+                        return (UP_TO_DATE,last_refreshed)
+                    elif o.modified > last_synced:
+                        return (OUT_OF_SYNC,last_refreshed)
                 else:
-                    return (OUTDATED,last_refreshed)
-
-
-            count =  cls.model.objects.all().count()
-            if count != cls.get_cachesize():
-                #cache is outdated
-                if last_synced > last_refreshed:
-                    return (OUTDATED,last_refreshed)
-                else:
-                    return (OUT_OF_SYNC,last_refreshed)
-
-            if count == 0:
-                return (UP_TO_DATE,last_refreshed)
-
-            o = cls.model.objects.all().order_by("-modified").first()
-            if o:
-                if last_refreshed and last_refreshed >= o.modified:
                     return (UP_TO_DATE,last_refreshed)
-                elif o.modified > last_synced:
-                    return (OUT_OF_SYNC,last_refreshed)
-            else:
-                return (UP_TO_DATE,last_refreshed)
-
-            if not last_refreshed:
-                return (OUTDATED,last_refreshed)
-            elif last_synced > last_refreshed:
-                return (OUTDATED,last_refreshed)
-            else:
+    
+                if not last_refreshed:
+                    return (OUTDATED,last_refreshed)
+                elif last_synced > last_refreshed:
+                    return (OUTDATED,last_refreshed)
+                else:
+                    return (UP_TO_DATE,last_refreshed)
+            except:
+                #Failed, assume it is up to date
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to get the status of the model '{}' from cache.{}".format(cls.__name__,traceback.format_exc()))
                 return (UP_TO_DATE,last_refreshed)
 
         @classmethod
         def is_changed(cls):
-            last_modified = defaultcache.get(cls.key)
-            if not last_modified:
-                #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
-                return False
-            elif not cls.get_cachetime():
-                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
-                return True
-            elif last_modified > cls.get_cachetime():
-                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
-                return True
-            else:
-                #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+            try:
+                last_modified = defaultcache.get(cls.key)
+                if not last_modified:
+                    #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+                    return False
+                elif not cls.get_cachetime():
+                    logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
+                    return True
+                elif last_modified > cls.get_cachetime():
+                    logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
+                    return True
+                else:
+                    #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+                    return False
+            except :
+                #Failed, assume it is not changed
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to check whether the model '{}' is changed or not.{}".format(cls.__name__,traceback.format_exc()))
                 return False
 
 
     class IdentityProviderChange(ModelChange):
-        key = settings.GET_CACHE_KEY("idp_last_modified")
+        key = "idp_last_modified"
         model = IdentityProvider
 
         @classmethod
@@ -1994,7 +2009,7 @@ if defaultcache:
             IdentityProviderChange.change()
 
     class CustomizableUserflowChange(ModelChange):
-        key = settings.GET_CACHE_KEY("customizableuserflow_last_modified")
+        key = "customizableuserflow_last_modified"
         model = CustomizableUserflow
 
         @classmethod
@@ -2024,7 +2039,7 @@ if defaultcache:
             CustomizableUserflowChange.change()
 
     class UserGroupChange(ModelChange):
-        key = settings.GET_CACHE_KEY("usergroup_last_modified")
+        key = "usergroup_last_modified"
         model = UserGroup
 
         @classmethod
@@ -2056,7 +2071,7 @@ if defaultcache:
             UserGroupChange.change()
 
     class UserAuthorizationChange(ModelChange):
-        key = settings.GET_CACHE_KEY("userauthorization_last_modified")
+        key = "userauthorization_last_modified"
         model = UserAuthorization
 
         @classmethod
@@ -2088,7 +2103,7 @@ if defaultcache:
             UserAuthorizationChange.change()
 
     class UserGroupAuthorizationChange(ModelChange):
-        key = settings.GET_CACHE_KEY("usergroupauthorization_last_modified")
+        key = "usergroupauthorization_last_modified"
         model = UserGroupAuthorization
 
         @classmethod

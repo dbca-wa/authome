@@ -161,7 +161,7 @@ class TrafficReportAdmin(TrafficDataPropertyMixin,admin.DatetimeMixin,djangoadmi
             if obj.cluster is None:
                 if obj.clusterid is None:
                     #non cluser env
-                    return mark_safe("<A href='{}?clusterid__isnull=Truestart_time__gte={}&end_time__lte={}'>Details</A>".format(reverse(self.traffic_data_list_url_name),self._start_time(obj),self._end_time(obj)))
+                    return mark_safe("<A href='{}?clusterid__isnull=True&start_time__gte={}&end_time__lte={}'>Details</A>".format(reverse(self.traffic_data_list_url_name),self._start_time(obj),self._end_time(obj)))
                 else:
                     #overall report
                     if obj.report_type == models.TrafficReport.DAILY_REPORT:

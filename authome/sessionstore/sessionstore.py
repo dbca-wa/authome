@@ -29,12 +29,11 @@ else:
 
 firstsessioncache = get_firstsessioncache()
 
-process_seq_key = "{}:{}".format(settings.CACHE_KEY_PREFIX,settings.SESSION_COOKIE_NAME) if settings.CACHE_KEY_PREFIX else settings.SESSION_COOKIE_NAME
-
-VALID_DIGITIAL_CHARS = string.digits + string.ascii_lowercase
+VALID_DIGITIAL_CHARS = string.digits + string.ascii_letters + "~#?*&^%$/!<>(){}[]"
+#VALID_DIGITIAL_CHARS = string.digits + string.ascii_letters
 VALID_KEY_CHARS = VALID_DIGITIAL_CHARS
 
-def convert_decimal(number,decimal):
+def convert_decimal(number,decimal=len(VALID_DIGITIAL_CHARS)):
     remain_number = number
     converted_number = None
     while remain_number is not None:
@@ -86,7 +85,7 @@ class _AbstractSessionStore(SessionBase):
     COOKIEDOMAIN = settings.SESSION_COOKIE_DOMAIN[1:] if (settings.SESSION_COOKIE_DOMAIN and settings.SESSION_COOKIE_DOMAIN[0] == ".") else settings.SESSION_COOKIE_DOMAIN
     COOKIEDOMAINSUFFIX = settings.SESSION_COOKIE_DOMAIN if (settings.SESSION_COOKIE_DOMAIN and settings.SESSION_COOKIE_DOMAIN[0]) == "." else ".{}".format(settings.SESSION_COOKIE_DOMAIN)
     
-    cache_key_prefix = "{}:session:".format(settings.CACHE_KEY_PREFIX) if settings.CACHE_KEY_PREFIX else "session:"
+    cache_key_prefix =  "session:"
     _idppk = None
     expired_session_key = None
     _samedomain = None
@@ -187,7 +186,7 @@ class _AbstractSessionStore(SessionBase):
     def cookie_value(self):
         #should be only called if session is not empty
         if self._cookie_domain:
-            return "{}{}{}".format(self.session_key or self.expired_session_key,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,self._cookie_domain)
+            return "{}{}{}".format(self.session_key or self.expired_session_key,settings.SESSION_COOKIE_DOMAIN_SEPARATOR,self._cookie_domain)
         else:
             return self.session_key or self.expired_session_key
 
@@ -366,19 +365,19 @@ class _AbstractSessionStore(SessionBase):
             logger.debug("Delete a session({}) from cache".format(session_key or self.session_key))
             pass
 
-    def populate_session_key(self,process_prefix,idpid):
+    def populate_session_key(self,idpid,timekey):
         if idpid:
             return "{3}-{1}{0}{2}".format(
-                process_prefix,
-                get_random_string(16, VALID_KEY_CHARS),
-                get_random_string(16, VALID_KEY_CHARS),
+                timekey,
+                get_random_string(15, VALID_KEY_CHARS),
+                get_random_string(15, VALID_KEY_CHARS),
                 idpid
             )
         else:
             return "{1}{0}{2}".format(
-                process_prefix,
-                get_random_string(16, VALID_KEY_CHARS),
-                get_random_string(16, VALID_KEY_CHARS)
+                timekey,
+                get_random_string(15, VALID_KEY_CHARS),
+                get_random_string(15, VALID_KEY_CHARS)
             )
 
         
@@ -387,79 +386,26 @@ class _AbstractSessionStore(SessionBase):
     def clear_expired(cls):
         pass
 
-if settings.SYNC_MODE:
-    class _SessionStoreWithSyncModeSupport(_AbstractSessionStore):
-        _process_prefix = None
 
-        @classmethod
-        def _init_process_prefix(cls):
-            if not cls._process_prefix:
-                firstsessioncache.get_or_set(process_seq_key,0,timeout=None)
-                cls._process_prefix = convert_decimal(firstsessioncache.incr(process_seq_key),36)
-                logger.info("Got process prefix({}) for session key.".format(cls._process_prefix))
+    def _get_new_session_key(self):
+        "Return session key that isn't being used."
+        cls = self.__class__
+        idpid = self.get("idp")
+        if idpid:
+            idp = models.IdentityProvider.get_idp(idpid)
+            idpid = convert_decimal(idp.id,36)
+        now = timezone.localtime()
+        timekey = convert_decimal((now.timetuple().tm_yday - 1) * 86400 + now.hour * 3600 + now.minute * 60 + now.second)
+        while True:
+            session_key = self.populate_session_key(idpid,timekey)
 
+            if not self.exists(session_key):
+                logger.debug("Create a new session key {}".format(session_key))
+                return session_key
 
-        @classmethod
-        def _get_process_prefix(cls):
-            if not cls._process_prefix:
-                cls._init_process_prefix()
-
-            return cls._process_prefix
-
-        def _get_new_session_key(self):
-            "Return session key that isn't being used."
-            cls = self.__class__
-            idpid = self.get("idp")
-            if idpid:
-                idp = models.IdentityProvider.get_idp(idpid)
-                idpid = convert_decimal(idp.id,36)
-            while True:
-                session_key = self.populate_session_key(self._get_process_prefix(),idpid)
-
-                if not self.exists(session_key):
-                    logger.debug("Create a new session key {}".format(session_key))
-                    return session_key
-
-else:
-    import queue
-    class _SessionStoreWithSyncModeSupport(_AbstractSessionStore):
-        _process_prefix = None
-
-        @classmethod
-        def _init_process_prefix(cls):
-            cls._process_prefix = queue.Queue(maxsize=10)
-            firstsessioncache.get_or_set(process_seq_key,0,timeout=None)
-            n = firstsessioncache.incr(process_seq_key,10) - 9
-            for i in range(n,n + 10):
-                cls._process_prefix.put(convert_decimal(i,36))
-
-
-        @classmethod
-        def _get_process_prefix(cls):
-            if not cls._process_prefix:
-                cls._init_process_prefix()
-
-            return cls._process_prefix.get()
-
-        def _get_new_session_key(self):
-            "Return session key that isn't being used."
-            cls = self.__class__
-            prefix = cls._get_process_prefix()
-            idpid = self.get("idp")
-            if idpid:
-                idp = models.IdentityProvider.get_idp(idpid)
-                idpid = convert_decimal(idp.id,36)
-            try:
-                while True:
-                    session_key = self.populate_session_key(prefix,idpid)
-
-                    if not self.exists(session_key):
-                        return session_key
-            finally:
-                cls._process_prefix.put(prefix)
 
 if settings.SESSION_CACHES == 1:
-    class _SessionStoreWithMultiCacheSupport(_SessionStoreWithSyncModeSupport):
+    class _SessionStoreWithMultiCacheSupport(_AbstractSessionStore):
         def __init__(self,session_key=None,request=None,cookie_domain=None):
             self._cache = caches[settings.SESSION_CACHE_ALIAS]
             super().__init__(session_key=session_key,request=request,cookie_domain=cookie_domain)
@@ -467,7 +413,7 @@ if settings.SESSION_CACHES == 1:
         def _get_cache(self,session_key=None):
             return self._cache
 else:
-    class _SessionStoreWithMultiCacheSupport(_SessionStoreWithSyncModeSupport):
+    class _SessionStoreWithMultiCacheSupport(_AbstractSessionStore):
         def _get_cache(self,session_key=None):
             if not session_key:
                 session_key = self.session_key
@@ -476,7 +422,6 @@ else:
 if settings.PREVIOUS_SESSION_CACHES > 0:
     if settings.PREVIOUS_SESSION_CACHES == 1:
         class _SessionStoreWithPreviousCacheSupport(_SessionStoreWithMultiCacheSupport):
-            previous_cache_key_prefix = "{}:session:".format(settings.PREVIOUS_CACHE_KEY_PREFIX) if settings.PREVIOUS_CACHE_KEY_PREFIX else "session:"
             def __init__(self,session_key=None,request=None,cookie_domain=None):
                 self._previous_cache = caches[settings.PREVIOUS_SESSION_CACHE_ALIAS]
                 super().__init__(session_key=session_key,request=request,cookie_domain=cookie_domain)
@@ -490,7 +435,7 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
                 return caches[settings.PREVIOUS_SESSION_CACHE_ALIAS(session_key)]
 
     class SessionStore(_SessionStoreWithPreviousCacheSupport):
-        previous_cache_key_prefix = "{}:session:".format(settings.PREVIOUS_CACHE_KEY_PREFIX) if settings.PREVIOUS_CACHE_KEY_PREFIX else "session:"
+        previous_cache_key_prefix =  "session:"
         @property
         def previous_cachekey(self):
             return self.previous_cache_key_prefix + self.session_key
@@ -558,13 +503,13 @@ if settings.PREVIOUS_SESSION_CACHES > 0:
                             finally:
                                 performance.end_processingstep("delete_session_from_previous_cache")
                                 pass
-                            DebugLog.log(DebugLog.MOVE_SESSION,None,None,self._session_key,utils.get_source_session_cookie(self._request),message="Move a session({0}) from previous redis server({1}) to redis server({2})".format(self._session_key,utils.print_redisserver(previous_sessioncache),utils.print_redisserver(sessioncache)),target_session_cookie=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY),request=self._request)
+                            DebugLog.log(DebugLog.MOVE_SESSION,None,None,self._session_key,utils.get_source_session_cookie(self._request),message="Move a session({0}) from previous redis server({1}) to redis server({2})".format(self._session_key,previous_sessioncache.server4print,sessioncache.server4print),target_session_cookie=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY),request=self._request)
                         else:
                             try:
                                 performance.start_processingstep("load_session_from_cache")
                                 session_data = sessioncache.get(cachekey)
-                                DebugLog.log_if_true(session_data,DebugLog.SESSION_ALREADY_MOVED,None,None,self._session_key,self._session_key,message="Session({0}) has already moved from previous redis server({1}) to redis server({2})".format(self._session_key,utils.print_redisserver(previous_sessioncache),utils.print_redisserver(sessioncache)),target_session_cookie=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY),request=self._request)
-                                DebugLog.log_if_true(not session_data,DebugLog.MOVE_NONEXIST_SESSION,None,None,self._session_key,self._session_key,message="No need to move a non-existing session({0}) from previous redis server({1})".format(self._session_key,utils.print_redisserver(previous_sessioncache)),target_session_cookie=self._session_key,request=self._request)
+                                DebugLog.log_if_true(session_data,DebugLog.SESSION_ALREADY_MOVED,None,None,self._session_key,self._session_key,message="Session({0}) has already moved from previous redis server({1}) to redis server({2})".format(self._session_key,previous_sessioncache.server4print,sessioncache.server4print),target_session_cookie=self._session_key,userid=(session_data or {}).get(USER_SESSION_KEY),request=self._request)
+                                DebugLog.log_if_true(not session_data,DebugLog.MOVE_NONEXIST_SESSION,None,None,self._session_key,self._session_key,message="No need to move a non-existing session({0}) from previous redis server({1})".format(self._session_key,previous_sessioncache.server4print),target_session_cookie=self._session_key,request=self._request)
                             finally:
                                 performance.end_processingstep("load_session_from_cache")
                                 pass

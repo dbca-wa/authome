@@ -100,13 +100,16 @@ class PerformanceTestCase(testutils.StartServerMixin,TestCase):
 
     @classmethod
     def setUpClass(cls):
+        super(PerformanceTestCase,cls).setUpClass()
+        cls.disable_messages()
+
         print("Prepare {} test users".format(cls.TEST_USER_NUMBER))
         testemails = [ "testuser_{:0>4}@{}".format(i,cls.TEST_USER_DOMAIN) for i in range(cls.TEST_USER_BASEID,cls.TEST_USER_BASEID + cls.TEST_USER_NUMBER)]
 
         cls.testusers = []
     
         for testemail in testemails:
-            res = requests.get(cls.get_login_user_url(testemail),headers=cls.headers)
+            res = requests.get(cls.get_login_user_url(testemail),headers=cls.headers,verify=settings.SSL_VERIFY)
             res.raise_for_status()
             userprofile = res.json()
 
@@ -117,9 +120,10 @@ class PerformanceTestCase(testutils.StartServerMixin,TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        super(PerformanceTestCase,cls).tearDownClass()
         print("logout all test user sessions")
         for testuser in cls.testusers:
-            res = requests.get(cls.get_logout_url(),headers=cls.headers,cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},allow_redirects=False)
+            res = requests.get(cls.get_logout_url(),headers=cls.headers,cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},allow_redirects=False,verify=settings.SSL_VERIFY)
             res.raise_for_status()
             pass
 
@@ -247,7 +251,7 @@ class PerformanceTestCase(testutils.StartServerMixin,TestCase):
                 starttime = timezone.localtime()
                 try:
                     #print("Begin to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.get_auth_url(),testuser.session.session_key))
-                    res = requests.get(cls.get_auth_url(),cookies={settings.SESSION_COOKIE_NAME:testuser.session_key})
+                    res = requests.get(cls.get_auth_url(),cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},verify=settings.SSL_VERIFY)
                     res = res.json()
                     endtime = timezone.localtime()
                     if res["status_code"] != 200:

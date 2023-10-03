@@ -13,8 +13,6 @@ from django.core.cache.backends.memcached import MemcachedCache
 from django.core.cache import caches
 from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 
-from django_redis import get_redis_connection
-
 from authome.cache import get_defaultcache,get_usercache
 from authome.cachesessionstore import get_firstsessioncache,SessionStore,process_seq_key
 
@@ -491,7 +489,7 @@ def _save_usertoken(key,value,expireat):
     _save(get_usercache(userid),settings.GET_USERTOKEN_KEY(userid),value,expireat)
 
 def _save_data(key,value,expireat):
-    _save(defaultcache,settings.GET_CACHE_KEY(key),value,expireat)
+    _save(defaultcache,key,value,expireat)
 
 def _save_process_seq(key,value,expireat):
     _save(firstsessioncache,process_seq_key,value,expireat)

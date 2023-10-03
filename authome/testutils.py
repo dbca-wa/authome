@@ -7,6 +7,7 @@ import requests
 
 from django.conf import settings
 from django.utils import timezone
+from django.utils.http import urlencode
 
 from . import  utils
 from .serializers import JSONDecoder
@@ -15,21 +16,53 @@ class StartServerMixin(object):
     TESTED_SERVER = "http://127.0.0.1:{}"
     process_map = {}
     headers = {"HOST":settings.AUTH2_DOMAIN}
-    cluster_headers = {"HOST":settings.AUTH2_DOMAIN,"X-LB-HASH-KEY":"dummy key"}
+    cluster_headers = {"HOST":settings.AUTH2_DOMAIN,"X-LB-HASH-KEY":"dummykey"}
+
+    default_env = {
+        "CACHE_KEY_PREFIX" : "",
+        "CACHE_KEY_VERSION_ENABLED" : "False",
+        
+        "PREVIOUS_CACHE_KEY_PREFIX" : "",
+        "PREVIOUS_CACHE_KEY_VERSION_ENABLED" : "False",
+
+        "STANDALONE_CACHE_KEY_PREFIX" : "",
+        "STANDALONE_CACHE_KEY_VERSION_ENABLED" : "False"
+   
+    }
 
     @classmethod
-    def start_auth2_server(cls,servername,port,precommands=None):
+    def disable_messages(cls):
+        import urllib3
+        from requests.packages.urllib3.exceptions import InsecureRequestWarning
+        requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+    @classmethod
+    def clean_cookie(cls,cookie):
+        if not cookie:
+            return cookie
+        if cookie[0] == cookie[-1] and cookie[0] in ("'","\""):
+            #cookie value is quoted by django
+            return cookie[1:-1]
+        else:
+            return cookie
+
+
+
+    @classmethod
+    def start_auth2_server(cls,servername,port,auth2_env=None):
         if servername in cls.process_map:
             raise Exception("Server({}) is already running".format(servername))
-        if precommands:
-            command = "{} && ./start_auth2 {} {}".format(precommands,port,servername) 
-        else:
-            command = "./start_auth2 {} {}".format(port,servername) 
-        cls.process_map[servername] = (subprocess.Popen([command],shell=True,preexec_fn=os.setsid,stdout=subprocess.PIPE),port)
+        auth2_env = " && ".join("export {0}=\"{1}\"".format(k,(auth2_env or {}).get(k,cls.default_env.get(k))) for k,v in cls.default_env.items())
+          
+        command = "/bin/bash -c 'set -a && export PORT={2} && source {0}/.env.{1} && {3} && poetry run python manage.py runserver 0.0.0.0:{2}'".format(settings.BASE_DIR,servername,port,auth2_env) 
+        print("Start auth2 server:{}".format(command))
+        cls.process_map[servername] = (subprocess.Popen(command,shell=True,preexec_fn=os.setsid,stdout=subprocess.PIPE),port)
         expired = 60
         while (True):
             try:
-                res = requests.get(cls.get_healthcheck_url(servername),headers=cls.cluster_headers)
+                res = requests.get(cls.get_healthcheck_url(servername),headers=cls.cluster_headers,verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 break
             except Exception as ex:
@@ -85,11 +118,14 @@ class StartServerMixin(object):
         return "{}{}".format(cls.get_baseurl(servername),url)
 
     @classmethod
+    def get_save_trafficdata_url(cls,servername="standalone"):
+        return "{}/test/trafficdata/save".format(cls.get_baseurl(servername))
+
+    @classmethod
     def get_flush_trafficdata_url(cls,servername="standalone"):
         return "{}/test/trafficdata/flush".format(cls.get_baseurl(servername))
 
-    @classmethod
-    def get_settings(cls,names,servername="standalone"):
+    def get_settings(self,names,servername="standalone"):
         """
         Return session data if found, otherwise return None
         """
@@ -99,7 +135,7 @@ class StartServerMixin(object):
             namestr = names
             names = namestr.split(",")
 
-        res = requests.get("{}?names={}".format(cls.get_absolute_url("/test/settings/get",servername),namestr),headers=cls.cluster_headers)
+        res = requests.get("{}?names={}".format(self.get_absolute_url("/test/settings/get",servername),namestr),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
         res.raise_for_status()
         data = res.json()
         if len(names) == 1:
@@ -107,34 +143,47 @@ class StartServerMixin(object):
         else:
             return [data.get(name) for name in names]
 
-    @classmethod
-    def get_session_data(cls,session_cookie,servername="standalone"):
+    def get_session_data(self,session_cookie,servername="standalone",exist=True):
         """
         Return session data if found, otherwise return None
         """
-        res = requests.get("{}?session={}".format(cls.get_absolute_url("/test/session/get",servername),session_cookie),headers=cls.cluster_headers)
-        if res.status_code == 404:
-            return None
+        if session_cookie[0] == session_cookie[-1] and session_cookie[0] in ("'","\""):
+            #session cookie is quoted by django
+            session_cookie = session_cookie[1:-1]
+        res = requests.get("{}?{}".format(self.get_absolute_url("/test/session/get",servername),urlencode({"session":session_cookie})),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
+        if exist:
+            self.assertNotEqual(res.status_code,404,"The session({1}) doesn't exist in auth2 server '{0}'".format(servername,session_cookie))
         else:
-            res.raise_for_status()
+            return None
+        res.raise_for_status()
         return res.json()
 
-    @classmethod
-    def flush_traffic_data(cls,session_cookie,servername="standalone"):
+    def save_traffic_data(self,session_cookie,servername="standalone"):
         """
         Save and return the traffic data
         """
-        res = requests.get("{}?session={}".format(cls.get_flush_trafficdata_url(servername),session_cookie),headers=cls.cluster_headers)
+        res = requests.get("{}?{}".format(self.get_save_trafficdata_url(servername),urlencode({"session":session_cookie})),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
         res.raise_for_status()
         return json.loads(res.text,cls=JSONDecoder)["data"]
 
+    def flush_traffic_data(self,session_cookie,servername="standalone"):
+        """
+        Flush the traffic data to redis
+        """
+        res = requests.get("{}?{}".format(self.get_flush_trafficdata_url(servername),urlencode({"session":session_cookie})),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
+        res.raise_for_status()
+        data = json.loads(res.text,cls=JSONDecoder)
+        if data["flushed"]:
+            print("Flush the data to redis for server '{}'.".format(data["server"]))
+            return True
+        else:
+            return False
 
-    @classmethod
-    def is_session_deleted(cls,session_cookie,servername="standalone"):
-        return cls.get_session_data(session_cookie,servername=servername) is None
 
-    @classmethod
-    def get_cluster_session_cookie(cls,clusterid,session_cookie,lb_hash_key=None):
+    def is_session_deleted(self,session_cookie,servername="standalone"):
+        return self.get_session_data(session_cookie,servername=servername,exist=False) is None
+
+    def get_cluster_session_cookie(self,clusterid,session_cookie,lb_hash_key=None):
         values = session_cookie.split("|")
         if len(values) == 1:
             if not lb_hash_key:

@@ -10,7 +10,7 @@ from social_core.exceptions import AuthException
 
 from .models import IdentityProvider, CustomizableUserflow
 from . import utils
-from .exceptions import AzureADB2CAuthenticateFailed
+from .exceptions import AzureADB2CAuthenticateFailed,PolicyNotConfiguredException
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +41,12 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
             #if request has a property policy, use that policy directly,
             #The features(mfa set, mfa reset, and password reset) use this proerty 'policy' to specific the customized policy
             policy = request.policy
+            if not policy:
+                raise PolicyNotConfiguredException('ADB2C policy is not configured for request({})'.format(request.path))
+            elif not policy.lower().startswith('b2c_'):
+                raise PolicyNotConfiguredException('The name of ADB2C policy({}) should be started with "b2c_" case-insensitive.'.format(policy))
         else:
-            domain = (utils.get_domain(request.session.get(utils.REDIRECT_FIELD_NAME)) or utils.get_host(request)) if request else None
+            domain = (utils.get_domain(request.session.get(utils.REDIRECT_FIELD_NAME)) or request.get_host()) if request else None
             if not domain or domain == settings.AUTH2_DOMAIN:
                 #Domain is None or dmain is auth2, use the user flow's default policy
                 userflow = CustomizableUserflow.get_userflow(None)
@@ -66,10 +70,10 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
                         policy = userflow.default
 
                     logger.debug("Prefered idp is '{}', Choosed userflow is '{}', request domain is '{}' ".format(idp,policy,domain))
-
-        if not policy or not policy.lower().startswith('b2c_'):
-            raise AuthException('SOCIAL_AUTH_AZUREAD_B2C_OAUTH2_POLICY is '
-                                'required and should start with `b2c_`')
+            if not policy:
+                raise PolicyNotConfiguredException('ADB2C policy is not configured for domain({})'.format(domain))
+            elif not policy.lower().startswith('b2c_'):
+                raise PolicyNotConfiguredException('The name of ADB2C policy({}) should be started with "b2c_" case-insensitive.'.format(policy))
 
         return policy
 

@@ -1,4 +1,5 @@
 from django.db import models
+import traceback
 import logging
 from django.conf  import settings
 from django.utils import timezone
@@ -134,39 +135,49 @@ class DebugLog(models.Model):
 
     @classmethod
     def warning(cls,category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=None,userid=None,request=None,useremail=None):
-        log = DebugLog(
-            lb_hash_key = lb_hash_key,
-            clusterid = settings.AUTH2_CLUSTERID if settings.AUTH2_CLUSTER_ENABLED else None,
-            session_clusterid = (session_clusterid if session_clusterid else (cache.default_auth2_cluster.clusterid if cache.default_auth2_cluster else "N/A")) if settings.AUTH2_CLUSTER_ENABLED else None,
-            session_key = session_key,
-            source_session_cookie = source_session_cookie,
-            target_session_cookie = target_session_cookie,
-            message = message,
-            category=category,
-            email = useremail if useremail else cls.get_email(userid),
-            request=utils.get_request_path(request)[:255],
-            useragent=utils.get_useragent(request)
-        )
-        log.save()
+        try:
+            path = utils.get_request_path(request)
+            path = path[:255] if path else path
+            log = DebugLog(
+                lb_hash_key = lb_hash_key,
+                clusterid = settings.AUTH2_CLUSTERID if settings.AUTH2_CLUSTER_ENABLED else None,
+                session_clusterid = (session_clusterid if session_clusterid else (cache.default_auth2_cluster.clusterid if cache.default_auth2_cluster else "N/A")) if settings.AUTH2_CLUSTER_ENABLED else None,
+                session_key = session_key,
+                source_session_cookie = source_session_cookie,
+                target_session_cookie = target_session_cookie,
+                message = message,
+                category=category,
+                email = useremail if useremail else cls.get_email(userid),
+                request=path,
+                useragent=utils.get_useragent(request)
+            )
+            log.save()
+        except:
+            logger.error("Failed to log the message '{}' to DebugLog.{}".format(message,traceback.format_exc()))
 
     @classmethod
     def warning_if_true(cls,condition,category,lb_hash_key,session_clusterid,session_key,source_session_cookie,message,target_session_cookie=None,userid=None,request=None):
-        if not condition:
-            return
-        log = DebugLog(
-            lb_hash_key = lb_hash_key,
-            clusterid = settings.AUTH2_CLUSTERID if settings.AUTH2_CLUSTER_ENABLED else None,
-            session_clusterid = (session_clusterid if session_clusterid else (cache.default_auth2_cluster.clusterid if cache.default_auth2_cluster else "N/A")) if settings.AUTH2_CLUSTER_ENABLED else None,
-            session_key = session_key,
-            source_session_cookie = source_session_cookie,
-            target_session_cookie = target_session_cookie,
-            message = message,
-            category=category,
-            email = cls.get_email(userid),
-            request=utils.get_request_path(request)[:255],
-            useragent=utils.get_useragent(request)
-        )
-        log.save()
+        try:
+            if not condition:
+                return
+            path = utils.get_request_path(request)
+            path = path[:255] if path else path
+            log = DebugLog(
+                lb_hash_key = lb_hash_key,
+                clusterid = settings.AUTH2_CLUSTERID if settings.AUTH2_CLUSTER_ENABLED else None,
+                session_clusterid = (session_clusterid if session_clusterid else (cache.default_auth2_cluster.clusterid if cache.default_auth2_cluster else "N/A")) if settings.AUTH2_CLUSTER_ENABLED else None,
+                session_key = session_key,
+                source_session_cookie = source_session_cookie,
+                target_session_cookie = target_session_cookie,
+                message = message,
+                category=category,
+                email = cls.get_email(userid),
+                request=path,
+                useragent=utils.get_useragent(request)
+            )
+            log.save()
+        except:
+            logger.error("Failed to log the message '{}' to DebugLog.{}".format(message,traceback.format_exc()))
 
 
 

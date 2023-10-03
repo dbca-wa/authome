@@ -14,6 +14,7 @@ from .. import utils
 from ..sessionstore.sessionstore import SessionStore 
 from ..serializers import JSONEncoder
 from .. import trafficdata
+from ..cache import cache
 
 if settings.AUTH2_CLUSTER_ENABLED:
     from ..sessionstore.clustersessionstore import SessionStore as ClusterSessionStore
@@ -92,7 +93,7 @@ def login_user(request):
 
 def echo(request):
     data = OrderedDict()
-    data["url"] = "https://{}{}".format(utils.get_host(request),request.get_full_path())
+    data["url"] = "https://{}{}".format(request.get_host(),request.get_full_path())
     data["method"] = request.method
     
     keys = [k for k in request.GET.keys()]
@@ -173,7 +174,7 @@ def get_session(request):
         values = session_cookie.split("|")
         if len(values) == 1:
             session_key = values[0]
-            values = session_key.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)
+            values = session_key.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPARATOR,1)
             if len(values) == 1:
                 cookie_domain = None
                 session_key = values[0]
@@ -185,7 +186,7 @@ def get_session(request):
                 sessionstore = SessionStore(session_key,cookie_domain=cookie_domain)
         else:
             lb_hash_key,auth2_clusterid,signature,session_key = values
-            values = session_key.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPATATOR,1)
+            values = session_key.rsplit(settings.SESSION_COOKIE_DOMAIN_SEPARATOR,1)
             if len(values) == 1:
                 cookie_domain = None
                 session_key = values[0]
@@ -205,6 +206,15 @@ def get_session(request):
         raise
 
 def flush_trafficdata(requests):
+    if cache._traffic_data and len(cache._traffic_data) > 1:
+        cache._save_traffic_data(timezone.localtime())
+        cache._traffic_data.clear()
+        cache._traffic_data["serverid"] = utils.get_processid()
+        return JsonResponse({"flushed":True,"server":utils.get_processid()},status=200,encoder=JSONEncoder)
+    else:
+        return JsonResponse({"flushed":False,"server":utils.get_processid()},status=200,encoder=JSONEncoder)
+    
+def save_trafficdata_to_db(requests):
     batchid = trafficdata.save2db()
     data = []
     for d in models.TrafficData.objects.filter(batchid=batchid).defer("cluster"):

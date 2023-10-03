@@ -18,6 +18,7 @@
     "fields": {
         "name": "Dbca Staff",
         "parent_group": 1,
+        "groupid":"DBCA",
         "users": "[\"@dbca.wa.gov.au\", \"@dpaw.wa.gov.au\"]",
         "excluded_users": null,
         "identity_provider": null,
