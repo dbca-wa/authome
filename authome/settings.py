@@ -567,3 +567,5 @@ else:
 
 SSL_VERIFY=env("SSL_VERIFY",default=True)
 
+SOCIAL_AUTH_ADMIN_SEARCH_FIELDS=["uid"]
+
