@@ -1154,21 +1154,36 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
         Return True if email belongs to this group; otherwise return False
         """
         matched = False
-        for useremail in self.useremails:
-            if useremail.match(email):
-                #email is included in the useremails
-                matched = True
-                break
+        check_useremail_first = (len(self.useremails) <= len(self.excluded_useremails)) if self.excluded_useremails else True
+        if check_useremail_first:
+            matched = False
+            for useremail in self.useremails:
+                if useremail.match(email):
+                    #email is included in the useremails
+                    matched = True
+                    break
+    
+            if not matched:
+                return False
 
-        if matched:
             if self.excluded_useremails:
                 for useremail in self.excluded_useremails:
                     if useremail.match(email):
                         #email is excluded in the excluded_useremails
-                        matched = False
-                        break
-        return matched
+                        return False
+            return True
+        else:
+            for useremail in self.excluded_useremails:
+                if useremail.match(email):
+                    #email is excluded in the excluded_useremails
+                    return False
+            
+            for useremail in self.useremails:
+                if useremail.match(email):
+                    #email is included in the useremails
+                    return True
 
+            return False
 
     @classmethod
     def find_groups(cls,email,cacheable=True):
