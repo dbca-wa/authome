@@ -13,11 +13,12 @@ class UserEmailTestCase(TestCase):
             ("**@**",models.AllUserEmail),
             ("@dbca.wa.gov.au",models.DomainEmail),
             ("test@dbca.wa.gov.au",models.ExactUserEmail),
-            ("test*@dbca.wa.gov.au",models.RegexUserEmail),
-            ("t*est*@dbca.wa.gov.au",models.RegexUserEmail),
-            ("*t*est*@dbca.wa.gov.au",models.RegexUserEmail),
-            ("*t*est*@*.wa.gov.au",models.RegexUserEmail),
-            ("*t*est*@*",models.RegexUserEmail)
+            ("test*@dbca.wa.gov.au",models.UserEmailPattern),
+            ("t*est*@dbca.wa.gov.au",models.UserEmailPattern),
+            ("*t*est*@dbca.wa.gov.au",models.UserEmailPattern),
+            ("*t*est*@*.wa.gov.au",models.UserEmailPattern),
+            ("*t*est*@*",models.UserEmailPattern),
+            ("^[a-z]+@test.com$",models.RegexUserEmail)
         ]
         for email, email_type in testcases:
             email_obj = models.UserEmail.get_instance(email)
