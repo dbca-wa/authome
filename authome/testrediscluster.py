@@ -57,7 +57,9 @@ class RedisClusterTestCase(TestCase):
         for node in nodeservers:
             data = nodes[node]
             cls.nodeids[data["node_id"]] = node
-            if "master" in data["flags"]:
+            if "fail" in data["flags"]:
+                cls.nodes[node] = {"id":data["node_id"],"is_master":None}
+            elif "master" in data["flags"]:
                 cls.nodes[node] = {"id":data["node_id"],"is_master":True, "slaves":[]}
             else:
                 cls.nodes[node] = {"id":data["node_id"],"is_master":False, "master":None}
@@ -66,19 +68,24 @@ class RedisClusterTestCase(TestCase):
         print(json.dumps(cls.nodeids,indent=4))
         for node in nodeservers:
             data = nodes[node]
-            if "master" in data["flags"]:
+            if "master" in data["flags"] and "fail" not in data["flags"]:
                 cls.groups.append([node])
                 cls.groupmap[node] = (cls.groups[-1],len(cls.groups) - 1)
 
 
         for node in nodeservers:
             data = nodes[node]
-            if "master" not in data["flags"]:
+            if "master" not in data["flags"] and "master_id" in data:
                 group = cls.groupmap[cls.nodeids[data["master_id"]]]
                 group[0].append(node)
                 cls.groupmap[node] = group
                 cls.nodes[cls.nodeids[data["master_id"]]]["slaves"].append(node)
                 cls.nodes[node]["master"] = cls.nodeids[data["master_id"]]
+
+        for group in cls.groups:
+            group.sort()
+
+        cls.groups.sort(key = lambda g:g[0])
         """
         print("============Reids Cluster Nodes===================")
         print(json.dumps(cls.nodes,indent=4))
@@ -111,10 +118,15 @@ class RedisClusterTestCase(TestCase):
                         if res != testingdata[key]:
                             raise DataMismatchException("{0} = {1}, expect {2}".format(key,res,testingdata[key]))
                     else:
-                        testingdata[key] = testingdata.get(key,0) + 1
-                        cls._redis_client.set(key,str(testingdata[key]))
-                except Exception as ex:
+                        val = testingdata.get(key,0) + 1
+                        cls._redis_client.set(key,str(val))
+                        testingdata[key] = val
+                except DataMismatchException as ex:
                     cls.requestdata["errors"][ex.__class__.__name__] = cls.requestdata["errors"].get(ex.__class__.__name__,0) + 1
+                except Exception as ex:
+                    error = "{}({})".format(ex.__class__.__name__,traceback.format_exc())
+                    print("Failed to {} {} from redis cluster group({}).error = {}".format("get" if getvalue else "set",key,group, error))
+                    cls.requestdata["errors"][error] = cls.requestdata["errors"].get(error,0) + 1
 
                 endtime = timezone.localtime()
                 processtime = (endtime - starttime).total_seconds()
@@ -201,6 +213,7 @@ class RedisClusterTestCase(TestCase):
         groupsdata = [[] if (not cls.TEST_REDISCLUSTER_NODES or any(tg in g for tg in cls.TEST_REDISCLUSTER_NODES)) else None for g in cls.groups]
 
         #prepare the data for testing
+        counter = 0
         while True:
             index += 1
             key = keypattern.format(index)
@@ -212,8 +225,12 @@ class RedisClusterTestCase(TestCase):
                     groupsdata[group[1]].append(key)
 
             if any(len(groupdata) < cls.TEST_KEYS_PER_GROUP for groupdata in groupsdata if groupdata is not None):
+                counter += 1
+                if counter % cls.TEST_KEYS_PER_GROUP == 0:
+                    print("Total {} keys generated.\n{}".format(counter,"\n".join( "{}={}".format(cls.groups[i],len(groupsdata[i])) for i in range(len(groupsdata)) if groupsdata[i] is not None )))
                 continue
             else:
+                print("Total {} keys generated.\n{}".format(counter,"\n".join( "{}={}".format(cls.groups[i],len(groupsdata[i])) for i in range(len(groupsdata)) if groupsdata[i] is not None )))
                 break
 
         processes = []
@@ -241,13 +258,15 @@ class RedisClusterTestCase(TestCase):
         print("""Begin to run the unit test.
     Start Time: {0}
     End Time: {1}
-    Total Processes: {2}
-    Testing Groups: {3}({4})
-    Processes Per Group: {5}
-    Keys Per Group: {6}
-    Keys Per Process: {7}""".format(
+    Request Interval: {2} milliseconds
+    Total Processes: {3}
+    Testing Groups: {4}({5})
+    Processes Per Group: {6}
+    Keys Per Group: {7}
+    Keys Per Process: {8}""".format(
             utils.format_datetime(test_starttime),
             utils.format_datetime(test_endtime),
+            cls.REQUEST_INTERVAL * 1000,
             len(processes),
             len(testing_groups),
             testing_groups,
@@ -273,10 +292,11 @@ class RedisClusterTestCase(TestCase):
 
         print("==========Test Result=================")
         print(json.dumps(cls.requestdata,indent=4))
+        
+        if exs:
+            print("===========Exceptions================")
+            for ex in exs:
+                print("{}:{}".format(ex.__class__.__name__,str(ex)))
 
-        print("===========Exceptions================")
-        for ex in exs:
-            print("{}:{}".format(ex.__class__.__name__,str(ex)))
-
-        self.assertEqual(len(self.requestdata["errors"]),0,msg="Some exceptions happened during testing")
+        self.assertEqual(len(self.requestdata["errors"]) == 0 and not exs,True,msg="Some exceptions happened during testing")
 
