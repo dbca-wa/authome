@@ -470,6 +470,7 @@ class AutoFailoverRedisCluster(RedisClusterMixin,redis.RedisCluster):
         self.nodes_manager.startup_nodes.move_to_end(new_master,last=False)
 
         self.nodes_manager.initialize()
+        logger.debug("{}: redis cluster nodes:{}".format(utils.get_processid(),self.nodes_manager.nodes_cache))
         if added and not self.dynamic_startup_nodes:
             #the new_master node was newly added to startup_nodes and dynamic_startup_nodes is False, remove the new_master from startup_nodes
             self.nodes_manager.startup_nodes.pop(new_master,None)
@@ -502,49 +503,49 @@ class AutoFailoverRedisCluster(RedisClusterMixin,redis.RedisCluster):
             return None
 
         group = self._groupmap[failed_node or prefered_master or node]
-        nodes = self.get_cluster_nodes(failed_node or prefered_master or node)
-        for groupnode in group:
-            if groupnode not in nodes:
-                continue
-            if "master" in nodes[groupnode]["flags"] and "fail" not in nodes[groupnode]["flags"] and (not failed_node or groupnode != failed_node):
-                logger.debug("A new master({}) was already chosen by redis clsuter".format(groupnode))
-                new_master = groupnode
-                self.init_nodesmanager_with_new_master(groupnode)
-                return new_master
-        for attempt in range(4):
+        nodes = self.get_cluster_nodes(failed_node)
+
+        tried_nodes = set()
+        if failed_node:
+            tried_nodes.add(failed_node)
+
+        for attempt in range(5):
             for groupnode in group:
-                if failed_node and groupnode == failed_node:
+                if groupnode in tried_nodes:
                     continue
                 if attempt == 0:
-                    #first round, try the prefered master
+                    #first round, try the current master node first
+                    if groupnode not in nodes:
+                        continue
+                    if "master" not in nodes[groupnode]["flags"] or "fail" in nodes[groupnode]["flags"] :
+                        continue
+                elif attempt == 1:
+                    #second round, try the prefered master
                     if not prefered_master:
                         #no prefered master
                         break
                     elif groupnode != prefered_master:
                         continue
-                else:
-                    if prefered_master and groupnode == prefered_master:
+                elif attempt == 2:
+                    #third round, try the non-failed nodes
+                    if groupnode not in nodes:
+                        continue
+                    if "fail" in nodes[groupnode]["flags"]:
+                        continue
+                elif attempt == 3:
+                    #fourth round, try the failed nodes
+                    if groupnode not in nodes:
+                        continue
+                    if "fail" not in nodes[groupnode]["flags"]:
                         #already processed in the first round
                         continue
-                    if attempt == 1:
-                        #second round, try the non-failed nodes
-                        if groupnode not in nodes:
-                            continue
-                        if "fail" in nodes[groupnode]["flags"]:
-                            continue
-                    elif attempt == 2:
-                        #third round, try the failed nodes
-                        if groupnode not in nodes:
-                            continue
-                        if "fail" not in nodes[groupnode]["flags"]:
-                            #already processed in the first round
-                            continue
-                    else:
-                        #fourth round, try the nodes which are not returned from cluster nodes
-                        if groupnode in nodes:
-                            continue
+                else:
+                     #fifth round, try the nodes which are not returned from cluster nodes
+                     if groupnode in nodes:
+                         continue
                 try:
                     #try to find the node from node_manager
+                    tried_nodes.add(groupnode)
                     master_node = self.nodes_manager.get_node(node_name = groupnode)
                     if not master_node:
                         #can't find the node from node_manager, maybe majority of redis master are down, try to create a node manually
@@ -557,16 +558,16 @@ class AutoFailoverRedisCluster(RedisClusterMixin,redis.RedisCluster):
                             
                         master_node = self.nodes_manager._get_or_create_cluster_node(host, port,PRIMARY,self.nodes_manager.nodes_cache)
                         self.nodes_manager.create_redis_connections([master_node])
-                       
+
                     resp = super()._execute_command(master_node,"CLUSTER FAILOVER","TAKEOVER")
                     new_master = None
-                    attempts = 0
-                    while attempts < 10:
+                    try_time = 0
+                    while try_time < 10:
                         nodes2 = self._execute_command(master_node,"CLUSTER NODES")
                         if "master" in nodes2[groupnode]["flags"] and "fail" not in nodes2[groupnode]["flags"]:
                             #switched successfully
                             new_master = groupnode
-                            logger.debug("Succeed to switch the node({}) to master node.".format(groupnode))
+                            logger.debug("{}: Succeed to switch the node({}) to master node.".format(utils.get_processid(),groupnode))
                         else:
                             for groupnode2 in group:
                                 if failed_node and groupnode2 == failed_node:
@@ -574,13 +575,13 @@ class AutoFailoverRedisCluster(RedisClusterMixin,redis.RedisCluster):
                                 if "master" in nodes2[groupnode2]["flags"] and "fail" not in nodes2[groupnode2]["flags"]:
                                     #another node was chosen by redis cluster as master node
                                     new_master = groupnode2
-                                    logger.debug("Try to switch the node({}) to master node, but the node({}) was chosen by redis as master node".format(groupnode,groupnode2))
+                                    logger.debug("{}: Try to switch the node({}) to master node, but the node({}) was chosen by redis as master node".format(utils.get_processid(), groupnode,groupnode2))
                                     break
                         if new_master:
                             break
                         else:
-                            attempts += 1
-                            if attempts < 10:
+                            try_time += 1
+                            if try_time < 10:
                                 time.sleep(0.2)
                             else:
                                 new_master = None
@@ -589,21 +590,24 @@ class AutoFailoverRedisCluster(RedisClusterMixin,redis.RedisCluster):
                         self.init_nodesmanager_with_new_master(new_master)
                         return new_master
                     else:
-                        logger.warning("Failed to switch the node({}) to master node without exception, try another node".format(groupnode))
+                        logger.warning("{}: Failed to switch the node({}) to master node without exception, try another node".format(utils.get_processid(),groupnode))
                 except redis.ResponseError as ex:
                     if "You should send CLUSTER FAILOVER to a replica" in str(ex):
                         #already switched
-                        logger.debug("A new master({}) was already chosen by redis clsuter".format(groupnode))
+                        logger.debug("{}: The new master({}) was already chosen by redis cluster".format(utils.get_processid(), groupnode))
                         new_master = groupnode
                         self.init_nodesmanager_with_new_master(master_node)
                         return new_master
+                    else:
+                        logger.warning("{}: Failed to switch the node({}) to master node, try another one.{}".format(utils.get_processid(),groupnode,ex))
+                        continue
                 except Exception as ex:
-                    logger.warning("Failed to switch the node({}) to master node, try another one.{}".format(groupnode,ex))
+                    logger.warning("{}: Failed to switch the node({}) to master node, try another one.{}".format(utils.get_processid(),groupnode,ex))
                     continue
         if failed_node:
-            logger.warning("Failed to find an accessible slave to replace the current master({})".format(failed_node))
+            logger.warning("{}: Failed to find an accessible slave to replace the current master({})".format(utils.get_processid(),failed_node))
         else:
-            logger.warning("Failed to find an accessible slave to act as the new master, prefered master is {}".format(prefered_master))
+            logger.warning("{}: Failed to find an accessible slave to act as the new master, prefered master is {}".format(utils.get_processid(),prefered_master))
         return None
 
     def execute_command(self, *args, **kwargs):
@@ -682,6 +686,7 @@ class AutoFailoverRedisCluster(RedisClusterMixin,redis.RedisCluster):
                         continue
                     elif failover_times:
                         #already try
+                        logger.debug("{}: Failed to execute command({}) on node({}),{}".format(utils.get_processid(),args,target_nodes,e))
                         raise e
                     else:
                         # raise the exception
@@ -691,10 +696,11 @@ class AutoFailoverRedisCluster(RedisClusterMixin,redis.RedisCluster):
                             #current node is not master, no need to switch
                             raise e
                         elif type(e) in (ConnectionError,TimeoutError):
-                            logger.info("Master failover action was triggered by command({}) on node({}) with exception({}:{})".format(args,current_node,e.__class__.__name__,str(e)))
+                            logger.info("{}: Master failover action was triggered by command({}) on node({}) with exception({}:{})".format(utils.get_processid(),args,current_node,e.__class__.__name__,str(e)))
                             new_master = self.master_failover(failed_node=current_node)
                             if new_master:
                                 #specify the target node to execute the command
+                                logger.debug("{}: try to execute command({}) on nodes({}={})".format(utils.get_processid(), args,new_master, self.nodes_manager.get_node(node_name=new_master)))
                                 target_nodes_specified = True
                                 if target_nodes:
                                     target_nodes.clear()
@@ -705,10 +711,11 @@ class AutoFailoverRedisCluster(RedisClusterMixin,redis.RedisCluster):
                                 #failed to switch the replica to primary
                                 raise e
                         elif isinstance(e, RedisClusterException):
-                            logger.info("Master failover action was triggered by command({}) on node({}) with exception({}:{})".format(args,current_node,e.__class__.__name__,str(e)))
+                            logger.info("{}: Master failover action was triggered by command({}) on node({}) with exception({}:{})".format(utils.get_processid(),args,current_node,e.__class__.__name__,str(e)))
                             new_master = self.master_failover(node=current_node)
                             if new_master:
                                 #specify the target node to execute the command
+                                logger.debug("{}: try to execute command({}) on nodes({}={})".format(utils.get_processid(), args,new_master, self.nodes_manager.get_node(node_name=new_master)))
                                 target_nodes_specified = True
                                 if target_nodes:
                                     target_nodes.clear()
@@ -719,9 +726,10 @@ class AutoFailoverRedisCluster(RedisClusterMixin,redis.RedisCluster):
                                 #failed to switch the replica to primary
                                 raise e
                         elif isinstance(e , ClusterError):
-                            logger.info("Master failover action was triggered by command({}) on node({}) with exception({}:{})".format(args,current_node,e.__class__.__name__,str(e)))
+                            logger.info("{}: Master failover action was triggered by command({}) on node({}) with exception({}:{})".format(utils.get_processid(),args,current_node,e.__class__.__name__,str(e)))
                             new_master = self.master_failover(prefered_master=current_node)
                             if new_master:
+                                logger.debug("{}: try to execute command({}) on nodes({}={})".format(utils.get_processid(), args,new_master, self.nodes_manager.get_node(node_name=new_master)))
                                 #specify the target node to execute the command
                                 target_nodes_specified = True
                                 if target_nodes:
