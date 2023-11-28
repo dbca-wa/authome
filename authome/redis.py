@@ -268,8 +268,9 @@ class RedisCache(CacheMixin,django_redis.RedisCache):
                 status = self.ping_redis(redisclient)
                 if not status[0]:
                     working = False
-                    errors.append(status[1])
-            return (working,errors)
+                    if status[1]:
+                        errors.append(status[1])
+            return (working,errors if errors else None)
         else:
             return self.ping_redis(redisclients)
         
@@ -838,7 +839,7 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
                     partially_failed_groups.append((group,nodes))
 
         if not offline_groups and not partially_failed_groups:
-            return (True,"OK")
+            return (True,None)
         elif len(offline_groups) == len(self.redis_client._groups):
             return (False,"The whole redis cluster is offline")
         else:
