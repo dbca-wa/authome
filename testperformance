@@ -1,5 +1,16 @@
 #!/bin/bash
+is_number='^[0-9]+$'
+if [[ "$1" != "" ]] && [[ $1 =~ ${is_number} ]] 
+then
+    export TEST_TIME=$1
+fi
+if [[ "$2" != "" ]] && [[ $2 =~ ${is_number} ]] 
+then
+    export TEST_USER_NUMBER=$2
+fi
 TEST_RUNNER=authome.testrunners.NoDatabaseTestRunner
 export TEST_RUNNER
 #source venv/bin/activate && python manage.py test authome --keepdb
-export IGNORE_LOADING_ERROR=True ; poetry run python manage.py test authome --keepdb --pattern="testperformance.py"
+result_file=./testperformace_result_$(date +"%Y%m%d-%H%M%S")
+export IGNORE_LOADING_ERROR=True ; python manage.py test authome --keepdb --pattern="testperformance.py" > ${result_file} 2>&1 &
+tail -f ${result_file}
