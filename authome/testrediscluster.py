@@ -119,7 +119,7 @@ class RedisClusterTestCase(TestCase):
                             raise DataMismatchException("{0} = {1}, expect {2}".format(key,res,testingdata[key]))
                     else:
                         val = testingdata.get(key,0) + 1
-                        cls._redis_client.set(key,str(val))
+                        cls._redis_client.set(key,str(val),ex=86400)
                         testingdata[key] = val
                 except DataMismatchException as ex:
                     cls.requestdata["errors"][ex.__class__.__name__] = cls.requestdata["errors"].get(ex.__class__.__name__,0) + 1
