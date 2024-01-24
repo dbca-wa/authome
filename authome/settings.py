@@ -470,7 +470,7 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
         else:
             for i in range(0,SESSION_CACHES) :
                 name = "session{}".format(i)
-                CACHES[name] = GET_CACHE_CONF(name,CACHE_SESSION_SERVER[i],CACHE_SESSION_SERVER_OPTIONS,key_function=KEY_FUNCTION)
+                CACHES[name] = GET_CACHE_CONF(name,CACHE_SESSION_SERVER[i],env("CACHE_SESSION_SERVER{}_OPTIONS".format(i),default=CACHE_SESSION_SERVER_OPTIONS),key_function=KEY_FUNCTION)
 
             SESSION_CACHE_ALIAS = lambda sessionkey:"session{}".format((ord(sessionkey[-1]) + ord(sessionkey[-2])) % SESSION_CACHES)
         SESSION_ENGINE = "authome.sessionstore"
@@ -488,7 +488,7 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
         else:
             for i in range(0,PREVIOUS_SESSION_CACHES) :
                 name = "previoussession{}".format(i)
-                CACHES[name] = GET_CACHE_CONF(name,PREVIOUS_CACHE_SESSION_SERVER[i],PREVIOUS_CACHE_SESSION_SERVER_OPTIONS,key_function=PREVIOUS_KEY_FUNCTION)
+                CACHES[name] = GET_CACHE_CONF(name,PREVIOUS_CACHE_SESSION_SERVER[i],env("PREVIOUS_CACHE_SESSION_SERVER{}_OPTIONS".format(i),default=PREVIOUS_CACHE_SESSION_SERVER_OPTIONS),key_function=PREVIOUS_KEY_FUNCTION)
 
             PREVIOUS_SESSION_CACHE_ALIAS = lambda sessionkey:"previoussession{}".format((ord(sessionkey[-1]) + ord(sessionkey[-2])) % PREVIOUS_SESSION_CACHES)
 
@@ -501,7 +501,7 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
         else:
             for i in range(0,USER_CACHES) :
                 name = "user{}".format(i)
-                CACHES[name] = GET_CACHE_CONF(name,CACHE_USER_SERVER[i],CACHE_USER_SERVER_OPTIONS,key_function=KEY_FUNCTION)
+                CACHES[name] = GET_CACHE_CONF(name,CACHE_USER_SERVER[i],env("CACHE_USER_SERVER{}_OPTIONS".format(i),CACHE_USER_SERVER_OPTIONS),key_function=KEY_FUNCTION)
 
             USER_CACHE_ALIAS = lambda userid:"user{}".format(abs(userid) % USER_CACHES)
         GET_USER_KEY = lambda userid:"user:{}".format(userid)
