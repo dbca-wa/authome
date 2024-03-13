@@ -1,5 +1,5 @@
 # Prepare the base environment.
-FROM python:3.10.12-slim-buster as builder_base_authome
+FROM python:3.11.8-slim-bullseye as builder_base_authome
 MAINTAINER asi@dbca.wa.gov.au
 LABEL org.opencontainers.image.source https://github.com/dbca-wa/authome
 RUN apt-get update -y \
@@ -16,12 +16,20 @@ COPY poetry.lock pyproject.toml /app/
 RUN poetry config virtualenvs.create false \
   && poetry install --only main --no-interaction --no-ansi
 
+#update permissoins
+RUN chmod 755 /etc
+RUN chmod 555 /etc/bash.bashrc
+
+#update add user
+RUN addgroup -gid 1000 app 
+RUN adduser -uid 1000 --gid 1000 --no-create-home --disabled-login app 
+
 # Install Python libs from pyproject.toml.
 FROM builder_base_authome as python_libs_authome
 WORKDIR /app/release
 # Install the project.
 FROM python_libs_authome
-COPY manage.py gunicorn.py testperformance testrequestheaders testrediscluster testperformance ./
+COPY manage.py gunicorn.py testperformance testrequestheaders testrediscluster testperformance pyproject.toml ./
 COPY authome ./authome
 COPY templates ./templates
 RUN export IGNORE_LOADING_ERROR=True ; python manage.py collectstatic --noinput --no-post-process
@@ -65,7 +73,9 @@ fi \n\
 
 RUN chmod 555 run_command
 
+RUN chown -R app:app /app
+
 # Run the application as the www-data user.
-USER www-data
+USER app
 EXPOSE 8080
 CMD ./start_app
