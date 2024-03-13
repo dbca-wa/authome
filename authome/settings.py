@@ -1,4 +1,5 @@
 import os
+import tomllib
 
 from .utils import env, get_digest_function
 from datetime import timedelta
@@ -208,6 +209,10 @@ DATABASES = {
 }
 
 DATABASES['default']["CONN_MAX_AGE"] = 3600
+if "OPTIONS" in DATABASES['default']:
+    DATABASES['default']["OPTIONS"]["options"] = "-c default_transaction_read_only=off"
+else:
+    DATABASES['default']["OPTIONS"] = {"options": "-c default_transaction_read_only=off"}
 
 # Static files configuration
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
@@ -568,4 +573,24 @@ else:
 SSL_VERIFY=env("SSL_VERIFY",default=True)
 
 SOCIAL_AUTH_ADMIN_SEARCH_FIELDS=["uid"]
+
+# Sentry settings
+project = tomllib.load(open(os.path.join(BASE_DIR, "pyproject.toml"), "rb"))
+VERSION_NO = project["tool"]["poetry"]["version"]
+SENTRY_DSN = env("SENTRY_DSN", None)
+SENTRY_ENVIRONMENT = env("SENTRY_ENVIRONMENT", None)
+SENTRY_SAMPLE_RATE = env("SENTRY_SAMPLE_RATE", 1.0)  # Error sampling rate
+SENTRY_TRANSACTION_SAMPLE_RATE = env("SENTRY_TRANSACTION_SAMPLE_RATE", 0.0)  # Transaction sampling
+SENTRY_PROFILES_SAMPLE_RATE = env("SENTRY_PROFILES_SAMPLE_RATE", 0.0)  # Proportion of sampled transactions to profile.
+if SENTRY_DSN and SENTRY_ENVIRONMENT:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        sample_rate=SENTRY_SAMPLE_RATE,
+        traces_sample_rate=SENTRY_TRANSACTION_SAMPLE_RATE,
+        profiles_sample_rate=SENTRY_PROFILES_SAMPLE_RATE,
+        environment=SENTRY_ENVIRONMENT,
+        release=VERSION_NO,
+    )
 
