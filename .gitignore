@@ -1,6 +1,7 @@
 .env*
 env*
 *-dev.*
+*_dev
 .coverage
 media/
 logs/

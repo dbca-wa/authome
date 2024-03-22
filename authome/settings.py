@@ -1,4 +1,5 @@
 import os
+import tomllib
 
 from .utils import env, get_digest_function
 from datetime import timedelta
@@ -208,6 +209,10 @@ DATABASES = {
 }
 
 DATABASES['default']["CONN_MAX_AGE"] = 3600
+if "OPTIONS" in DATABASES['default']:
+    DATABASES['default']["OPTIONS"]["options"] = "-c default_transaction_read_only=off"
+else:
+    DATABASES['default']["OPTIONS"] = {"options": "-c default_transaction_read_only=off"}
 
 # Static files configuration
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
@@ -470,7 +475,7 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
         else:
             for i in range(0,SESSION_CACHES) :
                 name = "session{}".format(i)
-                CACHES[name] = GET_CACHE_CONF(name,CACHE_SESSION_SERVER[i],CACHE_SESSION_SERVER_OPTIONS,key_function=KEY_FUNCTION)
+                CACHES[name] = GET_CACHE_CONF(name,CACHE_SESSION_SERVER[i],env("CACHE_SESSION_SERVER{}_OPTIONS".format(i),default=CACHE_SESSION_SERVER_OPTIONS),key_function=KEY_FUNCTION)
 
             SESSION_CACHE_ALIAS = lambda sessionkey:"session{}".format((ord(sessionkey[-1]) + ord(sessionkey[-2])) % SESSION_CACHES)
         SESSION_ENGINE = "authome.sessionstore"
@@ -488,7 +493,7 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
         else:
             for i in range(0,PREVIOUS_SESSION_CACHES) :
                 name = "previoussession{}".format(i)
-                CACHES[name] = GET_CACHE_CONF(name,PREVIOUS_CACHE_SESSION_SERVER[i],PREVIOUS_CACHE_SESSION_SERVER_OPTIONS,key_function=PREVIOUS_KEY_FUNCTION)
+                CACHES[name] = GET_CACHE_CONF(name,PREVIOUS_CACHE_SESSION_SERVER[i],env("PREVIOUS_CACHE_SESSION_SERVER{}_OPTIONS".format(i),default=PREVIOUS_CACHE_SESSION_SERVER_OPTIONS),key_function=PREVIOUS_KEY_FUNCTION)
 
             PREVIOUS_SESSION_CACHE_ALIAS = lambda sessionkey:"previoussession{}".format((ord(sessionkey[-1]) + ord(sessionkey[-2])) % PREVIOUS_SESSION_CACHES)
 
@@ -501,7 +506,7 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
         else:
             for i in range(0,USER_CACHES) :
                 name = "user{}".format(i)
-                CACHES[name] = GET_CACHE_CONF(name,CACHE_USER_SERVER[i],CACHE_USER_SERVER_OPTIONS,key_function=KEY_FUNCTION)
+                CACHES[name] = GET_CACHE_CONF(name,CACHE_USER_SERVER[i],env("CACHE_USER_SERVER{}_OPTIONS".format(i),CACHE_USER_SERVER_OPTIONS),key_function=KEY_FUNCTION)
 
             USER_CACHE_ALIAS = lambda userid:"user{}".format(abs(userid) % USER_CACHES)
         GET_USER_KEY = lambda userid:"user:{}".format(userid)
@@ -566,4 +571,26 @@ else:
     SECRETKEY_EXPIREDAYS_WARNING = timedelta(days=14)
 
 SSL_VERIFY=env("SSL_VERIFY",default=True)
+
+SOCIAL_AUTH_ADMIN_SEARCH_FIELDS=["uid"]
+
+# Sentry settings
+project = tomllib.load(open(os.path.join(BASE_DIR, "pyproject.toml"), "rb"))
+VERSION_NO = project["tool"]["poetry"]["version"]
+SENTRY_DSN = env("SENTRY_DSN", None)
+SENTRY_ENVIRONMENT = env("SENTRY_ENVIRONMENT", None)
+SENTRY_SAMPLE_RATE = env("SENTRY_SAMPLE_RATE", 1.0)  # Error sampling rate
+SENTRY_TRANSACTION_SAMPLE_RATE = env("SENTRY_TRANSACTION_SAMPLE_RATE", 0.0)  # Transaction sampling
+SENTRY_PROFILES_SAMPLE_RATE = env("SENTRY_PROFILES_SAMPLE_RATE", 0.0)  # Proportion of sampled transactions to profile.
+if SENTRY_DSN and SENTRY_ENVIRONMENT:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        sample_rate=SENTRY_SAMPLE_RATE,
+        traces_sample_rate=SENTRY_TRANSACTION_SAMPLE_RATE,
+        profiles_sample_rate=SENTRY_PROFILES_SAMPLE_RATE,
+        environment=SENTRY_ENVIRONMENT,
+        release=VERSION_NO,
+    )
 

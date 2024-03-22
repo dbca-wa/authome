@@ -1,0 +1,34 @@
+#!/bin/bash
+shopt -s nocasematch
+is_number='^[0-9]+$'
+is_true='^true$'
+backend=0
+if [[ "$1" != "" ]] 
+then
+    if [[ $1 =~ ${is_number} ]] 
+    then
+        export TEST_TIME=$1
+        if [[ "$2" != "" ]] && [[ $2 =~ ${is_true} ]]
+        then
+            backend=1
+        fi
+    elif [[ $1 =~ ${is_true} ]]
+    then
+        backend=1    
+    fi
+fi
+
+TEST_RUNNER=authome.testrunners.NoDatabaseTestRunner
+export TEST_RUNNER
+#source venv/bin/activate && python manage.py test authome --keepdb
+if [[ ${backend} -eq 1 ]] 
+then
+    #run in background
+    result_file=./testrediscluster_result_$(date +"%Y%m%d-%H%M%S")
+    export IGNORE_LOADING_ERROR=True ; python manage.py test authome --keepdb --pattern="testrediscluster.py" > ${result_file} 2>&1 &
+    tail -f ${result_file}
+
+else
+    #run in background
+    export IGNORE_LOADING_ERROR=True ; python manage.py test authome --keepdb --pattern="testrediscluster.py"
+fi
