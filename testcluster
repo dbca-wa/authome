@@ -1,4 +1,5 @@
 #!/bin/bash
+# please start the standlone redis and rediscluster first before run this unitest
 #source venv/bin/activate && python manage.py test authome --keepdb
 if [[ "$1" == "" ]]
 then

@@ -23,11 +23,13 @@ class RedisClusterTestCase(TestCase):
     TEST_PROCESSES_PER_GROUP = utils.env("TEST_PROCESSES_PER_GROUP",default=2)
     REQUEST_INTERVAL = utils.env("REQUEST_INTERVAL",default=1) #milliseconds
     TEST_TIME = utils.env("TEST_TIME",default=10) #seconds
-    TEST_REDISCLUSTER_NODES = utils.env("TEST_REDISCLUSTER_NODES",default=[])
+
 
     nodes = collections.OrderedDict()
     nodeids = collections.OrderedDict()
+    #redis cluster groups, each group is a list which contain the group node
     groups = []
+    #map between node and (group, the number of the nodes in the group)
     groupmap = collections.OrderedDict()
 
     requestdata = {
@@ -86,14 +88,13 @@ class RedisClusterTestCase(TestCase):
             group.sort()
 
         cls.groups.sort(key = lambda g:g[0])
-        """
+
         print("============Reids Cluster Nodes===================")
         print(json.dumps(cls.nodes,indent=4))
         print("============Reids Cluster Groups===================")
         print(json.dumps(cls.groups,indent=4))
         print("============Reids Cluster map between node and group===================")
         print(json.dumps(cls.groupmap,indent=4))
-        """
 
     def run_test(self,c_conn,group,groupdata,test_starttime,test_endtime):
         try:
@@ -206,13 +207,11 @@ class RedisClusterTestCase(TestCase):
         #prepare 1000 keys for each group
         keypattern = "testkey_{:010d}"
         index = 0
-        if not any(g for g in cls.groups if not cls.TEST_REDISCLUSTER_NODES or any(tg in g for tg in cls.TEST_REDISCLUSTER_NODES)):
-            print("No redis cluster are configured to test")
-            return
 
-        groupsdata = [[] if (not cls.TEST_REDISCLUSTER_NODES or any(tg in g for tg in cls.TEST_REDISCLUSTER_NODES)) else None for g in cls.groups]
+        groupsdata = [[]  for g in cls.groups]
 
-        #prepare the data for testing
+        #prepare the data key for testing
+        #generate the same amount of keys (cls.TEST_KEYS_PER_GROUP) for each redis cluster group
         counter = 0
         while True:
             index += 1
@@ -220,32 +219,29 @@ class RedisClusterTestCase(TestCase):
             node = cls._redis_client.get_node_from_key(key)
             
             group = cls.groupmap[node.name]
-            if not cls.TEST_REDISCLUSTER_NODES or node.name in TEST_REDISCLUSTER_NODES:
-                if len(groupsdata[group[1]]) < cls.TEST_KEYS_PER_GROUP:
-                    groupsdata[group[1]].append(key)
+            if len(groupsdata[group[1]]) < cls.TEST_KEYS_PER_GROUP:
+                groupsdata[group[1]].append(key)
 
-            if any(len(groupdata) < cls.TEST_KEYS_PER_GROUP for groupdata in groupsdata if groupdata is not None):
+            if any(len(groupdata) < cls.TEST_KEYS_PER_GROUP for groupdata in groupsdata ):
                 counter += 1
                 if counter % cls.TEST_KEYS_PER_GROUP == 0:
-                    print("Total {} keys generated.\n{}".format(counter,"\n".join( "{}={}".format(cls.groups[i],len(groupsdata[i])) for i in range(len(groupsdata)) if groupsdata[i] is not None )))
+                    print("Total {} keys generated.\n{}".format(counter,"\n".join( "{}={}".format(cls.groups[i],len(groupsdata[i])) for i in range(len(groupsdata)) )))
                 continue
             else:
-                print("Total {} keys generated.\n{}".format(counter,"\n".join( "{}={}".format(cls.groups[i],len(groupsdata[i])) for i in range(len(groupsdata)) if groupsdata[i] is not None )))
+                print("Total {} keys generated.\n{}".format(counter,"\n".join( "{}={}".format(cls.groups[i],len(groupsdata[i])) for i in range(len(groupsdata)) )))
                 break
 
         processes = []
         now = timezone.localtime()
         test_starttime = now + timedelta(seconds = 10)
         test_endtime = test_starttime + timedelta(seconds = self.TEST_TIME)
-        testing_groups = []
         keys_per_process = int(cls.TEST_KEYS_PER_GROUP / cls.TEST_PROCESSES_PER_GROUP)
         start_index = 0
         end_index = 0
 
+        #start the process to test redis cluster
+        #each key is operated by only one process
         for i in range(len(cls.groups)):
-            if cls.TEST_REDISCLUSTER_NODES and not any(tg in g for tg in cls.TEST_REDISCLUSTER_NODES):
-                continue
-            testing_groups.append(cls.groups[i])
             for j in range(self.TEST_PROCESSES_PER_GROUP):
                 start_index = keys_per_process * j
                 if j == self.TEST_PROCESSES_PER_GROUP - 1:
@@ -268,8 +264,8 @@ class RedisClusterTestCase(TestCase):
             utils.format_datetime(test_endtime),
             cls.REQUEST_INTERVAL * 1000,
             len(processes),
-            len(testing_groups),
-            testing_groups,
+            len(cls.groups),
+            cls.groups,
             cls.TEST_PROCESSES_PER_GROUP,
             cls.TEST_KEYS_PER_GROUP,
             keys_per_process
