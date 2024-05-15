@@ -38,7 +38,7 @@ def is_cluster(url):
     else: 
         raise Exception("No available redis server.")
 
-redis_re = re.compile("^\s*((?P<protocol>[a-zA-Z]+)://((?P<user>[^:@]+)?(:(?P<password>[^@]+)?)?@)?)?(?P<host>[^:/]+)(:(?P<port>[0-9]+))?(/(?P<db>[0-9]+))?\s*$")
+redis_re = re.compile("^\\s*((?P<protocol>[a-zA-Z]+)://((?P<user>[^:@]+)?(:(?P<password>[^@]+)?)?@)?)?(?P<host>[^:/]+)(:(?P<port>[0-9]+))?(/(?P<db>[0-9]+))?\\s*$")
 class CacheMixin(object):
     _parsed_servers = {}
     _instances = {}

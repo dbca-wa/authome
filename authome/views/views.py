@@ -147,7 +147,7 @@ def _get_next_url(request):
     return next_url
 
 
-basic_auth_re = re.compile('^Basic\s+([a-zA-Z0-9+/=]+)$')
+basic_auth_re = re.compile('^Basic\\s+([a-zA-Z0-9+/=]+)$' )
 def _parse_basic(basic_auth):
     """
     Parse the basic header to a tuple(username,password)
@@ -598,7 +598,7 @@ def auth_basic(request):
         #return basi auth required response if any exception occured.
         return basic_auth_required_response_factory(request)
 
-email_re = re.compile("^[a-zA-Z0-9\.!#\$\%\&’'\*\+\/\=\?\^_`\{\|\}\~\-]+@[a-zA-Z0-9\-]+(\.[a-zA-Z0-9-]+)*$")
+email_re = re.compile("^[a-zA-Z0-9\\.!#\\$\\%\\&’'\\*\\+\\/\\=\\?\\^_`\\{\\|\\}\\~\\-]+@[a-zA-Z0-9\\-]+(\\.[a-zA-Z0-9\\-]+)*$")
 VALID_CODE_CHARS = string.digits if settings.PASSCODE_DIGITAL else (string.ascii_uppercase + string.digits)
 VALID_TOKEN_CHARS = string.ascii_uppercase + string.digits
 
