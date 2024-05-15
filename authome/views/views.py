@@ -1724,7 +1724,7 @@ def mfa_reset_complete(request,backend,*args,**kwargs):
                        *args, **kwargs)
 
 
-bearer_token_re = re.compile("^Bearer\s+(?P<token>\S+)\s*$")
+bearer_token_re = re.compile("^Bearer\\s+(?P<token>\\S+)\\s*$")
 def _auth_bearer(request):
     """
     Check the bearer authentication

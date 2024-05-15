@@ -122,6 +122,7 @@ class UserEmailTestCase(TestCase):
         testcases = [
             ("Basic 123456","123456"),
             ("Basic    123456","123456"),
+            ("Basic    123456+=/","123456+=/"),
             (" Basic    123456",None),
             ("Basic    123456 ",None),
             ("Baasic 123456 ",None),
@@ -129,6 +130,21 @@ class UserEmailTestCase(TestCase):
         for text, result in testcases:
             m = basic_auth_re.search(text)
             self.assertEqual(m.group(1) if m else None ,result,"Basic auth({}) should be {},but got {}".format(text,result,m.group(1) if m else None))
+
+    def test_bearer_token_re(self):
+        print("============================================================================")
+        from .views.views import bearer_token_re
+        testcases = [
+            ("Bearer 123456","123456"),
+            ("Bearer    123456","123456"),
+            (" Bearer    123456",None),
+            ("Bearer    123456 ","123456"),
+            ("Bearer 123456 ", "123456"),
+            ("Bearer 123456%^&$ ", "123456%^&$")
+        ]
+        for text, result in testcases:
+            m = bearer_token_re.search(text)
+            self.assertEqual(m.group(1) if m else None ,result,"The bearer token({}) should be {},but got {}".format(text,result,m.group(1) if m else None))
 
     def test_email_re(self):
         print("============================================================================")
