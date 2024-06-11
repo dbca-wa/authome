@@ -29,12 +29,12 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='usergroup',
             name='excluded_users',
-            field=authome.models._ArrayField(base_field=models.CharField(max_length=64), blank=True, help_text="\nList all possible user emails in this group separated by new line character.\nThe following lists all valid options in the checking order\n    1. All Emails    : *\n    2. Domain Email  : Starts with '@', followed by email domain. For example@dbca.wa.gov.au\n    3. Email Pattern : A email pattern,'*' represents any strings. For example test_*@dbca.wa.gov.au\n    4. User Email    : A single user email, For example test_user01@dbca.wa.gov.au\n", null=True, size=None),
+            field=authome.models.ArrayField(base_field=models.CharField(max_length=64), blank=True, help_text="\nList all possible user emails in this group separated by new line character.\nThe following lists all valid options in the checking order\n    1. All Emails    : *\n    2. Domain Email  : Starts with '@', followed by email domain. For example@dbca.wa.gov.au\n    3. Email Pattern : A email pattern,'*' represents any strings. For example test_*@dbca.wa.gov.au\n    4. User Email    : A single user email, For example test_user01@dbca.wa.gov.au\n", null=True, size=None),
         ),
         migrations.AlterField(
             model_name='usergroup',
             name='users',
-            field=authome.models._ArrayField(base_field=models.CharField(max_length=64), help_text="\nList all possible user emails in this group separated by new line character.\nThe following lists all valid options in the checking order\n    1. All Emails    : *\n    2. Domain Email  : Starts with '@', followed by email domain. For example@dbca.wa.gov.au\n    3. Email Pattern : A email pattern,'*' represents any strings. For example test_*@dbca.wa.gov.au\n    4. User Email    : A single user email, For example test_user01@dbca.wa.gov.au\n", size=None),
+            field=authome.models.ArrayField(base_field=models.CharField(max_length=64), help_text="\nList all possible user emails in this group separated by new line character.\nThe following lists all valid options in the checking order\n    1. All Emails    : *\n    2. Domain Email  : Starts with '@', followed by email domain. For example@dbca.wa.gov.au\n    3. Email Pattern : A email pattern,'*' represents any strings. For example test_*@dbca.wa.gov.au\n    4. User Email    : A single user email, For example test_user01@dbca.wa.gov.au\n", size=None),
         ),
         migrations.AlterField(
             model_name='usergroupauthorization',

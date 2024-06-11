@@ -8,7 +8,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.db import models, transaction
-from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.fields.array import ArrayField as DjangoArrayField
 from django.db.models.signals import pre_delete, pre_save, post_save, post_delete
 from django.dispatch import receiver
 from django.contrib.auth.models import AbstractUser,UserManager
@@ -50,7 +50,7 @@ A domain or domain pattern
 The following lists all valid options in the checking order
     1. Single Domain  : Represent a single domain. For example oim.dbca.wa.gov.au.
     2. Domain Pattern : A domain pattern, '*" represents any strings. For example  pbs*dbca.wa.gov.au
-    3. Domain Regex   : A regex string starts with '^'. For example  ^pbs[^\.]*\.dbca\.wa\.gov\.au$
+    3. Domain Regex   : A regex string starts with '^'. For example  ^pbs[^\\.]*\\.dbca\\.wa\\.gov\\.au$
     4. Suffix Domain  : A string Starts with '.' followed by a domain. For example .dbca.wa.gov.au
     5. All Domain     : '*'
 """
@@ -66,7 +66,7 @@ The following lists all valid options in the checking order
 
 sortkey_c = models.Func('sortkey',function='C',template='(%(expressions)s) COLLATE "%(function)s"')
 
-class _ArrayField(ArrayField):
+class ArrayField(DjangoArrayField):
     """
     Customizable ArrayField to provide feature 'clean'
     """
@@ -127,9 +127,9 @@ class RequestDomain(object):
     4. Regex domain
 
     """
-    all_domain_re = re.compile("^\*+$")
-    sufix_re = re.compile("^\**\.(?P<sufix>([a-zA-Z0-9_\-]+)(\.[a-zA-Z0-9_\-]+)*)$")
-    exact_re = re.compile("^([a-zA-Z0-9_\-]+)(\.[a-zA-Z0-9_\-]+)+$")
+    all_domain_re = re.compile("^\\*+$")
+    sufix_re = re.compile("^\\**\\.(?P<sufix>([a-zA-Z0-9_\\-]+)(\\.[a-zA-Z0-9_\\-]+)*)$")
+    exact_re = re.compile("^([a-zA-Z0-9_\\-]+)(\\.[a-zA-Z0-9_\\-]+)+$")
     #two digit values(10 - 99), high value has low priority
     base_sort_key = 99
 
@@ -240,7 +240,7 @@ class RegexRequestDomain(RequestDomain):
             if domain.startswith("^") :
                 self._re = re.compile(domain)
             else:
-                self._re = re.compile("^{}$".format(domain.replace(".","\.").replace("*","[a-zA-Z0-9\._\-]*")))
+                self._re = re.compile("^{}$".format(domain.replace(".","\\.").replace("*","[a-zA-Z0-9\\._\\-]*")))
         except Exception as ex:
             raise ValidationError("The regex domain config({}) is invalid.{}".format(domain,str(ex)))
 
@@ -697,7 +697,7 @@ class UserEmail(object):
         self.config = config
         self.sort_key = "{}:{}".format(self.base_sort_key,config)
 
-    all_email_re = re.compile("^\*+(@\*+)?$")
+    all_email_re = re.compile("^\\*+(@\\*+)?$")
     @classmethod
     def get_instance(cls,email):
         email = email.strip() if email else None
@@ -802,7 +802,7 @@ class UserEmailPattern(UserEmail):
     def __init__(self,email):
         super().__init__(email)
         try:
-            self._qs_re = r"^{}$".format(email.replace(".","\.").replace('*','[a-zA-Z0-9\._\-\+]*'))
+            self._qs_re = r"^{}$".format(email.replace(".","\\.").replace('*','[a-zA-Z0-9\\._\\-\\+]*'))
             self._re = re.compile(self._qs_re)
         except Exception as ex:
             raise ValidationError("The regex email config({}) is invalid.{}".format(email,str(ex)))
@@ -866,8 +866,8 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     name = models.CharField(max_length=32,unique=True,null=False)
     groupid = models.SlugField(max_length=32,null=False,blank=True)
     parent_group = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
-    users = _ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
-    excluded_users = _ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
+    users = ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
+    excluded_users = ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
     identity_provider = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,null=True,blank=True,limit_choices_to=~models.Q(idp__exact=IdentityProvider.AUTH_EMAIL_VERIFY[0]))
     session_timeout = models.PositiveSmallIntegerField(null=True,editable=True,blank=True,help_text="Session timeout in seconds, 0 means never timeout")
     modified = models.DateTimeField(editable=False,db_index=True)
@@ -1247,7 +1247,7 @@ class RequestPath(object):
         self.config = config
         self.sort_key = "{}:{}".format(self.base_sort_key,config)
 
-    all_path_re = re.compile("^\*+$")
+    all_path_re = re.compile("^\\*+$")
     @classmethod
     def get_instance(cls,config):
         config = config.strip() if config else None
@@ -1339,8 +1339,8 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
     _editable_columns = ("domain","paths","excluded_paths")
 
     domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
-    paths = _ArrayField(models.CharField(max_length=512,null=False),null=True,blank=True,help_text=help_text_paths)
-    excluded_paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
+    paths = ArrayField(models.CharField(max_length=512,null=False),null=True,blank=True,help_text=help_text_paths)
+    excluded_paths = ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
     sortkey = models.CharField(max_length=128,editable=False)
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)

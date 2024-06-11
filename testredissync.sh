@@ -31,7 +31,7 @@ then
     dbsize=$1
     echo "${counter} keys are set in cluster 6380,dbsize = ${dbsize}"
 else
-    echo "Please the number of keys which need to be generated"
+    echo "Please specify the number of keys which need to be generated"
     exit 1
 fi
 

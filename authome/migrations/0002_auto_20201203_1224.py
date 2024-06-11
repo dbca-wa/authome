@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='identityprovider',
             name='domains',
-            field=authome.models._ArrayField(base_field=models.CharField(max_length=64), blank=True, help_text='\nTHe domains which use this identity provider as its prefer identity provider\nThe following lists all valid options in the checking order\n    1. Single Domain : Represent a single domain. For example oim.dbca.wa.gov.au. Only single domain can config path and excluded path\n    2. Regex Domain  : \'*" represents any strings. For example  pbs*dbca.wa.gov.au\n    3. Suffix Domain : Starts with \'.\' followed by a domain. For example .dbca.wa.gov.au\n    4. All Domain    : \'*\'\n', null=True, size=None),
+            field=authome.models.ArrayField(base_field=models.CharField(max_length=64), blank=True, help_text='\nTHe domains which use this identity provider as its prefer identity provider\nThe following lists all valid options in the checking order\n    1. Single Domain : Represent a single domain. For example oim.dbca.wa.gov.au. Only single domain can config path and excluded path\n    2. Regex Domain  : \'*" represents any strings. For example  pbs*dbca.wa.gov.au\n    3. Suffix Domain : Starts with \'.\' followed by a domain. For example .dbca.wa.gov.au\n    4. All Domain    : \'*\'\n', null=True, size=None),
         ),
         migrations.AlterField(
             model_name='user',

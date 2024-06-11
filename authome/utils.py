@@ -276,7 +276,7 @@ def env(key, default=None, required=False, value_type=None,subvalue_type=None):
     return _convert(key,value,default=default,required=required,value_type=value_type,subvalue_type=subvalue_type)
 
 
-url_re = re.compile("^((https?://)?(?P<domain>[^:/\?#]+)?(:(?P<port>[0-9]+))?)?(?P<path>[/#][^\?]*)?(\?(?P<parameters>.*))?$",re.IGNORECASE)
+url_re = re.compile("^(((?P<protocol>[a-z]+)://)?(?P<domain>[^:/\\?#]+)?(:(?P<port>[0-9]+))?)?(?P<path>[/#][^\\?]*)?(\\?(?P<parameters>.+)?)?$",re.IGNORECASE)
 def parse_url(url):
     """
     Return domain from url
@@ -287,7 +287,7 @@ def parse_url(url):
             return {
                 "url":url,
                 "domain":m.group("domain"),
-                "port":m.group("port"),
+                "port":int(m.group("port")) if m.group("port") else None,
                 "path":m.group("path") or "/",
                 "parameters":m.group("parameters")
             }
@@ -302,7 +302,7 @@ def parse_url(url):
             "parameters":None
         }
 
-domain_url_re = re.compile("^(https?://)?(?P<domain>[^:/\?#]+)",re.IGNORECASE)
+domain_url_re = re.compile("^((?P<protocol>[a-z]+)://)?(?P<domain>[^:/\\?#]+)",re.IGNORECASE)
 def get_domain(url):
     """
     Return domain from url
@@ -316,7 +316,7 @@ def get_domain(url):
     else:
         return None
 
-domain_path_url_re = re.compile("^((https?://)?(?P<domain>[^:/\?#]+)?(:(?P<port>[0-9]+))?)?(?P<path>[/\?#].*)?$",re.IGNORECASE)
+domain_path_url_re = re.compile("^(((?P<protocol>[a-z]+)://)?(?P<domain>[^:/\\?#]+)?(:(?P<port>[0-9]+))?)?(?P<path>[/\\?#].*)?$",re.IGNORECASE)
 def get_domain_path(url):
     """
     Return domain,path from url

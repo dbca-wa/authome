@@ -1,5 +1,5 @@
 # Prepare the base environment.
-FROM python:3.11.8-slim-bullseye as builder_base_authome
+FROM python:3.12.3-slim-bookworm as builder_base_authome
 MAINTAINER asi@dbca.wa.gov.au
 LABEL org.opencontainers.image.source https://github.com/dbca-wa/authome
 RUN apt-get update -y \

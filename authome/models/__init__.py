@@ -6,7 +6,7 @@ from django.conf import settings
 from .models import *
 from .clustermodels import *
 from .trafficmodels import *
-from .models import _ArrayField
+from .models import ArrayField
 from .debugmodels import *
 
 logger = logging.getLogger(__name__)
