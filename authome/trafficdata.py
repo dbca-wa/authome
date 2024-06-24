@@ -49,7 +49,7 @@ def _save_cluster_traffic_data(batchid):
             res = requests.get("{}/cluster/trafficdata/save?batchid={}".format(
                 cluster.endpoint,
                 encoded_batchid
-            ),headers={"HOST":settings.AUTH2_DOMAIN})
+            ),headers={"HOST":settings.AUTH2_DOMAIN},verify=settings.SSL_VERIFY)
             res.raise_for_status()
             data = res.json().get("result",[]) 
             if data:

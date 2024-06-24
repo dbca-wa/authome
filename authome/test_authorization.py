@@ -43,7 +43,14 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
             (("test12","test11",["developer_*@test1.com"],None,True),None),
             (("test10","test10",["developer_*@test1.com"],None,False),ValidationError("The parent group of the group ({0}) can't be itself".format("test10"))),
             (("test10","test12",["developer_*@test1.com"],None,False),ValidationError("The parent group({1}) of the group ({0}) can't be descendant of the group({0})".format("test10","test12"))),
-            (("test10","test11",["developer_*@test1.com"],None,False),ValidationError("The parent group({1}) of the group ({0}) can't be descendant of the group({0})".format("test10","test11")))
+            (("test10","test11",["developer_*@test1.com"],None,False),ValidationError("The parent group({1}) of the group ({0}) can't be descendant of the group({0})".format("test10","test11"))),
+            #test regex user email
+            (("test20","test1",["a@test1.com","b@test1.com"],["^[c-z][^@]*@test1.com$"],True),None),
+            (("test30","test1",["@test1.com"],["^[c-z][^@]*@test1.com$"],True),None),
+            (("test40","test1",["a*@test1.com"],["^[c-z][^@]*@test1.com$"],True),None),
+            (("test50","test1",["^a.*@test1.com$"],["^[c-z][^@]*@test1.com$"],True),None),
+            (("test60","test1",["^a.*@test1.com$"],["c@test1.com"],True),None),
+            (("test70","test1",["^a.*@test1.com$"],["c*@test1.com"],True),None)
         ]:
             index += 1
             if test_data[1]:
@@ -79,7 +86,7 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
         index = 0
         for test_data,expected_data in [
             ((None,["*"]),(["*"],["*"])),
-            ((["test2@test1.com","",None,"test1@test1.com","*1@*.com","@test3.com"],None),(["@test3.com","*1@*.com","test1@test1.com","test2@test1.com"],None)),
+            ((["test2@test1.com","",None,"test1@test1.com","*1@*.com","@test3.com","^[a-b].*@test4.com$"],None),(["@test3.com","^[a-b].*@test4.com$","*1@*.com","test1@test1.com","test2@test1.com"],None)),
         ]:
             index += 1
             obj = UserGroup(name="test_{}".format(index),groupid="test_{}".format(index),users=test_data[0],excluded_users=test_data[1])
@@ -101,6 +108,9 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
             ((["*"],["*1@*.com"]),[("test1@test1.com",False),("test1@test2.com",False),("test1@test1.org",True),("test@test.com",True)]),
             ((["@test1.com","@test2.com","test3@test3.com","*1@*.org"],["test1@test1.com","test1@test.org"]),[("test1@test1.com",False),("test11@test1.com",True),("test2@test2.com",True),("test3@test3.com",True),("test31@test3.com",False),("test1@test.org",False),("test11@test.org",True),("test1@test.com",False)]),
             ((["@test1.com"],["@test1.com"]),[("test1@test1.com",False),("test2@test2.com",False)]),
+            #test regex user email
+            ((["*"],["^[c-z][^@]*@test1.com$"]),[("test1@test1.com",False),("test2@test2.com",True),("c@test1.com",False),("dz@test1.com",False),("a@test1.com",True)]),
+            ((["^[a-d][^@]*@test1.com$","^[c-z][^@]*@test2.com$"],["^[c-z][^@]*@test1.com$"]),[("test1@test1.com",False),("test2@test2.com",True),("c@test1.com",False),("dz@test1.com",False),("a@test1.com",True),("cd@test2.com",True),("a@test2.com",False),("a@test3.com",False)]),
         ]:
             index += 1
             obj = UserGroup(name="test_{}".format(index),groupid="test_{}".format(index),users=test_data[0],excluded_users=test_data[1])
@@ -122,10 +132,21 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
                 ]),
                 ("supporters",["support_*@test1.com"],None,[])
             ]),
-            ("reportgroup",["report1@test1.com","dev_report1@test1.com","dev_app_report1@test1.com","dev_app_leader_report1@test1.com","dev_app_leader_manager_report1@test1.com","support_report1@test1.com"],None,None)
+            ("reportgroup",["report1@test1.com","dev_report1@test1.com","dev_app_report1@test1.com","dev_app_leader_report1@test1.com","dev_app_leader_manager_report1@test1.com","support_report1@test1.com"],None,None),
+            #test regex
+            ("testcompany2",["^[^@]+@test2.com$"],None,[
+                ("developers2",["dev_*@test2.com"],["^dev_.*fake.*@test2.com$"],[
+                    ("app_developers2",["dev_app_*@test2.com"],["^dev_app_.*fake.*@test2.com$"],[
+                        ("app_dev_leaders2",["^dev_app_leader.*@test2.com$"],None,[
+                            ("app_dev_manager2",["^dev_app_leader_manager.*@test2.com$"],None,None)
+                        ])
+                    ])
+                ])
+            ]),
+
         ]
         testcases = [
-            ("test@test2.com",[UserGroup.public_group().name],[UserGroup.public_group().groupid]),
+            ("test@test.com",[UserGroup.public_group().name],[UserGroup.public_group().groupid]),
             ("sales@test1.com",["testcompany"],[UserGroup.public_group().groupid,"testcompany"]),
             ("support_1@test1.com",["supporters"],[UserGroup.public_group().groupid,"testcompany","supporters"]),
             ("dev_1@test1.com",["developers"],[UserGroup.public_group().groupid,"testcompany","developers"]),
@@ -138,7 +159,19 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
             ("dev_report1@test1.com",["developers","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","reportgroup"]),
             ("dev_app_report1@test1.com",["app_developers","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","reportgroup"]),
             ("dev_app_leader_report1@test1.com",["app_dev_leaders","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders","reportgroup"]),
-            ("dev_app_leader_manager_report1@test1.com",["app_dev_manager","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders","app_dev_manager","reportgroup"])
+            ("dev_app_leader_manager_report1@test1.com",["app_dev_manager","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders","app_dev_manager","reportgroup"]),
+            #regex test
+
+            ("dev_1@test2.com",["developers2"],[UserGroup.public_group().groupid,"testcompany2","developers2"]),
+            ("dev_1_fake@test2.com",["testcompany2"],[UserGroup.public_group().groupid,"testcompany2"]),
+            ("dev_app_fake@test2.com",["testcompany2"],[UserGroup.public_group().groupid,"testcompany2"]),
+            ("dev_app_leader_fake@test2.com",["testcompany2"],[UserGroup.public_group().groupid,"testcompany2"]),
+            ("dev_app_leader_manager_fake@test2.com",["testcompany2"],[UserGroup.public_group().groupid,"testcompany2"]),
+            ("dev_app_1@test2.com",["app_developers2"],[UserGroup.public_group().groupid,"testcompany2","developers2","app_developers2"]),
+            ("dev_app_leader1@test2.com",["app_dev_leaders2"],[UserGroup.public_group().groupid,"testcompany2","developers2","app_developers2","app_dev_leaders2"]),
+            ("dev_app_leader_manager1@test2.com",["app_dev_manager2"],[UserGroup.public_group().groupid,"testcompany2","developers2","app_developers2","app_dev_leaders2","app_dev_manager2"]),
+
+
         ]
         #popuate UserGroup objects
         self.populate_testdata()

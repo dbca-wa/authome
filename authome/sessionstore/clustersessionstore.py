@@ -3,6 +3,7 @@ import traceback
 
 from django.conf import settings
 from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
+from django.core.cache import caches
 
 from django.utils.crypto import  get_random_string
 
@@ -16,7 +17,24 @@ from authome.models import DebugLog
 logger = logging.getLogger(__name__)
 
 class StandaloneSessionStore(sessionstore.SessionStore):
-    cache_key_prefix = "{}:session:".format(settings.STANDALONE_CACHE_KEY_PREFIX) if settings.STANDALONE_CACHE_KEY_PREFIX else "session:"
+    cache_key_prefix = "session:"
+    def _get_cache(self,session_key=None):
+        #get the standalone related cache which has a different key_function 
+        if settings.SESSION_CACHES == 1:
+            alias = settings.SESSION_CACHE_ALIAS
+        else:
+            if not session_key:
+                session_key = self.session_key
+            alias = settings.SESSION_CACHE_ALIAS(session_key)
+
+        standalone_alias = "standalone_{}".format(alias)
+        if standalone_alias not in settings.CACHES:
+            data = dict(settings.CACHES[alias])
+            data["CACHEID"] = standalone_alias 
+            data["KEY_FUNCTION"] = settings.STANDALONE_KEY_FUNCTION
+            settings.CACHES[standalone_alias] = data
+
+        return caches[standalone_alias]
 
 class SessionStore(sessionstore.SessionStore):
     """
@@ -62,21 +80,21 @@ class SessionStore(sessionstore.SessionStore):
         else:
             return settings.GUEST_SESSION_AGE
 
-    def populate_session_key(self,process_prefix,idpid):
+    def populate_session_key(self,idpid,timekey):
         if idpid:
             return "{4}-{0}{2}{1}{3}".format(
                 self._clusterid_prefix,
-                process_prefix,
-                get_random_string(16, sessionstore.VALID_KEY_CHARS),
-                get_random_string(16, sessionstore.VALID_KEY_CHARS),
+                timekey,
+                get_random_string(15, sessionstore.VALID_KEY_CHARS),
+                get_random_string(15, sessionstore.VALID_KEY_CHARS),
                 idpid
             )
         else:
             return "{0}{2}{1}{3}".format(
                 self._clusterid_prefix,
-                process_prefix,
-                get_random_string(16, sessionstore.VALID_KEY_CHARS),
-                get_random_string(16, sessionstore.VALID_KEY_CHARS)
+                timekey,
+                get_random_string(15, sessionstore.VALID_KEY_CHARS),
+                get_random_string(15, sessionstore.VALID_KEY_CHARS)
             )
 
         
@@ -84,7 +102,7 @@ class SessionStore(sessionstore.SessionStore):
     def cookie_value(self):
         #should be only called if session is not empty
         if self._cookie_domain:
-            return "{}|{}|{}|{}{}{}".format(self._lb_hash_key,settings.AUTH2_CLUSTERID,self._signature,self.session_key or self.expired_session_key,settings.SESSION_COOKIE_DOMAIN_SEPATATOR,self._cookie_domain)
+            return "{}|{}|{}|{}{}{}".format(self._lb_hash_key,settings.AUTH2_CLUSTERID,self._signature,self.session_key or self.expired_session_key,settings.SESSION_COOKIE_DOMAIN_SEPARATOR,self._cookie_domain)
         else:
             return "{}|{}|{}|{}".format(self._lb_hash_key,settings.AUTH2_CLUSTERID,self._signature,self.session_key or self.expired_session_key)
 

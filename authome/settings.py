@@ -1,8 +1,11 @@
 import os
+import tomllib
 
 from .utils import env, get_digest_function
 from datetime import timedelta
 import dj_database_url
+
+from . import redis
 
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -99,14 +102,21 @@ else:
     if SESSION_COOKIE_DOMAIN:
         SESSION_COOKIE_NAME = (SESSION_COOKIE_DOMAIN + ".sessionid").replace(".", "_")
 
+_samesite_options = {"none":"None","lax":"Lax","strict":"Strict","null":None}
+def _get_samesite(v):
+    return _samesite_options.get(v.lower() if v else None,"Lax")
+
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_HTTPONLY = env('SESSION_COOKIE_HTTPONLY', True)
 SESSION_COOKIE_SECURE = env('SESSION_COOKIE_SECURE', True)
 CSRF_COOKIE_SECURE = env('CSRF_COOKIE_SECURE', True)
 CSRF_COOKIE_HTTPONLY = env('CSRF_COOKIE_HTTPONLY', True)
+CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS",default=["https://{}".format("*.au" if h == '*' else ("*{}".format(h) if h.startswith('.') else h)) for h in ALLOWED_HOSTS])
+CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE","Lax") or None
+CSRF_COOKIE_SAMESITE = _get_samesite(CSRF_COOKIE_SAMESITE)
+
 SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE","Lax") or None
-if SESSION_COOKIE_SAMESITE and SESSION_COOKIE_SAMESITE.lower() in ("none","null") :
-    SESSION_COOKIE_SAMESITE = None
+SESSION_COOKIE_SAMESITE = _get_samesite(SESSION_COOKIE_SAMESITE)
 
 GUEST_SESSION_AGE=env('GUEST_SESSION_AGE',default=3600) #login session timeout in seconds
 SESSION_AGE=env('SESSION_AGE',default=1209600)
@@ -199,6 +209,10 @@ DATABASES = {
 }
 
 DATABASES['default']["CONN_MAX_AGE"] = 3600
+if "OPTIONS" in DATABASES['default']:
+    DATABASES['default']["OPTIONS"]["options"] = "-c default_transaction_read_only=off"
+else:
+    DATABASES['default']["OPTIONS"] = {"options": "-c default_transaction_read_only=off"}
 
 # Static files configuration
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
@@ -327,65 +341,141 @@ LOGGING = {
     }
 }
 
-def GET_CACHE_CONF(server,options={}):
-    if server.lower().startswith('redis'):
-        options["CLIENT_CLASS"] = "django_redis.client.DefaultClient"
-        return {
-            "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": server,
-            "OPTIONS": options
-        }
-    else:
-        return {
-            'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
-            'LOCATION': server,
-            "OPTIONS": options
-        }
-
 ENABLE_B2C_JS_EXTENSION = env("ENABLE_B2C_JS_EXTENSION",default=True)
 ADD_AUTH2_LOCAL_OPTION = env("ADD_AUTH2_LOCAL_OPTION",default=True)
 
 SYNC_MODE = env("SYNC_MODE",True)
 
 CACHE_KEY_PREFIX=env('CACHE_KEY_PREFIX',default="") or None
+CACHE_KEY_VERSION_ENABLED = env('CACHE_KEY_VERSION_ENABLED',default=True)
+if CACHE_KEY_PREFIX and CACHE_KEY_VERSION_ENABLED:
+    #use the default key function
+    key_pattern = "{}:{{}}:{{}}".format(CACHE_KEY_PREFIX)
+    KEY_FUNCTION = lambda key,key_prefix,version : key_pattern.format(version,key)
+elif CACHE_KEY_PREFIX:
+    #has KEY_PREFIX, but KEY_VERSION_ENABLED is False
+    key_pattern = "{}:{{}}".format(CACHE_KEY_PREFIX)
+    KEY_FUNCTION = lambda key,key_prefix,version : key_pattern.format(key)
+elif CACHE_KEY_VERSION_ENABLED:
+    #KEY_PREFIX if None, but KEY_VERSION_ENABLED is True
+    KEY_FUNCTION = lambda key,key_prefix,version : "{}:{}".format(version,key)
+else:
+    #KEY_PREFIX is None and KEY_VERSION_ENABLED is False
+    KEY_FUNCTION = lambda key,key_prefix,version : key
+
 PREVIOUS_CACHE_KEY_PREFIX=env('PREVIOUS_CACHE_KEY_PREFIX',default="") or None
+PREVIOUS_CACHE_KEY_VERSION_ENABLED = env('PREVIOUS_CACHE_KEY_VERSION_ENABLED',default=True)
+if PREVIOUS_CACHE_KEY_PREFIX and PREVIOUS_CACHE_KEY_VERSION_ENABLED:
+    #use the default key function
+    previous_key_pattern = "{}:{{}}:{{}}".format(PREVIOUS_CACHE_KEY_PREFIX)
+    PREVIOUS_KEY_FUNCTION = lambda key,key_prefix,version : previous_key_pattern.format(version,key)
+elif PREVIOUS_CACHE_KEY_PREFIX:
+    #has KEY_PREFIX, but KEY_VERSION_ENABLED is False
+    previous_key_pattern = "{}:{{}}".format(PREVIOUS_CACHE_KEY_PREFIX)
+    PREVIOUS_KEY_FUNCTION = lambda key,key_prefix,version : previous_key_pattern.format(key)
+elif PREVIOUS_CACHE_KEY_VERSION_ENABLED:
+    #KEY_PREFIX if None, but KEY_VERSION_ENABLED is True
+    PREVIOUS_KEY_FUNCTION = lambda key,key_prefix,version : "{}:{}".format(version,key)
+else:
+    #KEY_PREFIX is None and KEY_VERSION_ENABLED is False
+    PREVIOUS_KEY_FUNCTION = lambda key,key_prefix,version : key
+
+STANDALONE_CACHE_KEY_PREFIX=env("STANDALONE_CACHE_KEY_PREFIX") or None
+STANDALONE_CACHE_KEY_VERSION_ENABLED = env('STANDALONE_CACHE_KEY_VERSION_ENABLED',default=True)
+if STANDALONE_CACHE_KEY_PREFIX and STANDALONE_CACHE_KEY_VERSION_ENABLED:
+    #use the default key function
+    standalone_key_pattern = "{}:{{}}:{{}}".format(STANDALONE_CACHE_KEY_PREFIX)
+    STANDALONE_KEY_FUNCTION = lambda key,key_prefix,version : standalone_key_pattern.format(version,key)
+elif STANDALONE_CACHE_KEY_PREFIX:
+    #has KEY_PREFIX, but KEY_VERSION_ENABLED is False
+    standalone_key_pattern = "{}:{{}}".format(STANDALONE_CACHE_KEY_PREFIX)
+    STANDALONE_KEY_FUNCTION = lambda key,key_prefix,version : standalone_key_pattern.format(key)
+elif STANDALONE_CACHE_KEY_VERSION_ENABLED:
+    #KEY_PREFIX if None, but KEY_VERSION_ENABLED is True
+    STANDALONE_KEY_FUNCTION = lambda key,key_prefix,version : "{}:{}".format(version,key)
+else:
+    #KEY_PREFIX is None and KEY_VERSION_ENABLED is False
+    STANDALONE_KEY_FUNCTION = lambda key,key_prefix,version : key
+
+def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
+    if server.lower().startswith('redis'):
+        if "max_connections" not in options:
+            options["max_connections"] = 2
+
+        cluster = options.pop("cluster",None)
+        if cluster is None:
+            cluster = redis.is_cluster(server)
+
+        if cluster:
+            if "require_full_coverage" not in options:
+                options["require_full_coverage"] = False
+            return {
+                "BACKEND": "authome.redis.RedisClusterCache",
+                "KEY_FUNCTION":key_function,
+                "LOCATION": server,
+                "CACHEID" : cacheid,
+                "OPTIONS": options
+            }
+        else:
+            return {
+                "BACKEND": "authome.redis.RedisCache",
+                "KEY_FUNCTION":key_function,
+                "LOCATION": server,
+                "CACHEID" : cacheid,
+                "OPTIONS": options
+            }
+    else:
+        return {
+            'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
+            "KEY_FUNCTION":key_function,
+            'LOCATION': server,
+            "OPTIONS": options
+        }
+
 CACHE_SERVER = env("CACHE_SERVER")
 CACHE_SERVER_OPTIONS = env("CACHE_SERVER_OPTIONS",default={})
+
 CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
 CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
+
 PREVIOUS_CACHE_SESSION_SERVER = env("PREVIOUS_CACHE_SESSION_SERVER")
 PREVIOUS_CACHE_SESSION_SERVER_OPTIONS = env("PREVIOUS_CACHE_SESSION_SERVER_OPTIONS",default={})
 
 CACHE_USER_SERVER = env("CACHE_USER_SERVER")
 CACHE_USER_SERVER_OPTIONS = env("CACHE_USER_SERVER_OPTIONS",default={})
+
 USER_CACHE_ALIAS = None
 PREVIOUS_SESSION_CACHE_ALIAS=None
-GET_CACHE_KEY = lambda key:key
+
+GET_DEFAULT_CACHE_KEY = lambda key:key
 GET_USER_KEY = lambda userid:str(userid)
 GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
+
 SESSION_CACHES = 0
 PREVIOUS_SESSION_CACHES = 0
 SESSION_CACHES = 0
 USER_CACHES = 0
+
 if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     CACHES = {}
     if CACHE_SERVER:
-        CACHES['default'] = GET_CACHE_CONF(CACHE_SERVER,CACHE_SERVER_OPTIONS)
+        CACHES['default'] = GET_CACHE_CONF('default',CACHE_SERVER,CACHE_SERVER_OPTIONS,key_function=KEY_FUNCTION)
         if CACHE_KEY_PREFIX:
             default_key_pattern = "{}:{{}}".format(CACHE_KEY_PREFIX)
-            GET_CACHE_KEY = lambda key:default_key_pattern.format(key)
+            GET_DEFAULT_CACHE_KEY = lambda key:default_key_pattern.format(key)
         else:
-            GET_CACHE_KEY = lambda key:key
+            GET_DEFAULT_CACHE_KEY = lambda key:key
 
     if CACHE_SESSION_SERVER:
         CACHE_SESSION_SERVER = [s.strip() for s in CACHE_SESSION_SERVER.split(",") if s and s.strip()]
         SESSION_CACHES = len(CACHE_SESSION_SERVER)
         if SESSION_CACHES == 1:
-            CACHES["session"] = GET_CACHE_CONF(CACHE_SESSION_SERVER[0],CACHE_SESSION_SERVER_OPTIONS)
+            CACHES["session"] = GET_CACHE_CONF("session",CACHE_SESSION_SERVER[0],CACHE_SESSION_SERVER_OPTIONS,key_function=KEY_FUNCTION)
             SESSION_CACHE_ALIAS = "session"
         else:
             for i in range(0,SESSION_CACHES) :
-                CACHES["session{}".format(i)] = GET_CACHE_CONF(CACHE_SESSION_SERVER[i],CACHE_SESSION_SERVER_OPTIONS)
+                name = "session{}".format(i)
+                CACHES[name] = GET_CACHE_CONF(name,CACHE_SESSION_SERVER[i],env("CACHE_SESSION_SERVER{}_OPTIONS".format(i),default=CACHE_SESSION_SERVER_OPTIONS),key_function=KEY_FUNCTION)
 
             SESSION_CACHE_ALIAS = lambda sessionkey:"session{}".format((ord(sessionkey[-1]) + ord(sessionkey[-2])) % SESSION_CACHES)
         SESSION_ENGINE = "authome.sessionstore"
@@ -398,11 +488,12 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
         PREVIOUS_CACHE_SESSION_SERVER = [s.strip() for s in PREVIOUS_CACHE_SESSION_SERVER.split(",") if s and s.strip()]
         PREVIOUS_SESSION_CACHES = len(PREVIOUS_CACHE_SESSION_SERVER)
         if PREVIOUS_SESSION_CACHES == 1:
-            CACHES["previoussession"] = GET_CACHE_CONF(PREVIOUS_CACHE_SESSION_SERVER[0],PREVIOUS_CACHE_SESSION_SERVER_OPTIONS)
+            CACHES["previoussession"] = GET_CACHE_CONF("previoussession",PREVIOUS_CACHE_SESSION_SERVER[0],PREVIOUS_CACHE_SESSION_SERVER_OPTIONS,key_function=PREVIOUS_KEY_FUNCTION)
             PREVIOUS_SESSION_CACHE_ALIAS = "previoussession"
         else:
             for i in range(0,PREVIOUS_SESSION_CACHES) :
-                CACHES["previoussession{}".format(i)] = GET_CACHE_CONF(PREVIOUS_CACHE_SESSION_SERVER[i],PREVIOUS_CACHE_SESSION_SERVER_OPTIONS)
+                name = "previoussession{}".format(i)
+                CACHES[name] = GET_CACHE_CONF(name,PREVIOUS_CACHE_SESSION_SERVER[i],env("PREVIOUS_CACHE_SESSION_SERVER{}_OPTIONS".format(i),default=PREVIOUS_CACHE_SESSION_SERVER_OPTIONS),key_function=PREVIOUS_KEY_FUNCTION)
 
             PREVIOUS_SESSION_CACHE_ALIAS = lambda sessionkey:"previoussession{}".format((ord(sessionkey[-1]) + ord(sessionkey[-2])) % PREVIOUS_SESSION_CACHES)
 
@@ -410,30 +501,19 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
         CACHE_USER_SERVER = [s.strip() for s in CACHE_USER_SERVER.split(",") if s and s.strip()]
         USER_CACHES = len(CACHE_USER_SERVER)
         if USER_CACHES == 1:
-            CACHES["user"] = GET_CACHE_CONF(CACHE_USER_SERVER[0],CACHE_USER_SERVER_OPTIONS)
+            CACHES["user"] = GET_CACHE_CONF("user",CACHE_USER_SERVER[0],CACHE_USER_SERVER_OPTIONS,key_function=KEY_FUNCTION)
             USER_CACHE_ALIAS = "user"
         else:
             for i in range(0,USER_CACHES) :
-                CACHES["user{}".format(i)] = GET_CACHE_CONF(CACHE_USER_SERVER[i],CACHE_USER_SERVER_OPTIONS)
+                name = "user{}".format(i)
+                CACHES[name] = GET_CACHE_CONF(name,CACHE_USER_SERVER[i],env("CACHE_USER_SERVER{}_OPTIONS".format(i),CACHE_USER_SERVER_OPTIONS),key_function=KEY_FUNCTION)
 
             USER_CACHE_ALIAS = lambda userid:"user{}".format(abs(userid) % USER_CACHES)
-        if CACHE_KEY_PREFIX:
-            user_key_pattern = "{}:{{}}".format(CACHE_KEY_PREFIX)
-            usertoken_key_pattern = "{}:T{{}}".format(CACHE_KEY_PREFIX)
-            GET_USER_KEY = lambda userid:user_key_pattern.format(userid)
-            GET_USERTOKEN_KEY = lambda userid:usertoken_key_pattern.format(userid)
-        else:
-            GET_USER_KEY = lambda userid:str(userid)
-            GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
+        GET_USER_KEY = lambda userid:"user:{}".format(userid)
+        GET_USERTOKEN_KEY = lambda userid:"token:{}".format(userid)
     elif CACHE_SERVER:
-        if CACHE_KEY_PREFIX:
-            user_key_pattern = "{}:user:{{}}".format(CACHE_KEY_PREFIX)
-            usertoken_key_pattern = "{}:token:{{}}".format(CACHE_KEY_PREFIX)
-        else:
-            user_key_pattern = "user:{}"
-            usertoken_key_pattern = "token:{}"
-        GET_USER_KEY = lambda userid:user_key_pattern.format(userid)
-        GET_USERTOKEN_KEY = lambda userid:usertoken_key_pattern.format(userid)
+        GET_USER_KEY = lambda userid:"user:{}".format(userid)
+        GET_USERTOKEN_KEY = lambda userid:"token:{}".format(userid)
         USER_CACHE_ALIAS = "default"
         USER_CACHES = 1
 
@@ -466,7 +546,6 @@ TEST_RUNNER=env("TEST_RUNNER","django.test.runner.DiscoverRunner")
 AUTH2_CLUSTERID=env("AUTH2_CLUSTERID",default=None)
 AUTH2_CLUSTER_ENDPOINT=env("AUTH2_CLUSTER_ENDPOINT",default=None)
 DEFAULT_AUTH2_CLUSTER=env("DEFAULT_AUTH2_CLUSTER",default=False)
-STANDALONE_CACHE_KEY_PREFIX=env("STANDALONE_CACHE_KEY_PREFIX") or None
 AUTH2_CLUSTERS_CHECK_INTERVAL=env("AUTH2_CLUSTERS_CHECK_INTERVAL",default=60)
 if AUTH2_CLUSTERS_CHECK_INTERVAL <= 0:
     AUTH2_CLUSTERS_CHECK_INTERVAL = 60
@@ -478,7 +557,7 @@ if AUTH2_CLUSTER_ENABLED:
 
 START_OF_WEEK_MONDAY = env("START_OF_WEEK_MONDAY",default=True)
 
-SESSION_COOKIE_DOMAIN_SEPATATOR=":"
+SESSION_COOKIE_DOMAIN_SEPARATOR=":"
 
 AUTH2_INTERCONNECTION_TIMEOUT = env('AUTH2_INTERCONNECTION_TIMEOUT',default=5000)#timeout for interconnection among auth2 clusters, in milliseconds
 AUTH2_INTERCONNECTION_TIMEOUT = round(AUTH2_INTERCONNECTION_TIMEOUT/1000,3)# convert AUTH2_INTERCONNECTION_TIMEOUT from milliseconds to seconds
@@ -490,4 +569,28 @@ if SECRETKEY_EXPIREDAYS_WARNING > 0:
     SECRETKEY_EXPIREDAYS_WARNING = timedelta(days=SECRETKEY_EXPIREDAYS_WARNING)
 else:
     SECRETKEY_EXPIREDAYS_WARNING = timedelta(days=14)
+
+SSL_VERIFY=env("SSL_VERIFY",default=True)
+
+SOCIAL_AUTH_ADMIN_SEARCH_FIELDS=["uid"]
+
+# Sentry settings
+project = tomllib.load(open(os.path.join(BASE_DIR, "pyproject.toml"), "rb"))
+VERSION_NO = project["tool"]["poetry"]["version"]
+SENTRY_DSN = env("SENTRY_DSN", None)
+SENTRY_ENVIRONMENT = env("SENTRY_ENVIRONMENT", None)
+SENTRY_SAMPLE_RATE = env("SENTRY_SAMPLE_RATE", 1.0)  # Error sampling rate
+SENTRY_TRANSACTION_SAMPLE_RATE = env("SENTRY_TRANSACTION_SAMPLE_RATE", 0.0)  # Transaction sampling
+SENTRY_PROFILES_SAMPLE_RATE = env("SENTRY_PROFILES_SAMPLE_RATE", 0.0)  # Proportion of sampled transactions to profile.
+if SENTRY_DSN and SENTRY_ENVIRONMENT:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        sample_rate=SENTRY_SAMPLE_RATE,
+        traces_sample_rate=SENTRY_TRANSACTION_SAMPLE_RATE,
+        profiles_sample_rate=SENTRY_PROFILES_SAMPLE_RATE,
+        environment=SENTRY_ENVIRONMENT,
+        release=VERSION_NO,
+    )
 

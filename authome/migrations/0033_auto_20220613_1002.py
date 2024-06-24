@@ -88,11 +88,11 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='userauthorization',
             name='paths',
-            field=authome.models._ArrayField(base_field=models.CharField(max_length=512), blank=True, help_text="\nList all possible paths separated by new line character.\nThe following lists all valid options in the checking order\n    1. All path      : *\n    2. Prefix path   : the paths except All path, regex path and exact path. For example /admin\n    3. Regex path    : A regex string starts with '^'. For example ^.*/add$\n    4. Exact path  : Starts with '=', represents a single request path . For example =/register\n", null=True, size=None),
+            field=authome.models.ArrayField(base_field=models.CharField(max_length=512), blank=True, help_text="\nList all possible paths separated by new line character.\nThe following lists all valid options in the checking order\n    1. All path      : *\n    2. Prefix path   : the paths except All path, regex path and exact path. For example /admin\n    3. Regex path    : A regex string starts with '^'. For example ^.*/add$\n    4. Exact path  : Starts with '=', represents a single request path . For example =/register\n", null=True, size=None),
         ),
         migrations.AlterField(
             model_name='usergroupauthorization',
             name='paths',
-            field=authome.models._ArrayField(base_field=models.CharField(max_length=512), blank=True, help_text="\nList all possible paths separated by new line character.\nThe following lists all valid options in the checking order\n    1. All path      : *\n    2. Prefix path   : the paths except All path, regex path and exact path. For example /admin\n    3. Regex path    : A regex string starts with '^'. For example ^.*/add$\n    4. Exact path  : Starts with '=', represents a single request path . For example =/register\n", null=True, size=None),
+            field=authome.models.ArrayField(base_field=models.CharField(max_length=512), blank=True, help_text="\nList all possible paths separated by new line character.\nThe following lists all valid options in the checking order\n    1. All path      : *\n    2. Prefix path   : the paths except All path, regex path and exact path. For example /admin\n    3. Regex path    : A regex string starts with '^'. For example ^.*/add$\n    4. Exact path  : Starts with '=', represents a single request path . For example =/register\n", null=True, size=None),
         ),
     ]

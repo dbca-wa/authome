@@ -9,16 +9,24 @@ from django.conf import settings
 import base64
 
 from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access,UserToken,User,CustomizableUserflow
-from .cache import cache
+from .cache import cache,get_usercache
 from authome import patch
 groupid = 0
 
 class Auth2Client(Client):
-    def get(self,*args,**kwargs):
-        kwargs["HTTP_HOST"] = settings.AUTH2_DOMAIN
-        kwargs["HTTP_SERVER_NAME"] = settings.AUTH2_DOMAIN
+    def get(self,path, authorization=None,domain=None,url=None):
+        headers={"HOST":settings.AUTH2_DOMAIN,"SERVER_NAME":settings.AUTH2_DOMAIN}
+        if authorization:
+            headers["AUTHORIZATION"] = authorization
+        if domain:
+            headers["X_UPSTREAM_SERVER_NAME"] = domain
+        elif path in ("/sso/auth","/sso/auth_basic","/sso/auth_optional"):
+            headers["X_UPSTREAM_SERVER_NAME"] = settings.AUTH2_DOMAIN
 
-        return super().get(*args,**kwargs)
+        if url:
+            headers["X_UPSTREAM_REQUEST_URI"] = url
+
+        return super().get(path,headers=headers)
     
 class BaseAuthTestCase(TestCase):
     client_class = Auth2Client
@@ -105,6 +113,10 @@ class BaseAuthTestCase(TestCase):
                     token = UserToken(user=obj,enabled=True)
                     token.generate_token()
                     token.save()
+                    usercache = get_usercache(token.user_id)
+                    if usercache and usercache.get(settings.GET_USERTOKEN_KEY(token.user_id)):
+                        #Only cache the user token only if it is already cached
+                        usercache.set(settings.GET_USERTOKEN_KEY(token.user_id),token,settings.STAFF_CACHE_TIMEOUT if token.user.is_staff else settings.USER_CACHE_TIMEOUT)
         self.test_users = users
 
         if self.test_usergroupauthorization:

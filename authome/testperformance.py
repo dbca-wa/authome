@@ -17,15 +17,13 @@ from django.conf import settings
 from . import urls
 
 from .utils import env
+from . import utils
 from . import models
 from authome import performance
 from . import testutils
 
 
 class PerformanceTestCase(testutils.StartServerMixin,TestCase):
-    headers = {}
-    cluster_headers = {}
-
     TEST_USER_NUMBER = env("TEST_USER_NUMBER",default=100)
     TEST_USER_BASEID = int(env("TEST_USER_BASEID",default=1))
     TEST_USER_DOMAIN = env("TEST_USER_DOMAIN",default="dbca.wa.gov.au")
@@ -100,13 +98,22 @@ class PerformanceTestCase(testutils.StartServerMixin,TestCase):
 
     @classmethod
     def setUpClass(cls):
+        super(PerformanceTestCase,cls).setUpClass()
+        url_data = utils.parse_url(cls.TESTED_SERVER)
+        if url_data["domain"] in ("auth2.dbca.wa.gov.au","auth2-uat.dbca.wa.gov.au","auth2-dev.dbca.wa.gov.au"):
+            cls.request_headers = {}
+        else:
+            cls.request_headers = cls.cluster_headers
+        
+        cls.disable_messages()
+
         print("Prepare {} test users".format(cls.TEST_USER_NUMBER))
         testemails = [ "testuser_{:0>4}@{}".format(i,cls.TEST_USER_DOMAIN) for i in range(cls.TEST_USER_BASEID,cls.TEST_USER_BASEID + cls.TEST_USER_NUMBER)]
 
         cls.testusers = []
     
         for testemail in testemails:
-            res = requests.get(cls.get_login_user_url(testemail),headers=cls.headers)
+            res = requests.get(cls.get_login_user_url(testemail),headers=cls.request_headers,verify=settings.SSL_VERIFY)
             res.raise_for_status()
             userprofile = res.json()
 
@@ -117,9 +124,10 @@ class PerformanceTestCase(testutils.StartServerMixin,TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        super(PerformanceTestCase,cls).tearDownClass()
         print("logout all test user sessions")
         for testuser in cls.testusers:
-            res = requests.get(cls.get_logout_url(),headers=cls.headers,cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},allow_redirects=False)
+            res = requests.get(cls.get_logout_url(),headers=cls.request_headers,cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},allow_redirects=False,verify=settings.SSL_VERIFY)
             res.raise_for_status()
             pass
 
@@ -247,7 +255,7 @@ class PerformanceTestCase(testutils.StartServerMixin,TestCase):
                 starttime = timezone.localtime()
                 try:
                     #print("Begin to access url({1}) with session({2}) for user({0})".format(testuser.email,cls.get_auth_url(),testuser.session.session_key))
-                    res = requests.get(cls.get_auth_url(),cookies={settings.SESSION_COOKIE_NAME:testuser.session_key})
+                    res = requests.get(cls.get_auth_url(),cookies={settings.SESSION_COOKIE_NAME:testuser.session_key},headers=cls.request_headers,verify=settings.SSL_VERIFY)
                     res = res.json()
                     endtime = timezone.localtime()
                     if res["status_code"] != 200:
@@ -482,7 +490,7 @@ class PerformanceTestCase(testutils.StartServerMixin,TestCase):
         if self.TEST_USER_NUMBER == 1:
             test_starttime = now
         else:
-            test_starttime = now + timedelta(seconds = 10)
+            test_starttime = now + timedelta(seconds = 20 - now.second % 10)
         test_endtime = test_starttime + timedelta(seconds = self.TEST_TIME)
         if cls.TEST_REQUESTS:
             print("Performance test will launch {} requests".format(cls.TEST_REQUESTS))

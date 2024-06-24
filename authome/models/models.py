@@ -1,5 +1,6 @@
 import re
 import logging
+import traceback
 import random
 from datetime import timedelta
 
@@ -7,7 +8,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.db import models, transaction
-from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.fields.array import ArrayField as DjangoArrayField
 from django.db.models.signals import pre_delete, pre_save, post_save, post_delete
 from django.dispatch import receiver
 from django.contrib.auth.models import AbstractUser,UserManager
@@ -19,6 +20,7 @@ import hashlib
 from ..cache import cache,get_defaultcache,get_usercache
 from .. import signals
 from .. import utils
+from .debugmodels import DebugLog
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,8 @@ The following lists all valid options in the checking order
     1. All Emails    : *
     2. Domain Email  : Starts with '@', followed by email domain. For example@dbca.wa.gov.au
     3. Email Pattern : A email pattern,'*' represents any strings. For example test_*@dbca.wa.gov.au
-    4. User Email    : A single user email, For example test_user01@dbca.wa.gov.au
+    4. Regex Email   : A regex email, starts with '^' and ends with '$'
+    5. User Email    : A single user email, For example test_user01@dbca.wa.gov.au
 """
 
 help_text_domain = """
@@ -47,7 +50,7 @@ A domain or domain pattern
 The following lists all valid options in the checking order
     1. Single Domain  : Represent a single domain. For example oim.dbca.wa.gov.au.
     2. Domain Pattern : A domain pattern, '*" represents any strings. For example  pbs*dbca.wa.gov.au
-    3. Domain Regex   : A regex string starts with '^'. For example  ^pbs[^\.]*\.dbca\.wa\.gov\.au$
+    3. Domain Regex   : A regex string starts with '^'. For example  ^pbs[^\\.]*\\.dbca\\.wa\\.gov\\.au$
     4. Suffix Domain  : A string Starts with '.' followed by a domain. For example .dbca.wa.gov.au
     5. All Domain     : '*'
 """
@@ -63,7 +66,7 @@ The following lists all valid options in the checking order
 
 sortkey_c = models.Func('sortkey',function='C',template='(%(expressions)s) COLLATE "%(function)s"')
 
-class _ArrayField(ArrayField):
+class ArrayField(DjangoArrayField):
     """
     Customizable ArrayField to provide feature 'clean'
     """
@@ -124,9 +127,9 @@ class RequestDomain(object):
     4. Regex domain
 
     """
-    all_domain_re = re.compile("^\*+$")
-    sufix_re = re.compile("^\**\.(?P<sufix>([a-zA-Z0-9_\-]+)(\.[a-zA-Z0-9_\-]+)*)$")
-    exact_re = re.compile("^([a-zA-Z0-9_\-]+)(\.[a-zA-Z0-9_\-]+)+$")
+    all_domain_re = re.compile("^\\*+$")
+    sufix_re = re.compile("^\\**\\.(?P<sufix>([a-zA-Z0-9_\\-]+)(\\.[a-zA-Z0-9_\\-]+)*)$")
+    exact_re = re.compile("^([a-zA-Z0-9_\\-]+)(\\.[a-zA-Z0-9_\\-]+)+$")
     #two digit values(10 - 99), high value has low priority
     base_sort_key = 99
 
@@ -237,7 +240,7 @@ class RegexRequestDomain(RequestDomain):
             if domain.startswith("^") :
                 self._re = re.compile(domain)
             else:
-                self._re = re.compile("^{}$".format(domain.replace(".","\.").replace("*","[a-zA-Z0-9\._\-]*")))
+                self._re = re.compile("^{}$".format(domain.replace(".","\\.").replace("*","[a-zA-Z0-9\\._\\-]*")))
         except Exception as ex:
             raise ValidationError("The regex domain config({}) is invalid.{}".format(domain,str(ex)))
 
@@ -694,7 +697,7 @@ class UserEmail(object):
         self.config = config
         self.sort_key = "{}:{}".format(self.base_sort_key,config)
 
-    all_email_re = re.compile("^\*+(@\*+)?$")
+    all_email_re = re.compile("^\\*+(@\\*+)?$")
     @classmethod
     def get_instance(cls,email):
         email = email.strip() if email else None
@@ -710,8 +713,10 @@ class UserEmail(object):
                 raise ValidationError("The domain of the email config({}) can't contain '*'".format(email))
             else:
                 return DomainEmail(email)
-        elif "*" in email:
+        elif email[0] == '^' and email[-1] == '$':
             return RegexUserEmail(email)
+        elif "*" in email:
+            return UserEmailPattern(email)
         else:
             return ExactUserEmail(email)
 
@@ -746,6 +751,8 @@ class ExactUserEmail(UserEmail):
         return models.Q(email=self.config)
 
     def contain(self,useremail):
+        if isinstance(useremail,RegexUserEmail):
+            return None
         return self.config == useremail.config
 
 class DomainEmail(UserEmail):
@@ -765,15 +772,37 @@ class DomainEmail(UserEmail):
             return self.match(useremail.config)
         elif isinstance(useremail,DomainEmail):
             return self.config == useremail.config
+        elif isinstance(useremail,RegexUserEmail):
+            return None
         else:
             return useremail.config.endswith(self.config)
 
 class RegexUserEmail(UserEmail):
+    base_sort_key = 5
+    def __init__(self,email):
+        super().__init__(email)
+        try:
+            self._qs_re = r"{}".format(email)
+            self._re = re.compile(self._qs_re)
+        except Exception as ex:
+            raise ValidationError("The regex email config({}) is invalid.{}".format(email,str(ex)))
+
+    def match(self,email):
+        return True if self._re.search(email) else False
+
+    @property
+    def qs_filter(self):
+        return models.Q(email__regex=self._qs_re)
+
+    def contain(self,useremail):
+        return None
+
+class UserEmailPattern(UserEmail):
     base_sort_key = 6
     def __init__(self,email):
         super().__init__(email)
         try:
-            self._qs_re = r"^{}$".format(email.replace(".","\.").replace('*','[a-zA-Z0-9\._\-\+]*'))
+            self._qs_re = r"^{}$".format(email.replace(".","\\.").replace('*','[a-zA-Z0-9\\._\\-\\+]*'))
             self._re = re.compile(self._qs_re)
         except Exception as ex:
             raise ValidationError("The regex email config({}) is invalid.{}".format(email,str(ex)))
@@ -790,6 +819,8 @@ class RegexUserEmail(UserEmail):
             return False
         elif isinstance(useremail,ExactUserEmail):
             return self.match(useremail.config)
+        elif isinstance(useremail,RegexUserEmail):
+            return None
         else:
             if isinstance(useremail,DomainEmail):
                 useremail = UserEmail.get_instance("*{}".format(useremail.config))
@@ -835,8 +866,8 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     name = models.CharField(max_length=32,unique=True,null=False)
     groupid = models.SlugField(max_length=32,null=False,blank=True)
     parent_group = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
-    users = _ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
-    excluded_users = _ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
+    users = ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
+    excluded_users = ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
     identity_provider = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,null=True,blank=True,limit_choices_to=~models.Q(idp__exact=IdentityProvider.AUTH_EMAIL_VERIFY[0]))
     session_timeout = models.PositiveSmallIntegerField(null=True,editable=True,blank=True,help_text="Session timeout in seconds, 0 means never timeout")
     modified = models.DateTimeField(editable=False,db_index=True)
@@ -938,7 +969,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
         for excluded_useremail in self.excluded_useremails:
             contained = False
             for useremail in self.useremails:
-                if useremail.contain(excluded_useremail):
+                if useremail.contain(excluded_useremail) is not False:
                     contained = True
                     break
             if not contained:
@@ -949,7 +980,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
             for useremail in self.useremails:
                 contained = False
                 for parent_useremail in self.parent_group.useremails:
-                    if parent_useremail.contain(useremail):
+                    if parent_useremail.contain(useremail) is not False:
                         contained = True
                         break
                 if not contained:
@@ -958,7 +989,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
             for parent_excluded_useremail in self.parent_group.excluded_useremails:
                 contained = False
                 for useremail in self.useremails:
-                    if useremail.contain(parent_excluded_useremail):
+                    if useremail.contain(parent_excluded_useremail) :
                         contained = True
                         break
                 if not contained:
@@ -966,7 +997,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
                 contained = False
                 for excluded_useremail in self.excluded_useremails:
-                    if excluded_useremail.contain(parent_excluded_useremail):
+                    if excluded_useremail.contain(parent_excluded_useremail) is not False:
                         contained = True
                         break
                 if not contained:
@@ -979,7 +1010,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                 for child_useremail in child_group.useremails:
                     contained = False
                     for useremail in self.useremails:
-                        if useremail.contain(child_useremail):
+                        if useremail.contain(child_useremail) is not False:
                             contained = True
                             break
                     if not contained:
@@ -997,48 +1028,11 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
                     contained = False
                     for child_excluded_useremail in child_group.excluded_useremails:
-                        if child_excluded_useremail.contain(excluded_useremail):
+                        if child_excluded_useremail.contain(excluded_useremail) is not False:
                             contained = True
                             break
                     if not contained:
                         raise ValidationError("The excluded email pattern({}) in the current group({}) is contained by the child group({})".format(excluded_useremail.config,self,child_group))
-
-        #allow user in multible brother groups
-        """
-        #check between current group and its brother groups
-        if self.parent_group:
-            brother_groups = UserGroup.objects.filter(parent_group=self.parent_group)
-            if self.id:
-                brother_groups = brother_groups.exclude(id=self.id)
-            for brother_group in brother_groups:
-                for brother_useremail in brother_group.useremails:
-                    contained_type = None
-                    checked_useremail = None
-                    for useremail in self.useremails:
-                        if useremail.contain(brother_useremail) :
-                            contained_type = "contain_brother"
-                            for excluded_useremail in self.excluded_useremails:
-                                if excluded_useremail.contain(brother_useremail):
-                                    contained_type = None
-                                    break
-                            if contained_type:
-                                checked_useremail = useremail
-                                break
-                        elif brother_useremail.contain(useremail):
-                            contained_type = "contained_by_brother"
-                            for excluded_useremail in brother_group.excluded_useremails:
-                                if excluded_useremail.contain(useremail):
-                                    contained_type = None
-                                    break
-                            if contained_type:
-                                checked_useremail = useremail
-                                break
-                    if contained_type == "contain_brother":
-                        raise ValidationError("The email pattern({1}) in the group({0}) containes the email pattern({3}) in the brother group({2})".format(self,checked_useremail.config,brother_group,brother_useremail.config))
-                    elif contained_type == "contained_by_brother":
-                        raise ValidationError("The email pattern({3}) in the brother group({2}) containes the email pattern({1}) in the group({0})".format(self,checked_useremail.config,brother_group,brother_useremail.config))
-        """
-
 
     @property
     def is_public_group(self):
@@ -1152,21 +1146,36 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
         Return True if email belongs to this group; otherwise return False
         """
         matched = False
-        for useremail in self.useremails:
-            if useremail.match(email):
-                #email is included in the useremails
-                matched = True
-                break
+        check_useremail_first = (len(self.useremails) <= len(self.excluded_useremails)) if self.excluded_useremails else True
+        if check_useremail_first:
+            matched = False
+            for useremail in self.useremails:
+                if useremail.match(email):
+                    #email is included in the useremails
+                    matched = True
+                    break
+    
+            if not matched:
+                return False
 
-        if matched:
             if self.excluded_useremails:
                 for useremail in self.excluded_useremails:
                     if useremail.match(email):
                         #email is excluded in the excluded_useremails
-                        matched = False
-                        break
-        return matched
+                        return False
+            return True
+        else:
+            for useremail in self.excluded_useremails:
+                if useremail.match(email):
+                    #email is excluded in the excluded_useremails
+                    return False
+            
+            for useremail in self.useremails:
+                if useremail.match(email):
+                    #email is included in the useremails
+                    return True
 
+            return False
 
     @classmethod
     def find_groups(cls,email,cacheable=True):
@@ -1238,7 +1247,7 @@ class RequestPath(object):
         self.config = config
         self.sort_key = "{}:{}".format(self.base_sort_key,config)
 
-    all_path_re = re.compile("^\*+$")
+    all_path_re = re.compile("^\\*+$")
     @classmethod
     def get_instance(cls,config):
         config = config.strip() if config else None
@@ -1330,8 +1339,8 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
     _editable_columns = ("domain","paths","excluded_paths")
 
     domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
-    paths = _ArrayField(models.CharField(max_length=512,null=False),null=True,blank=True,help_text=help_text_paths)
-    excluded_paths = _ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
+    paths = ArrayField(models.CharField(max_length=512,null=False),null=True,blank=True,help_text=help_text_paths)
+    excluded_paths = ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
     sortkey = models.CharField(max_length=128,editable=False)
     modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = models.DateTimeField(auto_now_add=timezone.now)
@@ -1894,7 +1903,10 @@ if defaultcache:
         key = None
         @classmethod
         def change(cls,timeout=None):
-            defaultcache.set(cls.key,timezone.localtime(),timeout=timeout)
+            try:
+                defaultcache.set(cls.key,timezone.localtime(),timeout=timeout)
+            except Exception as ex:
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to set the latest change time of the model '{}' to cache.{}".format(cls.__name__,traceback.format_exc(ex)))
 
         @classmethod
         def get_cachetime(cls):
@@ -1910,61 +1922,71 @@ if defaultcache:
 
         @classmethod
         def status(cls):
-            last_refreshed = cls.get_cachetime()
-            last_synced = defaultcache.get(cls.key)
-            if not last_synced:
-                if last_refreshed:
+            try:
+                last_refreshed = cls.get_cachetime()
+                last_synced = defaultcache.get(cls.key)
+                if not last_synced:
+                    if last_refreshed:
+                        return (UP_TO_DATE,last_refreshed)
+                    else:
+                        return (OUTDATED,last_refreshed)
+
+
+                count =  cls.model.objects.all().count()
+                if count != cls.get_cachesize():
+                    #cache is outdated
+                    if last_synced > last_refreshed:
+                        return (OUTDATED,last_refreshed)
+                    else:
+                        return (OUT_OF_SYNC,last_refreshed)
+    
+                if count == 0:
                     return (UP_TO_DATE,last_refreshed)
+    
+                o = cls.model.objects.all().order_by("-modified").first()
+                if o:
+                    if last_refreshed and last_refreshed >= o.modified:
+                        return (UP_TO_DATE,last_refreshed)
+                    elif o.modified > last_synced:
+                        return (OUT_OF_SYNC,last_refreshed)
                 else:
-                    return (OUTDATED,last_refreshed)
-
-
-            count =  cls.model.objects.all().count()
-            if count != cls.get_cachesize():
-                #cache is outdated
-                if last_synced > last_refreshed:
-                    return (OUTDATED,last_refreshed)
-                else:
-                    return (OUT_OF_SYNC,last_refreshed)
-
-            if count == 0:
-                return (UP_TO_DATE,last_refreshed)
-
-            o = cls.model.objects.all().order_by("-modified").first()
-            if o:
-                if last_refreshed and last_refreshed >= o.modified:
                     return (UP_TO_DATE,last_refreshed)
-                elif o.modified > last_synced:
-                    return (OUT_OF_SYNC,last_refreshed)
-            else:
-                return (UP_TO_DATE,last_refreshed)
-
-            if not last_refreshed:
-                return (OUTDATED,last_refreshed)
-            elif last_synced > last_refreshed:
-                return (OUTDATED,last_refreshed)
-            else:
+    
+                if not last_refreshed:
+                    return (OUTDATED,last_refreshed)
+                elif last_synced > last_refreshed:
+                    return (OUTDATED,last_refreshed)
+                else:
+                    return (UP_TO_DATE,last_refreshed)
+            except:
+                #Failed, assume it is up to date
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to get the status of the model '{}' from cache.{}".format(cls.__name__,traceback.format_exc()))
                 return (UP_TO_DATE,last_refreshed)
 
         @classmethod
         def is_changed(cls):
-            last_modified = defaultcache.get(cls.key)
-            if not last_modified:
-                #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
-                return False
-            elif not cls.get_cachetime():
-                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
-                return True
-            elif last_modified > cls.get_cachetime():
-                logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
-                return True
-            else:
-                #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+            try:
+                last_modified = defaultcache.get(cls.key)
+                if not last_modified:
+                    #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+                    return False
+                elif not cls.get_cachetime():
+                    logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
+                    return True
+                elif last_modified > cls.get_cachetime():
+                    logger.debug("{} was changed, need to refresh cache data".format(cls.__name__[:-6]))
+                    return True
+                else:
+                    #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
+                    return False
+            except :
+                #Failed, assume it is not changed
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to check whether the model '{}' is changed or not.{}".format(cls.__name__,traceback.format_exc()))
                 return False
 
 
     class IdentityProviderChange(ModelChange):
-        key = settings.GET_CACHE_KEY("idp_last_modified")
+        key = "idp_last_modified"
         model = IdentityProvider
 
         @classmethod
@@ -1994,7 +2016,7 @@ if defaultcache:
             IdentityProviderChange.change()
 
     class CustomizableUserflowChange(ModelChange):
-        key = settings.GET_CACHE_KEY("customizableuserflow_last_modified")
+        key = "customizableuserflow_last_modified"
         model = CustomizableUserflow
 
         @classmethod
@@ -2024,7 +2046,7 @@ if defaultcache:
             CustomizableUserflowChange.change()
 
     class UserGroupChange(ModelChange):
-        key = settings.GET_CACHE_KEY("usergroup_last_modified")
+        key = "usergroup_last_modified"
         model = UserGroup
 
         @classmethod
@@ -2056,7 +2078,7 @@ if defaultcache:
             UserGroupChange.change()
 
     class UserAuthorizationChange(ModelChange):
-        key = settings.GET_CACHE_KEY("userauthorization_last_modified")
+        key = "userauthorization_last_modified"
         model = UserAuthorization
 
         @classmethod
@@ -2088,7 +2110,7 @@ if defaultcache:
             UserAuthorizationChange.change()
 
     class UserGroupAuthorizationChange(ModelChange):
-        key = settings.GET_CACHE_KEY("usergroupauthorization_last_modified")
+        key = "usergroupauthorization_last_modified"
         model = UserGroupAuthorization
 
         @classmethod
