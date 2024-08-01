@@ -28,6 +28,7 @@ class RequestHeaderTestCase(testutils.StartServerMixin,TestCase):
     noauth_url = "/test/echo"
     auth_url = "/test/echo/auth"
     auth_basic_url = "/test/echo/auth_basic"
+    auth_basic_optional_url = "/test/echo/auth_basic_optional"
     auth_optional_url = "/test/echo/auth_optional"
 
     @classmethod
@@ -153,6 +154,24 @@ class RequestHeaderTestCase(testutils.StartServerMixin,TestCase):
     def test_auth_basic(self):
         cls = self.__class__
         res = requests.get(cls.get_absolute_url(cls.auth_basic_url),headers=cls.injected_headers,auth=requests.auth.HTTPBasicAuth(cls.testuser.email, cls.testusertoken.token),verify=settings.SSL_VERIFY).json()
+        res_headers = res.get("headers",{})
+        sso_headers = []
+        other_headers = []
+        for k,v in cls.injected_headers.items():
+            if k.lower() in cls.headers:
+                continue
+            if k.lower() in cls.sso_headers:
+                if res_headers.get(k.lower()) != cls.user_sso_headers[k]:
+                    sso_headers.append("{}={}(expected {})".format(k,res_headers.get(k.lower()),cls.user_sso_headers[k]))
+            elif v != res_headers.get(k.lower()):
+                other_headers.append("{}={}(expected {})".format(k,res_headers.get(k.lower()),v))
+
+        self.assertEqual(len(sso_headers),0,msg="SSO headers({}) were not properly set".format(" , ".join(sso_headers)))
+        self.assertEqual(len(other_headers),0,msg="Other headers({}) were changed".format(" , ".join(other_headers)))
+
+    def test_auth_basic_optional(self):
+        cls = self.__class__
+        res = requests.get(cls.get_absolute_url(cls.auth_basic_optional_url),headers=cls.injected_headers,auth=requests.auth.HTTPBasicAuth(cls.testuser.email, cls.testusertoken.token),verify=settings.SSL_VERIFY).json()
         res_headers = res.get("headers",{})
         sso_headers = []
         other_headers = []

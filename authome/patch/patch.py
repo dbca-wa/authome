@@ -214,7 +214,7 @@ exception.response_for_exception = get_response_for_exception()
 def get_host():
     original_get_host = HttpRequest.get_host
     def _init_get_host(self):
-        if self.path in ("/sso/auth","/sso/auth_basic","/sso/auth_optional"):
+        if self.path in ("/sso/auth","/sso/auth_basic","/sso/auth_optional","/sso/auth_basic_optional"):
             host = self.headers.get("x-upstream-server-name")
             if host:
                 logger.debug("Customize the request method 'get_host' to get the request from request header 'x-upstream-server-name'; if not found, then use the default logic.")

@@ -472,7 +472,14 @@ def is_usertoken_valid(user,token):
     return usertoken and usertoken.is_valid(token)
 
 @csrf_exempt
+def auth_basic_optional(request):
+    return _auth_basic(request,not_authentiated_response_factory=auth_not_required_response_factory)
+
+@csrf_exempt
 def auth_basic(request):
+    return _auth_basic(request,)
+
+def _auth_basic(request,not_authentiated_response_factory=basic_auth_required_response_factory):
     """
     view method for path '/sso/auth_basic'
     First authenticate with useremail and user token; if failed,fall back to session authentication
@@ -488,7 +495,7 @@ def auth_basic(request):
             return res
         else:
             #not authenticated, return basic auth required response
-            return basic_auth_required_response_factory(request)
+            return not_authentiated_response_factory(request)
 
     #get the user name and user toke by parsing the basic auth data
     try:
@@ -502,7 +509,7 @@ def auth_basic(request):
             return res
         else:
             #not authenticated, return basic auth required response
-            return basic_auth_required_response_factory(request)
+            return not_authentiated_response_factory(request)
 
     #try to get the reponse from cache with useremail and token
     auth_basic_key = cache.get_basic_auth_key(useremail,token)
@@ -522,7 +529,7 @@ def auth_basic(request):
                 if not user.is_active :
                     logger.debug("The user({}) is inactive.".format(useremail))
                     cache.delete_basic_auth(auth_basic_key)
-                    return basic_auth_required_response_factory(request)
+                    return not_authentiated_response_factory(request)
                 elif not is_usertoken_valid(user,token):
                     #token is invalid, remove the cached response
                     cache.delete_basic_auth(auth_basic_key)
@@ -535,7 +542,7 @@ def auth_basic(request):
                     else:
                         #not authenticated, return basic auth required reponse
                         logger.debug("Failed to authenticate the user({}) with token".format(useremail))
-                        return basic_auth_required_response_factory(request)
+                        return not_authentiated_response_factory(request)
 
             request.session.modified = False
             #check authorization
@@ -581,7 +588,7 @@ def auth_basic(request):
                 return response
         elif not user.is_active :
             logger.debug("The user({}) is inactive.".format(useremail))
-            return basic_auth_required_response_factory(request)
+            return not_authentiated_response_factory(request)
         else:
             #user token is invalid; fallback to user session authentication
             res = _auth(request)
@@ -592,11 +599,11 @@ def auth_basic(request):
             else:
                 #Not authenticated, return basic auth required response
                 logger.debug("Failed to authenticate the user({}) with token".format(useremail))
-                return basic_auth_required_response_factory(request)
+                return not_authentiated_response_factory(request)
 
     except Exception as e:
         #return basi auth required response if any exception occured.
-        return basic_auth_required_response_factory(request)
+        return not_authentiated_response_factory(request)
 
 email_re = re.compile("^[a-zA-Z0-9\\.!#\\$\\%\\&’'\\*\\+\\/\\=\\?\\^_`\\{\\|\\}\\~\\-]+@[a-zA-Z0-9\\-]+(\\.[a-zA-Z0-9\\-]+)*$")
 VALID_CODE_CHARS = string.digits if settings.PASSCODE_DIGITAL else (string.ascii_uppercase + string.digits)

@@ -109,6 +109,7 @@ def _get_samesite(v):
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_HTTPONLY = env('SESSION_COOKIE_HTTPONLY', True)
 SESSION_COOKIE_SECURE = env('SESSION_COOKIE_SECURE', True)
+CSRF_COOKIE_NAME = "csrftoken_auth2"
 CSRF_COOKIE_SECURE = env('CSRF_COOKIE_SECURE', True)
 CSRF_COOKIE_HTTPONLY = env('CSRF_COOKIE_HTTPONLY', True)
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS",default=["https://{}".format("*.au" if h == '*' else ("*{}".format(h) if h.startswith('.') else h)) for h in ALLOWED_HOSTS])

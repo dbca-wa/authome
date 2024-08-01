@@ -20,7 +20,7 @@ class Auth2Client(Client):
             headers["AUTHORIZATION"] = authorization
         if domain:
             headers["X_UPSTREAM_SERVER_NAME"] = domain
-        elif path in ("/sso/auth","/sso/auth_basic","/sso/auth_optional"):
+        elif path in ("/sso/auth","/sso/auth_basic","/sso/auth_optional","/sso/auth_basic_optional"):
             headers["X_UPSTREAM_SERVER_NAME"] = settings.AUTH2_DOMAIN
 
         if url:
@@ -32,7 +32,9 @@ class BaseAuthTestCase(TestCase):
     client_class = Auth2Client
     home_url = reverse('home')
     auth_url = reverse('auth')
+    auth_optional_url = reverse('auth_optional')
     auth_basic_url = reverse('auth_basic')
+    auth_basic_optional_url = reverse('auth_basic_optional')
     test_usergroups = None
     test_usergroupauthorization = None
     test_userauthorization = None

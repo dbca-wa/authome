@@ -54,8 +54,8 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
 
     @classmethod
     def get_test_url(cls,test_domain):
-        return "https://{}{}".format(test_domain,random.choice(["/sso/auth","/sso/auth_optional","/sso/auth_basic"]))
-        #return "https://{}{}".format(test_domain,random.choice(["/sso/auth"]))
+        return "https://{}{}".format(test_domain,random.choice(["/sso/auth","/sso/auth_optional","/sso/auth_basic","/sso/auth_basic_optional"]))
+        #return "https://{}{}".format(test_domain,random.choice(["/sso/auth_basic_optional"]))
 
     @classmethod
     def get_test_domain(cls):

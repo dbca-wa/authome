@@ -41,6 +41,33 @@ class AuthTestCase(BaseAuthTestCase):
             self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
             self.assertEqual(res.get('X-auth-cache-hit'),'success',msg="Already authenticated, should hit the cache")
  
+    def test_auth_optional(self):
+        self.test_users = [
+            ("staff_1@gunfire.com","staff_1@gunfire.com")
+        ]
+        self.test_usergroups = [
+            ("all_user",["*@*.*"],None,None)
+        ]
+        self.test_usergroupauthorization = [
+            ("all_user","*","*",None)
+        ]
+        self.populate_testdata()
+
+        #test sso_auth without authentication  
+        res = self.client.get(self.auth_optional_url)
+        self.assertEqual(res.status_code,204,msg="Should return 204 response for unauthenticated request")
+        
+        #test sso_auth after authentication   
+        self.client.force_login(self.test_users["staff_1@gunfire.com"])
+        res = self.client.get(self.auth_optional_url)
+        self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
+        self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
+
+        for i in range(0,5):
+            res = self.client.get(self.auth_optional_url,domain="gunfire.com",url="/about")
+            self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
+            self.assertEqual(res.get('X-auth-cache-hit'),'success',msg="Already authenticated, should hit the cache")
+ 
     def test_auth_basic(self):
         self.test_users = [
             ("staff_1@gunfire.com","staff_1@gunfire.com",True)
@@ -74,6 +101,40 @@ class AuthTestCase(BaseAuthTestCase):
 
             res = self.client.get(self.auth_basic_url,authorization=self.basic_auth(username,"faketoken"))
             self.assertEqual(res.status_code,401,msg="Should return 401 response for unauthenticated request")
+
+    def test_auth_basic_optional(self):
+        self.test_users = [
+            ("staff_1@gunfire.com","staff_1@gunfire.com",True)
+        ]
+        self.test_usergroups = [
+            ("all_user",["*@*.*"],None,None)
+        ]
+        self.test_usergroupauthorization = [
+            ("all_user","*","*",None)
+        ]
+        self.populate_testdata()
+
+        #test sso_auth without authentication   
+        res = self.client.get(self.auth_basic_optional_url)
+        self.assertEqual(res.status_code,204,msg="Should return 204 response for unauthenticated request")
+        
+        res = self.client.get(self.auth_url)
+        self.assertEqual(res.status_code,401,msg="Should return 401 response for unauthenticated request")
+
+        #test sso token auth
+        user=self.test_users["staff_1@gunfire.com"]
+        for username,token in ((user.username,user.token.token),(user.email,user.token.token)):
+            res = self.client.get(self.auth_basic_optional_url,authorization=self.basic_auth(username,token))
+            self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
+            self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
+    
+            for i in range(0,5):
+                res = self.client.get(self.auth_basic_optional_url,authorization=self.basic_auth(username,token))
+                self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
+                self.assertEqual(res.get('X-auth-cache-hit'),'success',msg="Already authenticated, should hit the cache")
+
+            res = self.client.get(self.auth_basic_optional_url,authorization=self.basic_auth(username,"faketoken"))
+            self.assertEqual(res.status_code,204,msg="Should return 204 response for unauthenticated request")
 
     def test_auth_basic_over_auth(self):
         self.test_users = [
