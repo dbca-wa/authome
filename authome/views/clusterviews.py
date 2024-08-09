@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 defaultcache = get_defaultcache()
 
-#pre creaed authentication not required response used by auth_optional,status = 204
+#pre created authentication not required response used by auth_optional and auth_basic_optional,status = 204
 NO_CHANGE_RESPONSE = HttpResponse(content="Already up to date",status=208)
 
 def config_changed(request,modelname):

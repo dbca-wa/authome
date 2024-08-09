@@ -452,7 +452,7 @@ def _del_no_requests_data(d):
         if isinstance(v,dict):
             _del_no_requests_data(v)
 
-sso_requests_keys = {"auth","auth_basic","auth_optional"}
+sso_requests_keys = {"auth","auth_basic","auth_optional","auth_basic_optional"}
 def _save_trafficdata(batchid):
     client = defaultcache.redis_client
     trafficdata_key = cache.traffic_data_key
