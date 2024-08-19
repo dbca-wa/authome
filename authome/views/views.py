@@ -720,7 +720,7 @@ def auth_local(request):
                     code = get_expirable_session_data(request.session,codekey,None,now)
                     if code and code.startswith(codeid + "="):
                         #codeid is matched, reuse the existing code
-                        context["messages"] = [("info","Verification code has already been sent to {}; Please entery the verification code.".format(email))]
+                        context["messages"] = [("info",mark_safe("Verification code has already been sent to {}<br>Please entery the verification code.".format(email)))]
                         logger.debug("Verification code has already been sent to {}, no need to send again".format(context["email"]))
                     else:
                         #code is outdated, generate a new one
@@ -760,7 +760,7 @@ def auth_local(request):
                 )
                 #send email
                 emails.send_email(userflow.verifyemail_from,context["email"],userflow.verifyemail_subject,verifyemail_body)
-                context["messages"] = [("info","Verification code has been sent to {}; Please enter the verification code.".format(email))]
+                context["messages"] = [("info",mark_safe("Verification code has been sent to {}<br>Please enter the verification code.".format(email)))]
                 logger.debug("Verification code has been sent to {}.".format(context["email"]))
             context["codeid"] = codeid
             return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
