@@ -1696,6 +1696,7 @@ class NormalUserManager(UserManager):
 class User(AbstractUser):
     last_idp = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,editable=False,null=True)
     systemuser = models.BooleanField(default=False,editable=False)
+    comments = models.TextField(null=True,editable=True,blank=True)
     modified = models.DateTimeField(auto_now=timezone.now)
 
     class Meta(AbstractUser.Meta):

@@ -12,7 +12,7 @@ def get_help_text(model_class,field):
 class UserCreateForm(djangoforms.ModelForm):
     class Meta:
         model = User
-        fields = ("username","email","first_name","last_name","is_active","is_staff","is_superuser")
+        fields = ("username","email","first_name","last_name","is_active")
 
 class UserEditForm(UserCreateForm):
     pass
@@ -25,6 +25,11 @@ class SystemUserCreateForm(djangoforms.ModelForm):
     class Meta:
         model = User
         fields = ("username","email")
+
+class SystemUserEditForm(djangoforms.ModelForm):
+    class Meta:
+        model = User
+        fields = ("username","email","comments","is_active")
 
 class UserGroupForm(djangoforms.ModelForm):
     users = SimpleArrayField(djangoforms.CharField(required=False),delimiter="\n",widget=djangoforms.Textarea(attrs={"style":"width:80%","rows":10}),help_text=get_help_text(UserGroup,"users"))
