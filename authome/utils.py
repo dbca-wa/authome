@@ -479,8 +479,9 @@ def add_to_map(m,k,v):
         return m
 
 def ping_database(dbalias):
-    error = None
+    status = {}
     healthy = True
+    starttime = timezone.localtime()
     with connections[dbalias].cursor() as cursor:
         try:
             cursor.execute("select 1")
@@ -491,14 +492,18 @@ def ping_database(dbalias):
         except Exception as ex:
             healthy = False
             error = str(ex)
-    return (healthy,error)
+    if healthy:
+        return (True,{"ping":True,"pingtime":round((timezone.localtime() - starttime).total_seconds(),6)})
+    else:
+        return (False,{"ping":False,"pingtime":round((timezone.localtime() - starttime).total_seconds(),6),"error":error})
 
 def ping_cacheserver(serveralias):
+    starttime = timezone.localtime()
     try:
         caches[serveralias].set("PING","PONG")
-        return (True, None)
+        return (True, {"ping":True,"pingtime":round((timezone.localtime() - starttime).total_seconds(),6)})
     except Exception as ex:
-        return (False,"Not Accessible".format(str(ex)))
+        return (False, {"ping":False,"pingtime":round((timezone.localtime() - starttime).total_seconds(),6),"error":"Not Accessible".format(str(ex))})
 
 
 def print_cookies(request):
