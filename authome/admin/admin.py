@@ -243,6 +243,16 @@ class UserGroupsMixin(RequestMixin):
             return models.UserGroup.find_groups(obj.email,cacheable=False)[1]
     _usergroupnames.short_description = "User Group Names"
 
+class DbcaAccountMixin(RequestMixin):
+    def _is_staff(self,obj):
+        if not obj :
+            return False
+        else:
+            return obj.is_staff
+    _is_staff.boolean = True
+    _is_staff.short_description = "DBCA Account?"
+
+
 class UserAuthorizationCheckMixin(object):
     def check_authorization(self,request, queryset):
         users = queryset.values_list("email",flat=True)
@@ -275,12 +285,12 @@ class DeleteMixin(object):
 class UserAdmin(UserAuthorizationCheckMixin,UserGroupsMixin,DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdmin):
     list_display = ('username', 'email', 'first_name', 'last_name','is_active', 'is_staff','last_idp','_last_login')
     list_filter = ( 'is_superuser',)
-    readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","_email","_usergroups","last_idp","_modified")
+    readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","is_superuser","_email","_usergroups","last_idp","_modified")
     fieldsets = (
         (None, {'fields': ('_email', )}),
-        ('Personal info', {'fields': ('username','first_name', 'last_name',"_usergroups")}),
+        ('Personal info', {'fields': ('username','first_name', 'last_name')}),
         ('Permissions', {
-            'fields': ('is_active', 'is_staff', 'is_superuser', ),
+            'fields': ('is_active', 'is_staff', 'is_superuser',"_usergroups" ),
         }),
         ('Important dates', {'fields': ('last_idp','_last_login', '_date_joined','_modified')}),
     )
@@ -307,14 +317,14 @@ class SystemUser(models.User):
         verbose_name_plural="{}System Users".format(" " * 9)
 
 
-class SystemUserAdmin(PermissionCheckMixin,UserGroupsMixin,DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdmin):
-    list_display = ('username', 'email', 'is_active', '_usergroups','last_idp','_last_login')
+class SystemUserAdmin(PermissionCheckMixin,DbcaAccountMixin,UserGroupsMixin,DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdmin):
+    list_display = ('username', 'email', 'is_active', '_usergroups',"_is_staff",'_date_joined')
     list_filter = ("is_active",)
     add_form_template = 'admin/change_form.html'
     change_form_template = 'admin/change_form.html'
     add_form = forms.SystemUserCreateForm
-    form = forms.UserCreateForm
-    readonly_fields = ("_last_login","_date_joined","username","_email","_usergroups")
+    form = forms.SystemUserEditForm
+    readonly_fields = ("_date_joined","username","_email","_is_staff","_usergroups")
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
@@ -322,12 +332,12 @@ class SystemUserAdmin(PermissionCheckMixin,UserGroupsMixin,DatetimeMixin,CatchMo
         }),
     )
     fieldsets = (
-        (None, {'fields': ('_email', "_usergroups")}),
+        (None, {'fields': ('_email',"comments")}),
         ('Personal info', {'fields': ('username',)}),
         ('Permissions', {
-            'fields': ('is_active', ),
+            'fields': ('is_active', "_is_staff","_usergroups"),
         }),
-        ('Important dates', {'fields': ('_last_login', '_date_joined')}),
+        ('Important dates', {'fields': ('_date_joined',)}),
     )
 
     model = SystemUser
@@ -340,9 +350,6 @@ class SystemUserAdmin(PermissionCheckMixin,UserGroupsMixin,DatetimeMixin,CatchMo
         else:
             return obj.email
     _email.short_description = "Email"
-
-
-
 
 class UserGroupAdmin(PermissionCheckMixin,CacheableListTitleMixin,DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmin):
     list_display = ('name','groupid','parent_group','users','excluded_users','identity_provider','_session_timeout','_modified','_created')
@@ -466,23 +473,11 @@ class NormalUserToken(models.User):
 
 
 class AccessTokenAdmin(DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdmin):
-    list_display = ('email','last_name','first_name','_token_enabled','_token_short','_token_created','_token_expired')
-    readonly_fields = ('email','last_name','first_name','_token_enabled','_token','_token_created','_token_expired')
     ordering = ('email',)
     change_form_template = 'admin/change_form.html'
     actions = ['enable_token','disable_token'] + ['create_{}days_token'.format(o) if o > 0 else 'create_permenent_token' for o in settings.USER_ACCESS_TOKEN_LIFETIME] + ['revoke_token']
     search_fields=("email","last_name","first_name")
     list_filter = (TokenStatusFilter,)
-
-    fieldsets = (
-        (None, {'fields': ('email','_token_enabled','_token','_token_created' ,'_token_expired')}),
-        ('Personal info', {'fields': ('username','first_name', 'last_name')}),
-        ('Permissions', {
-            'fields': ('is_active', 'is_staff', 'is_superuser', ),
-        }),
-        ('Important dates', {'fields': ('_last_login', '_date_joined')}),
-    )
-
 
     def _enable_token(self,request, queryset,enable):
         for user in queryset:
@@ -632,11 +627,33 @@ class AccessTokenAdmin(DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdm
 
 class UserAccessTokenAdmin(AccessTokenAdmin):
     object_change_url_name = 'admin:{}_{}_change'.format(NormalUserToken._meta.app_label,NormalUserToken._meta.model_name)
+    list_display = ('email','last_name','first_name','_token_enabled','_token_short','_token_created','_token_expired')
+    readonly_fields = ('email','username','last_name','first_name','_token_enabled','_token','_token_created','_token_expired',"is_active","is_staff","is_superuser","_last_login","_date_joined")
+    fieldsets = (
+        (None, {'fields': ('email','_token_enabled','_token','_token_created' ,'_token_expired')}),
+        ('Personal info', {'fields': ('username','first_name', 'last_name')}),
+        ('Permissions', {
+            'fields': ('is_active', 'is_staff', 'is_superuser', ),
+        }),
+        ('Important dates', {'fields': ('_last_login', '_date_joined')}),
+    )
 
-class SystemUserAccessTokenAdmin(PermissionCheckMixin,AccessTokenAdmin):
+
+class SystemUserAccessTokenAdmin(PermissionCheckMixin,DbcaAccountMixin,AccessTokenAdmin):
     model = SystemUserToken
     object_change_url_name = 'admin:{}_{}_change'.format(SystemUserToken._meta.app_label,SystemUserToken._meta.model_name)
     object_delete_url_name = 'admin:{}_{}_delete'.format(SystemUserToken._meta.app_label,SystemUserToken._meta.model_name)
+
+    list_display = ('email','_token_enabled','_token_short','_token_created','_token_expired')
+    readonly_fields = ('email','_token_enabled','_token','_token_created','_token_expired',"username","comments","is_active","_is_staff","_date_joined")
+    fieldsets = (
+        (None, {'fields': ('email','_token_enabled','_token','_token_created' ,'_token_expired')}),
+        ('Personal info', {'fields': ('username','comments')}),
+        ('Permissions', {
+            'fields': ('is_active', '_is_staff' ),
+        }),
+        ('Important dates', {'fields': ('_date_joined',)}),
+    )
 
     def has_change_permission(self, request, obj=None):
         return False
