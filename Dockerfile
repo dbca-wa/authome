@@ -4,7 +4,7 @@ MAINTAINER asi@dbca.wa.gov.au
 LABEL org.opencontainers.image.source https://github.com/dbca-wa/authome
 RUN apt-get update -y \
   && apt-get upgrade -y \
-  && apt-get install -y wget libmagic-dev gcc binutils python3-dev libpq-dev \
+  && apt-get install -y wget libmagic-dev gcc binutils python3-dev libpq-dev procps\
   && rm -rf /var/lib/apt/lists/* \
   && pip install --upgrade pip
 
