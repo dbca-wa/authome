@@ -261,18 +261,27 @@ class RedisCache(CacheMixin,django_redis.RedisCache):
 
     def ping(self):
         redisclients = self._redis_server_clients
+        pingstatus = {}
+        starttime = None
+        working = True
         if isinstance(redisclients,list):
-            working = True
-            errors = []
             for redisclient in redisclients:
+                starttime = timezone.local()
                 status = self.ping_redis(redisclient)
+                pingstatus[redisclient[0]] = {"ping":status[0],"pingtime":round((timezone.localtime() - starttime).total_seconds(),6)}
                 if not status[0]:
                     working = False
                     if status[1]:
-                        errors.append(status[1])
-            return (working,errors if errors else None)
+                        pingstatus[redisclient[0]]["error"] = status[1]
         else:
-            return self.ping_redis(redisclients)
+            starttime = timezone.local()
+            status = self.ping_redis(redisclients,pingtimes)
+            pingstatus[redisclients[0]] = {"ping":status[0],"pingtime":round((timezone.localtime() - starttime).total_seconds(),6)}
+            if not status[0]:
+                working = False
+                if status[1]:
+                    pingstatus[redisclients[0]]["error"] = status[1]
+        return (working,pingstatus)
         
     @cached_property
     def _redis_server_clients(self):
@@ -821,11 +830,20 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
         from .cache import cache
 
         redisclients = self._redis_server_clients
+        starttime = None
+        pingstatus = {}
         for redisclient in redisclients:
+            starttime = timezone.localtime()
             status = self.ping_redis(redisclient)
+            pingstatus[redisclient[0]] = {"ping":status[0],"pingtime":round((timezone.localtime() - starttime).total_seconds(),6)}
             if not status[0]:
                 if redisclient[0] not in self._failed_cluster_nodes:
                     self._failed_cluster_nodes.append(redisclient[0])
+                if status[1]:
+                    pingstatus[redisclient[0]]["error"] = status[1]
+
+        if not self._failed_cluster_nodes:
+            return (True,pingstatus)
 
         offline_groups = []
         partially_failed_groups = []
@@ -839,9 +857,10 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
                     partially_failed_groups.append((group,nodes))
 
         if not offline_groups and not partially_failed_groups:
-            return (True,None)
+            return (True,pingstatus)
         elif len(offline_groups) == len(self.redis_client._groups):
-            return (False,"The whole redis cluster is offline")
+            pingstatus["error"] = "The whole redis cluster is offline"
+            return (False,pingstatus)
         else:
             errors = None
             for group in offline_groups:
@@ -851,8 +870,10 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
                     errors = utils.add_to_list(errors,"The node({1}) in redis cluster group({0}) is offline.".format(group,failed_nodes[0]))
                 else:
                     errors = utils.add_to_list(errors,"The nodes({1}) in redis cluster group({0}) are offline.".format(group,failed_nodes))
+            
+            pingstatus["errors"] = errors
 
-            return (False if offline_groups else True,errors)
+            return (False if offline_groups else True,pingstatus)
 
     def _get_server_status(self,redisclient):
         result = super()._get_server_status(redisclient)

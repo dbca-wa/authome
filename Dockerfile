@@ -1,17 +1,17 @@
 # Prepare the base environment.
-FROM python:3.12.3-slim-bookworm as builder_base_authome
-MAINTAINER asi@dbca.wa.gov.au
-LABEL org.opencontainers.image.source https://github.com/dbca-wa/authome
+FROM python:3.12.4-slim-bookworm as builder_base_authome
+LABEL org.opencontainers.image.authors=asi@dbca.wa.gov.au
+LABEL org.opencontainers.image.source=https://github.com/dbca-wa/authome
 RUN apt-get update -y \
   && apt-get upgrade -y \
-  && apt-get install -y wget libmagic-dev gcc binutils python3-dev libpq-dev \
+  && apt-get install -y wget libmagic-dev gcc binutils python3-dev libpq-dev procps\
   && rm -rf /var/lib/apt/lists/* \
   && pip install --upgrade pip
 
 #install and config poetry
 WORKDIR /app
-ENV POETRY_VERSION=1.5.1
-RUN pip install "poetry==$POETRY_VERSION"
+ARG POETRY_VERSION=1.8.3
+RUN pip install --root-user-action=ignore poetry==${POETRY_VERSION}
 COPY poetry.lock pyproject.toml /app/
 RUN poetry config virtualenvs.create false \
   && poetry install --only main --no-interaction --no-ansi
@@ -21,8 +21,8 @@ RUN chmod 755 /etc
 RUN chmod 555 /etc/bash.bashrc
 
 #update add user
-RUN addgroup -gid 1000 app 
-RUN adduser -uid 1000 --gid 1000 --no-create-home --disabled-login app 
+RUN addgroup -gid 1000 app
+RUN adduser -uid 1000 --gid 1000 --no-create-home --disabled-login app
 
 # Install Python libs from pyproject.toml.
 FROM builder_base_authome as python_libs_authome
@@ -75,7 +75,7 @@ RUN chmod 555 run_command
 
 RUN chown -R app:app /app
 
-# Run the application as the www-data user.
+# Run the application as the non-root user.
 USER app
 EXPOSE 8080
 CMD ./start_app
