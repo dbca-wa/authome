@@ -65,7 +65,7 @@ class CacheMixin(object):
         return key
 
     def ttl(self, key):
-        return self._cache.get(key, default)
+        return self._cache.ttl(key)
         
     def expire(self, key,timeout):
         return self._cache.expire(key, timeout)
@@ -196,6 +196,14 @@ class BaseRedisCacheClient(django_redis.RedisCacheClient):
             options["retry"] = redis.retry.Retry(redis.backoff.NoBackoff(),retry_attempts)
         super().__init__(servers,**options)
            
+    def ttl(self, key):
+        client = self.get_client(key)
+        return client.ttl(key)
+
+    def expire(self, key,timeout):
+        client = self.get_client(key, write=True)
+        return client.expire(key,timeout)
+
 class RedisCacheClient(BaseRedisCacheClient):
     _redisclient = None
     def get_client(self, key=None, *, write=False):
@@ -773,6 +781,14 @@ class RedisClusterCacheClient(django_redis.RedisCacheClient):
         else:
             self._client = RedisCluster
         
+    def ttl(self, key):
+        client = self.get_client(key)
+        return client.ttl(key)
+
+    def expire(self, key,timeout):
+        client = self.get_client(key, write=True)
+        return client.expire(key,timeout)
+
     def get_client(self, key=None, *, write=False):
         # key is used so that the method signature remains the same and custom
         # cache client can be implemented which might require the key to select
