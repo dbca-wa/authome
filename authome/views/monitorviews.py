@@ -16,6 +16,7 @@ from datetime import datetime,timedelta
 from .. import models
 from ..cache import cache,get_defaultcache
 from .. import utils
+from ..serializers import JSONFormater
 
 defaultcache = get_defaultcache()
 
@@ -347,7 +348,7 @@ def ping(request):
     if pingstatus:
         content["pingstatus"] = pingstatus
 
-    return HttpResponse(json.dumps(content,indent=4),status=code,content_type="application/json")
+    return HttpResponse(json.dumps(content,indent=4,cls=JSONFormater),status=code,content_type="application/json")
 
 def healthcheckfactory(t=None):
     if t:

@@ -321,7 +321,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     created = models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
-        verbose_name_plural = "{}Identity Providers".format(" " * 4)
+        verbose_name_plural = "{}Identity Providers".format(" " * 9)
 
     @classmethod
     def get_model_change_cls(self):
@@ -550,7 +550,7 @@ Email: enquiries@dbca.wa.gov.au
     created = models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
-        verbose_name_plural = "{}Customizable Userflows".format(" " * 5)
+        verbose_name_plural = "{}Customizable Userflows".format(" " * 10)
 
     @classmethod
     def get_model_change_cls(self):
@@ -875,7 +875,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
 
     class Meta:
         unique_together = [["users","excluded_users"]]
-        verbose_name_plural = "{}User Groups".format(" " * 7)
+        verbose_name_plural = "{}User Groups".format(" " * 12)
 
 
     @property
@@ -1604,7 +1604,7 @@ class UserAuthorization(CacheableMixin,AuthorizationMixin):
 
     class Meta:
         unique_together = [["user","domain"]]
-        verbose_name_plural = "{}User Authorizations".format(" " * 2)
+        verbose_name_plural = "{}User Authorizations".format(" " * 7)
 
     @classmethod
     def get_model_change_cls(self):
@@ -1650,7 +1650,7 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
 
     class Meta:
         unique_together = [["usergroup","domain"]]
-        verbose_name_plural = "{}User Group Authorizations".format(" " * 6)
+        verbose_name_plural = "{}User Group Authorizations".format(" " * 11)
 
     @classmethod
     def get_model_change_cls(self):
@@ -1702,7 +1702,7 @@ class User(AbstractUser):
     class Meta(AbstractUser.Meta):
         swappable = 'AUTH_USER_MODEL'
         db_table = "auth_user"
-        verbose_name_plural = "{}Users".format(" " * 9)
+        verbose_name_plural = "{}Users".format(" " * 14)
         unique_together = [["email"]]
 
     def clean(self):
@@ -1744,7 +1744,7 @@ class UserToken(models.Model):
     modified = models.DateTimeField(editable=False,db_index=True,auto_now=True)
 
     class Meta:
-        verbose_name_plural = "{}Access Tokens".format(" " * 3)
+        verbose_name_plural = "{}Access Tokens".format(" " * 8)
 
     def __str__(self):
         return self.user.email
@@ -1840,7 +1840,7 @@ class UserTOTP(models.Model):
     created = models.DateTimeField(null=False,editable=False)
 
     class Meta:
-        verbose_name_plural = "{}User TOTPs".format(" " * 3)
+        verbose_name_plural = "{}User TOTPs".format(" " * 8)
 
 class UserListener(object):
     @staticmethod

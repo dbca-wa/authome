@@ -80,7 +80,7 @@ class DebugLog(models.Model):
     message = models.TextField(editable=False,null=True)
 
     class Meta:
-        verbose_name_plural = "{}Auth2 Logs".format(" " * 0)
+        verbose_name_plural = "{}Auth2 Logs".format(" " * 4)
 
     @classmethod
     def attach_request(cls,request):

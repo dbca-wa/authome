@@ -14,6 +14,7 @@ from django.utils.functional import cached_property
 from django.conf import settings
 
 from . import utils
+from .serializers import Processtime
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,14 @@ class CacheMixin(object):
         else:
             return self._class(self._servers, **self._options)
 
+    def make_and_validate_key(self, key, version=None):
+        return key
+
+    def ttl(self, key):
+        return self._cache.get(key, default)
+        
+    def expire(self, key,timeout):
+        return self._cache.expire(key, timeout)
         
     def _parse_server(self,server=None):
         """
@@ -268,7 +277,7 @@ class RedisCache(CacheMixin,django_redis.RedisCache):
             for redisclient in redisclients:
                 starttime = timezone.local()
                 status = self.ping_redis(redisclient)
-                pingstatus[redisclient[0]] = {"ping":status[0],"pingtime":round((timezone.localtime() - starttime).total_seconds(),6)}
+                pingstatus[redisclient[0]] = {"ping":status[0],"pingtime":Processtime((timezone.localtime() - starttime).total_seconds())}
                 if not status[0]:
                     working = False
                     if status[1]:
@@ -276,7 +285,7 @@ class RedisCache(CacheMixin,django_redis.RedisCache):
         else:
             starttime = timezone.local()
             status = self.ping_redis(redisclients,pingtimes)
-            pingstatus[redisclients[0]] = {"ping":status[0],"pingtime":round((timezone.localtime() - starttime).total_seconds(),6)}
+            pingstatus[redisclients[0]] = {"ping":status[0],"pingtime":Processtime((timezone.localtime() - starttime).total_seconds())}
             if not status[0]:
                 working = False
                 if status[1]:
@@ -835,7 +844,7 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
         for redisclient in redisclients:
             starttime = timezone.localtime()
             status = self.ping_redis(redisclient)
-            pingstatus[redisclient[0]] = {"ping":status[0],"pingtime":round((timezone.localtime() - starttime).total_seconds(),6)}
+            pingstatus[redisclient[0]] = {"ping":status[0],"pingtime":Processtime((timezone.localtime() - starttime).total_seconds())}
             if not status[0]:
                 if redisclient[0] not in self._failed_cluster_nodes:
                     self._failed_cluster_nodes.append(redisclient[0])
