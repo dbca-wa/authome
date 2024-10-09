@@ -19,11 +19,11 @@ def _auth2_cluster_status(request,clusterid):
     
 
 def _auth2_status(request):
-    f = os.path.join(settings.AUTH2_MONITORING_DIR,"auth2","serverinfo.html")
+    f = os.path.join(settings.AUTH2_MONITORING_DIR,"auth2","standalone","serverinfo.html")
     if os.path.exists(f):
         return FileResponse(open(f,'rb'))
     else:
-        return TemplateResponse(request,"authome/healthcheck_not_enabled.html",context={"message":"The healthcheck is not enabled for auth2 server".format(clusterid)})
+        return TemplateResponse(request,"authome/healthcheck_not_enabled.html",context={"message":"The healthcheck is not enabled for auth2 server"})
 
 def _auth2_cluster_liveness(request,clusterid,serviceid,monitordate):
     if clusterid == settings.AUTH2_CLUSTERID:
@@ -32,7 +32,7 @@ def _auth2_cluster_liveness(request,clusterid,serviceid,monitordate):
         return HttpResponse(cache.get_auth2_liveness(clusterid,serviceid,monitordate),content_type="text/html")
 
 def _auth2_liveness(request,serviceid,monitordate):
-    return FileResponse(open(os.path.join(settings.AUTH2_MONITORING_DIR,"auth2",serviceid,"{}.html".format(monitordate)),'rb'))
+    return FileResponse(open(os.path.join(settings.AUTH2_MONITORING_DIR,"auth2","standalone",serviceid,"{}.html".format(monitordate)),'rb'))
 
 auth2_status = _auth2_cluster_status if settings.AUTH2_CLUSTER_ENABLED else _auth2_status
 auth2_liveness = _auth2_cluster_liveness if settings.AUTH2_CLUSTER_ENABLED else _auth2_liveness
