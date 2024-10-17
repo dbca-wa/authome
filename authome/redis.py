@@ -61,14 +61,11 @@ class CacheMixin(object):
         else:
             return self._class(self._servers, **self._options)
 
-    def make_and_validate_key(self, key, version=None):
-        return key
-
     def ttl(self, key):
-        return self._cache.ttl(key)
+        return self._cache.ttl(self.make_and_validate_key(key))
         
     def expire(self, key,timeout):
-        return self._cache.expire(key, timeout)
+        return self._cache.expire(self.make_and_validate_key(key), timeout)
         
     def _parse_server(self,server=None):
         """
@@ -283,7 +280,7 @@ class RedisCache(CacheMixin,django_redis.RedisCache):
         working = True
         if isinstance(redisclients,list):
             for redisclient in redisclients:
-                starttime = timezone.local()
+                starttime = timezone.localtime()
                 status = self.ping_redis(redisclient)
                 pingstatus[redisclient[0]] = {"ping":status[0],"pingtime":Processtime((timezone.localtime() - starttime).total_seconds())}
                 if not status[0]:
@@ -291,8 +288,8 @@ class RedisCache(CacheMixin,django_redis.RedisCache):
                     if status[1]:
                         pingstatus[redisclient[0]]["error"] = status[1]
         else:
-            starttime = timezone.local()
-            status = self.ping_redis(redisclients,pingtimes)
+            starttime = timezone.localtime()
+            status = self.ping_redis(redisclients)
             pingstatus[redisclients[0]] = {"ping":status[0],"pingtime":Processtime((timezone.localtime() - starttime).total_seconds())}
             if not status[0]:
                 working = False

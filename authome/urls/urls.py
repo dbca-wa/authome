@@ -19,7 +19,7 @@ if settings.AUTH2_MONITORING_DIR:
         admin_urls[0].insert(0,path('auth2status/<str:clusterid>', views.auth2_status,name="auth2_status"))
         admin_urls[0].insert(1,path('liveness/<str:clusterid>/<str:serviceid>/<str:monitordate>.html', views.auth2_liveness,name="auth2_liveness"))
     else:
-        admin_urls[0].insert(0,path('healthcheck', views.auth2_status,name="auth2_status"))
+        admin_urls[0].insert(0,path('auth2status', views.auth2_status,name="auth2_status"))
         admin_urls[0].insert(1,path('liveness/<str:serviceid>/<str:monitordate>.html', views.auth2_liveness,name="auth2_liveness"))
 
 admin_urls[0].insert(0,path('authome/tools/apple/secretkey/renew', views.renew_apple_secretkey,name="renew_apple_secretkey"))

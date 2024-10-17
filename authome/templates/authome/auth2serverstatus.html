@@ -1,0 +1,112 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_list %}
+
+{% block extrastyle %}
+  <link rel="stylesheet" type="text/css" href="{% static "admin/css/forms.css" %}">
+  <script src="{% url 'admin:jsi18n' %}"></script>
+  {{ media.css }}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+    <style>
+        #content table {
+        	border-collapse: collapse;
+            font-family: Tahoma, Geneva, sans-serif;
+        }
+        #content table td {
+        	padding: 15px;
+        }
+        #content table thead th {
+        	background-color: #54585d;
+        	color: #ffffff;
+        	font-weight: bold;
+        	font-size: 13px;
+        	border: 1px solid #54585d;
+        }
+        #content table tbody td {
+        	color: #636363;
+        	font-size: 14px;
+        	border: 1px solid #dddfe1;
+        }
+        #content table tbody tr {
+        	background-color: #f9fafb;
+        }
+        #content table tbody tr:nth-child(odd) {
+        	background-color: #ffffff;
+        }
+        #content table caption {
+          font-weight: bold;
+          font-size: 16px;
+          color: #636363;
+          margin: 20px;
+         }
+        #content a{
+            color: blue;
+            font-weight: bold;
+            font-size: 14;
+            padding-left: 5px;
+            padding-right: 5px;
+        }
+        #content pre {
+            font-size: 14px;
+            font-style: italic;
+            margin-left: 30px;
+            margin-top: 0px;
+            color: #2c7114;
+        }
+
+    </style>       
+    <script>
+        function showdetailusage(servername) {
+            detail = document.getElementById(servername + "detail")
+            if (detail.style.display == "none") {
+                detail.style.display = "block"
+                document.getElementById(servername + "detaillink").innerHTML = "-"
+            } else {
+                detail.style.display = "none"
+                document.getElementById(servername + "detaillink").innerHTML = "+"
+            }
+        }
+    </script>
+{{ media.js }}
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} change-list{% endblock %}
+
+{% if not is_popup %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label='authome' %}"> AUTHENTICATION AND AUTHORIZATION </a>
+{% if clusterid == "standalone" %}
+&rsaquo; Auth2 Server Status
+{% else %}
+&rsaquo; Auth2 Cluster Status
+&rsaquo; <a href="{% url 'admin:auth2_status' clusterid=clusterid %}">{{clusterid}}</a>
+{% endif %}
+</div>
+{% endblock %}
+{% endif %}
+
+{% block coltype %}{% endblock %}
+
+{% block content %}
+    <table>
+        <thead>
+            <tr>
+                <th>Auth2 Server</th>
+                <th>Ready Time</th>
+                <th>Heartbeat</th>
+                <th>PingTime</th>
+                <th>PingStatus</th>
+                <th>Resource Usage</th>
+                <th>Monitoring</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{data}}
+        </tbody>
+    </table>
+{% endblock %}

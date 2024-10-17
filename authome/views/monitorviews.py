@@ -289,17 +289,17 @@ def _localhealthcheck(request):
     working,status = _check_localhealth()
 
     content = {"working":working}
-    if errors:
+    if status:
         content["status"] = status
 
-    return JsonResponse(content,status=200)
+    return HttpResponse(json.dumps(content,cls=JSONFormater),status=200,content_type="application/json")
 
 def _remotehealthcheck(request):
-    working,errors = _check_localhealth()
+    working,status = _check_localhealth()
     content = {"working":working}
-    if errors:
+    if status:
         content["status"] = status
-    return JsonResponse(content,status=200)
+    return HttpResponse(json.dumps(content,cls=JSONFormater),status=200,content_type="application/json")
 
 def _check_clusterhealth():
     working = False
@@ -323,7 +323,7 @@ def _check_clusterhealth():
 
 def _clusterhealthcheck(request):
     content = _check_clusterhealth()
-    return JsonResponse(content,status=200)
+    return HttpResponse(json.dumps(content,cls=JSONFormater),status=200,content_type="application/json")
 
 def ping(request):
     #used by health checker of the kuberneter to monitor the status of auth2 server
@@ -334,8 +334,8 @@ def ping(request):
     if working:
         code = 200
         #in working status, update heartbeat
-        if settings.AUTH2_CLUSTER_ENABLED:
-            #in cluster mode, update the heartbeat
+        if not settings.AUTH2_MONITORING_DIR and settings.AUTH2_CLUSTER_ENABLED:
+            #in cluster mode, update the heartbeat if auth2 monitoring feature is not enabled
             cache._current_auth2_cluster.register(only_update_heartbeat=True)
         for status in pingstatus.values():
             if any(not s["ping"] for s in status.values() ):
