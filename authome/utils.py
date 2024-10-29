@@ -12,6 +12,7 @@ import logging
 import traceback
 import threading
 from datetime import timedelta,datetime
+import redis
 
 from django.utils import timezone
 from django.contrib.auth import REDIRECT_FIELD_NAME
@@ -477,14 +478,14 @@ def add_to_map(m,k,v):
     else:
         m[k] = v
         return m
-
+ping_db_sql = "select 1"
 def ping_database(dbalias):
     status = {}
     healthy = True
     starttime = timezone.localtime()
     with connections[dbalias].cursor() as cursor:
         try:
-            cursor.execute("select 1")
+            cursor.execute(ping_db_sql)
             v = cursor.fetchone()[0]
             if v != 1:
                 healthy = False
@@ -537,3 +538,35 @@ def create_secret_key(length=64):
     return get_random_string(length, string.digits + string.ascii_letters + "`~!@$%^&*()_+-={}|[]:;,./<>?")
 
 
+def is_cluster(url):
+    ex = None
+    for redisurl in url.split(";"):
+        redisurl = redisurl.strip()
+        if not redisurl:
+            continue
+        client = None
+        try:
+            client = redis.Redis.from_url(redisurl)
+            data = client.info("cluster")
+            logger.debug("Redis server({}) is cluster {}".format(redisurl,"enabled" if data["cluster_enabled"] else "disabled"))
+            return True if data["cluster_enabled"] else False
+        except Exception as e:
+            if client:
+                client.close()
+            ex = e
+    if ex:
+        raise Exception("No available redis server.{}".format(str(ex)))
+    else: 
+        raise Exception("No available redis server.")
+
+authome_module_prefix=None
+def print_call_stack():
+    global authome_module_prefix
+    if not authome_module_prefix:
+        from django.conf import settings
+        authome_module_prefix = 'File "{}'.format(settings.BASE_DIR)
+
+    for line in traceback.format_stack()[:-1]:
+        line = line.strip()
+        if line.startswith(authome_module_prefix):
+            print(line.strip())

@@ -470,7 +470,7 @@ def _save_trafficdata(batchid):
     with transaction.atomic():
         #save the data to db
         for data in traffic_datas.values():
-            if not data.get("sso_requests",{}).get("requests") and not data.get("get_remote_session",{}).get("requests") and not data.get("delete_remote_session",{}).get("requests"):
+            if not data.get("sso_requests",{}).get("requests") and not data.get("get_remote_session",{}).get("requests") and not data.get("delete_remote_session",{}).get("requests") and not data.get("Redis",{}).get("requests") and not data.get("DB",{}).get("requests"):
                 #no requests
                 logger.debug("Ignore empty data")
                 continue
@@ -488,6 +488,10 @@ def _save_trafficdata(batchid):
                 avg_time=data["sso_requests"].get("avgtime"),
                 status=data["sso_requests"].get("status"),
                 domains=data["sso_requests"].get("domains"),
+                redis_requests = data.get("Redis",{}).get("requests") or 0,
+                redis_avg_time = data.get("Redis",{}).get("avgtime") or 0,
+                db_requests = data.get("DB",{}).get("requests") or 0,
+                db_avg_time = data.get("DB",{}).get("avgtime") or 0,
                 get_remote_sessions = data.get("get_remote_session",{}).get("requests") or 0,
                 delete_remote_sessions = data.get("delete_remote_session",{}).get("requests") or 0
             )

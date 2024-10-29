@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from . import admin
 from .. import  models
+from ..cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,20 @@ class TrafficDataPropertyMixin(object):
             return round(obj.avg_time,2)
     _avg_time.short_description = "Avg Time"
 
+    def _redis_avg_time(self,obj):
+        if not obj or not obj.redis_avg_time:
+            return ""
+        else:
+            return round(obj.redis_avg_time,2)
+    _redis_avg_time.short_description = "Redis Avg Time"
+
+    def _db_avg_time(self,obj):
+        if not obj or not obj.db_avg_time:
+            return ""
+        else:
+            return round(obj.db_avg_time,2)
+    _db_avg_time.short_description = "DB Avg Time"
+
     def _domains(self,obj):
         if not obj or not obj.domains:
             return ""
@@ -85,13 +100,63 @@ class SSOMethodTrafficDataInline(TrafficDataPropertyMixin,djangoadmin.TabularInl
     readonly_fields = ("sso_method","requests","_total_time","_min_time","_max_time","_avg_time","_status","_domains")
     fields = readonly_fields
 
+    def _domains(self,obj):
+        if not obj or not obj.domains:
+            return ""
+        else:
+            datas = [(k,v) for k,v in obj.domains.items()]
+            datas.sort(key=lambda o:((o[1].get("requests") or 0) * -1,o[0]) if isinstance(o[1],dict) else (o[1] * -1,o[0]))
+            return mark_safe("<pre>{}</pre>".format("\r\n".join("  {} : {}".format(o[0],json.dumps(o[1],sort_keys=True,indent=4) if isinstance(o[1],dict) else o[1]) for o in datas)))
+    _domains.short_description = "Groups"
+
+if settings.REDIS_TRAFFIC_MONITOR_LEVEL > 0 and settings.DB_TRAFFIC_MONITOR_LEVEL > 0:
+    list_display_4_cluster = ("_start_time","_cluster","_servers","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","db_requests","_db_avg_time","get_remote_sessions","delete_remote_sessions")
+    list_display = ("_start_time","_cluster","_servers","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","db_requests","_db_avg_time")
+    fields_4_cluster = ("_cluster","_start_time","_end_time","_serverlist","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","db_requests","_db_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains","_batchid")
+    fields = ("_cluster","_start_time","_end_time","_serverlist","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","db_requests","_db_avg_time","_status","_domains","_batchid")
+elif settings.REDIS_TRAFFIC_MONITOR_LEVEL > 0:
+    list_display_4_cluster = ("_start_time","_cluster","_servers","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","get_remote_sessions","delete_remote_sessions")
+    list_display = ("_start_time","_cluster","_servers","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time")
+    fields_4_cluster = ("_cluster","_start_time","_end_time","_serverlist","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains","_batchid")
+    fields = ("_cluster","_start_time","_end_time","_serverlist","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","_status","_domains","_batchid")
+elif settings.DB_TRAFFIC_MONITOR_LEVEL > 0:
+    list_display_4_cluster = ("_start_time","_cluster","_servers","requests","_min_time","_max_time","_avg_time","db_requests","_db_avg_time","get_remote_sessions","delete_remote_sessions")
+    list_display = ("_start_time","_cluster","_servers","requests","_min_time","_max_time","_avg_time","db_requests","_db_avg_time")
+    fields_4_cluster = ("_cluster","_start_time","_end_time","_serverlist","requests","_min_time","_max_time","_avg_time","db_requests","_db_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains","_batchid")
+    fields = ("_cluster","_start_time","_end_time","_serverlist","requests","_min_time","_max_time","_avg_time","db_requests","_db_avg_time","_status","_domains","_batchid")
+else:
+    list_display_4_cluster = ("_start_time","_cluster","_servers","requests","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions")
+    list_display = ("_start_time","_cluster","_servers","requests","_min_time","_max_time","_avg_time")
+    fields_4_cluster = ("_cluster","_start_time","_end_time","_serverlist","requests","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains","_batchid")
+    fields = ("_cluster","_start_time","_end_time","_serverlist","requests","_min_time","_max_time","_avg_time","_status","_domains","_batchid")
+
 class TrafficDataAdmin(TrafficDataPropertyMixin,admin.DatetimeMixin,djangoadmin.ModelAdmin):
-    list_display = ("_start_time","_cluster","_servers","requests","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions")
     readonly_fields = ("_cluster","_start_time","_end_time","_serverlist","requests","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains","_batchid")
     fields = readonly_fields
     ordering = ("-start_time","clusterid")
     list_filter = ['clusterid']
     inlines = [SSOMethodTrafficDataInline]
+
+    @property
+    def list_display(self):
+        if settings.AUTH2_CLUSTER_ENABLED and cache.auth2_clusters:
+            return list_display_4_cluster
+        else:
+            return list_display
+
+    @property
+    def readonly_fields(self):
+        if settings.AUTH2_CLUSTER_ENABLED and cache.auth2_clusters:
+            return fields_4_cluster
+        else:
+            return fields
+
+    @property
+    def fields(self):
+        if settings.AUTH2_CLUSTER_ENABLED and cache.auth2_clusters:
+            return fields_4_cluster
+        else:
+            return fields
 
     def _subreports(self,obj):
         if not obj:
@@ -142,6 +207,15 @@ class SSOMethodTrafficReportInline(TrafficDataPropertyMixin,djangoadmin.TabularI
     model = models.SSOMethodTrafficReport
     readonly_fields = ("sso_method","requests","_total_time","_min_time","_max_time","_avg_time","_status","_domains")
     fields = readonly_fields
+
+    def _domains(self,obj):
+        if not obj or not obj.domains:
+            return ""
+        else:
+            datas = [(k,v) for k,v in obj.domains.items()]
+            datas.sort(key=lambda o:((o[1].get("requests") or 0) * -1,o[0]) if isinstance(o[1],dict) else (o[1] * -1,o[0]))
+            return mark_safe("<pre>{}</pre>".format("\r\n".join("  {} : {}".format(o[0],json.dumps(o[1],sort_keys=True,indent=4) if isinstance(o[1],dict) else o[1]) for o in datas)))
+    _domains.short_description = "Groups"
 
 class TrafficReportAdmin(TrafficDataPropertyMixin,admin.DatetimeMixin,djangoadmin.ModelAdmin):
     list_display = ("_report_type","_start_time","_cluster","requests","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_subreports")

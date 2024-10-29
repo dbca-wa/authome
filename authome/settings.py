@@ -1,11 +1,10 @@
 import os
 import tomllib
 
-from .utils import env, get_digest_function
+from django.utils import timezone
+from .utils import env, get_digest_function,is_cluster
 from datetime import timedelta
 import dj_database_url
-
-from . import redis
 
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -399,14 +398,89 @@ else:
     #KEY_PREFIX is None and KEY_VERSION_ENABLED is False
     STANDALONE_KEY_FUNCTION = lambda key,key_prefix,version : key
 
+CACHE_SERVER = env("CACHE_SERVER")
+CACHE_SERVER_OPTIONS = env("CACHE_SERVER_OPTIONS",default={})
+
+CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
+CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
+
+PREVIOUS_CACHE_SESSION_SERVER = env("PREVIOUS_CACHE_SESSION_SERVER")
+PREVIOUS_CACHE_SESSION_SERVER_OPTIONS = env("PREVIOUS_CACHE_SESSION_SERVER_OPTIONS",default={})
+
+CACHE_USER_SERVER = env("CACHE_USER_SERVER")
+CACHE_USER_SERVER_OPTIONS = env("CACHE_USER_SERVER_OPTIONS",default={})
+
+USER_CACHE_ALIAS = None
+PREVIOUS_SESSION_CACHE_ALIAS=None
+
+GET_DEFAULT_CACHE_KEY = lambda key:key
+GET_USER_KEY = lambda userid:str(userid)
+GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
+
+SESSION_CACHES = 0
+PREVIOUS_SESSION_CACHES = 0
+SESSION_CACHES = 0
+USER_CACHES = 0
+
+TRAFFIC_MONITOR_LEVEL = env('TRAFFIC_MONITOR_LEVEL',default=0) #0: disabled, 1:summary, 2: per domain
+if not CACHE_SERVER or not CACHE_SERVER.lower().startswith('redis'):
+    TRAFFIC_MONITOR_LEVEL = 0
+if TRAFFIC_MONITOR_LEVEL > 0:
+    try:
+        REDIS_TRAFFIC_MONITOR_LEVEL = int(env('REDIS_TRAFFIC_MONITOR_LEVEL',default=0))
+    except:
+        REDIS_TRAFFIC_MONITOR_LEVEL = 0
+    try:
+        DB_TRAFFIC_MONITOR_LEVEL = int(env('DB_TRAFFIC_MONITOR_LEVEL',default=0))
+    except:
+        DB_TRAFFIC_MONITOR_LEVEL = 0
+else:
+    REDIS_TRAFFIC_MONITOR_LEVEL = 0
+    DB_TRAFFIC_MONITOR_LEVEL = 0
+
+TRAFFIC_MONITOR_INTERVAL=env('TRAFFIC_MONITOR_INTERVAL',default=3600)
+if TRAFFIC_MONITOR_INTERVAL and TRAFFIC_MONITOR_INTERVAL > 0:
+    if 86400 % TRAFFIC_MONITOR_INTERVAL > 0 :
+        #One day can't be divided by interval, invalid, reset it to one hour
+        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
+    else:
+        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=TRAFFIC_MONITOR_INTERVAL)
+else:
+    TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
+
+if REDIS_TRAFFIC_MONITOR_LEVEL > 0:
+    import redis
+    class MonitorEnabledConnection(redis.Connection):
+        _cache = None
+        def send_command(self, *args, **kwargs):
+            try:
+                starttime = timezone.localtime()
+                status = "OK"
+                return super().send_command(*args,**kwargs)
+            except Exception as ex:
+                status = ex.__class__.__name__
+                raise
+            finally:
+                #cache and ignore the exceptions which are thrown before cache is fully initialized
+                try:
+                    MonitorEnabledConnection._cache.log_redisrequest("Redis",args[0],starttime,status)
+                except:
+                    try:
+                        from . import cache
+                        MonitorEnabledConnection._cache = cache.cache
+                    except:
+                        MonitorEnabledConnection._cache = None
+                
 def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
     if server.lower().startswith('redis'):
         if "max_connections" not in options:
-            options["max_connections"] = 2
+            options["max_connections"] = 10
+        if REDIS_TRAFFIC_MONITOR_LEVEL > 0:
+            options["connection_class"] = MonitorEnabledConnection
 
         cluster = options.pop("cluster",None)
         if cluster is None:
-            cluster = redis.is_cluster(server)
+            cluster = is_cluster(server)
 
         if cluster:
             if "require_full_coverage" not in options:
@@ -434,29 +508,6 @@ def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
             "OPTIONS": options
         }
 
-CACHE_SERVER = env("CACHE_SERVER")
-CACHE_SERVER_OPTIONS = env("CACHE_SERVER_OPTIONS",default={})
-
-CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
-CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
-
-PREVIOUS_CACHE_SESSION_SERVER = env("PREVIOUS_CACHE_SESSION_SERVER")
-PREVIOUS_CACHE_SESSION_SERVER_OPTIONS = env("PREVIOUS_CACHE_SESSION_SERVER_OPTIONS",default={})
-
-CACHE_USER_SERVER = env("CACHE_USER_SERVER")
-CACHE_USER_SERVER_OPTIONS = env("CACHE_USER_SERVER_OPTIONS",default={})
-
-USER_CACHE_ALIAS = None
-PREVIOUS_SESSION_CACHE_ALIAS=None
-
-GET_DEFAULT_CACHE_KEY = lambda key:key
-GET_USER_KEY = lambda userid:str(userid)
-GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
-
-SESSION_CACHES = 0
-PREVIOUS_SESSION_CACHES = 0
-SESSION_CACHES = 0
-USER_CACHES = 0
 
 if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     CACHES = {}
@@ -526,21 +577,6 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     STAFF_CACHE_TIMEOUT = env("STAFF_CACHE_TIMEOUT",86400 * 14)
     if STAFF_CACHE_TIMEOUT <= 0:
         STAFF_CACHE_TIMEOUT = None
-
-TRAFFIC_MONITOR_LEVEL = env('TRAFFIC_MONITOR_LEVEL',default=0) #0: disabled, 1:summary, 2: per domain
-if not CACHE_SERVER or not CACHE_SERVER.lower().startswith('redis'):
-    TRAFFIC_MONITOR_LEVEL = 0
-
-TRAFFIC_MONITOR_INTERVAL=env('TRAFFIC_MONITOR_INTERVAL',default=3600)
-if TRAFFIC_MONITOR_INTERVAL and TRAFFIC_MONITOR_INTERVAL > 0:
-    if 86400 % TRAFFIC_MONITOR_INTERVAL > 0 :
-        #One day can't be divided by interval, invalid, reset it to one hour
-        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
-    else:
-        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=TRAFFIC_MONITOR_INTERVAL)
-else:
-    TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
-
 
 TEST_RUNNER=env("TEST_RUNNER","django.test.runner.DiscoverRunner")
 

@@ -68,24 +68,24 @@ class MemoryCache(cache.MemoryCache):
         """
         In cluster environment, default cluster can be null, but current auth2 cluster can't be null
         """
-        if not self._current_auth2_cluster:
+        if self._current_auth2_cluster is None:
             self.refresh_auth2_clusters(True)
         return self._default_auth2_cluster
 
     @property
     def current_auth2_cluster(self):
-        if not self._current_auth2_cluster:
+        if self._current_auth2_cluster is None:
             self.refresh_auth2_clusters(True)
         return self._current_auth2_cluster
 
     @property
     def auth2_clusters(self):
-        if not self._auth2_clusters:
+        if self._auth2_clusters is None:
             self.refresh_auth2_clusters(True)
         return self._auth2_clusters
 
     def refresh_auth2_clusters(self,force=False):
-        if self._auth2_clusters_check_time.can_run() or force or not self._auth2_clusters:
+        if self._auth2_clusters_check_time.can_run() or force or self._auth2_clusters is None:
             from ..models import Auth2Cluster
             refreshtime = timezone.localtime()
             l1 = len(self._auth2_clusters)
@@ -139,7 +139,7 @@ class MemoryCache(cache.MemoryCache):
                         DebugLog.warning(DebugLog.INTERCONNECTION_TIMEOUT,None,o.clusterid,None,None,message="Accessing auth2 cluster({1}) times out({0} seconds),{2}".format(settings.AUTH2_INTERCONNECTION_TIMEOUT,o.clusterid,str(ex)),request=request)
                     failed_clusters = utils.add_to_list(failed_clusters,(o,ex))
 
-        if not force_refresh and (retry_clusters or not self._auth2_clusters):
+        if not force_refresh and (retry_clusters or self._auth2_clusters is None):
             #some clusters failed
             self.refresh_auth2_clusters(True)
             for o,ex in retry_clusters:
