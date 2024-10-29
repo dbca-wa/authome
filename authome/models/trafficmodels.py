@@ -36,7 +36,7 @@ class TrafficData(models.Model):
     domains = models.JSONField(null=True,editable=False)
 
     class Meta:
-        verbose_name_plural = "{}Traffic Data".format(" " * 1)
+        verbose_name_plural = "{}Traffic Data".format(" " * 6)
         unique_together = [["clusterid","start_time","end_time","batchid"]]
 
 class SSOMethodTrafficData(models.Model):
@@ -121,7 +121,7 @@ class TrafficReport(models.Model):
     domains = models.JSONField(null=True,editable=False)
 
     class Meta:
-        verbose_name_plural = "{}Traffic Report".format(" " * 1)
+        verbose_name_plural = "{}Traffic Report".format(" " * 5)
         unique_together = [["clusterid","report_type","start_time"]]
 
     @classmethod

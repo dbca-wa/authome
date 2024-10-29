@@ -85,9 +85,11 @@ def login_user(request):
 
     request.session["idp"] = idp.idp
     login(request,user,'django.contrib.auth.backends.ModelBackend')
-
     request.session["idp"] = idp.idp
-    request.session["session_timeout"] = 3600
+    usergroups = models.UserGroup.find_groups(email)[0]
+    timeout = models.UserGroup.get_session_timeout(usergroups)
+    if timeout:
+        request.session["session_timeout"] = timeout
 
     return views.profile(request)
 
@@ -198,7 +200,8 @@ def get_session(request):
         cachekey = sessionstore.cache_key
         session_data = sessioncache.get(cachekey)
         if session_data:
-            return JsonResponse(session_data,status=200)
+            ttl = sessionstore.ttl
+            return JsonResponse({"session":session_data,"ttl":ttl},status=200)
         else:
             return  views.response_not_found_factory(request)
     except Exception as ex:

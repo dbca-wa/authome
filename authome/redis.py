@@ -14,6 +14,7 @@ from django.utils.functional import cached_property
 from django.conf import settings
 
 from . import utils
+from .serializers import Processtime
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,11 @@ class CacheMixin(object):
         else:
             return self._class(self._servers, **self._options)
 
+    def ttl(self, key):
+        return self._cache.ttl(self.make_and_validate_key(key))
+        
+    def expire(self, key,timeout):
+        return self._cache.expire(self.make_and_validate_key(key), timeout)
         
     def _parse_server(self,server=None):
         """
@@ -187,6 +193,14 @@ class BaseRedisCacheClient(django_redis.RedisCacheClient):
             options["retry"] = redis.retry.Retry(redis.backoff.NoBackoff(),retry_attempts)
         super().__init__(servers,**options)
            
+    def ttl(self, key):
+        client = self.get_client(key)
+        return client.ttl(key)
+
+    def expire(self, key,timeout):
+        client = self.get_client(key, write=True)
+        return client.expire(key,timeout)
+
 class RedisCacheClient(BaseRedisCacheClient):
     _redisclient = None
     def get_client(self, key=None, *, write=False):
@@ -266,17 +280,17 @@ class RedisCache(CacheMixin,django_redis.RedisCache):
         working = True
         if isinstance(redisclients,list):
             for redisclient in redisclients:
-                starttime = timezone.local()
+                starttime = timezone.localtime()
                 status = self.ping_redis(redisclient)
-                pingstatus[redisclient[0]] = {"ping":status[0],"pingtime":round((timezone.localtime() - starttime).total_seconds(),6)}
+                pingstatus[redisclient[0]] = {"ping":status[0],"pingtime":Processtime((timezone.localtime() - starttime).total_seconds())}
                 if not status[0]:
                     working = False
                     if status[1]:
                         pingstatus[redisclient[0]]["error"] = status[1]
         else:
-            starttime = timezone.local()
-            status = self.ping_redis(redisclients,pingtimes)
-            pingstatus[redisclients[0]] = {"ping":status[0],"pingtime":round((timezone.localtime() - starttime).total_seconds(),6)}
+            starttime = timezone.localtime()
+            status = self.ping_redis(redisclients)
+            pingstatus[redisclients[0]] = {"ping":status[0],"pingtime":Processtime((timezone.localtime() - starttime).total_seconds())}
             if not status[0]:
                 working = False
                 if status[1]:
@@ -764,6 +778,14 @@ class RedisClusterCacheClient(django_redis.RedisCacheClient):
         else:
             self._client = RedisCluster
         
+    def ttl(self, key):
+        client = self.get_client(key)
+        return client.ttl(key)
+
+    def expire(self, key,timeout):
+        client = self.get_client(key, write=True)
+        return client.expire(key,timeout)
+
     def get_client(self, key=None, *, write=False):
         # key is used so that the method signature remains the same and custom
         # cache client can be implemented which might require the key to select
@@ -835,7 +857,7 @@ class RedisClusterCache(CacheMixin,django_redis.RedisCache):
         for redisclient in redisclients:
             starttime = timezone.localtime()
             status = self.ping_redis(redisclient)
-            pingstatus[redisclient[0]] = {"ping":status[0],"pingtime":round((timezone.localtime() - starttime).total_seconds(),6)}
+            pingstatus[redisclient[0]] = {"ping":status[0],"pingtime":Processtime((timezone.localtime() - starttime).total_seconds())}
             if not status[0]:
                 if redisclient[0] not in self._failed_cluster_nodes:
                     self._failed_cluster_nodes.append(redisclient[0])

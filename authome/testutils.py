@@ -51,9 +51,13 @@ class StartServerMixin(object):
 
 
     @classmethod
-    def start_auth2_server(cls,servername,port,auth2_env=None):
+    def start_auth2_server(cls,servername,port,auth2_env=None,start=True):
         if servername in cls.process_map:
             raise Exception("Server({}) is already running".format(servername))
+        if not start:
+            cls.process_map[servername] = (None,port)
+            return
+
         auth2_env = " && ".join("export {0}=\"{1}\"".format(k,(auth2_env or {}).get(k,cls.default_env.get(k))) for k,v in cls.default_env.items())
           
         command = "/bin/bash -c 'set -a && export PORT={2} && source {0}/.env.{1} && {3} && poetry run python manage.py runserver 0.0.0.0:{2}'".format(settings.BASE_DIR,servername,port,auth2_env) 
@@ -77,6 +81,8 @@ class StartServerMixin(object):
     @classmethod
     def shutdown_auth2_server(cls,servername="standalone"):
         if servername in cls.process_map:
+            if  cls.process_map[servername][0] is None:
+                return
             print("shutdown auth2 server({})".format(servername))
             os.killpg(os.getpgid(cls.process_map[servername][0].pid), signal.SIGTERM)
             del cls.process_map[servername]
@@ -85,6 +91,8 @@ class StartServerMixin(object):
     @classmethod
     def shutdown_all_auth2_servers(cls):
         for servername,server in cls.process_map.items():
+            if server[0] is None:
+                continue
             print("shutdown auth2 server({})".format(servername))
             os.killpg(os.getpgid(server[0].pid), signal.SIGTERM)
             time.sleep(1)
@@ -153,10 +161,12 @@ class StartServerMixin(object):
         res = requests.get("{}?{}".format(self.get_absolute_url("/test/session/get",servername),urlencode({"session":session_cookie})),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
         if exist:
             self.assertNotEqual(res.status_code,404,"The session({1}) doesn't exist in auth2 server '{0}'".format(servername,session_cookie))
+            res.raise_for_status()
+            data = res.json()
+            return (data["session"],data["ttl"])
         else:
+            self.assertEqual(res.status_code,404,"The session({1}) doesn't exist in auth2 server '{0}'".format(servername,session_cookie))
             return None
-        res.raise_for_status()
-        return res.json()
 
     def save_traffic_data(self,session_cookie,servername="standalone"):
         """

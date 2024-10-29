@@ -269,7 +269,7 @@ class NormalUser(models.User):
     class Meta:
         proxy = True
         verbose_name="User"
-        verbose_name_plural="{}Users".format(" " * 11)
+        verbose_name_plural="{}Users".format(" " * 16)
 
 class DeleteMixin(object):
     def delete_model(self, request, obj):
@@ -314,7 +314,7 @@ class SystemUser(models.User):
     class Meta:
         proxy = True
         verbose_name="System User"
-        verbose_name_plural="{}System Users".format(" " * 9)
+        verbose_name_plural="{}System Users".format(" " * 14)
 
 
 class SystemUserAdmin(PermissionCheckMixin,DbcaAccountMixin,UserGroupsMixin,DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdmin):
@@ -462,14 +462,14 @@ class SystemUserToken(models.User):
     class Meta:
         proxy = True
         verbose_name="System User"
-        verbose_name_plural="{}System User Tokens".format(" " * 8)
+        verbose_name_plural="{}System User Tokens".format(" " * 13)
 
 class NormalUserToken(models.User):
     objects = models.NormalUserManager()
     class Meta:
         proxy = True
         verbose_name="System User"
-        verbose_name_plural="{}User Tokens".format(" " * 10)
+        verbose_name_plural="{}User Tokens".format(" " * 15)
 
 
 class AccessTokenAdmin(DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdmin):

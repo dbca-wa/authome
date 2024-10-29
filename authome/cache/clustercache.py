@@ -461,6 +461,32 @@ class MemoryCache(cache.MemoryCache):
         except Exception as ex:
             return (False,str(ex))
 
+    def get_auth2_status(self,clusterid):
+        """
+        get the status of the cluster server
+        Return server status
+        """
+        def _send_request(cluster):
+            return requests.get("{}{}".format(
+                cluster.endpoint,
+                reverse('cluster:auth2_status',kwargs={"clusterid":cluster.clusterid})
+            ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT,verify=settings.SSL_VERIFY)
+        res = self._send_request_to_cluster(None,clusterid,_send_request)
+        return res.text
+
+    def get_auth2_liveness(self,clusterid,serviceid,monitordate):
+        """
+        get the status of the cluster server
+        Return server status
+        """
+        def _send_request(cluster):
+            return requests.get("{}{}".format(
+                cluster.endpoint,
+                reverse('cluster:auth2_liveness',kwargs={"clusterid":cluster.clusterid,"serviceid":serviceid,"monitordate":monitordate})
+            ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT,verify=settings.SSL_VERIFY)
+        res = self._send_request_to_cluster(None,clusterid,_send_request)
+        return res.text
+
     @property
     def status(self):
         result = super().status

@@ -3,6 +3,16 @@ from datetime import datetime,date,timedelta
 
 from django.utils import timezone
 
+class Formatable(object):
+    def format(self):
+        return self.__repr__()
+
+class Processtime(Formatable):
+    def __init__(self,val):
+        self.val = val
+    def __repr__(self):
+        return "{:.6f}".format(self.val)
+
 class JSONDecoder(json.JSONDecoder):
 
     def __init__(self,*args, **kwargs):
@@ -45,7 +55,7 @@ class JSONEncoder(json.JSONEncoder):
                 'value' : [obj.days,obj.seconds,obj.microseconds]
             }   
         else:
-            return JSONEncoder.default(self, obj)
+            return super().default(obj)
 
 class JSONFormater(json.JSONEncoder):
     """ Instead of letting the default encoder convert datetime to string,
@@ -60,5 +70,7 @@ class JSONFormater(json.JSONEncoder):
             return obj.strftime(obj,"%Y-%m-%d")
         elif isinstance(obj, timedelta):
             return "{}.{}".format(obj.days * 86400 + obj.seconds,obj.microseconds)
+        elif isinstance(obj, Formatable):
+            return obj.format()
         else:
-            return JSONEncoder.default(self, obj)
+            return super().default(obj)
