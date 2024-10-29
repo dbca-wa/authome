@@ -30,7 +30,7 @@ sentry-sdk = {version = "2.16.0", extras = ["django"]}
 ipython = "^8.28.0"
 coverage = "^5.3"
 coveralls = "^2.1.2"
-mock = "^4.0.2"
+mock = "^5.1.0"
 ipdb = "^0.13.4"
 
 [build-system]
