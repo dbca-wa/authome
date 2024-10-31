@@ -76,6 +76,7 @@ fi
 
 if [[ "$backend" =~ ^true$ ]]
 then
+    source .env.monitor
     if [[ "$envfile" == ".env.standalone" ]]
     then
         echo 'Running auth2 server in background'
@@ -104,6 +105,7 @@ else
     else
         echo 'Running auth2 cluster in foreground'
     fi
+    source .env.monitor
     export SYNC_MODE=False
     poetry run python manage.py runserver 0.0.0.0:$PORT
 fi

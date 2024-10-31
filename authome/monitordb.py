@@ -63,13 +63,18 @@ if settings.DB_TRAFFIC_MONITOR_LEVEL > 0:
     
     def install_monitor_db_access(connection, **kwargs):
         """
-        Install slow_query_warner on the given database connection.
+        Install monitor_db_access on the given database connection.
         Rather than use the documented API of the `execute_wrapper()` context
         manager, directly insert the hook.
         """
+        
+        if monitor_db_access in connection.execute_wrappers:
+            return
+
         connection.execute_wrappers.insert(0, monitor_db_access)
     
     
-    connection_created.connect(install_monitor_db_access)
     for connection in connections.all():
         install_monitor_db_access(connection=connection)
+
+    connection_created.connect(install_monitor_db_access)

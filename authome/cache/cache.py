@@ -210,7 +210,6 @@ class _BaseMemoryCache(object):
     @property
     def usergrouptree(self):
         if not self._usergrouptree:
-            logger.error("The usergrouptree cache is Empty, Try to refresh the data to bring the cache back to normal state")
             self.refresh_usergroups()
 
         return self._usergrouptree
@@ -218,7 +217,6 @@ class _BaseMemoryCache(object):
     @property
     def usergroups(self):
         if not self._usergroups:
-            logger.error("The usergroups cache is Empty, Try to refresh the data to bring the cache back to normal state")
             self.refresh_usergroups()
 
         return self._usergroups
@@ -243,7 +241,6 @@ class _BaseMemoryCache(object):
     @property
     def usergroupauthorization(self):
         if not self._usergroupauthorization:
-            logger.error("The usergroupauthorization cache is Empty, Try to refresh the data to bring the cache back to normal state")
             self.refresh_usergroupauthorization()
 
         return self._usergroupauthorization

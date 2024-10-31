@@ -560,13 +560,13 @@ def is_cluster(url):
         raise Exception("No available redis server.")
 
 authome_module_prefix=None
-def print_call_stack():
+def get_callstack(only_include_authome_module=True):
     global authome_module_prefix
     if not authome_module_prefix:
         from django.conf import settings
         authome_module_prefix = 'File "{}'.format(settings.BASE_DIR)
 
-    for line in traceback.format_stack()[:-1]:
-        line = line.strip()
-        if line.startswith(authome_module_prefix):
-            print(line.strip())
+    if only_include_authome_module:
+        return "\n".join(line for line in traceback.format_stack()[:-1] if line.strip().startswith(authome_module_prefix))
+    else:
+        return "\n".join(line for line in traceback.format_stack()[:-1])

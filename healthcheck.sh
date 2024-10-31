@@ -127,7 +127,7 @@ auth2processes=${#auth2pids[@]};
 resourceusage="<div class='summary' id='${SERVICEID}'>Processes : ${auth2processes} , Total CPU : $(printf %6.2f%% ${totalcpuusage}) , Virutal Memory : $(printf %8.2fM ${totalvsusage}) , Memory : $(printf %8.2fM ${totalrsusage})<\/div><div id='${SERVICEID}detail' class='detail'><ul>"
 
 for (( i=0; i<${auth2processes}; i++ )); do 
-    resourceusage="${resourceusage}<li>CPU : $(printf %6.2f%% ${cpuusages[i]}) , Virtual Memory : $(printf %8.2fM ${vsusages[i]}) , Memory : $(printf %8.2fM ${rsusages[i]}) <\/li>"
+    resourceusage="${resourceusage}<li>PID : ${auth2pids[i]} , CPU : $(printf %6.2f%% ${cpuusages[i]}) , Virtual Memory : $(printf %8.2fM ${vsusages[i]}) , Memory : $(printf %8.2fM ${rsusages[i]}) <\/li>"
 done
 
 resourceusage="${resourceusage}<\/ul><\/div>"
@@ -152,7 +152,7 @@ if [[ $(date '+%s') -ge ${nexttime} ]] ; then
     message="${message}</span> <div style='display:none' id='${SERVICEID}${nowseconds}detail' class='detail'><ul>"
 
     for (( i=0; i<${auth2processes}; i++ )); do 
-        message="${message}<li>CPU : $(printf %6.2f%% ${cpuusages[i]}) , Virtual Memory : $(printf %8.2fM ${vsusages[i]}) , Memory : $(printf %8.2fM ${rsusages[i]}) </li>"
+        message="${message}<li>PID : ${auth2pids[i]} , CPU : $(printf %6.2f%% ${cpuusages[i]}) , Virtual Memory : $(printf %8.2fM ${vsusages[i]}) , Memory : $(printf %8.2fM ${rsusages[i]}) </li>"
     done
     if [[ $status -eq 0 ]]; then
         message="${message}</ul><div><pre>$(cat /tmp/auth2_ping.json)</pre></div></div>"
