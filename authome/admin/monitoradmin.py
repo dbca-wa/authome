@@ -131,8 +131,6 @@ else:
     fields = ("_cluster","_start_time","_end_time","_serverlist","requests","_min_time","_max_time","_avg_time","_status","_domains","_batchid")
 
 class TrafficDataAdmin(TrafficDataPropertyMixin,admin.DatetimeMixin,djangoadmin.ModelAdmin):
-    readonly_fields = ("_cluster","_start_time","_end_time","_serverlist","requests","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains","_batchid")
-    fields = readonly_fields
     ordering = ("-start_time","clusterid")
     list_filter = ['clusterid']
     inlines = [SSOMethodTrafficDataInline]
@@ -217,16 +215,59 @@ class SSOMethodTrafficReportInline(TrafficDataPropertyMixin,djangoadmin.TabularI
             return mark_safe("<pre>{}</pre>".format("\r\n".join("  {} : {}".format(o[0],json.dumps(o[1],sort_keys=True,indent=4) if isinstance(o[1],dict) else o[1]) for o in datas)))
     _domains.short_description = "Groups"
 
+if settings.REDIS_TRAFFIC_MONITOR_LEVEL > 0 and settings.DB_TRAFFIC_MONITOR_LEVEL > 0:
+    report_list_display_4_cluster = ("_report_type","_start_time","_cluster","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","db_requests","_db_avg_time","get_remote_sessions","delete_remote_sessions","_subreports")
+    report_list_display = ("_report_type","_start_time","_cluster","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","db_requests","_db_avg_time","_subreports")
+
+    report_fields_4_cluster = ("_cluster","_report_type","_start_time","_end_time","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","db_requests","_db_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains")
+    report_fields = ("_cluster","_report_type","_start_time","_end_time","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","db_requests","_db_avg_time","_status","_domains")
+elif settings.REDIS_TRAFFIC_MONITOR_LEVEL > 0:
+    report_list_display_4_cluster = ("_report_type","_start_time","_cluster","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","get_remote_sessions","delete_remote_sessions","_subreports")
+    report_list_display = ("_report_type","_start_time","_cluster","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","_subreports")
+
+    report_fields_4_cluster = ("_cluster","_report_type","_start_time","_end_time","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains")
+    report_fields = ("_cluster","_report_type","_start_time","_end_time","requests","_min_time","_max_time","_avg_time","redis_requests","_redis_avg_time","_status","_domains")
+elif settings.DB_TRAFFIC_MONITOR_LEVEL > 0:
+    report_list_display_4_cluster = ("_report_type","_start_time","_cluster","requests","_min_time","_max_time","_avg_time","db_requests","_db_avg_time","get_remote_sessions","delete_remote_sessions","_subreports")
+    report_list_display = ("_report_type","_start_time","_cluster","requests","_min_time","_max_time","_avg_time","db_requests","_db_avg_time","_subreports")
+
+    report_fields_4_cluster = ("_cluster","_report_type","_start_time","_end_time","requests","_min_time","_max_time","_avg_time","db_requests","_db_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains")
+    report_fields = ("_cluster","_report_type","_start_time","_end_time","requests","_min_time","_max_time","_avg_time","db_requests","_db_avg_time","_status","_domains")
+else:
+    report_list_display_4_cluster = ("_report_type","_start_time","_cluster","requests","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_subreports")
+    report_list_display = ("_report_type","_start_time","_cluster","requests","_min_time","_max_time","_avg_time","_subreports")
+
+    report_fields_4_cluster = ("_cluster","_report_type","_start_time","_end_time","requests","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains")
+    report_fields = ("_cluster","_report_type","_start_time","_end_time","requests","_min_time","_max_time","_avg_time","_status","_domains")
+
 class TrafficReportAdmin(TrafficDataPropertyMixin,admin.DatetimeMixin,djangoadmin.ModelAdmin):
-    list_display = ("_report_type","_start_time","_cluster","requests","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_subreports")
-    readonly_fields = ("_cluster","_report_type","_start_time","_end_time","requests","_min_time","_max_time","_avg_time","get_remote_sessions","delete_remote_sessions","_status","_domains")
-    fields = readonly_fields
     ordering = ("report_type","-start_time",'clusterid')
     list_filter = ['clusterid',"report_type"]
     inlines = [SSOMethodTrafficReportInline]
 
     traffic_data_list_url_name = 'admin:{}_{}_changelist'.format(models.TrafficData._meta.app_label,models.TrafficData._meta.model_name)
     traffic_report_list_url_name = 'admin:{}_{}_changelist'.format(models.TrafficReport._meta.app_label,models.TrafficReport._meta.model_name)
+
+    @property
+    def list_display(self):
+        if settings.AUTH2_CLUSTER_ENABLED and cache.auth2_clusters:
+            return report_list_display_4_cluster
+        else:
+            return report_list_display
+
+    @property
+    def readonly_fields(self):
+        if settings.AUTH2_CLUSTER_ENABLED and cache.auth2_clusters:
+            return report_fields_4_cluster
+        else:
+            return report_fields
+
+    @property
+    def fields(self):
+        if settings.AUTH2_CLUSTER_ENABLED and cache.auth2_clusters:
+            return report_fields_4_cluster
+        else:
+            return report_fields
 
     def _subreports(self,obj):
         if not obj:

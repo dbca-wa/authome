@@ -129,7 +129,7 @@ def _populate_reports():
 
             if data.batchid == BATCHID_END:
                 continue
-            if not data.requests and not data.get_remote_sessions and not data.delete_remote_sessions:
+            if not data.requests and not data.get_remote_sessions and not data.delete_remote_sessions and not data.db_requests and not data.redis_requests:
                 #no requests
                 continue
 
@@ -228,7 +228,18 @@ def _populate_reports():
                                 _add_avg(method_traffic_report.domains)
                             else:
                                 method_traffic_report.domains = method_data.domains
+
     
                         method_traffic_report.changed = True
+
+                        if method_data.sso_method == "Redis":
+                            traffic_reports[method_report_key[0]].redis_requests = method_traffic_report.requests
+                            traffic_reports[method_report_key[0]].redis_avg_time = method_traffic_report.avg_time
+                            traffic_reports[method_report_key[0]].changed = True
+                        elif method_data.sso_method == "DB":
+                            traffic_reports[method_report_key[0]].db_requests = method_traffic_report.requests
+                            traffic_reports[method_report_key[0]].db_avg_time = method_traffic_report.avg_time
+                            traffic_reports[method_report_key[0]].changed = True
+
     if not traffic_reports :
         logger.info("No new traffic data and all traffic reports are latest.")
