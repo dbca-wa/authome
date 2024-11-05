@@ -32,7 +32,7 @@ from pyotp.totp import TOTP
 import time
 
 from .. import models
-from .. cache import cache, get_defaultcache
+from ..cache import cache, get_defaultcache
 from .. import utils
 from .. import emails
 from ..exceptions import HttpResponseException,UserDoesNotExistException,PolicyNotConfiguredException

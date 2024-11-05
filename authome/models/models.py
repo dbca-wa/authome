@@ -1665,6 +1665,11 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
         refreshtime = timezone.localtime()
         for authorization in UserGroupAuthorization.objects.all().order_by("usergroup","sortkey"):
             size += 1
+            #try to get the data from cache to avoid a extra db access
+            try:
+                authorization.usergroup = cache.usergroups[authorization.usergroup_id]
+            except:
+                pass
 
             if not previous_usergroup:
                 usergroupauthorization[authorization.usergroup] = [authorization]

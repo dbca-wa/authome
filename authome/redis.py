@@ -1,4 +1,5 @@
 import re
+import traceback
 from datetime import timedelta
 import time
 from itertools import chain
@@ -17,27 +18,6 @@ from . import utils
 from .serializers import Processtime
 
 logger = logging.getLogger(__name__)
-
-def is_cluster(url):
-    ex = None
-    for redisurl in url.split(";"):
-        redisurl = redisurl.strip()
-        if not redisurl:
-            continue
-        client = None
-        try:
-            client = redis.Redis.from_url(redisurl)
-            data = client.info("cluster")
-            logger.debug("Redis server({}) is cluster {}".format(redisurl,"enabled" if data["cluster_enabled"] else "disabled"))
-            return True if data["cluster_enabled"] else False
-        except Exception as e:
-            if client:
-                client.close()
-            ex = e
-    if ex:
-        raise Exception("No available redis server.{}".format(str(ex)))
-    else: 
-        raise Exception("No available redis server.")
 
 redis_re = re.compile("^\\s*((?P<protocol>[a-zA-Z]+)://((?P<user>[^:@]+)?(:(?P<password>[^@]+)?)?@)?)?(?P<host>[^:/]+)(:(?P<port>[0-9]+))?(/(?P<db>[0-9]+))?\\s*$")
 class CacheMixin(object):
@@ -192,7 +172,7 @@ class BaseRedisCacheClient(django_redis.RedisCacheClient):
         if retry_attempts >= 1:
             options["retry"] = redis.retry.Retry(redis.backoff.NoBackoff(),retry_attempts)
         super().__init__(servers,**options)
-           
+
     def ttl(self, key):
         client = self.get_client(key)
         return client.ttl(key)
