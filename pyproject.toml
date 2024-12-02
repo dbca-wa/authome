@@ -27,7 +27,7 @@ redis = "5.0.4"
 sentry-sdk = {version = "2.16.0", extras = ["django"]}
 
 [tool.poetry.dev-dependencies]
-ipython = "^8.28.0"
+ipython = "^8.30.0"
 coverage = "^5.3"
 coveralls = "^2.1.2"
 mock = "^4.0.2"
