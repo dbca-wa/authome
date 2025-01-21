@@ -305,6 +305,7 @@ PASSCODE_DAILY_LIMIT = env("PASSCODE_DAILY_LIMIT",100)
 PASSCODE_TRY_TIMES = env("PASSCODE_TRY_TIMES",3)
 PASSCODE_LENGTH=env('PASSCODE_LENGTH',default=6)
 PASSCODE_AGE=env('PASSCODE_AGE',default=300) #the age of verify code, in seconds
+PASSCODE_RESEND_INTERVAL=env('PASSCODE_RESEND_INTERVAL',default=45) #the interval to resend passcode, in seconds
 SIGNUP_TOKEN_LENGTH=env('SIGNUP_TOKEN_LENGTH',default=64)
 SIGNUP_TOKEN_AGE=env('SIGNUP_TOKEN_AGE',default=3600) #the age of signup token, in seconds
 

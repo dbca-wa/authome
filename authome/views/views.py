@@ -669,7 +669,15 @@ def auth_local(request):
 
     page_layout,extracss = _get_userflow_pagelayout(request,next_url_domain)
 
-    context = {"body":page_layout,"extracss":extracss,"domain":next_url_domain,"next":next_url,"expiretime":utils.format_timedelta(settings.PASSCODE_AGE,unit='s')}
+    context = {
+        "body":page_layout,
+        "extracss":extracss,
+        "domain":next_url_domain,
+        "next":next_url,
+        "expiretime":utils.format_timedelta(settings.PASSCODE_AGE,unit='s'),
+        "passcode_age":settings.PASSCODE_AGE - 5,
+        "passcode_resend_interval":settings.PASSCODE_RESEND_INTERVAL
+    }
 
     now = timezone.localtime()
     if request.method == "GET":

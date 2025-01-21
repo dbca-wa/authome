@@ -30,11 +30,17 @@
 </div>
 <div class="buttons"> 
    <div style="display:inline;">
-     <button id="id_defaultaction" type="submit" name="action" value="verifycode" form="attributeVerification" style="width:150px">Verify code</button>
-     <button id="id_resendcode" type="submit" name="action" value="resendcode" form="attributeVerification"  style="width:150px" >Send new code</button>
+     <button id="id_defaultaction" type="submit" name="action" value="verifycode" form="attributeVerification" style="width:150px">Verify code {{passcode_age}}</button>
+     <button id="id_resendcode" type="submit" name="action" value="resendcode" form="attributeVerification"  style="width:150px" disabled >Send new code {{passcode_resend_interval}}</button>
   </div>
    <button id="id_changeemail" type="submit" name="action" value="changeemail" form="attributeVerification"  style="width:305px;">Change your email</button>
    <button id="cancel" aria-label="Cancel" formnovalidate="" name="action" value="cancel" form="attributeVerification">Cancel</button>
  </div>
 </form>
+<script type="text/javascript">
+    $(document).ready(function () {
+        enableButton($("#id_resendcode"),"Send new code",{{passcode_resend_interval}},true);
+        enableButton($("#id_defaultaction"),"Verify code",{{passcode_age}},false);
+    })
+</script>
 {% endblock realcontent %}
