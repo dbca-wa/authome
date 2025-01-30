@@ -768,7 +768,14 @@ def auth_local(request):
                 )
                 #send email
                 emails.send_email(userflow.verifyemail_from,context["email"],userflow.verifyemail_subject,verifyemail_body)
-                context["messages"] = [("info",mark_safe("Verification code has been sent to {}<br>Please enter the verification code.".format(email)))]
+                if action == "resendcode":
+                    context["messages"] = [
+                        ("info",mark_safe("A new verification code has been sent to {}<br>Please enter the new verification code.".format(email))),
+                        ("warning",mark_safe("All previous pin codes will be invalidated.")),
+                    ]
+                else:
+                    context["messages"] = [("info",mark_safe("Verification code has been sent to {}<br>Please enter the verification code.".format(email)))]
+
                 logger.debug("Verification code has been sent to {}.".format(context["email"]))
             context["codeid"] = codeid
             return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
