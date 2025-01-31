@@ -474,6 +474,19 @@ class MemoryCache(cache.MemoryCache):
         res = self._send_request_to_cluster(None,clusterid,_send_request)
         return res.text
 
+    def get_auth2_onlinestatus(self,clusterid):
+        """
+        get the onlinestatus of the cluster server
+        Return cluster online status
+        """
+        def _send_request(cluster):
+            return requests.get("{}{}".format(
+                cluster.endpoint,
+                reverse('cluster:auth2_onlinestatus')
+            ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT,verify=settings.SSL_VERIFY)
+        res = self._send_request_to_cluster(None,clusterid,_send_request)
+        return json.loads(res.text,cls=JSONDecoder)
+
     def get_auth2_liveness(self,clusterid,serviceid,monitordate):
         """
         get the status of the cluster server

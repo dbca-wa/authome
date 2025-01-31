@@ -20,5 +20,6 @@ urlpatterns = [
 
 if settings.AUTH2_MONITORING_DIR:
     urlpatterns.append(path('auth2status/<str:clusterid>', views.auth2_status,name="auth2_status"))
+    urlpatterns.append(path('auth2onlinestatus', views.auth2_local_onlinestatus,name="auth2_onlinestatus"))
     urlpatterns.append(path('liveness/<str:clusterid>/<str:serviceid>/<str:monitordate>.html', views.auth2_liveness,name="auth2_liveness"))
 
