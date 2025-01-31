@@ -67,7 +67,7 @@ def _auth2_cluster_liveness(request,clusterid,serviceid,monitordate):
 def _auth2_liveness(request,serviceid,monitordate):
     return _auth2_cluster_liveness(request,"standalone",serviceid,monitordate)
 
-serverinfo_re = re.compile("['\"](?P<serverid>[a-zA-Z0-9_\\-\\.]+)readytime['\"][^a-zA-Z0-9_\\-\\.]+(?P<readytime>[0-9][0-9\\- :]*[0-9])?.+['\"](?P=serverid)heartbeat['\"][^a-zA-Z0-9_\\-\\.]+(?P<heartbeat>[0-9][0-9\\- :]*[0-9])?",re.DOTALL)
+serverinfo_re = re.compile("['\"](?P<serverid>[a-zA-Z0-9_\\-\\.:]+)readytime['\"][^a-zA-Z0-9_\\-\\.]+(?P<readytime>[0-9][0-9\\- :]*[0-9])?.+['\"](?P=serverid)heartbeat['\"][^a-zA-Z0-9_\\-\\.]+(?P<heartbeat>[0-9][0-9\\- :]*[0-9])?",re.DOTALL)
 def _auth2_local_onlinestatus():
     clusterid = settings.AUTH2_CLUSTERID if settings.AUTH2_CLUSTER_ENABLED else "standalone"
     p = os.path.join(settings.AUTH2_MONITORING_DIR,"auth2",clusterid)
@@ -202,10 +202,10 @@ def _populate_onlinestatus(serverstatuslist,now,earliestMonitorDay,monitortime4N
 
 
 def auth2_onlinestatus(request):
-    now = timezone.localtime()
+    now = timezone.localtime().replace(microsecond=0)
     today = now.replace(hour=0,minute=0,second=0,microsecond=0)
     earliestMonitorDay = today - timedelta(days=settings.AUTH2_MONITOR_EXPIREDAYS)
-    monitortime4Now = now - timedelta(seconds=15)
+    monitortime4Now = now - timedelta(seconds=30)
     
     allservers = _auth2_local_onlinestatus()
     onlinestatuslist = _populate_onlinestatus(allservers[0],now,earliestMonitorDay,monitortime4Now)
