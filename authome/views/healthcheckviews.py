@@ -175,7 +175,7 @@ def _populate_onlinestatus(serverstatuslist,now,earliestMonitorDay,monitortime4N
                         online_status[1] = server[0]
                         onlinestatuslist.append(online_status)
                         
-                    if (online_endtime - server[0]).total_seconds() < 120:
+                    if (online_endtime != now) and (online_endtime - server[0]).total_seconds() < 120:
                         #an old server was replaced, delete the old server.
                         serverstatuslist[serverindex][-1] = server[0]
                         del serverstatuslist[serverindex]
