@@ -1,5 +1,9 @@
 from datetime import timedelta
-from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden, JsonResponse, HttpResponseNotAllowed, HttpResponseNotFound
+import tempfile
+import os
+import random
+import subprocess
+from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden, JsonResponse, HttpResponseNotAllowed, HttpResponseNotFound,FileResponse
 from django.template.response import TemplateResponse
 from django.contrib.auth import logout
 from django.urls import reverse
@@ -68,7 +72,7 @@ def succeed_response_factory(request):
     else:
         return SUCCEED_RESPONSE
 
-FORBIDDEN_RESPONSE = HttpResponseForbidden()
+FORBIDDEN_RESPONSE = HttpResponseForbidden("Denied")
 def forbidden_response_factory(request):
     if request.session.cookie_changed or request.session.is_empty():
         return HttpResponseForbidden()
@@ -417,6 +421,68 @@ def auth(request):
     if res:
         #authenticated, but can be authorized or not authorized
         return res
+    else:
+        #not authenticated
+        return auth_required_response_factory(request)
+
+@csrf_exempt
+def auth_captcha(request):
+    """
+    Only captcha is required
+    """
+    res = _auth(request)
+    if res and res.status_code == 403:
+        #authenticated but not authorized.
+        return res
+
+    requestpath = utils.get_request_path(request)
+    key = "captcha_{}".format(requestpath)
+
+    if request.session.get(key) == "T":
+        #captcha checked
+        del request.session[key]
+        if res:
+            #authenticated, but can be authorized or not authorized
+            return res
+        else:
+            #not authenticated
+            return SUCCEED_RESPONSE
+    else:
+        #captcha required
+        if request.session.get(key) == "R":
+            #captcha requirement flag is already set
+            request.session.modified = False
+        else:
+            request.session[key] = "R"
+        return auth_required_response_factory(request)
+
+@csrf_exempt
+def auth_and_captcha(request):
+    """
+    Both auth and captcha are required
+    """
+    res = _auth(request)
+    if res:
+        if res.status_code == 403:
+            #authenticated but not authorized.
+            return res
+
+        #authenticated, but can be authorized or not authorized
+        requestpath = utils.get_request_path(request)
+        key = "captcha_{}".format(requestpath)
+
+        if request.session.get(key) == "T":
+            #captcha checked
+            del request.session[key]
+            return res
+        else:
+            #captcha required
+            if request.session.get(key) == "R":
+                #captcha requirement flag is already set
+                request.session.modified = False
+            else:
+                request.session[key] = "R"
+            return auth_required_response_factory(request)
     else:
         #not authenticated
         return auth_required_response_factory(request)
@@ -948,6 +1014,156 @@ def auth_local(request):
     else:
         return  HttpResponseNotAllowed(["GET","POST"])
 
+CODE_CHARS="0123456789"
+#CODE_CHARS="23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+captchadir = os.path.join(tempfile.gettempdir(),"auth2captchas")
+captchadirlen = len(captchadir)
+
+def _generate_captcha(kind):
+    code = None
+    for i in range(settings.CAPTCHA_LEN):
+        if code:
+            code += CODE_CHARS[random.choice(range(len(CODE_CHARS)))]
+        else:
+            code = CODE_CHARS[random.choice(range(len(CODE_CHARS)))]
+
+    result = subprocess.run(["python","captchautil.py",kind,code],capture_output=True)
+    if result.returncode != 0:
+        raise Exception("Failed to generate {} captcha.{}".format(kind,result))
+    return (code,result.stdout.decode("UTF-8").strip())
+
+def check_auth_and_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND):
+    """
+    check authentication and generate and check captcha
+    """
+    
+    if request.user.is_authenticated and request.user.is_active:
+        #authenticated
+        return check_captcha(request,kind=kind,auth=True)
+    else:
+        return home(request)
+
+imagefile = "authome/check_captcha_image.html"
+audiofile = "authome/check_captcha_audio.html"
+imagefileWithAuth = "authome/check_auth_and_captcha_image.html"
+audiofileWithAuth = "authome/check_auth_and_captcha_audio.html"
+def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
+    """
+    generate and check captcha
+    """
+    if request.method == "GET":
+        next_url = _get_next_url(request)
+    else:
+        next_url = request.POST.get("next","")
+        if not next_url:
+            domain = request.get_host()
+            if domain == settings.AUTH2_DOMAIN:
+                next_url = "https://{}/sso/setting".format(domain)
+            else:
+                next_url = "https://{}".format(domain)
+
+    next_url_domain = utils.get_domain(next_url)
+    key = "captcha_{}{}".format(*utils.get_domain_path(next_url))
+    filekey = "captchafile_{}{}".format(*utils.get_domain_path(next_url))
+    if key not in request.session:
+        #not forward from next_url, not allowed to generate the captcha
+        #redirect to next_url
+        return HttpResponseRedirect(next_url)
+
+    if request.session[key] == "T":
+        #already checked the captcha, redirect to next_url
+        return HttpResponseRedirect(next_url)
+
+    page_layout,extracss = _get_userflow_pagelayout(request,next_url_domain)
+
+    context = {
+        "body":page_layout,
+        "extracss":extracss,
+        "domain":next_url_domain,
+        "next":next_url,
+        "expiretime":utils.format_timedelta(settings.PASSCODE_AGE,unit='s'),
+        "passcode_age":settings.PASSCODE_AGE - 5,
+        "passcode_resend_interval":settings.PASSCODE_RESEND_INTERVAL
+    }
+
+    now = timezone.localtime()
+
+    if not request.get_host().endswith(settings.SESSION_COOKIE_DOMAIN):
+        #post request is sent from other domain, invalid, redirect to auth2 to let user login to session cookie domain first
+        return HttpResponse(status=404)
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+    else:
+        action = "GET"
+
+    tempfile = (imagefileWithAuth if kind == "image" else audiofileWithAuth) if auth else (imagefile if kind == "image" else audiofile)
+
+    if action == "refresh":
+        outfile = request.session.get(filekey)
+        if outfile:
+            utils.remove_file(outfile)
+
+        code,outfile = _generate_captcha(kind)
+        request.session[key] = code
+        request.session[filekey] = outfile
+        context["outfile"] = outfile[captchadirlen:]
+        return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
+    elif action == "check":
+        code = request.POST.get("code")
+        saved_code = request.session.get(key)
+        if not saved_code or len(saved_code) != settings.CAPTCHA_LEN:
+            outfile = request.session.get(filekey)
+            if outfile:
+                utils.remove_file(outfile)
+
+            code,outfile = _generate_captcha(kind)
+            request.session[key] = code
+            request.session[filekey] = outfile
+            context["outfile"] = outfile[captchadirlen:]
+            context["messages"] = [("error","Code is expired!")]
+            return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
+        elif not code or code != saved_code:
+            outfile = request.session.get(filekey)
+            if not outfile:
+                code,outfile = _generate_captcha(kind)
+                request.session[key] = code
+                request.session[filekey] = outfile
+                context["outfile"] = outfile[captchadirlen:]
+                context["messages"] = [("error","Code is expired.")]
+            else:
+                context["code"] = code
+                context["outfile"] = outfile[captchadirlen:]
+                context["messages"] = [("error","Code doesn't match.")]
+            return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
+        else:
+            #code matched
+            request.session[key] = "T"
+            outfile = request.session.get(filekey)
+            if outfile:
+                #remote the  file of the matched code
+                utils.remove_file(outfile)
+            del request.session[filekey]
+
+            return HttpResponseRedirect(next_url)
+    else:
+        #request is sent from session cookie domain, show the page to input email
+        savedcode = request.session.get(key)
+        outfile = request.session.get(filekey)
+        if outfile:
+            #remove the expired captcha file
+            utils.remove_file(outfile)
+        #generate a new captcha
+        code,outfile = _generate_captcha(kind)
+        request.session[key] = code
+        request.session[filekey] = outfile
+        context["outfile"] = outfile[captchadirlen:]
+        return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
+
+def captchaimage(request,imagedir,imagefile):
+    #with open(os.path.join(captchadir,imagedir,imagefile)) as f:
+    #    return FileResponse(f, as_attachment=False)
+    return FileResponse(open(os.path.join(captchadir,imagedir,imagefile),'rb'), as_attachment=False)
 
 def logout_view(request):
     """

@@ -570,3 +570,11 @@ def get_callstack(only_include_authome_module=True):
         return "\n".join(line for line in traceback.format_stack()[:-1] if line.strip().startswith(authome_module_prefix))
     else:
         return "\n".join(line for line in traceback.format_stack()[:-1])
+
+
+def remove_file(f):
+    try:
+        os.remove(f)
+    except Exception as ex:
+        logger.error("Failed to remove the file '{}'. {}".format(f,str(ex)))
+        
