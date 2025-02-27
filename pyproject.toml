@@ -25,6 +25,7 @@ PyJWT = "2.9.0"
 psutil = "6.1.0"
 redis = "5.0.4"
 sentry-sdk = {version = "2.16.0", extras = ["django"]}
+captcha = "0.6.0"
 
 [tool.poetry.dev-dependencies]
 ipython = "^8.29.0"
@@ -32,6 +33,7 @@ coverage = "^5.3"
 coveralls = "^2.1.2"
 mock = "^5.1.0"
 ipdb = "^0.13.4"
+pipdeptree = "^2.25.0"
 
 [build-system]
 requires = ["poetry-core"]

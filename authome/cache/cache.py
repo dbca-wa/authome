@@ -173,6 +173,11 @@ class _BaseMemoryCache(object):
         self._idps_size = None
         self._idps_ts = None
 
+        #model TrafficControl cache
+        self._tcontrols = None
+        self._tcontrols_size = None
+        self._tcontrols_ts = None
+
         #user authentication cache
         self._auth_map = OrderedDict() 
         self._staff_auth_map = OrderedDict() 
@@ -206,6 +211,9 @@ class _BaseMemoryCache(object):
 
         #The runable task to check IdentityProvider cache
         self._idp_cache_check_time = IntervalTaskRunable("idp cache",settings.IDP_CACHE_CHECK_INTERVAL) if settings.IDP_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("idp cache",settings.IDP_CACHE_CHECK_HOURS)
+
+        #The runable task to check TrafficControl cache
+        self._tcontrol_cache_check_time = IntervalTaskRunable("traffic control cache",settings.TRAFFICCONTROL_CACHE_CHECK_INTERVAL) if settings.TRAFFICCONTROL_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("traffic control cache",settings.TRAFFICCONTROL_CACHE_CHECK_HOURS)
 
     @property
     def usergrouptree(self):
@@ -275,6 +283,18 @@ class _BaseMemoryCache(object):
             self._idps,self._idps_size,self._idps_ts = value
         else:
             self._idps,self._idps_size,self._idps_ts = None,None,None
+
+    @property
+    def tcontrols(self):
+        self.refresh_tcontrol_cache()
+        return self._tcontrols
+
+    @tcontrols.setter
+    def tcontrols(self,value):
+        if value:
+            self._tcontrols,self._tcontrols_size,self._tcontrols_ts = value
+        else:
+            self._tcontrols,self._tcontrols_size,self._tcontrols_ts = None,None,None
 
     @property
     def userflows(self):
@@ -541,6 +561,15 @@ class _BaseMemoryCache(object):
             if IdentityProviderChange.is_changed():
                 IdentityProvider.refresh_cache()
 
+    def refresh_tcontrol_cache(self,force=False):
+        if not self._tcontrols:
+            from ..models import TrafficControl
+            self._tcontrol_cache_check_time.can_run()
+            TrafficControl.refresh_cache()
+        elif self._tcontrol_cache_check_time.can_run() or force:
+            from ..models import TrafficControlChange,TrafficControl
+            if TrafficControlChange.is_changed():
+                TrafficControl.refresh_cache()
 
     def refresh_userflow_cache(self,force=False):
         if not self._userflows:

@@ -577,4 +577,42 @@ def remove_file(f):
         os.remove(f)
     except Exception as ex:
         logger.error("Failed to remove the file '{}'. {}".format(f,str(ex)))
+
+
+NUMBER2CHAR = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz[]{};:,./<>?|+=-_()*&^%$#@!`~"
+CHAR2NUMBER = {}
+index = 0
+for s in NUMBER2CHAR:
+    CHAR2NUMBER[s] = index
+    index += 1
+     
+def encode_integer(n,base=len(NUMBER2CHAR)):
+    if not n:
+        return "0"
+    result = None
+    while n > 0:
+        d = n % base
+        if result:
+            result = "{}{}".format(NUMBER2CHAR[d],result)
+        else:
+            result = NUMBER2CHAR[d]
+        n = int((n - d) / base)
+
+    return result
+
+def decode_integer(s,base=len(NUMBER2CHAR)):
+    if not s:
+        return 0
+    result = 0
+    i = len(s)
+    for c in s:
+        i -= 1
+        if i == 0:
+            result += CHAR2NUMBER[c]
+        elif i == 1:
+            result += CHAR2NUMBER[c] * base
+        else:
+            result += CHAR2NUMBER[c] * pow(base,i)
+
+    return result
         

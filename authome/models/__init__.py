@@ -30,6 +30,13 @@ def initialize():
         if not settings.IGNORE_LOADING_ERROR:
             raise Exception("Failed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
         
+    logger.debug("Begin to load TrafficControl cache")
+    try:
+        cache.refresh_tcontrol_cache(True)
+    except:
+        if not settings.IGNORE_LOADING_ERROR:
+            raise Exception("Failed to load TrafficControl cache during server starting.{}".format(traceback.format_exc()))
+        
     logger.debug("Begin to load IDP cache")
     try:
         cache.refresh_idp_cache(True)

@@ -35,16 +35,18 @@ urlpatterns = [
     path('sso/auth_basic_optional', traffic_monitor("auth_basic_optional",views.auth_basic_optional), name='auth_basic_optional'),
     path('sso/auth_captcha', traffic_monitor("auth_captcha",views.auth_captcha), name='auth_captcha'),
     path('sso/auth_and_captcha', traffic_monitor("auth_and_captcha",views.auth_and_captcha), name='auth_and_captcha'),
-    path('sso/check_captcha/', views.check_captcha, name='check_captcha'),
-    path('sso/check_captcha/<slug:kind>', views.check_captcha, name='check_captcha2'),
-    path('sso/check_auth_and_captcha/', views.check_auth_and_captcha, name='check_auth_and_captcha'),
-    path('sso/check_auth_and_captcha/<slug:kind>', views.check_auth_and_captcha, name='check_auth_and_captcha2'),
-    path('sso/captchaimage/<slug:imagedir>/<str:imagefile>', views.captchaimage, name='captchaimage'),
+
+    path('sso/auth_tcontrol', traffic_monitor("auth&tcontrol",views.auth_tcontrol), name='auth_and_tcontrol'),
+    path('sso/auth_optional_tcontrol', traffic_monitor("auth_optional&tcontrol",views.auth_optional_tcontrol), name='auth_optional_and_tcontrol'),
+    path('sso/auth_basic_tcontrol', traffic_monitor("auth_basic&tcontrol",views.auth_basic_tcontrol), name='auth_basic_and_tcontrol'),
+    path('sso/auth_basic_optional_tcontrol', traffic_monitor("auth_basic_optional&tcontrol",views.auth_basic_optional_tcontrol), name='auth_basic_optional_and_tcontrol'),
+
     path('sso/login_domain', csrf_exempt(views.login_domain), name='login_domain'),
     path('sso/profile', views.profile, name='profile'),
     path('sso/signout_socialmedia', views.signout_socialmedia, name='signout_socialmedia'),
     path('sso/signedout', views.signedout, name='signedout'),
     path('sso/forbidden', views.forbidden, name='forbidden'),
+    path('sso/forbidden_tcontrol', views.forbidden_tcontrol, name='forbidden_tcontrol'),
     path('sso/loginstatus', views.loginstatus, name='loginstatus'),
 
     path('sso/verifycode', views.verify_code_via_email, name='verify_code'),
@@ -77,6 +79,11 @@ urlpatterns = [
     path('sso/', include('social_django.urls', namespace='social')),
     path('admin/', admin_urls),
     path('', views.home, name='home'),
+    path('check_captcha/', views.check_captcha, name='check_captcha'),
+    path('check_captcha/<slug:kind>', views.check_captcha, name='check_captcha2'),
+    path('check_auth_and_captcha/', views.check_auth_and_captcha, name='check_auth_and_captcha'),
+    path('check_auth_and_captcha/<slug:kind>', views.check_auth_and_captcha, name='check_auth_and_captcha2'),
+    path('captcha/<slug:captchadir>/<str:captchafile>', views.captcha, name='captcha'),
 
     path("favicon.ico",RedirectView.as_view(url="{}images/favicon.ico".format(settings.STATIC_URL)))
 ]

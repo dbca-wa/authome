@@ -22,8 +22,8 @@
 <div id="attributeList" class="attr">
   <ul>
    <li>
-    <input type="text" title="Please enter the verification code." id="id_code" name="code" pattern="^[A-Z0-9]+$" placeholder="Code" value="{{code}}" aria-label="Code" required style="width:150px">
-    <img src="/sso/captchaimage{{outfile}}">
+    <input type="text" title="Please enter the 4 digits verification code." id="id_code" name="code" pattern="^[0-9]{4}$" placeholder="code" value="{{code}}" aria-label="Code" required style="width:150px">
+    <img src="/captcha{{outfile}}">
    </li>
   </ul>
 </div>

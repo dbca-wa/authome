@@ -1,8 +1,10 @@
 from datetime import timedelta
 import tempfile
 import os
+import math
 import random
 import subprocess
+from django.core.cache import caches
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden, JsonResponse, HttpResponseNotAllowed, HttpResponseNotFound,FileResponse
 from django.template.response import TemplateResponse
 from django.contrib.auth import logout
@@ -537,14 +539,6 @@ def is_usertoken_valid(user,token):
     usertoken = load_usertoken(user)
     return usertoken and usertoken.is_valid(token)
 
-@csrf_exempt
-def auth_basic_optional(request):
-    return _auth_basic(request,not_authentiated_response_factory=auth_not_required_response_factory)
-
-@csrf_exempt
-def auth_basic(request):
-    return _auth_basic(request,)
-
 def _auth_basic(request,not_authentiated_response_factory=basic_auth_required_response_factory):
     """
     view method for path '/sso/auth_basic'
@@ -670,6 +664,180 @@ def _auth_basic(request,not_authentiated_response_factory=basic_auth_required_re
     except Exception as e:
         #return basi auth required response if any exception occured.
         return not_authentiated_response_factory(request)
+
+@csrf_exempt
+def auth_basic_optional(request):
+    return _auth_basic(request,not_authentiated_response_factory=auth_not_required_response_factory)
+
+@csrf_exempt
+def auth_basic(request):
+    return _auth_basic(request,)
+
+tcontrolcache = caches[settings.TRAFFICCONTROL_CACHE_ALIAS] if settings.TRAFFICCONTROL_SUPPORTED else None
+def _check_tcontrol(tcontrol,clientip,client):
+    try:
+        #check traffic control for client
+        now = timezone.localtime()
+        today = now.replace(hour=0,minute=0,second=0,microsecond=0)
+        milliseconds = math.floor((now - today).total_seconds() * 1000)
+        cacheclient = tcontrolcache.redis_client
+        userlimitkey = None
+        if client and tcontrol.userlimit > 0 and tcontrol.userlimitperiod:
+            userlimitkey = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}_{}_{}".format(tcontrol.name,tcontrol.userlimitperiod,client,math.floor(milliseconds / (tcontrol.userlimitperiod * 1000))))
+            requests = cacheclient.incr(userlimitkey)
+            #logger.warning("{}: The user({}) has already sent {} requests".format(tcontrol.name,client,requests))
+            if requests == 1:
+                #set the expire time, 5 seconds later than limitperiod
+                cacheclient.expire(userlimitkey,tcontrol.userlimitperiod + 5)
+            elif requests > tcontrol.userlimit:
+                if requests == tcontrol.userlimit + 1:
+                    if cacheclient.execute_command("set","{}_{}_debuglog".format(tcontrol.name,client),"1","NX","EX",1800):
+                        #log interval half an hour
+                        DebugLog.tcontrol(DebugLog.USER_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Send too many requests({}) in {}".format(requests,utils.format_timedelta(tcontrol.userlimitperiod)))
+                #exceed the user limit
+                return (False,"USER",requests,(today + timedelta(milliseconds=milliseconds + tcontrol.userlimitperiod * 1000 - milliseconds % (tcontrol.userlimitperiod * 1000))).strftime("%Y-%m-%d %H:%M:%S"))
+    
+        iplimitkey = None
+        if clientip and tcontrol.iplimit > 0 and tcontrol.iplimitperiod:
+            iplimitkey = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}_{}_{}".format(tcontrol.name,tcontrol.iplimitperiod,clientip,math.floor(milliseconds / (tcontrol.iplimitperiod * 1000))))
+            requests = cacheclient.incr(iplimitkey)
+            #logger.warning("{}: The IP address({}) has already sent {} requests.key={}".format(tcontrol.name,clientip,requests,iplimitkey))
+            if requests == 1:
+                #set the expire time, 5 seconds later than limitperiod
+                cacheclient.expire(iplimitkey,tcontrol.iplimitperiod + 5)
+            elif requests > tcontrol.iplimit:
+                if requests == tcontrol.iplimit + 1:
+                    if cacheclient.execute_command("set","{}_{}_debuglog".format(tcontrol.name,clientip),"1","NX","EX",1800):
+                        #log interval half an hour
+                        DebugLog.tcontrol(DebugLog.IP_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Send too many requests({}) in {}".format(requests,utils.format_timedelta(tcontrol.iplimitperiod)))
+                #exceed the ip limit
+                if userlimitkey:
+                    #decrease the user limits which was added before
+                    cacheclient.desc(userlimitkey)
+                return (False,"IP",requests,(today + timedelta(milliseconds=milliseconds + tcontrol.iplimitperiod * 1000 - milliseconds % (tcontrol.iplimitperiod * 1000))).strftime("%Y-%m-%d %H:%M:%S"))
+    
+    
+        #check the concurrency
+        if tcontrol.concurrency > 0 and tcontrol.est_processtime > 0:
+            bucketid,expired_buckets = tcontrol.get_buckets(today,milliseconds)
+            key = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,bucketid))
+            #use 2 hours as a cycle to reduce the length of value. and use 10 millisecond as minimum time unit
+            requests = cacheclient.incr(key)
+            if requests == 1:
+                #set the expire time, 5 seconds later than limitperiod
+                cacheclient.expire(key,math.ceil(tcontrol.est_processtime / 1000) + 5)
+            if expired_buckets:
+                #fetch the data from redis
+                fetchtime = timezone.localtime()
+                expiredbuckets_requests = cacheclient.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in expired_buckets])
+                tcontrol.set_buckets(requests,timezone.localtime(),expiredbuckets_requests)
+            else:
+                tcontrol.set_buckets(requests)
+    
+            totalrequests = tcontrol.runningrequests
+            #logger.warning("{}: Have {} running requests,bucket={} , expired buckets = {}({})".format(tcontrol.name,totalrequests,bucketid,len(expired_buckets) if expired_buckets else 0,[d for d in expired_buckets or []]))
+            if totalrequests <= tcontrol.concurrency:
+                #allow to access
+                return (True,None)
+            else:
+                #if exceed the limit, can't access
+                #decrease the concurrency which was added before
+                cacheclient.decr(key)
+                #decrease the user limit which was added before
+                if userlimitkey:
+                    cacheclient.decr(userlimitkey)
+                #decrease the ip limit which was added before
+                if iplimitkey:
+                    cacheclient.decr(iplimitkey)
+                
+                if cacheclient.execute_command("set","{}_debuglog".format(tcontrol.name),"1","NX","EX",300):
+                    #the log interval is 5 minutes
+                    DebugLog.tcontrol(DebugLog.CONCURRENCY_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Too many running requests({})".format(totalrequests))
+                return (False,"CONCURRENCY",totalrequests)
+    except Exception as ex:
+        if settings.DEBUG:
+            raise
+        else:
+            #check failed, ignore traffic control
+            return (True,str(ex))
+            
+def _tcontrol(request):
+    if request.user.is_authenticated:
+        client = client=request.user.email
+        if settings.TRAFFICCONTROL_EXEMPT_NONPUBLICUSER:
+            groups = models.UserGroup.find_groups(client)
+            if len(groups[0]) > 1:
+                #is the user we known,exempt traffic control
+                return True
+    else:
+        client = request.COOKIES.get(settings.TRAFFICCONTROL_COOKIE_NAME) or None
+
+    clientip = request.META.get('REMOTE_ADDR')
+
+    domain = request.get_host()
+    path = request.headers.get("x-upstream-request-uri")
+    if path:
+        #get the original request path
+        #remove the query string
+        try:
+            path = path[:path.index("?")]
+        except:
+            pass
+    else:
+        #can't get the original path, use request path directly
+        path = request.path
+
+    method = request.headers.get("x-upstream-request-method") or "GET"
+    if not method:
+        method = models.TrafficControlLocation.GET
+    else:
+        method = models.TrafficControlLocation.METHODS.get(method) or models.TrafficControlLocation.METHODS.get(method.upper()) or models.TrafficControlLocation.GET
+
+    tcontrol = cache.tcontrols.get((domain,path,method))
+    if not tcontrol or not tcontrol.active:
+        #no traffic control policies are enabled.
+        return None
+
+    if settings.TRAFFICCONTROL_SUPPORTED:
+        result = _check_tcontrol(tcontrol,clientip,client)
+    else:
+        result = cahce.tcontrol(settings.TRAFFICCONTROL_CLUSTERID,tcontrol.id,clientip,client)
+    
+    if result[0]:
+        return None
+    else:
+        res = HttpResponseForbidden("Denied")
+        res["x-tcontrol"] = urllib.parse.quote("{}|{}|{}|{}".format(tcontrol.id,result[1],result[2],result[3]) if len(result) == 4  else "{}|{}|{}".format(tcontrol.id,result[1],result[2]))
+        return res
+
+def auth_tcontrol(request):
+    res = auth(request)
+    if res.status_code > 300:
+        return res
+    #authentication and authorization succeed
+    #check the traffic control
+    return _tcontrol(request) or res
+
+def auth_optional_tcontrol(request):
+    res = auth_optional(request)
+    if res.status_code > 300:
+        return res
+    #check the traffic control
+    return _tcontrol(request) or res
+
+def auth_basic_tcontrol(request):
+    res = auth_basic(request)
+    if res.status_code > 300:
+        return res
+    #check the traffic control
+    return _tcontrol(request) or res
+
+def auth_basic_optional_tcontrol(request):
+    res = auth_basic_optional(request)
+    if res.status_code > 300:
+        return res
+    #check the traffic control
+    return _tcontrol(request) or res
 
 email_re = re.compile("^[a-zA-Z0-9\\.!#\\$\\%\\&’'\\*\\+\\/\\=\\?\\^_`\\{\\|\\}\\~\\-]+@[a-zA-Z0-9\\-]+(\\.[a-zA-Z0-9\\-]+)*$")
 VALID_CODE_CHARS = string.digits if settings.PASSCODE_DIGITAL else (string.ascii_uppercase + string.digits)
@@ -1014,18 +1182,22 @@ def auth_local(request):
     else:
         return  HttpResponseNotAllowed(["GET","POST"])
 
-CODE_CHARS="0123456789"
-#CODE_CHARS="23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
-captchadir = os.path.join(tempfile.gettempdir(),"auth2captchas")
-captchadirlen = len(captchadir)
+captchabasedir = os.environ.get("CAPTCHA_BASEDIR")
+if captchabasedir:
+    if captchabasedir.endswith("/"):
+        captchabasedir = captchabasedir[:-1]
+else:
+    captchabasedir = os.path.join(tempfile.gettempdir(),"auth2captchas")
+captchabasedirlen = len(captchabasedir)
 
 def _generate_captcha(kind):
     code = None
+    validchars = settings.CAPTCHA_CHARS_IMAGE if kind == "image" else settings.CAPTCHA_CHARS_AUDIO 
     for i in range(settings.CAPTCHA_LEN):
         if code:
-            code += CODE_CHARS[random.choice(range(len(CODE_CHARS)))]
+            code += validchars[random.choice(range(len(validchars)))]
         else:
-            code = CODE_CHARS[random.choice(range(len(CODE_CHARS)))]
+            code = validchars[random.choice(range(len(validchars)))]
 
     result = subprocess.run(["python","captchautil.py",kind,code],capture_output=True)
     if result.returncode != 0:
@@ -1036,7 +1208,6 @@ def check_auth_and_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND):
     """
     check authentication and generate and check captcha
     """
-    
     if request.user.is_authenticated and request.user.is_active:
         #authenticated
         return check_captcha(request,kind=kind,auth=True)
@@ -1107,7 +1278,7 @@ def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
         code,outfile = _generate_captcha(kind)
         request.session[key] = code
         request.session[filekey] = outfile
-        context["outfile"] = outfile[captchadirlen:]
+        context["outfile"] = outfile[captchabasedirlen:]
         return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
     elif action == "check":
         code = request.POST.get("code")
@@ -1120,7 +1291,7 @@ def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
             code,outfile = _generate_captcha(kind)
             request.session[key] = code
             request.session[filekey] = outfile
-            context["outfile"] = outfile[captchadirlen:]
+            context["outfile"] = outfile[captchabasedirlen:]
             context["messages"] = [("error","Code is expired!")]
             return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
         elif not code or code != saved_code:
@@ -1129,11 +1300,11 @@ def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
                 code,outfile = _generate_captcha(kind)
                 request.session[key] = code
                 request.session[filekey] = outfile
-                context["outfile"] = outfile[captchadirlen:]
+                context["outfile"] = outfile[captchabasedirlen:]
                 context["messages"] = [("error","Code is expired.")]
             else:
                 context["code"] = code
-                context["outfile"] = outfile[captchadirlen:]
+                context["outfile"] = outfile[captchabasedirlen:]
                 context["messages"] = [("error","Code doesn't match.")]
             return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
         else:
@@ -1157,13 +1328,13 @@ def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
         code,outfile = _generate_captcha(kind)
         request.session[key] = code
         request.session[filekey] = outfile
-        context["outfile"] = outfile[captchadirlen:]
+        context["outfile"] = outfile[captchabasedirlen:]
         return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
 
-def captchaimage(request,imagedir,imagefile):
-    #with open(os.path.join(captchadir,imagedir,imagefile)) as f:
+def captcha(request,captchadir,captchafile):
+    #with open(os.path.join(captchabasedir,captchadir,captchafile)) as f:
     #    return FileResponse(f, as_attachment=False)
-    return FileResponse(open(os.path.join(captchadir,imagedir,imagefile),'rb'), as_attachment=False)
+    return FileResponse(open(os.path.join(captchabasedir,captchadir,captchafile),'rb'), as_attachment=False)
 
 def logout_view(request):
     """
@@ -1775,6 +1946,46 @@ def forbidden(request):
     context = {"body":page_layout,"extracss":extracss,"path":path,"url":url.format(domain,path),"domain":domain}
 
     return TemplateResponse(request,"authome/forbidden.html",context=context)
+
+def forbidden_tcontrol(request):
+    """
+    View method for path '/sso/forbidden_tcontrol'
+    can also be called from other view method
+    Provide a consistent,customized forbidden page.
+    """
+    tcontrol = request.GET.get("tcontrol")
+    if tcontrol:
+        url = get_absolute_url(request.GET.get("path") or request.get_full_path(),request.get_host())
+        parsed_url = utils.parse_url(url)
+        domain = parsed_url["domain"]
+        path = parsed_url["path"]
+
+        page_layout,extracss = _get_userflow_pagelayout(request,domain)
+        context = {"body":page_layout,"extracss":extracss,"path":path,"url":url.format(domain,path),"domain":domain}
+        
+        try:
+            tcontrol = tcontrol.split("|")
+            tcontrol[0] = cache.tcontrols.get(int(tcontrol[0])) or None
+
+            if tcontrol[1] == "USER":
+                if tcontrol[0]:
+                    context["msg"] = "You have send too many requests({}) in {}, please try again after {}".format(tcontrol[2],utils.format_timedelta(tcontrol[0].userlimitperiod) ,tcontrol[3])
+                else:
+                    context["msg"] = "You have send too many requests({}), please try again after {}".format(tcontrol[2],tcontrol[3])
+            elif tcontrol[1] == "IP":
+                if tcontrol[0]:
+                    context["msg"] = "Too many requests({}) have been sent in {}, please try again after {}".format(tcontrol[2],utils.format_timedelta(tcontrol[0].userlimitperiod) ,tcontrol[3])
+                else:
+                    context["msg"] = "Too many requests({}) have been sent, please try again after {}".format(tcontrol[2],tcontrol[3])
+            else:
+                context["msg"] = "Too many requets({}) are running, please wait a few seconds and try again.".format(tcontrol[2])
+        except:
+            context["msg"] = "Too many requets are running, please wait a few seconds and try again."
+
+
+        return TemplateResponse(request,"authome/tcontrol.html",context=context)
+    else:
+        return forbidden(request)
 
 def profile_edit(request):
     """

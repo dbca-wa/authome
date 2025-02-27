@@ -2,12 +2,14 @@ import re
 import logging
 import traceback
 import random
+import math
 from datetime import timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from django.db import models, transaction
+from django.db import transaction
+from django.db import models as django_models
 from django.contrib.postgres.fields.array import ArrayField as DjangoArrayField
 from django.db.models.signals import pre_delete, pre_save, post_save, post_delete
 from django.dispatch import receiver
@@ -64,7 +66,7 @@ The following lists all valid options in the checking order
     4. Exact path  : Starts with '=', represents a single request path . For example =/register
 """
 
-sortkey_c = models.Func('sortkey',function='C',template='(%(expressions)s) COLLATE "%(function)s"')
+sortkey_c = django_models.Func('sortkey',function='C',template='(%(expressions)s) COLLATE "%(function)s"')
 
 class ArrayField(DjangoArrayField):
     """
@@ -284,7 +286,7 @@ class CacheableMixin(object):
         cls.get_model_change_cls().refresh_cache_if_required()
 
 
-class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
+class IdentityProvider(CacheableMixin,DbObjectMixin,django_models.Model):
     """
     The identity provider to authenticate user.
     IdentityProvider 'local' means local account
@@ -307,18 +309,18 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     _editable_columns = ("name","userflow","logout_url","logout_method","secretkey_expireat")
 
     #meaningful name set in auth2, this name will be used in some other place, so change it only if necessary
-    name = models.CharField(max_length=64,unique=True,null=True)
+    name = django_models.CharField(max_length=64,unique=True,null=True)
     #unique name returned from b2c
-    idp = models.CharField(max_length=256,unique=True,null=False,editable=False)
+    idp = django_models.CharField(max_length=256,unique=True,null=False,editable=False)
     #the user flow id dedicated for this identity provider
-    userflow = models.CharField(max_length=64,blank=True,null=True)
+    userflow = django_models.CharField(max_length=64,blank=True,null=True)
     #the logout url to logout the user from identity provider
-    logout_url = models.CharField(max_length=512,blank=True,null=True)
+    logout_url = django_models.CharField(max_length=512,blank=True,null=True)
     #the way to logout from idp
-    logout_method = models.PositiveSmallIntegerField(choices=LOGOUT_METHODS,blank=True,null=True)
-    secretkey_expireat = models.DateTimeField(null=True,editable=True,blank=True)
-    modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
-    created = models.DateTimeField(auto_now_add=timezone.now)
+    logout_method = django_models.PositiveSmallIntegerField(choices=LOGOUT_METHODS,blank=True,null=True)
+    secretkey_expireat = django_models.DateTimeField(null=True,editable=True,blank=True)
+    modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
         verbose_name_plural = "{}Identity Providers".format(" " * 9)
@@ -384,7 +386,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     def __str__(self):
         return self.name or self.idp
 
-class CustomizableUserflow(CacheableMixin,DbObjectMixin,models.Model):
+class CustomizableUserflow(CacheableMixin,DbObjectMixin,django_models.Model):
     """
     Customize userflow for domain.
     The domain '*' is the default settings.
@@ -526,28 +528,28 @@ Email: enquiries@dbca.wa.gov.au
 
     _editable_columns = ("default","mfa_set","mfa_reset","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body","signedout_url","relogin_url","signout_body","sortkey")
 
-    domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
-    fixed = models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
-    default = models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
-    mfa_set = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa set user flow")
-    mfa_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa reset user flow")
-    password_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The user password reset user flow")
+    domain = django_models.CharField(max_length=128,null=False,help_text=help_text_domain)
+    fixed = django_models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
+    default = django_models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
+    mfa_set = django_models.CharField(max_length=64,null=True,blank=True,help_text="The mfa set user flow")
+    mfa_reset = django_models.CharField(max_length=64,null=True,blank=True,help_text="The mfa reset user flow")
+    password_reset = django_models.CharField(max_length=64,null=True,blank=True,help_text="The user password reset user flow")
 
-    extracss = models.TextField(null=True,blank=True)
-    page_layout = models.TextField(null=True,blank=True)
+    extracss = django_models.TextField(null=True,blank=True)
+    page_layout = django_models.TextField(null=True,blank=True)
 
-    verifyemail_from = models.EmailField(null=True,blank=True)
-    verifyemail_subject = models.CharField(max_length=512,null=True,blank=True)
-    verifyemail_body = models.TextField(null=True,blank=True)
+    verifyemail_from = django_models.EmailField(null=True,blank=True)
+    verifyemail_subject = django_models.CharField(max_length=512,null=True,blank=True)
+    verifyemail_body = django_models.TextField(null=True,blank=True)
 
-    signedout_url = models.CharField(max_length=256,null=True,blank=True,help_text="Redirect to this url after sign out from sso")
-    relogin_url = models.CharField(max_length=256,null=True,blank=True,help_text="A link can be used in signed out page to let user relogin to the system after signout from sso.")
-    signout_body = models.TextField(null=True,blank=True,help_text="The body template used in the signed out page")
+    signedout_url = django_models.CharField(max_length=256,null=True,blank=True,help_text="Redirect to this url after sign out from sso")
+    relogin_url = django_models.CharField(max_length=256,null=True,blank=True,help_text="A link can be used in signed out page to let user relogin to the system after signout from sso.")
+    signout_body = django_models.TextField(null=True,blank=True,help_text="The body template used in the signed out page")
 
-    sortkey = models.CharField(max_length=128,editable=True,help_text="A sorting string consisted with a 2 digitals and string separated by ':', the sorting string is auto generated if the digitals is in {}".format(RequestDomain.all_base_sort_keys()))
+    sortkey = django_models.CharField(max_length=128,editable=True,help_text="A sorting string consisted with a 2 digitals and string separated by ':', the sorting string is auto generated if the digitals is in {}".format(RequestDomain.all_base_sort_keys()))
 
-    modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
-    created = models.DateTimeField(auto_now_add=timezone.now)
+    modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
         verbose_name_plural = "{}Customizable Userflows".format(" " * 10)
@@ -748,7 +750,7 @@ class ExactUserEmail(UserEmail):
 
     @property
     def qs_filter(self):
-        return models.Q(email=self.config)
+        return django_models.Q(email=self.config)
 
     def contain(self,useremail):
         if isinstance(useremail,RegexUserEmail):
@@ -763,7 +765,7 @@ class DomainEmail(UserEmail):
 
     @property
     def qs_filter(self):
-        return models.Q(email__endswith=self.config)
+        return django_models.Q(email__endswith=self.config)
 
     def contain(self,useremail):
         if isinstance(useremail,AllUserEmail):
@@ -792,7 +794,7 @@ class RegexUserEmail(UserEmail):
 
     @property
     def qs_filter(self):
-        return models.Q(email__regex=self._qs_re)
+        return django_models.Q(email__regex=self._qs_re)
 
     def contain(self,useremail):
         return None
@@ -812,7 +814,7 @@ class UserEmailPattern(UserEmail):
 
     @property
     def qs_filter(self):
-        return models.Q(email__regex=self._qs_re)
+        return django_models.Q(email__regex=self._qs_re)
 
     def contain(self,useremail):
         if isinstance(useremail,AllUserEmail):
@@ -857,21 +859,21 @@ class UserEmailPattern(UserEmail):
 
             return p_index >= len(self.config)
 
-class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
+class UserGroup(CacheableMixin,DbObjectMixin,django_models.Model):
     _useremails = None
     _excluded_useremails = None
 
     _editable_columns = ("users","parent_group","excluded_users","identity_provider","groupid","session_timeout")
 
-    name = models.CharField(max_length=32,unique=True,null=False)
-    groupid = models.SlugField(max_length=32,null=False,blank=True)
-    parent_group = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
-    users = ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
-    excluded_users = ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
-    identity_provider = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,null=True,blank=True,limit_choices_to=~models.Q(idp__exact=IdentityProvider.AUTH_EMAIL_VERIFY[0]))
-    session_timeout = models.PositiveSmallIntegerField(null=True,editable=True,blank=True,help_text="Session timeout in seconds, 0 means never timeout")
-    modified = models.DateTimeField(editable=False,db_index=True)
-    created = models.DateTimeField(auto_now_add=timezone.now)
+    name = django_models.CharField(max_length=32,unique=True,null=False)
+    groupid = django_models.SlugField(max_length=32,null=False,blank=True)
+    parent_group = django_models.ForeignKey('self', on_delete=django_models.SET_NULL,null=True,blank=True)
+    users = ArrayField(django_models.CharField(max_length=64,null=False),help_text=help_text_users)
+    excluded_users = ArrayField(django_models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
+    identity_provider = django_models.ForeignKey(IdentityProvider, on_delete=django_models.SET_NULL,null=True,blank=True,limit_choices_to=~django_models.Q(idp__exact=IdentityProvider.AUTH_EMAIL_VERIFY[0]))
+    session_timeout = django_models.PositiveSmallIntegerField(null=True,editable=True,blank=True,help_text="Session timeout in seconds, 0 means never timeout")
+    modified = django_models.DateTimeField(editable=False,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
         unique_together = [["users","excluded_users"]]
@@ -882,8 +884,8 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     def sessiontimeout(self):
         if self.session_timeout is not None:
             return self.session_timeout
-        elif self.parent_group:
-            return self.parent_group.sessiontimeout
+        elif self.parent_group_id is not None:
+            return (cache.usergroups.get(self.parent_group_id) or self.parent_group).sessiontimeout
         else:
             return 0
 
@@ -1327,7 +1329,7 @@ class RegexRequestPath(RequestPath):
         return True if self._re.search(path) else False
 
 
-class AuthorizationMixin(DbObjectMixin,models.Model):
+class AuthorizationMixin(DbObjectMixin,django_models.Model):
 
     _request_domain = None
     _excluded_request_paths = None
@@ -1338,12 +1340,12 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
 
     _editable_columns = ("domain","paths","excluded_paths")
 
-    domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
-    paths = ArrayField(models.CharField(max_length=512,null=False),null=True,blank=True,help_text=help_text_paths)
-    excluded_paths = ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
-    sortkey = models.CharField(max_length=128,editable=False)
-    modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
-    created = models.DateTimeField(auto_now_add=timezone.now)
+    domain = django_models.CharField(max_length=128,null=False,help_text=help_text_domain)
+    paths = ArrayField(django_models.CharField(max_length=512,null=False),null=True,blank=True,help_text=help_text_paths)
+    excluded_paths = ArrayField(django_models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
+    sortkey = django_models.CharField(max_length=128,editable=False)
+    modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
         abstract = True
@@ -1600,7 +1602,7 @@ def can_access(email,domain,path):
         return False
 
 class UserAuthorization(CacheableMixin,AuthorizationMixin):
-    user = models.EmailField(max_length=64)
+    user = django_models.EmailField(max_length=64)
 
     class Meta:
         unique_together = [["user","domain"]]
@@ -1646,7 +1648,7 @@ class UserAuthorization(CacheableMixin,AuthorizationMixin):
         return self.user
 
 class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
-    usergroup = models.ForeignKey(UserGroup, on_delete=models.CASCADE)
+    usergroup = django_models.ForeignKey(UserGroup, on_delete=django_models.CASCADE)
 
     class Meta:
         unique_together = [["usergroup","domain"]]
@@ -1699,10 +1701,10 @@ class NormalUserManager(UserManager):
         return super().get_queryset().filter(systemuser=False)
 
 class User(AbstractUser):
-    last_idp = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,editable=False,null=True)
-    systemuser = models.BooleanField(default=False,editable=False)
-    comments = models.TextField(null=True,editable=True,blank=True)
-    modified = models.DateTimeField(auto_now=timezone.now)
+    last_idp = django_models.ForeignKey(IdentityProvider, on_delete=django_models.SET_NULL,editable=False,null=True)
+    systemuser = django_models.BooleanField(default=False,editable=False)
+    comments = django_models.TextField(null=True,editable=True,blank=True)
+    modified = django_models.DateTimeField(auto_now=timezone.now)
 
     class Meta(AbstractUser.Meta):
         swappable = 'AUTH_USER_MODEL'
@@ -1731,7 +1733,7 @@ class User(AbstractUser):
     def __str__(self):
         return self.email
 
-class UserToken(models.Model):
+class UserToken(django_models.Model):
     DISABLED = -1
     NOT_CREATED = -2
     EXPIRED = -3
@@ -1741,12 +1743,12 @@ class UserToken(models.Model):
     RANDOM_CHARS="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYA0123456789~!@#$%^&*()-_+=`{}[];':\",./<>?"
     RANDOM_CHARS_MAX_INDEX = len(RANDOM_CHARS) - 1
 
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,primary_key=True,related_name="token",editable=False)
-    enabled = models.BooleanField(default=False,editable=False)
-    token = models.CharField(max_length=128,null=True,editable=False)
-    created = models.DateTimeField(null=True,editable=False)
-    expired = models.DateField(null=True,editable=False)
-    modified = models.DateTimeField(editable=False,db_index=True,auto_now=True)
+    user = django_models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=django_models.CASCADE,primary_key=True,related_name="token",editable=False)
+    enabled = django_models.BooleanField(default=False,editable=False)
+    token = django_models.CharField(max_length=128,null=True,editable=False)
+    created = django_models.DateTimeField(null=True,editable=False)
+    expired = django_models.DateField(null=True,editable=False)
+    modified = django_models.DateTimeField(editable=False,db_index=True,auto_now=True)
 
     class Meta:
         verbose_name_plural = "{}Access Tokens".format(" " * 8)
@@ -1831,21 +1833,290 @@ class UserToken(models.Model):
         with transaction.atomic():
             super().save(*args,**kwargs)
 
-class UserTOTP(models.Model):
-    email = models.CharField(max_length=64,null=False,editable=False,unique=True)
-    secret_key = models.CharField(max_length=512,null=False,editable=False)
-    timestep = models.PositiveSmallIntegerField(null=False,editable=False)
-    prefix = models.CharField(max_length=64,null=False,editable=False)
-    issuer = models.CharField(max_length=64,null=False,editable=False)
-    name = models.CharField(max_length=128,null=False,editable=False)
-    algorithm = models.CharField(max_length=32,null=False,editable=False)
-    digits = models.PositiveSmallIntegerField(null=False,editable=False)
-    last_verified_code = models.CharField(max_length=16,null=True,editable=False)
-    last_verified = models.DateTimeField(null=True,editable=False)
-    created = models.DateTimeField(null=False,editable=False)
+class UserTOTP(django_models.Model):
+    email = django_models.CharField(max_length=64,null=False,editable=False,unique=True)
+    secret_key = django_models.CharField(max_length=512,null=False,editable=False)
+    timestep = django_models.PositiveSmallIntegerField(null=False,editable=False)
+    prefix = django_models.CharField(max_length=64,null=False,editable=False)
+    issuer = django_models.CharField(max_length=64,null=False,editable=False)
+    name = django_models.CharField(max_length=128,null=False,editable=False)
+    algorithm = django_models.CharField(max_length=32,null=False,editable=False)
+    digits = django_models.PositiveSmallIntegerField(null=False,editable=False)
+    last_verified_code = django_models.CharField(max_length=16,null=True,editable=False)
+    last_verified = django_models.DateTimeField(null=True,editable=False)
+    created = django_models.DateTimeField(null=False,editable=False)
 
     class Meta:
         verbose_name_plural = "{}User TOTPs".format(" " * 8)
+
+class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
+    _buckets = None
+    _bucketslen = None
+    _buckets_currentid = None
+    _buckets_currenttime = None
+    _buckets_begintime = None
+    _buckets_fetchtime = None
+
+    _editable_columns = ("est_processtime","concurrency","iplimit","iplimitperiod","userlimit","userlimitperiod","enabled","active","buckettime","buckets")
+    name = django_models.SlugField(max_length=128,null=False,editable=True,unique=True)
+    enabled = django_models.BooleanField(default=True,editable=True,help_text="Enable/disable the traffic control")
+    active = django_models.BooleanField(default=False,editable=False)
+    est_processtime = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The estimated processing time(milliseconds) used to calculate the concurrency requests") #millisecond
+    buckettime = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="Declare the time period(milliseconds) of the bucket, the est_processtime and the total milliseconds of one day should be divided by this value.") #milliseconds
+    buckets = django_models.PositiveIntegerField(default=0,null=False,editable=False)
+    concurrency = django_models.PositiveIntegerField(default=0,null=False,editable=True)
+    iplimit = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The maximum requests per client ip which can be allowd in configure period")
+    iplimitperiod = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The time period(seconds) configured for requests limit per client ip") #in seconds
+    userlimit = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The maximum requests per user which can be allowd in configure period")
+    userlimitperiod = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The time period(seconds) configured for requests limit per user") #in seconds
+    modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
+
+    class Meta:
+        verbose_name_plural = "{}Traffic Control".format(" " * 9)
+
+    class ExpiredBucketIds(object):
+        def __init__(self,tcontrol,length):
+            self.tcontrol = tcontrol
+            self.length = length
+            self.bucketid = None
+        def __len__(self):
+            return self.length
+        def __iter__(self):
+            self.bucketid = self.tcontrol._normalize_bucketid(self.tcontrol._buckets_currentid - self.length)
+            return self
+
+        def __next__(self):
+            if self.bucketid == self.tcontrol._buckets_currentid:
+                raise StopIteration()
+            try:
+                return self.bucketid
+            finally:
+                self.bucketid = self.tcontrol._normalize_bucketid(self.bucketid + 1)
+
+    class Buckets(object):
+        def __init__(self,tcontrol,expiredbuckets = 0):
+            self.tcontrol = tcontrol
+            if expiredbuckets == 0:
+                self.expiredbuckets_beginindex = None
+            else:
+                self.expiredbuckets_beginindex = self.tcontrol._bucketslen - expiredbuckets - 1
+            self.bucket = None
+            self.index = None
+            
+        def __iter__(self):
+            self.index = 0
+            if self.expiredbuckets_beginindex is not None and self.expiredbuckets_beginindex == self.index:
+                self.bucket = [self.tcontrol._buckets_begintime,self.tcontrol._normalize_bucketid(self.tcontrol._buckets_currentid - self.tcontrol._bucketslen + 1),"Expired"]
+            else:
+                self.bucket = [self.tcontrol._buckets_begintime,self.tcontrol._normalize_bucketid(self.tcontrol._buckets_currentid - self.tcontrol._bucketslen + 1),self.tcontrol._buckets[self.index]]
+            return self
+
+        def __next__(self):
+            if self.index >= self.tcontrol._bucketslen:
+                raise StopIteration()
+            if self.bucket[1] == self.tcontrol._buckets_currentid:
+                if self.bucket[0] != self.tcontrol._buckets_currenttime:
+                    raise Exception("buckets_begintime({}) is incorrect.".format(self.tcontrol._buckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),self.tcontrol._buckets_currenttime.strftime("%Y-%m-%d %H:%M:%S.%f"),self.tcontrol._bucketslen))
+            try:
+                return self.bucket
+            finally:
+                self.index += 1
+                if self.index < self.tcontrol._bucketslen:
+                    if self.expiredbuckets_beginindex is not None and self.index >= self.expiredbuckets_beginindex and self.index < self.tcontrol._bucketslen - 1:
+                        self.bucket = [self.bucket[0] + timedelta(milliseconds=self.tcontrol.buckettime),self.tcontrol._normalize_bucketid(self.bucket[1] + 1),"Expired"]
+                    else:
+                        self.bucket = [self.bucket[0] + timedelta(milliseconds=self.tcontrol.buckettime),self.tcontrol._normalize_bucketid(self.bucket[1] + 1),self.tcontrol._buckets[self.index]]
+
+    @classmethod
+    def get_model_change_cls(self):
+        return TrafficControlChange
+
+    def clean(self):
+        super().clean()
+        timediff = math.floor(settings.TRAFFICCONTROL_TIMEDIFF.microseconds / 1000)
+
+        if self.userlimitperiod and 86400 % self.userlimitperiod != 0:
+            raise ValidationError("The total seconds of a day(86400) should be divided by userlimitperiod.")
+        
+        if self.iplimitperiod and 86400 % self.iplimitperiod != 0:
+            raise ValidationError("The total seconds of a day(86400) should be divided by iplimitperiod.")
+        
+        if self.est_processtime > 21600000:
+            raise ValidationError("The estimate processtime can't be larger than 6 hours")
+
+        if not self.buckettime or self.buckettime < timediff or self.est_processtime % self.buckettime != 0 or 86400000 % self.buckettime != 0:
+            raise ValidationError("The buckettime should be larger than {}; Both the total milleseconds of one day(86400000) and estimated processing time({}) must be divided by the value of buckettime.".format(timediff,self.est_processtime))
+
+        if int(self.est_processtime / self.buckettime) > settings.TRAFFICCONTROL_MAX_BUCKETS:
+            raise ValidationError("The buckettime is too small, will slow the performance, it should be larger than {}".format( math.ceil(self.est_processtime / settings.TRAFFICCONTROL_MAX_BUCKETS)))
+
+        totalbucketstime = self.est_processtime +  (50000 + self.est_processtime - 50000 % self.est_processtime)
+
+        minbuckets = int(totalbucketstime / self.buckettime)
+
+        while 86400000 % totalbucketstime != 0 and int((86400000 % totalbucketstime) / self.buckettime) < minbuckets:
+            totalbucketstime += self.buckettime
+
+        self.buckets = int(totalbucketstime / self.buckettime)
+        self.active = self.enabled and ((self.concurrency > 0 and self.est_processtime > 0) or (self.iplimit > 0 and self.iplimitperiod > 0) or (self.userlimit > 0 and self.userlimitperiod > 0))
+
+    def _normalize_bucketid(self,bucketid):
+        if bucketid < 0:
+            return bucketid + self.buckets
+        elif bucketid < self.buckets:
+            return bucketid
+        else :
+            return bucketid - self.buckets
+
+    def get_buckets(self,today,milliseconds_in_day):
+        """
+        today: 
+        milliseconds: milliseconds in today
+        get the current bucket
+        return (current bucketid,expired bucketids)
+        """
+        try:
+            milliseconds = (milliseconds_in_day % self.totalbucketstime)
+        except:
+            self.totalbucketstime = self.buckets * self.buckettime
+            milliseconds = (milliseconds_in_day % self.totalbucketstime)
+
+        currentbucketid = math.floor(milliseconds / self.buckettime)
+        currentbuckettime = today + timedelta(milliseconds=milliseconds_in_day - milliseconds % self.buckettime )
+
+        if self._buckets_fetchtime is None:
+            if self._buckets is None:
+                self._buckets = [None] * int(self.est_processtime / self.buckettime)
+                self._bucketslen = len(self._buckets)
+            self._buckets_currenttime = currentbuckettime
+            self._buckets_currentid = currentbucketid
+            self._buckets_begintime = self._buckets_currenttime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+            #logger.warning("First time check,\n    Current bucket {} : {} , Expired Buckets: {}\n    Buckets:\n{}".format(self._buckets_currenttime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currentid,self._bucketslen - 1,"\n".join([ str((d[0].strftime("%Y-%m-%d %H:%M:%S.%f"),d[1],d[2])) for d in self.Buckets(self,self._bucketslen - 1)])))
+            if self._bucketslen == 1:
+                return [self._buckets_currentid,None]
+            else:
+                return [self._buckets_currentid,self.ExpiredBucketIds(self,self._bucketslen - 1)]
+        elif self._buckets_currenttime != currentbuckettime:
+            #a new bucket is required
+            self._buckets.append(None)
+            del self._buckets[0]
+            self._buckets_currenttime = currentbuckettime
+            self._buckets_currentid = currentbucketid
+            #adjust the beginid and begintime
+            self._buckets_begintime = self._buckets_begintime + timedelta(milliseconds=self.buckettime)
+
+            buckets_begintime = self._buckets_currenttime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+            buckets = int(((self._buckets_currenttime - self._buckets_begintime).total_seconds()) * 1000 / self.buckettime)
+            outdatedbuckets = buckets - self._bucketslen + 1
+            self._buckets_begintime = buckets_begintime
+            if outdatedbuckets >= self._bucketslen - 1:
+                #all data is expired, fetch again.
+                #logger.warning("New bucket time check, Fetch time {}\n    Current bucket {} : {} , Expired Buckets: {}\n    Buckets:\n{} ".format(self._buckets_fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currenttime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currentid,self._bucketslen - 1,"\n".join([ str((d[0].strftime("%Y-%m-%d %H:%M:%S.%f"),d[1],d[2])) for d in self.Buckets(self,self._bucketslen - 1)])))
+                self._buckets_fetchtime = None
+                return [self._buckets_currentid,self.ExpiredBucketIds(self,self._bucketslen - 1)]
+            elif outdatedbuckets > 0:
+                #part of the data is expired.
+                #shift the not expired buckets
+                for i in range(self._bucketslen - 1 - outdatedbuckets):
+                    self._buckets[i] = self._buckets[i + outdatedbuckets]
+            elif outdatedbuckets < 0:
+                raise Exception("Incorrest status. buckets_begintime: {} , buckets_currenttime: {} , outdatedbuckets: {}".format(self._buckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currenttime.strftime("%Y-%m-%d %H:%M:%S.%f"),outdatedbuckets))
+        else:
+            outdatedbuckets = None
+
+        expired_bucketstime = (self._buckets_currenttime - (self._buckets_fetchtime - settings.TRAFFICCONTROL_TIMEDIFF)).total_seconds() * 1000
+        if expired_bucketstime <= 0:
+            #all previous buckets are up-to-date
+            #logger.warning("{} bucket time check, Fetch time {}\n    Current bucket {} : {} , Expired Buckets: {}\n    Buckets:\n{}".format("Same" if outdatedbuckets is None else "New",self._buckets_fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currenttime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currentid,0,"\n".join([ str((d[0].strftime("%Y-%m-%d %H:%M:%S.%f"),d[1],d[2])) for d in self.Buckets(self)])))
+            return [self._buckets_currentid,[]]
+        else:
+            expired_buckets = math.ceil(expired_bucketstime / self.buckettime)
+            if expired_buckets >= self._bucketslen - 1:
+                #all previous buckets are expired
+                #logger.warning("{} bucket time check, Fetch time {}\n    Current bucket {} : {} , Expired Buckets: {}\n    Buckets:\n{}".format("Same" if outdatedbuckets is None else "New",self._buckets_fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currenttime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currentid,self._bucketslen - 1,"\n".join([ str((d[0].strftime("%Y-%m-%d %H:%M:%S.%f"),d[1],d[2])) for d in self.Buckets(self,self._bucketslen - 1)])))
+                self._buckets_fetchtime = None
+                return [self._buckets_currentid,self.ExpiredBucketIds(self,self._bucketslen - 1)]
+            else:
+                #logger.warning("{} bucket time check, Fetch time {}\n    Current bucket {} : {} , Expired Buckets: {}\n    Buckets:\n{}".format("Same" if outdatedbuckets is None else "New",self._buckets_fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currenttime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currentid,expired_buckets,"\n".join([ str((d[0].strftime("%Y-%m-%d %H:%M:%S.%f"),d[1],d[2])) for d in self.Buckets(self,expired_buckets)])))
+                return [self._buckets_currentid,self.ExpiredBucketIds(self,expired_buckets)]
+
+    def set_buckets(self,current_bucket_requests,fetchtime=None,expiredbuckets_requests=None):
+        self._buckets[-1] = current_bucket_requests
+        if fetchtime:
+            self._buckets_fetchtime = fetchtime
+            offset = self._bucketslen - 1 - len(expiredbuckets_requests)
+            for i in range(len(expiredbuckets_requests)):
+                self._buckets[i + offset] = int(expiredbuckets_requests[i]) if expiredbuckets_requests[i] else 0
+        #logger.warning("Fetched the buckets requests, buckets: {} , fetch time:{} , running requests: {},\n    buckets:\n{}".format(self._bucketslen,self._buckets_fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),self.runningrequests,"\n".join([ str((d[0].strftime("%Y-%m-%d %H:%M:%S.%f"),d[1],d[2])) for d in self.Buckets(self)])))
+        
+
+    @property
+    def runningrequests(self):
+        """
+        should be called after set_current_buckets , expired_previous_buckets and set_previous_buckets 
+        """
+        if self._buckets is None:
+            return 0
+
+        result = 0
+        for data in self._buckets:
+            result += data
+
+        return result
+        
+
+    @classmethod
+    def refresh_cache(cls):
+        """
+        Popuate the data and save them to cache
+        """
+        logger.debug("Refresh TrafficControl cache")
+        refreshtime = timezone.localtime()
+        size = 0
+        tcontrols = {}
+        for obj in TrafficControlLocation.objects.select_related("tcontrol").all():
+            size += 1
+            if obj.tcontrol.active :
+                tcontrols[(obj.domain,obj.location,obj.method)] = obj.tcontrol
+                if settings.TRAFFICCONTROL_SUPPORTED:
+                    tcontrols[obj.tcontrol.id] = obj.tcontrol
+        cache.tcontrols = (tcontrols,size,refreshtime)
+        return refreshtime
+
+    
+
+class TrafficControlLocation(DbObjectMixin,django_models.Model):
+    GET = 1
+    POST = 2
+    PUT = 3
+    DELETE = 4
+
+    METHOD_CHOICES = (
+        (GET,"GET"),
+        (POST,"POST"),
+        (PUT,"PUT"),
+        (DELETE,"DELETE")
+    )
+    METHODS = {
+        "GET":GET,
+        "POST":POST,
+        "PUT":PUT,
+        "DELETE":DELETE
+    }
+
+    _editable_columns = ("domain","method","location")
+    tcontrol = django_models.ForeignKey(TrafficControl, on_delete=django_models.CASCADE,editable=False,null=False)
+    domain = django_models.CharField(max_length=128,null=False,editable=True)
+    method = django_models.PositiveSmallIntegerField(choices=METHOD_CHOICES,null=False,editable=True)
+    location = django_models.CharField(max_length=256,null=False,editable=True)
+    modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
+
+    class Meta:
+        verbose_name_plural = "{}Traffic Control Locations"
+        unique_together = [["domain","method","location"]]
+
 
 class UserListener(object):
     @staticmethod
@@ -1930,8 +2201,8 @@ if defaultcache:
         def status(cls):
             try:
                 last_refreshed = cls.get_cachetime()
-                last_synced = defaultcache.get(cls.key)
-                if not last_synced:
+                cls.last_synced = defaultcache.get(cls.key)
+                if not cls.last_synced:
                     if last_refreshed:
                         return (UP_TO_DATE,last_refreshed)
                     else:
@@ -1941,7 +2212,7 @@ if defaultcache:
                 count =  cls.model.objects.all().count()
                 if count != cls.get_cachesize():
                     #cache is outdated
-                    if last_synced > last_refreshed:
+                    if cls.last_synced > last_refreshed:
                         return (OUTDATED,last_refreshed)
                     else:
                         return (OUT_OF_SYNC,last_refreshed)
@@ -1953,14 +2224,14 @@ if defaultcache:
                 if o:
                     if last_refreshed and last_refreshed >= o.modified:
                         return (UP_TO_DATE,last_refreshed)
-                    elif o.modified > last_synced:
+                    elif o.modified > cls.last_synced:
                         return (OUT_OF_SYNC,last_refreshed)
                 else:
                     return (UP_TO_DATE,last_refreshed)
     
                 if not last_refreshed:
                     return (OUTDATED,last_refreshed)
-                elif last_synced > last_refreshed:
+                elif cls.last_synced > last_refreshed:
                     return (OUTDATED,last_refreshed)
                 else:
                     return (UP_TO_DATE,last_refreshed)
@@ -1991,6 +2262,69 @@ if defaultcache:
                 return False
 
 
+    class TrafficControlChange(ModelChange):
+        key = "tcontrol_last_modified"
+        model = TrafficControlLocation
+
+        @classmethod
+        def get_cachetime(cls):
+            return cache._tcontrols_ts
+
+        @classmethod
+        def get_cachesize(cls):
+            return cache._tcontrolss_size
+
+        @classmethod
+        def get_next_refreshtime(cls):
+            return cache._tcontrol_cache_check_time.next_runtime
+
+        @classmethod
+        def refresh_cache_if_required(cls):
+            cache.refresh_tcontrol_cache()
+
+        @staticmethod
+        @receiver(post_save, sender=TrafficControl)
+        def post_save_tcontrol(sender,*args,**kwargs):
+            TrafficControlChange.change()
+
+        @staticmethod
+        @receiver(post_delete, sender=TrafficControl)
+        def post_delete_tcontrol(sender,*args,**kwargs):
+            TrafficControlChange.change()
+
+        @staticmethod
+        @receiver(post_save, sender=TrafficControlLocation)
+        def post_save_location(sender,*args,**kwargs):
+            TrafficControlChange.change()
+
+        @staticmethod
+        @receiver(post_delete, sender=TrafficControlLocation)
+        def post_delete_location(sender,*args,**kwargs):
+            TrafficControlChange.change()
+
+        @classmethod
+        def status(cls):
+            status = super().status()
+            if status[0] != UP_TO_DATE:
+                return status
+
+            try:
+                last_refreshed = cls.get_cachetime()
+                o = TrafficControl.objects.all().order_by("-modified").first()
+                if o:
+                    if last_refreshed and last_refreshed >= o.modified:
+                        return (UP_TO_DATE,last_refreshed)
+                    elif o.modified > cls.last_synced:
+                        return (OUT_OF_SYNC,last_refreshed)
+                else:
+                    return (UP_TO_DATE,last_refreshed)
+    
+                return (UP_TO_DATE,last_refreshed)
+            except:
+                #Failed, assume it is up to date
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to get the status of the model 'TrafficControl' from cache.{}".format(traceback.format_exc()))
+                return (UP_TO_DATE,last_refreshed)
+
     class IdentityProviderChange(ModelChange):
         key = "idp_last_modified"
         model = IdentityProvider
@@ -2013,12 +2347,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=IdentityProvider)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             IdentityProviderChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=IdentityProvider)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             IdentityProviderChange.change()
 
     class CustomizableUserflowChange(ModelChange):
@@ -2043,12 +2377,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=CustomizableUserflow)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             CustomizableUserflowChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=CustomizableUserflow)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             CustomizableUserflowChange.change()
 
     class UserGroupChange(ModelChange):
@@ -2075,12 +2409,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=UserGroup)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             UserGroupChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=UserGroup)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             UserGroupChange.change()
 
     class UserAuthorizationChange(ModelChange):
@@ -2107,12 +2441,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=UserAuthorization)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             UserAuthorizationChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=UserAuthorization)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             UserAuthorizationChange.change()
 
     class UserGroupAuthorizationChange(ModelChange):
@@ -2139,12 +2473,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=UserGroupAuthorization)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             UserGroupAuthorizationChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=UserGroupAuthorization)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             UserGroupAuthorizationChange.change()
 
 else:
@@ -2190,6 +2524,47 @@ else:
                 #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
 
+    class TrafficControlChange(ModelChange):
+        model = TrafficControlLocation
+
+        @classmethod
+        def get_cachetime(cls):
+            return cache._tcontrols_ts
+
+        @classmethod
+        def get_cachesize(cls):
+            return cache._tcontrols_size
+
+        @classmethod
+        def get_next_refreshtime(cls):
+            return cache._tcontrol_cache_check_time.next_runtime
+
+        @classmethod
+        def refresh_cache_if_required(cls):
+            cache.refresh_tcontrol_cache()
+
+        @classmethod
+        def status(cls):
+            status = super().status()
+            if status[0] != UP_TO_DATE:
+                return status
+
+            try:
+                last_refreshed = cls.get_cachetime()
+                o = TrafficControl.objects.all().order_by("-modified").first()
+                if o:
+                    if last_refreshed and last_refreshed >= o.modified:
+                        return (UP_TO_DATE,last_refreshed)
+                    elif o.modified > cls.last_synced:
+                        return (OUT_OF_SYNC,last_refreshed)
+                else:
+                    return (UP_TO_DATE,last_refreshed)
+    
+                return (UP_TO_DATE,last_refreshed)
+            except:
+                #Failed, assume it is up to date
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to get the status of the model 'TrafficControl' from cache.{}".format(traceback.format_exc()))
+                return (UP_TO_DATE,last_refreshed)
     class IdentityProviderChange(ModelChange):
         model = IdentityProvider
 

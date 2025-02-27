@@ -147,6 +147,9 @@ class IdentityProviderAdmin(SyncConfigChangeMixin,admin.IdentityProviderAdmin):
 class CustomizableUserflowAdmin(SyncConfigChangeMixin,admin.CustomizableUserflowAdmin):
     pass
         
+class TrafficControlAdmin(SyncConfigChangeMixin,admin.TrafficControlAdmin):
+    pass
+
 class UserAdmin(SyncObjectChangeMixin,admin.UserAdmin):
     def _sync_change(self,objids):
         return cache.users_changed(objids,True)

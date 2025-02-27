@@ -2,6 +2,7 @@ import logging
 import json
 import requests
 import traceback
+from urllib.parse import quote_plus
 
 from django.conf import settings
 from django.utils import timezone
@@ -499,6 +500,43 @@ class MemoryCache(cache.MemoryCache):
             ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT,verify=settings.SSL_VERIFY)
         res = self._send_request_to_cluster(None,clusterid,_send_request)
         return res.text
+
+    def tcontrol(self,clusterid,tcontrolid,clientip,client):
+        """
+        traffic control
+        Return True if allowed; otherwise False
+        """
+        def _send_request(cluster):
+            if client:
+                url = "{}{}?clientip={}&client={}&tcontrol={}".format(
+                    cluster.endpoint,
+                    reverse('cluster:tcontrol'),
+                    quote_plus(clientip),
+                    client,
+                    tcontrolid
+                )
+            else:
+                url = "{}{}?clientip={}&tcontrol={}".format(
+                    cluster.endpoint,
+                    reverse('cluster:tcontrol'),
+                    quote_plus(clientip),
+                    tcontrolid
+                )
+            return requests.get(url,headers=self._get_headers(),timeout=settings.TRAFFICCONTROL_TIMEOUT,verify=settings.SSL_VERIFY)
+        try:
+            res = self._send_request_to_cluster(None,clusterid,_send_request)
+            #succeed
+            return True
+        except HTTPError as ex:
+            if ex.response and ex.response.status_code == 403:
+                #not allowed
+                return False
+            else:
+                #other exceptions,ignore traffic control
+                return True
+        except:
+            #other error. ignore traffic control
+            return True
 
     @property
     def status(self):

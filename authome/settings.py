@@ -18,6 +18,7 @@ TESTMODE = env("TESTMODE",default=False)
 
 RELEASE = False if LOGLEVEL in ["DEBUG"] else True
 
+SECURE_SSL_REDIRECT = env("SECURE_SSL_REDIRECT",default=False)
 SECRET_KEY = env('SECRET_KEY', 'PlaceholderSecretKey')
 PREVIOUS_SECRET_KEY=env("PREVIOUS_SECRET_KEY",default=None)
 if not DEBUG:
@@ -48,6 +49,19 @@ AUTHENTICATION_BACKENDS = (
 )
 IGNORE_LOADING_ERROR = env('IGNORE_LOADING_ERROR',False)
 
+#enable auth2 cluster feature by setting AUTH2_CLUSTERID
+AUTH2_CLUSTERID=env("AUTH2_CLUSTERID",default=None)
+AUTH2_CLUSTER_ENDPOINT=env("AUTH2_CLUSTER_ENDPOINT",default=None)
+DEFAULT_AUTH2_CLUSTER=env("DEFAULT_AUTH2_CLUSTER",default=False)
+AUTH2_CLUSTERS_CHECK_INTERVAL=env("AUTH2_CLUSTERS_CHECK_INTERVAL",default=60)
+if AUTH2_CLUSTERS_CHECK_INTERVAL <= 0:
+    AUTH2_CLUSTERS_CHECK_INTERVAL = 60
+
+AUTH2_CLUSTER_ENABLED = True if AUTH2_CLUSTERID and AUTH2_CLUSTER_ENDPOINT else False
+if AUTH2_CLUSTER_ENABLED:
+    if not SECRET_KEY:
+        raise Exception("Must set SECRET_KEY for auth2 cluster feature")
+
 EMAIL_HOST = env('EMAIL_HOST', default="")
 EMAIL_PORT = env('EMAIL_PORT', 25)
 
@@ -55,6 +69,9 @@ AUTH2_DOMAIN = env("AUTH2_DOMAIN",default="auth2.dbca.wa.gov.au")
 AUTH2_MONITORING_DIR=env("AUTH2_MONITORING_DIR")
 AUTH2_MONITOR_EXPIREDAYS=env("AUTH2_MONITOR_EXPIREDAYS",default=10)
 
+
+CAPTCHA_CHARS_IMAGE = env("CAPTCHA_CHARS_IMAGE",default="34689ABDEFGHJKLMNPQRTWXY")
+CAPTCHA_CHARS_AUDIO = env("CAPTCHA_CHARS_AUDIO",default="0123456789")
 CAPTCHA_DEFAULT_KIND = env("CAPTCHA_DEFAULT_KIND",default="image")
 CAPTCHA_LEN = env("CAPTCHA_LEN",default=4)
 if CAPTCHA_LEN < 4:
@@ -298,6 +315,23 @@ USERFLOW_CACHE_CHECK_INTERVAL=env('USERFLOW_CACHE_CHECK_INTERVAL',default=0) #in
 if USERFLOW_CACHE_CHECK_INTERVAL < 0:
     USERFLOW_CACHE_CHECK_INTERVAL = 0
 
+TRAFFICCONTROL_COOKIE_NAME = env('TRAFFICCONTROL_COOKIE_NAME')
+TRAFFICCONTROL_CACHE_CHECK_HOURS=env('TRAFFICCONTROL_CACHE_CHECK_HOURS',default=[0]) #the hours in the day when traffic control can be checked
+TRAFFICCONTROL_CACHE_CHECK_INTERVAL=env('TRAFFICCONTROL_CACHE_CHECK_INTERVAL',default=0) #in seconds,the interval to check traffic control cache, if it is not greater than 0, use TRAFFICCONTROL_CACHE_CHECK_HOURS
+if TRAFFICCONTROL_CACHE_CHECK_INTERVAL < 0:
+    TRAFFICCONTROL_CACHE_CHECK_INTERVAL = 0
+
+TRAFFICCONTROL_EXEMPT_NONPUBLICUSER=env('TRAFFICCONTROL_EXEMPT_NONPUBLICUSER',default=True)
+TRAFFICCONTROL_MAX_BUCKETS=env('TRAFFICCONTROL_MAX_BUCKETS',default=25)
+TRAFFICCONTROL_CLUSTERID=env('TRAFFICCONTROL_CLUSTERID')
+TRAFFICCONTROL_TIMEOUT = env('TRAFFICCONTROL_TIMEOUT',default=100)
+if not TRAFFICCONTROL_TIMEOUT or TRAFFICCONTROL_TIMEOUT <= 0:
+    TRAFFICCONTROL_TIMEOUT = 0.1
+else:
+    TRAFFICCONTROL_TIMEOUT /= 1000
+TRAFFICCONTROL_TIMEDIFF=env('TRAFFICCONTROL_TIMEDIFF',default=5)# milliseconds, the maximum time difference among auth2 server processes, it should be less than a few milliseconds
+TRAFFICCONTROL_TIMEDIFF=timedelta(milliseconds=TRAFFICCONTROL_TIMEDIFF)
+
 PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
 
 DBCA_STAFF_GROUPID=env('DBCA_STAFF_GROUPID',default="DBCA") # The emails belongs to group 'dbca staff' are allowed to self sign up (no pre-registration required).
@@ -408,6 +442,9 @@ else:
 CACHE_SERVER = env("CACHE_SERVER")
 CACHE_SERVER_OPTIONS = env("CACHE_SERVER_OPTIONS",default={})
 
+TRAFFICCONTROL_CACHE_SERVER = env("TRAFFICCONTROL_CACHE_SERVER")
+TRAFFICCONTROL_CACHE_SERVER_OPTIONS = env("TRAFFICCONTROL_CACHE_SERVER_OPTIONS",default={})
+
 CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
 CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
 
@@ -515,8 +552,8 @@ def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
             "OPTIONS": options
         }
 
-
-if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
+TRAFFICCONTROL_CACHE_ALIAS = None
+if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER or TRAFFICCONTROL_CACHE_SERVER:
     CACHES = {}
     if CACHE_SERVER:
         CACHES['default'] = GET_CACHE_CONF('default',CACHE_SERVER,CACHE_SERVER_OPTIONS,key_function=KEY_FUNCTION)
@@ -585,20 +622,38 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     if STAFF_CACHE_TIMEOUT <= 0:
         STAFF_CACHE_TIMEOUT = None
 
+    if AUTH2_CLUSTER_ENABLED:
+        if TRAFFICCONTROL_CLUSTERID == AUTH2_CLUSTERID:
+            #current auth2 cluster supports traffic control
+            TRAFFICCONTROL_SUPPORTED = True
+        else:
+            #current auth2 cluster does not support traffic control, dependents on other cluster to implement traffic control
+            TRAFFICCONTROL_SUPPORTED = False
+    else:
+        #standalone auth2 server, should always support traffic control
+        TRAFFICCONTROL_SUPPORTED = True
+
+
+    if TRAFFICCONTROL_SUPPORTED :
+        if TRAFFICCONTROL_CACHE_SERVER:
+            CACHES["traffic"] = GET_CACHE_CONF("traffic",TRAFFICCONTROL_CACHE_SERVER,TRAFFICCONTROL_CACHE_SERVER_OPTIONS,key_function=lambda key,key_prefix,version : key)
+            TRAFFICCONTROL_CACHE_ALIAS = "traffic"
+            GET_TRAFFICCONTROL_CACHE_KEY = lambda key:"T_{}".format(key)
+        elif CACHE_SERVER:
+            TRAFFICCONTROL_CACHE_ALIAS = "default"
+            GET_TRAFFICCONTROL_CACHE_KEY = GET_DEFAULT_CACHE_KEY
+            if CACHE_KEY_PREFIX:
+                trafficcontrol_key_pattern = "{}:T_{{}}".format(CACHE_KEY_PREFIX)
+                GET_TRAFFICCONTROL_CACHE_KEY = lambda key:trafficcontrol_key_pattern.format(key)
+            else:
+                GET_TRAFFICCONTROL_CACHE_KEY = lambda key:"T_{}".format(key)
+        else:
+            TRAFFICCONTROL_SUPPORTED = False
+else:
+    TRAFFICCONTROL_SUPPORTED = False
+                
+
 TEST_RUNNER=env("TEST_RUNNER","django.test.runner.DiscoverRunner")
-
-#enable auth2 cluster feature by setting AUTH2_CLUSTERID
-AUTH2_CLUSTERID=env("AUTH2_CLUSTERID",default=None)
-AUTH2_CLUSTER_ENDPOINT=env("AUTH2_CLUSTER_ENDPOINT",default=None)
-DEFAULT_AUTH2_CLUSTER=env("DEFAULT_AUTH2_CLUSTER",default=False)
-AUTH2_CLUSTERS_CHECK_INTERVAL=env("AUTH2_CLUSTERS_CHECK_INTERVAL",default=60)
-if AUTH2_CLUSTERS_CHECK_INTERVAL <= 0:
-    AUTH2_CLUSTERS_CHECK_INTERVAL = 60
-
-AUTH2_CLUSTER_ENABLED = True if AUTH2_CLUSTERID and AUTH2_CLUSTER_ENDPOINT else False
-if AUTH2_CLUSTER_ENABLED:
-    if not SECRET_KEY:
-        raise Exception("Must set SECRET_KEY for auth2 cluster feature")
 
 START_OF_WEEK_MONDAY = env("START_OF_WEEK_MONDAY",default=True)
 
