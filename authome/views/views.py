@@ -1259,7 +1259,8 @@ def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
         "next":next_url,
         "expiretime":utils.format_timedelta(settings.PASSCODE_AGE,unit='s'),
         "passcode_age":settings.PASSCODE_AGE - 5,
-        "passcode_resend_interval":settings.PASSCODE_RESEND_INTERVAL
+        "passcode_resend_interval":settings.PASSCODE_RESEND_INTERVAL,
+        "captcha_len":settings.CAPTCHA_LEN
     }
 
     now = timezone.localtime()
@@ -1286,7 +1287,7 @@ def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
         context["outfile"] = outfile[captchabasedirlen:]
         return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
     elif action == "check":
-        code = request.POST.get("code")
+        code = request.POST.get("code").upper()
         saved_code = request.session.get(key)
         if not saved_code or len(saved_code) != settings.CAPTCHA_LEN:
             outfile = request.session.get(filekey)
