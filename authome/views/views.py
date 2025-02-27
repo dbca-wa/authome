@@ -674,7 +674,7 @@ def auth_basic(request):
     return _auth_basic(request,)
 
 tcontrolcache = caches[settings.TRAFFICCONTROL_CACHE_ALIAS] if settings.TRAFFICCONTROL_SUPPORTED else None
-def _check_tcontrol(tcontrol,clientip,client):
+def _check_tcontrol(tcontrol,clientip,client,exempt):
     try:
         #check traffic control for client
         now = timezone.localtime()
@@ -682,7 +682,8 @@ def _check_tcontrol(tcontrol,clientip,client):
         milliseconds = math.floor((now - today).total_seconds() * 1000)
         cacheclient = tcontrolcache.redis_client
         userlimitkey = None
-        if client and tcontrol.userlimit > 0 and tcontrol.userlimitperiod:
+
+        if not exempt and client and tcontrol.userlimit > 0 and tcontrol.userlimitperiod:
             userlimitkey = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}_{}_{}".format(tcontrol.name,tcontrol.userlimitperiod,client,math.floor(milliseconds / (tcontrol.userlimitperiod * 1000))))
             requests = cacheclient.incr(userlimitkey)
             #logger.warning("{}: The user({}) has already sent {} requests".format(tcontrol.name,client,requests))
@@ -711,10 +712,11 @@ def _check_tcontrol(tcontrol,clientip,client):
                         #log interval half an hour
                         DebugLog.tcontrol(DebugLog.IP_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Send too many requests({}) in {}".format(requests,utils.format_timedelta(tcontrol.iplimitperiod)))
                 #exceed the ip limit
-                if userlimitkey:
-                    #decrease the user limits which was added before
-                    cacheclient.desc(userlimitkey)
-                return (False,"IP",requests,(today + timedelta(milliseconds=milliseconds + tcontrol.iplimitperiod * 1000 - milliseconds % (tcontrol.iplimitperiod * 1000))).strftime("%Y-%m-%d %H:%M:%S"))
+                if not exempt:
+                    if userlimitkey:
+                        #decrease the user limits which was added before
+                        cacheclient.desc(userlimitkey)
+                    return [False,"IP",requests,(today + timedelta(milliseconds=milliseconds + tcontrol.iplimitperiod * 1000 - milliseconds % (tcontrol.iplimitperiod * 1000))).strftime("%Y-%m-%d %H:%M:%S")]
     
     
         #check the concurrency
@@ -736,42 +738,32 @@ def _check_tcontrol(tcontrol,clientip,client):
     
             totalrequests = tcontrol.runningrequests
             #logger.warning("{}: Have {} running requests,bucket={} , expired buckets = {}({})".format(tcontrol.name,totalrequests,bucketid,len(expired_buckets) if expired_buckets else 0,[d for d in expired_buckets or []]))
-            if totalrequests <= tcontrol.concurrency:
-                #allow to access
-                return (True,None)
-            else:
+            if totalrequests > tcontrol.concurrency:
                 #if exceed the limit, can't access
-                #decrease the concurrency which was added before
-                cacheclient.decr(key)
-                #decrease the user limit which was added before
-                if userlimitkey:
-                    cacheclient.decr(userlimitkey)
-                #decrease the ip limit which was added before
-                if iplimitkey:
-                    cacheclient.decr(iplimitkey)
-                
                 if cacheclient.execute_command("set","{}_debuglog".format(tcontrol.name),"1","NX","EX",300):
                     #the log interval is 5 minutes
                     DebugLog.tcontrol(DebugLog.CONCURRENCY_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Too many running requests({})".format(totalrequests))
-                return (False,"CONCURRENCY",totalrequests)
+                if not exempt:
+                    #decrease the concurrency which was added before
+                    cacheclient.decr(key)
+                    #decrease the user limit which was added before
+                    if userlimitkey:
+                        cacheclient.decr(userlimitkey)
+                    #decrease the ip limit which was added before
+                    if iplimitkey:
+                        cacheclient.decr(iplimitkey)
+                    return [False,"CONCURRENCY",totalrequests]
+
+        #not exceed any traffic control, allow access
+        return [True,None]
     except Exception as ex:
         if settings.DEBUG:
             raise
         else:
             #check failed, ignore traffic control
-            return (True,str(ex))
+            return [True,str(ex)]
             
 def _tcontrol(request):
-    if request.user.is_authenticated:
-        client = client=request.user.email
-        if settings.TRAFFICCONTROL_EXEMPT_NONPUBLICUSER:
-            groups = models.UserGroup.find_groups(client)
-            if len(groups[0]) > 1:
-                #is the user we known,exempt traffic control
-                return True
-    else:
-        client = request.COOKIES.get(settings.TRAFFICCONTROL_COOKIE_NAME) or None
-
     clientip = request.META.get('REMOTE_ADDR')
 
     domain = request.get_host()
@@ -797,11 +789,24 @@ def _tcontrol(request):
     if not tcontrol or not tcontrol.active:
         #no traffic control policies are enabled.
         return None
+    exempt = False
+    if request.user.is_authenticated:
+        client = client=request.user.email
+        if settings.TRAFFICCONTROL_EXEMPT_NONPUBLICUSER:
+            groups = models.UserGroup.find_groups(client)
+            if len(groups[0]) > 1 or groups[0][0].id != cache.public_group.id:
+                #is the user we known,exempt traffic control
+                if (tcontrol.iplimit == 0 or tcontrol.iplimitperiod == 0) and (tcontrol.concurrency == 0 or tcontrol.est_processtime == 0):
+                    return True
+                else:
+                    exempt = True
+    else:
+        client = request.COOKIES.get(settings.TRAFFICCONTROL_COOKIE_NAME) or None
 
     if settings.TRAFFICCONTROL_SUPPORTED:
-        result = _check_tcontrol(tcontrol,clientip,client)
+        result = _check_tcontrol(tcontrol,clientip,client,exempt)
     else:
-        result = cahce.tcontrol(settings.TRAFFICCONTROL_CLUSTERID,tcontrol.id,clientip,client)
+        result = cahce.tcontrol(settings.TRAFFICCONTROL_CLUSTERID,tcontrol.id,clientip,client,exempt)
     
     if result[0]:
         return None

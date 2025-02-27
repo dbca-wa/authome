@@ -155,11 +155,11 @@ def tcontrol(request):
     client = request.GET.get("client")
     clientip = request.GET.get("clientip")
     tcontrol = cache.tcontrols.get(int(request.GET.get("tcontrol")))
+    exempt = True if request.GET.get("exempt") == "1" else False
+
     if not tcontrol or not tcontrol.active:
         #not traffic control configured
         return views.SUCCEED_RESPONSE
-    if views._check_tcontrol(tcontrol,clientip,client):
-        return views.SUCCEED_RESPONSE
-    else:
-        return views.FORBIDDEN_RESPONSE
+    result = views._check_tcontrol(tcontrol,clientip,client,exempt)
+    return JsonResponse([1, 2, 3], safe=False)
 

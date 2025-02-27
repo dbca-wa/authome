@@ -501,42 +501,36 @@ class MemoryCache(cache.MemoryCache):
         res = self._send_request_to_cluster(None,clusterid,_send_request)
         return res.text
 
-    def tcontrol(self,clusterid,tcontrolid,clientip,client):
+    def tcontrol(self,clusterid,tcontrolid,clientip,client,exempt):
         """
         traffic control
         Return True if allowed; otherwise False
         """
         def _send_request(cluster):
             if client:
-                url = "{}{}?clientip={}&client={}&tcontrol={}".format(
+                url = "{}{}?clientip={}&client={}&tcontrol={}&exempt={}".format(
                     cluster.endpoint,
                     reverse('cluster:tcontrol'),
                     quote_plus(clientip),
                     client,
-                    tcontrolid
+                    tcontrolid,
+                    "1" if exempt else "0"
                 )
             else:
-                url = "{}{}?clientip={}&tcontrol={}".format(
+                url = "{}{}?clientip={}&tcontrol={}&exempt={}".format(
                     cluster.endpoint,
                     reverse('cluster:tcontrol'),
                     quote_plus(clientip),
-                    tcontrolid
+                    tcontrolid,
+                    "1" if exempt else "0"
                 )
             return requests.get(url,headers=self._get_headers(),timeout=settings.TRAFFICCONTROL_TIMEOUT,verify=settings.SSL_VERIFY)
         try:
             res = self._send_request_to_cluster(None,clusterid,_send_request)
-            #succeed
-            return True
-        except HTTPError as ex:
-            if ex.response and ex.response.status_code == 403:
-                #not allowed
-                return False
-            else:
-                #other exceptions,ignore traffic control
-                return True
+            return res.json()
         except:
             #other error. ignore traffic control
-            return True
+            return [True,None]
 
     @property
     def status(self):
