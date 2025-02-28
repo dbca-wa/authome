@@ -26,10 +26,13 @@ RUN adduser -uid 1000 --gid 1000 --no-create-home --disabled-login app
 
 # Install Python libs from pyproject.toml.
 FROM builder_base_authome as python_libs_authome
+WORKDIR /app
+COPY fonts ./fonts
+
 WORKDIR /app/release
 # Install the project.
 FROM python_libs_authome
-COPY manage.py gunicorn.py testperformance testrequestheaders testrediscluster testperformance pyproject.toml ./
+COPY manage.py gunicorn.py testperformance testrequestheaders testrediscluster testperformance pyproject.toml captchautil.py ./
 COPY authome ./authome
 COPY templates ./templates
 RUN export IGNORE_LOADING_ERROR=True ; python manage.py collectstatic --noinput --no-post-process

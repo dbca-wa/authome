@@ -1,5 +1,8 @@
 import time
 import logging
+import hashlib
+import secrets
+import base64
 from importlib import import_module
 
 from django.conf import settings
@@ -11,6 +14,7 @@ from django.utils.http import http_date
 from django.http import HttpResponse,HttpResponseForbidden
 from django.contrib.auth import SESSION_KEY as USER_SESSION_KEY
 from django.http.cookie import SimpleCookie as DjangoSimpleCookie
+from django.utils import timezone
 
 from authome.models import DebugLog
 from . import utils
@@ -120,6 +124,18 @@ class SessionMiddleware(MiddlewareMixin):
         the session cookie if the session has been emptied.
         """
         try:
+            if settings.TRAFFICCONTROL_COOKIE_NAME and settings.TRAFFICCONTROL_COOKIE_NAME not in request.COOKIES:
+                value = "{}{}".format(timezone.localtime().strftime("%Y%m%d%H%M%S%f"),base64.b64encode(secrets.token_bytes(nbytes=24)).decode().rstrip('='))
+                response.set_cookie(
+                    settings.TRAFFICCONTROL_COOKIE_NAME,
+                    value,
+                    path="/",
+                    max_age=86400,
+                    domain=settings.GET_SESSION_COOKIE_DOMAIN(request.get_host()),
+                    secure=True,
+                    httponly=False,
+                    samesite="Lax"
+                )
             try:
                 accessed = request.session.accessed
                 modified = request.session.modified

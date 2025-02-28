@@ -1,11 +1,10 @@
 import os
 import tomllib
 
-from .utils import env, get_digest_function
+from django.utils import timezone
+from .utils import env, get_digest_function,is_cluster
 from datetime import timedelta
 import dj_database_url
-
-from . import redis
 
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -19,6 +18,7 @@ TESTMODE = env("TESTMODE",default=False)
 
 RELEASE = False if LOGLEVEL in ["DEBUG"] else True
 
+SECURE_SSL_REDIRECT = env("SECURE_SSL_REDIRECT",default=False)
 SECRET_KEY = env('SECRET_KEY', 'PlaceholderSecretKey')
 PREVIOUS_SECRET_KEY=env("PREVIOUS_SECRET_KEY",default=None)
 if not DEBUG:
@@ -49,11 +49,33 @@ AUTHENTICATION_BACKENDS = (
 )
 IGNORE_LOADING_ERROR = env('IGNORE_LOADING_ERROR',False)
 
+#enable auth2 cluster feature by setting AUTH2_CLUSTERID
+AUTH2_CLUSTERID=env("AUTH2_CLUSTERID",default=None)
+AUTH2_CLUSTER_ENDPOINT=env("AUTH2_CLUSTER_ENDPOINT",default=None)
+DEFAULT_AUTH2_CLUSTER=env("DEFAULT_AUTH2_CLUSTER",default=False)
+AUTH2_CLUSTERS_CHECK_INTERVAL=env("AUTH2_CLUSTERS_CHECK_INTERVAL",default=60)
+if AUTH2_CLUSTERS_CHECK_INTERVAL <= 0:
+    AUTH2_CLUSTERS_CHECK_INTERVAL = 60
+
+AUTH2_CLUSTER_ENABLED = True if AUTH2_CLUSTERID and AUTH2_CLUSTER_ENDPOINT else False
+if AUTH2_CLUSTER_ENABLED:
+    if not SECRET_KEY:
+        raise Exception("Must set SECRET_KEY for auth2 cluster feature")
+
 EMAIL_HOST = env('EMAIL_HOST', default="")
 EMAIL_PORT = env('EMAIL_PORT', 25)
 
 AUTH2_DOMAIN = env("AUTH2_DOMAIN",default="auth2.dbca.wa.gov.au")
 AUTH2_MONITORING_DIR=env("AUTH2_MONITORING_DIR")
+AUTH2_MONITOR_EXPIREDAYS=env("AUTH2_MONITOR_EXPIREDAYS",default=10)
+
+
+CAPTCHA_CHARS_IMAGE = env("CAPTCHA_CHARS_IMAGE",default="34689ABDEFGHJKLMNPQRTWXY")
+CAPTCHA_CHARS_AUDIO = env("CAPTCHA_CHARS_AUDIO",default="0123456789")
+CAPTCHA_DEFAULT_KIND = env("CAPTCHA_DEFAULT_KIND",default="image")
+CAPTCHA_LEN = env("CAPTCHA_LEN",default=4)
+if CAPTCHA_LEN < 4:
+    CAPTCHA_LEN = 4
 
 TOTP_SECRET_KEY_LENGTH = env("TOTP_SECRET_KEY_LENGTH",default=128)
 TOTP_ISSUER = env("TOTP_ISSUER",default="DBCA")
@@ -293,6 +315,23 @@ USERFLOW_CACHE_CHECK_INTERVAL=env('USERFLOW_CACHE_CHECK_INTERVAL',default=0) #in
 if USERFLOW_CACHE_CHECK_INTERVAL < 0:
     USERFLOW_CACHE_CHECK_INTERVAL = 0
 
+TRAFFICCONTROL_COOKIE_NAME = env('TRAFFICCONTROL_COOKIE_NAME')
+TRAFFICCONTROL_CACHE_CHECK_HOURS=env('TRAFFICCONTROL_CACHE_CHECK_HOURS',default=[0]) #the hours in the day when traffic control can be checked
+TRAFFICCONTROL_CACHE_CHECK_INTERVAL=env('TRAFFICCONTROL_CACHE_CHECK_INTERVAL',default=0) #in seconds,the interval to check traffic control cache, if it is not greater than 0, use TRAFFICCONTROL_CACHE_CHECK_HOURS
+if TRAFFICCONTROL_CACHE_CHECK_INTERVAL < 0:
+    TRAFFICCONTROL_CACHE_CHECK_INTERVAL = 0
+
+TRAFFICCONTROL_EXEMPT_NONPUBLICUSER=env('TRAFFICCONTROL_EXEMPT_NONPUBLICUSER',default=True)
+TRAFFICCONTROL_MAX_BUCKETS=env('TRAFFICCONTROL_MAX_BUCKETS',default=25)
+TRAFFICCONTROL_CLUSTERID=env('TRAFFICCONTROL_CLUSTERID')
+TRAFFICCONTROL_TIMEOUT = env('TRAFFICCONTROL_TIMEOUT',default=100)
+if not TRAFFICCONTROL_TIMEOUT or TRAFFICCONTROL_TIMEOUT <= 0:
+    TRAFFICCONTROL_TIMEOUT = 0.1
+else:
+    TRAFFICCONTROL_TIMEOUT /= 1000
+TRAFFICCONTROL_TIMEDIFF=env('TRAFFICCONTROL_TIMEDIFF',default=5)# milliseconds, the maximum time difference among auth2 server processes, it should be less than a few milliseconds
+TRAFFICCONTROL_TIMEDIFF=timedelta(milliseconds=TRAFFICCONTROL_TIMEDIFF)
+
 PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
 
 DBCA_STAFF_GROUPID=env('DBCA_STAFF_GROUPID',default="DBCA") # The emails belongs to group 'dbca staff' are allowed to self sign up (no pre-registration required).
@@ -306,6 +345,7 @@ PASSCODE_DAILY_LIMIT = env("PASSCODE_DAILY_LIMIT",100)
 PASSCODE_TRY_TIMES = env("PASSCODE_TRY_TIMES",3)
 PASSCODE_LENGTH=env('PASSCODE_LENGTH',default=6)
 PASSCODE_AGE=env('PASSCODE_AGE',default=300) #the age of verify code, in seconds
+PASSCODE_RESEND_INTERVAL=env('PASSCODE_RESEND_INTERVAL',default=45) #the interval to resend passcode, in seconds
 SIGNUP_TOKEN_LENGTH=env('SIGNUP_TOKEN_LENGTH',default=64)
 SIGNUP_TOKEN_AGE=env('SIGNUP_TOKEN_AGE',default=3600) #the age of signup token, in seconds
 
@@ -399,14 +439,92 @@ else:
     #KEY_PREFIX is None and KEY_VERSION_ENABLED is False
     STANDALONE_KEY_FUNCTION = lambda key,key_prefix,version : key
 
+CACHE_SERVER = env("CACHE_SERVER")
+CACHE_SERVER_OPTIONS = env("CACHE_SERVER_OPTIONS",default={})
+
+TRAFFICCONTROL_CACHE_SERVER = env("TRAFFICCONTROL_CACHE_SERVER")
+TRAFFICCONTROL_CACHE_SERVER_OPTIONS = env("TRAFFICCONTROL_CACHE_SERVER_OPTIONS",default={})
+
+CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
+CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
+
+PREVIOUS_CACHE_SESSION_SERVER = env("PREVIOUS_CACHE_SESSION_SERVER")
+PREVIOUS_CACHE_SESSION_SERVER_OPTIONS = env("PREVIOUS_CACHE_SESSION_SERVER_OPTIONS",default={})
+
+CACHE_USER_SERVER = env("CACHE_USER_SERVER")
+CACHE_USER_SERVER_OPTIONS = env("CACHE_USER_SERVER_OPTIONS",default={})
+
+USER_CACHE_ALIAS = None
+PREVIOUS_SESSION_CACHE_ALIAS=None
+
+GET_DEFAULT_CACHE_KEY = lambda key:key
+GET_USER_KEY = lambda userid:str(userid)
+GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
+
+SESSION_CACHES = 0
+PREVIOUS_SESSION_CACHES = 0
+SESSION_CACHES = 0
+USER_CACHES = 0
+
+TRAFFIC_MONITOR_LEVEL = env('TRAFFIC_MONITOR_LEVEL',default=0) #0: disabled, 1:summary, 2: per domain
+if not CACHE_SERVER or not CACHE_SERVER.lower().startswith('redis'):
+    TRAFFIC_MONITOR_LEVEL = 0
+if TRAFFIC_MONITOR_LEVEL > 0:
+    try:
+        REDIS_TRAFFIC_MONITOR_LEVEL = int(env('REDIS_TRAFFIC_MONITOR_LEVEL',default=0))
+    except:
+        REDIS_TRAFFIC_MONITOR_LEVEL = 0
+    try:
+        DB_TRAFFIC_MONITOR_LEVEL = int(env('DB_TRAFFIC_MONITOR_LEVEL',default=0))
+    except:
+        DB_TRAFFIC_MONITOR_LEVEL = 0
+else:
+    REDIS_TRAFFIC_MONITOR_LEVEL = 0
+    DB_TRAFFIC_MONITOR_LEVEL = 0
+
+TRAFFIC_MONITOR_INTERVAL=env('TRAFFIC_MONITOR_INTERVAL',default=3600)
+if TRAFFIC_MONITOR_INTERVAL and TRAFFIC_MONITOR_INTERVAL > 0:
+    if 86400 % TRAFFIC_MONITOR_INTERVAL > 0 :
+        #One day can't be divided by interval, invalid, reset it to one hour
+        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
+    else:
+        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=TRAFFIC_MONITOR_INTERVAL)
+else:
+    TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
+
+if REDIS_TRAFFIC_MONITOR_LEVEL > 0:
+    import redis
+    class MonitorEnabledConnection(redis.Connection):
+        _cache = None
+        def send_command(self, *args, **kwargs):
+            try:
+                starttime = timezone.localtime()
+                status = "OK"
+                return super().send_command(*args,**kwargs)
+            except Exception as ex:
+                status = ex.__class__.__name__
+                raise
+            finally:
+                #cache and ignore the exceptions which are thrown before cache is fully initialized
+                try:
+                    MonitorEnabledConnection._cache.log_redisrequest("Redis",args[0],starttime,status)
+                except:
+                    try:
+                        from . import cache
+                        MonitorEnabledConnection._cache = cache.cache
+                    except:
+                        MonitorEnabledConnection._cache = None
+                
 def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
     if server.lower().startswith('redis'):
         if "max_connections" not in options:
-            options["max_connections"] = 2
+            options["max_connections"] = 10
+        if REDIS_TRAFFIC_MONITOR_LEVEL > 0:
+            options["connection_class"] = MonitorEnabledConnection
 
         cluster = options.pop("cluster",None)
         if cluster is None:
-            cluster = redis.is_cluster(server)
+            cluster = is_cluster(server)
 
         if cluster:
             if "require_full_coverage" not in options:
@@ -434,31 +552,8 @@ def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
             "OPTIONS": options
         }
 
-CACHE_SERVER = env("CACHE_SERVER")
-CACHE_SERVER_OPTIONS = env("CACHE_SERVER_OPTIONS",default={})
-
-CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
-CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
-
-PREVIOUS_CACHE_SESSION_SERVER = env("PREVIOUS_CACHE_SESSION_SERVER")
-PREVIOUS_CACHE_SESSION_SERVER_OPTIONS = env("PREVIOUS_CACHE_SESSION_SERVER_OPTIONS",default={})
-
-CACHE_USER_SERVER = env("CACHE_USER_SERVER")
-CACHE_USER_SERVER_OPTIONS = env("CACHE_USER_SERVER_OPTIONS",default={})
-
-USER_CACHE_ALIAS = None
-PREVIOUS_SESSION_CACHE_ALIAS=None
-
-GET_DEFAULT_CACHE_KEY = lambda key:key
-GET_USER_KEY = lambda userid:str(userid)
-GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
-
-SESSION_CACHES = 0
-PREVIOUS_SESSION_CACHES = 0
-SESSION_CACHES = 0
-USER_CACHES = 0
-
-if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
+TRAFFICCONTROL_CACHE_ALIAS = None
+if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER or TRAFFICCONTROL_CACHE_SERVER:
     CACHES = {}
     if CACHE_SERVER:
         CACHES['default'] = GET_CACHE_CONF('default',CACHE_SERVER,CACHE_SERVER_OPTIONS,key_function=KEY_FUNCTION)
@@ -527,35 +622,38 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     if STAFF_CACHE_TIMEOUT <= 0:
         STAFF_CACHE_TIMEOUT = None
 
-TRAFFIC_MONITOR_LEVEL = env('TRAFFIC_MONITOR_LEVEL',default=0) #0: disabled, 1:summary, 2: per domain
-if not CACHE_SERVER or not CACHE_SERVER.lower().startswith('redis'):
-    TRAFFIC_MONITOR_LEVEL = 0
-
-TRAFFIC_MONITOR_INTERVAL=env('TRAFFIC_MONITOR_INTERVAL',default=3600)
-if TRAFFIC_MONITOR_INTERVAL and TRAFFIC_MONITOR_INTERVAL > 0:
-    if 86400 % TRAFFIC_MONITOR_INTERVAL > 0 :
-        #One day can't be divided by interval, invalid, reset it to one hour
-        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
+    if AUTH2_CLUSTER_ENABLED:
+        if TRAFFICCONTROL_CLUSTERID == AUTH2_CLUSTERID:
+            #current auth2 cluster supports traffic control
+            TRAFFICCONTROL_SUPPORTED = True
+        else:
+            #current auth2 cluster does not support traffic control, dependents on other cluster to implement traffic control
+            TRAFFICCONTROL_SUPPORTED = False
     else:
-        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=TRAFFIC_MONITOR_INTERVAL)
-else:
-    TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
+        #standalone auth2 server, should always support traffic control
+        TRAFFICCONTROL_SUPPORTED = True
 
+
+    if TRAFFICCONTROL_SUPPORTED :
+        if TRAFFICCONTROL_CACHE_SERVER:
+            CACHES["traffic"] = GET_CACHE_CONF("traffic",TRAFFICCONTROL_CACHE_SERVER,TRAFFICCONTROL_CACHE_SERVER_OPTIONS,key_function=lambda key,key_prefix,version : key)
+            TRAFFICCONTROL_CACHE_ALIAS = "traffic"
+            GET_TRAFFICCONTROL_CACHE_KEY = lambda key:"T_{}".format(key)
+        elif CACHE_SERVER:
+            TRAFFICCONTROL_CACHE_ALIAS = "default"
+            GET_TRAFFICCONTROL_CACHE_KEY = GET_DEFAULT_CACHE_KEY
+            if CACHE_KEY_PREFIX:
+                trafficcontrol_key_pattern = "{}:T_{{}}".format(CACHE_KEY_PREFIX)
+                GET_TRAFFICCONTROL_CACHE_KEY = lambda key:trafficcontrol_key_pattern.format(key)
+            else:
+                GET_TRAFFICCONTROL_CACHE_KEY = lambda key:"T_{}".format(key)
+        else:
+            TRAFFICCONTROL_SUPPORTED = False
+else:
+    TRAFFICCONTROL_SUPPORTED = False
+                
 
 TEST_RUNNER=env("TEST_RUNNER","django.test.runner.DiscoverRunner")
-
-#enable auth2 cluster feature by setting AUTH2_CLUSTERID
-AUTH2_CLUSTERID=env("AUTH2_CLUSTERID",default=None)
-AUTH2_CLUSTER_ENDPOINT=env("AUTH2_CLUSTER_ENDPOINT",default=None)
-DEFAULT_AUTH2_CLUSTER=env("DEFAULT_AUTH2_CLUSTER",default=False)
-AUTH2_CLUSTERS_CHECK_INTERVAL=env("AUTH2_CLUSTERS_CHECK_INTERVAL",default=60)
-if AUTH2_CLUSTERS_CHECK_INTERVAL <= 0:
-    AUTH2_CLUSTERS_CHECK_INTERVAL = 60
-
-AUTH2_CLUSTER_ENABLED = True if AUTH2_CLUSTERID and AUTH2_CLUSTER_ENDPOINT else False
-if AUTH2_CLUSTER_ENABLED:
-    if not SECRET_KEY:
-        raise Exception("Must set SECRET_KEY for auth2 cluster feature")
 
 START_OF_WEEK_MONDAY = env("START_OF_WEEK_MONDAY",default=True)
 

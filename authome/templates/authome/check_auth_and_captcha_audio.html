@@ -1,0 +1,35 @@
+{% extends "authome/default.html" %}
+{% load i18n static %}
+
+{% block title %}Sign in with email address{% endblock title %}
+
+{% block extrapagecss %}
+<link rel="stylesheet" type="text/css" href="/sso/static/css/message.css">
+{% endblock extrapagecss %}
+
+{% block extrajs %}
+{% endblock extrajs %}
+
+{% block realcontent %}
+<form method="post" action="{% url 'check_auth_and_captcha2' kind="audio" %}" id="attributeVerification" class="localAccount">
+{% csrf_token %}
+<input type="hidden" id="id_next" name="next" value="{{next}}">
+<input type="hidden" id="id_codeid" name="codeid" value="{{codeid}}">
+<div >
+    <div style="color:black;font-weight:bold;font-size:medium;text-align:left;margin-top:10px;margin-bottom:10px;white-space:pre-wrap">Enter the verification code spoken in the audio</div>
+</div>
+{% include "authome/inc/messages.html"%}
+<div id="attributeList" class="attr">
+  <ul>
+   <li>
+    <audio controls src="/captcha{{outfile}}"></audio><br>
+    <input type="text" title="Please enter the {{captcha_len}} digits verification code." id="id_code" name="code" pattern="^[0-9]&#123;{{captcha_len}}&#125;$" placeholder="code" value="{{code}}" aria-label="Code" required style="width:150px">
+   </li>
+  </ul>
+</div>
+<div class="buttons" >
+   <button id="id_defaultaction" type="submit" name="action" value="check" form="attributeVerification" >Check</button>
+   <button id="cancel" aria-label="Cancel" formnovalidate="" name="action" value="refresh" form="attributeVerification">Refresh</button>
+</div>
+</form>
+{% endblock realcontent %}
