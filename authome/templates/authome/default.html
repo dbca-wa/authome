@@ -16,6 +16,16 @@
             color: #666666;
     </style>
     <script type="text/javascript">
+        var submitted = false
+        function submitonce() {
+            if (submitted) {
+                return false
+            } else {
+                submitted = true
+                return true
+            }
+        }
+
         function enableButton(button,button_text,enabletime,enabled) {
             setTimeout(function () {
                 enabletime -= 1
