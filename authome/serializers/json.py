@@ -55,6 +55,7 @@ class JSONEncoder(json.JSONEncoder):
                 'value' : [obj.days,obj.seconds,obj.microseconds]
             }   
         else:
+            print("***={}".format(obj))
             return super().default(obj)
 
 class JSONFormater(json.JSONEncoder):

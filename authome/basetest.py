@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
 from datetime import timedelta
+from importlib import import_module
 
 from django.urls import reverse
 from django.test import TestCase, Client
@@ -26,7 +27,25 @@ class Auth2Client(Client):
         if url:
             headers["X_UPSTREAM_REQUEST_URI"] = url
 
+        if settings.AUTH2_CLUSTER_ENABLED:
+            headers["X_LB_HASH_KEY"] = "test_lb_hashkey"
         return super().get(path,headers=headers)
+
+    @property
+    def session(self):
+        """Return the current session variables."""
+        engine = import_module(settings.SESSION_ENGINE)
+        cookie = self.cookies.get(settings.SESSION_COOKIE_NAME)
+        if cookie:
+            return engine.SessionStore("test_lb_hashkey",settings.AUTH2_CLUSTERID,cookie.value)
+        if settings.AUTH2_CLUSTER_ENABLED:
+            session = engine.SessionStore("test_lb_hashkey",settings.AUTH2_CLUSTERID,None)
+        else:
+            session = engine.SessionStore()
+        session.save()
+        self.cookies[settings.SESSION_COOKIE_NAME] = session.session_key
+        return session
+
     
 class BaseTestCase(TestCase):
     test_usergroupauthorization = None
@@ -171,6 +190,13 @@ class BaseAuthTestCase(BaseTestCase):
         settings.AUTHORIZATION_CACHE_CHECK_HOURS = [0,12]
 
         settings.CHECK_AUTH_BASIC_PER_REQUEST = False
+
+        if settings.AUTH2_CLUSTER_ENABLED:
+            print("(*****************={}".format(cache.current_auth2_cluster.id))
+            cache.current_auth2_cluster.register()
+            cache._auth2_clusters.clear()
+            cache.refresh_auth2_clusters(True)
+
         User.objects.filter(email__endswith="@gunfire.com").delete()
         User.objects.filter(email__endswith="@gunfire.com.au").delete()
         User.objects.filter(email__endswith="@hacker.com").delete()

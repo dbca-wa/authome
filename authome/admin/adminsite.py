@@ -122,6 +122,13 @@ class Auth2AdminSite(djangoadmin.AdminSite):
                 if app_label in app_dict:
                     if settings.AUTH2_CLUSTER_ENABLED:
                         app_dict[app_label]["models"].append({
+                            'name': "{0}Auth2 Online Status".format(" " * 2),
+                            'object_name': "AUTH2_ONLINE_STATUS",
+                            'perms': [],
+                            'admin_url': reverse("admin:auth2_onlinestatus"),
+                            'add_url': None,
+                        })
+                        app_dict[app_label]["models"].append({
                             'name': "{1}Healthcheck({0})".format(settings.AUTH2_CLUSTERID," " * 2),
                             'object_name': "{}_Healthcheck".format(settings.AUTH2_CLUSTERID),
                             'perms': [],
@@ -166,11 +173,11 @@ from .admin import NormalUser,SystemUser,NormalUserToken,SystemUserToken
 if settings.AUTH2_CLUSTER_ENABLED:
     from .clusteradmin import Auth2ClusterAdmin
     admin_site.register(auth2_models.Auth2Cluster,Auth2ClusterAdmin)
-    from .clusteradmin import (UserGroupAdmin,IdentityProviderAdmin,CustomizableUserflowAdmin,UserGroupAuthorizationAdmin,UserAdmin,UserAccessTokenAdmin,SystemUserAccessTokenAdmin)
+    from .clusteradmin import (UserGroupAdmin,IdentityProviderAdmin,CustomizableUserflowAdmin,UserGroupAuthorizationAdmin,UserAdmin,UserAccessTokenAdmin,SystemUserAccessTokenAdmin,TrafficControlAdmin)
     from .admin import (SystemUserAdmin,UserTOTPAdmin)
 else:
     from .admin import (UserAdmin,SystemUserAdmin,UserGroupAuthorizationAdmin,UserGroupAdmin,UserAccessTokenAdmin,SystemUserAccessTokenAdmin,
-        IdentityProviderAdmin,CustomizableUserflowAdmin,UserTOTPAdmin)
+        IdentityProviderAdmin,CustomizableUserflowAdmin,UserTOTPAdmin,TrafficControlAdmin)
 
 from .debugadmin import DebugLogAdmin
 admin_site.register(auth2_models.DebugLog,DebugLogAdmin)
@@ -190,3 +197,4 @@ admin_site.register(NormalUserToken,UserAccessTokenAdmin)
 admin_site.register(auth2_models.IdentityProvider,IdentityProviderAdmin)
 admin_site.register(auth2_models.CustomizableUserflow,CustomizableUserflowAdmin)
 admin_site.register(auth2_models.UserTOTP,UserTOTPAdmin)
+admin_site.register(auth2_models.TrafficControl,TrafficControlAdmin)
