@@ -715,7 +715,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt):
                 if not exempt:
                     if userlimitkey:
                         #decrease the user limits which was added before
-                        cacheclient.desc(userlimitkey)
+                        cacheclient.decr(userlimitkey)
                     return [False,"IP",requests,(today + timedelta(milliseconds=milliseconds + tcontrol.iplimitperiod * 1000 - milliseconds % (tcontrol.iplimitperiod * 1000))).strftime("%Y-%m-%d %H:%M:%S")]
     
     
@@ -812,7 +812,7 @@ def _tcontrol(request):
         return None
     else:
         res = HttpResponseForbidden("Denied")
-        res["x-tcontrol"] = urllib.parse.quote("{}|{}|{}|{}".format(tcontrol.id,result[1],result[2],result[3]) if len(result) == 4  else "{}|{}|{}".format(tcontrol.id,result[1],result[2]))
+        res["x-tcontrol"] = urllib.parse.quote("{1}|{0}|{2}|{3}".format(tcontrol.id,result[1],result[2],result[3]) if len(result) == 4  else "{1}|{0}|{2}".format(tcontrol.id,result[1],result[2]))
         return res
 
 def auth_tcontrol(request):
@@ -1971,20 +1971,30 @@ def forbidden_tcontrol(request):
         
         try:
             tcontrol = tcontrol.split("|")
-            tcontrol[0] = cache.tcontrols.get(int(tcontrol[0])) or None
+            tcontrol[1] = cache.tcontrols.get(int(tcontrol[1])) or None
 
-            if tcontrol[1] == "USER":
-                if tcontrol[0]:
-                    context["msg"] = "You have send too many requests({}) in {}, please try again after {}".format(tcontrol[2],utils.format_timedelta(tcontrol[0].userlimitperiod) ,tcontrol[3])
+            if tcontrol[0] == "USER":
+                if tcontrol[1]:
+                    context["msg"] = "You have send too many requests({}) in {}, please try again after {}".format(tcontrol[2],utils.format_timedelta(tcontrol[1].userlimitperiod) ,tcontrol[3])
                 else:
                     context["msg"] = "You have send too many requests({}), please try again after {}".format(tcontrol[2],tcontrol[3])
-            elif tcontrol[1] == "IP":
-                if tcontrol[0]:
-                    context["msg"] = "Too many requests({}) have been sent in {}, please try again after {}".format(tcontrol[2],utils.format_timedelta(tcontrol[0].userlimitperiod) ,tcontrol[3])
-                else:
-                    context["msg"] = "Too many requests({}) have been sent, please try again after {}".format(tcontrol[2],tcontrol[3])
             else:
-                context["msg"] = "Too many requets({}) are running, please wait a few seconds and try again.".format(tcontrol[2])
+                if settings.DEBUG:
+                    if tcontrol[0] == "IP":
+                        if tcontrol[1]:
+                            context["msg"] = "Too many requests({}) have been sent in {}, please try again after {}".format(tcontrol[2],utils.format_timedelta(tcontrol[1].userlimitperiod) ,tcontrol[3])
+                        else:
+                            context["msg"] = "Too many requests({}) have been sent, please try again after {}".format(tcontrol[2],tcontrol[3])
+                    else:
+                        context["msg"] = "Too many requets({}) are running, please wait a few seconds and try again.".format(tcontrol[2])
+                else:
+                    if tcontrol[0] == "IP":
+                        if tcontrol[1]:
+                            context["msg"] = "Too many requests have been sent in {}, please try again after {}".format(utils.format_timedelta(tcontrol[1].userlimitperiod) ,tcontrol[3])
+                        else:
+                            context["msg"] = "Too many requests have been sent, please try again after {}".format(tcontrol[3])
+                    else:
+                        context["msg"] = "Too many requets are running, please wait a few seconds and try again."
         except:
             context["msg"] = "Too many requets are running, please wait a few seconds and try again."
 

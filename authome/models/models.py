@@ -1942,24 +1942,27 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
         if self.iplimitperiod and 86400 % self.iplimitperiod != 0:
             raise ValidationError("The total seconds of a day(86400) should be divided by iplimitperiod.")
         
-        if self.est_processtime > 21600000:
+        if self.est_processtime and self.est_processtime > 21600000:
             raise ValidationError("The estimate processtime can't be larger than 6 hours")
 
-        if not self.buckettime or self.buckettime < timediff or self.est_processtime % self.buckettime != 0 or 86400000 % self.buckettime != 0:
-            raise ValidationError("The buckettime should be larger than {}; Both the total milleseconds of one day(86400000) and estimated processing time({}) must be divided by the value of buckettime.".format(timediff,self.est_processtime))
+        if self.buckettime and self.est_processtime:
+            if self.buckettime < timediff or self.est_processtime % self.buckettime != 0 or 86400000 % self.buckettime != 0:
+                raise ValidationError("The buckettime should be larger than {}; Both the total milleseconds of one day(86400000) and estimated processing time({}) must be divided by the value of buckettime.".format(timediff,self.est_processtime))
 
-        if int(self.est_processtime / self.buckettime) > settings.TRAFFICCONTROL_MAX_BUCKETS:
-            raise ValidationError("The buckettime is too small, will slow the performance, it should be larger than {}".format( math.ceil(self.est_processtime / settings.TRAFFICCONTROL_MAX_BUCKETS)))
+            if int(self.est_processtime / self.buckettime) > settings.TRAFFICCONTROL_MAX_BUCKETS:
+                raise ValidationError("The buckettime is too small, will slow the performance, it should be larger than {}".format( math.ceil(self.est_processtime / settings.TRAFFICCONTROL_MAX_BUCKETS)))
 
-        totalbucketstime = self.est_processtime +  (50000 + self.est_processtime - 50000 % self.est_processtime)
+            totalbucketstime = self.est_processtime +  (50000 + self.est_processtime - 50000 % self.est_processtime)
 
-        minbuckets = int(totalbucketstime / self.buckettime)
+            minbuckets = int(totalbucketstime / self.buckettime)
 
-        while 86400000 % totalbucketstime != 0 and int((86400000 % totalbucketstime) / self.buckettime) < minbuckets:
-            totalbucketstime += self.buckettime
+            while 86400000 % totalbucketstime != 0 and int((86400000 % totalbucketstime) / self.buckettime) < minbuckets:
+                totalbucketstime += self.buckettime
 
-        self.buckets = int(totalbucketstime / self.buckettime)
-        self.active = self.enabled and ((self.concurrency > 0 and self.est_processtime > 0) or (self.iplimit > 0 and self.iplimitperiod > 0) or (self.userlimit > 0 and self.userlimitperiod > 0))
+            self.buckets = int(totalbucketstime / self.buckettime)
+        else:
+            self.buckets = 0
+        self.active = True if (self.enabled and ((self.concurrency > 0 and self.est_processtime > 0 and self.buckettime) or (self.iplimit > 0 and self.iplimitperiod > 0) or (self.userlimit > 0 and self.userlimitperiod > 0))) else False
 
     def _normalize_bucketid(self,bucketid):
         if bucketid < 0:

@@ -78,12 +78,12 @@ class Auth2ClusterListener(object):
 def refresh_cache_wrapper(cls,column):
     _original_func = getattr(cls,"refresh_cache")
     def _func(cls):
+        refreshtime = _original_func()
         try:
-            refreshtime = _original_func()
             setattr(cache.current_auth2_cluster,column,refreshtime)
             cache.current_auth2_cluster.save(update_fields=[column,"modified"])
-        except:
-            logger.error("Failed to save the latest refresh time({1}) to auth2 cluster '{0}'".format(cache.current_auth2_cluster.cluserid,column))
+        except Exception as ex:
+            logger.error("Failed to save the latest refresh time({1}) to auth2 cluster '{0}'. {2}".format(cache.current_auth2_cluster.clusterid,column,str(ex)))
         return refreshtime
     return _func
 

@@ -26,7 +26,7 @@ class AuthTestCase(BaseAuthTestCase):
         ]
         self.populate_testdata()
 
-        #test sso_auth without authentication  
+        #test sso_auth without authentication
         res = self.client.get(self.auth_url)
         self.assertEqual(res.status_code,401,msg="Should return 401 response for unauthenticated request")
         
