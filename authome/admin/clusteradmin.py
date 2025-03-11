@@ -40,7 +40,7 @@ class SyncConfigChangeMixin(object):
     def sync_config(self,request):
         changelist_url_name = 'admin:{}_{}_changelist'.format(self.model._meta.app_label,self.model._meta.model_name)
         obj = self.model.objects.all().only("id","modified").order_by("-modified").first()
-        if not obj or True:
+        if not obj :
             #no data, no need to sync
             self.message_user(
                 request, 
