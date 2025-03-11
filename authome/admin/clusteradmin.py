@@ -38,8 +38,9 @@ class SyncConfigChangeMixin(object):
         return urls
 
     def sync_config(self,request):
+        changelist_url_name = 'admin:{}_{}_changelist'.format(self.model._meta.app_label,self.model._meta.model_name)
         obj = self.model.objects.all().only("id","modified").order_by("-modified").first()
-        if not obj:
+        if not obj or True:
             #no data, no need to sync
             self.message_user(
                 request, 
@@ -91,7 +92,6 @@ class SyncConfigChangeMixin(object):
                 request, 
                 message
             )
-        changelist_url_name = 'admin:{}_{}_changelist'.format(self.model._meta.app_label,self.model._meta.model_name)
         return HttpResponseRedirect(reverse(changelist_url_name))
 
 class SyncObjectChangeMixin(object):
