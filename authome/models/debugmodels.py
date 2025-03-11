@@ -192,6 +192,7 @@ class DebugLog(django_models.Model):
         try:
             log = DebugLog(
                 clusterid = settings.AUTH2_CLUSTERID if settings.AUTH2_CLUSTER_ENABLED else None,
+                lb_hash_key = ip,
                 message = message,
                 category=category,
                 email = email,

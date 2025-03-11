@@ -192,7 +192,6 @@ class BaseAuthTestCase(BaseTestCase):
         settings.CHECK_AUTH_BASIC_PER_REQUEST = False
 
         if settings.AUTH2_CLUSTER_ENABLED:
-            print("(*****************={}".format(cache.current_auth2_cluster.id))
             cache.current_auth2_cluster.register()
             cache._auth2_clusters.clear()
             cache.refresh_auth2_clusters(True)

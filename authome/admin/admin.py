@@ -218,7 +218,7 @@ class UserGroupsMixin(RequestMixin):
         if not obj :
             return ""
         else:
-            usergroups,usergroupnames = models.UserGroup.find_groups(obj.email,cacheable=False)
+            usergroups,usergroupnames,grouppks = models.UserGroup.find_groups(obj.email,cacheable=False)
             result = None
             for group in usergroups:
                 url = reverse(self.group_change_url_name, args=(group.id,))
@@ -746,7 +746,7 @@ class TrafficControlLocationInline(DatetimeMixin,djangoadmin.TabularInline):
 class TrafficControlAdmin(PermissionCheckMixin,CacheableListTitleMixin,DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmin):
     list_display = ('name','enabled','est_processtime','buckettime','concurrency','iplimit','iplimitperiod','userlimit','userlimitperiod','_modified','_created')
     readonly_fields = ('_modified','_created')
-    fields = ('name','enabled','est_processtime','buckettime','concurrency','iplimit','iplimitperiod','userlimit','userlimitperiod','_modified','_created')
+    fields = ('name','enabled','est_processtime','buckettime','concurrency','iplimit','iplimitperiod','userlimit','userlimitperiod','exempt_include','exempt_groups','_modified','_created')
     ordering = ('name',)
     search_fields=("email",)
     form = forms.TrafficControlForm

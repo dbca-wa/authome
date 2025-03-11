@@ -1,9 +1,11 @@
 import math
+from multiprocessing import Process,Pipe
 import time
 import random
 from datetime import timedelta
 
 from django.test import TestCase
+from django.db import connections
 
 from django.utils import timezone
 
@@ -462,4 +464,221 @@ class TrafficControlTestCase(BaseTestCase):
                 bucketstarttime = bucketstarttime + timedelta(milliseconds = buckettime)
         finally:
             tcontrol_config.delete()
+                    
+    def test_performance(self):
+        request_interval = 100 #milliseconds
+        users = 100
+        userips = int(users * 0.6)
+
+        userlimit=10
+        userlimitperiod=10
+
+        iplimit=100
+        iplimitperiod=5
+
+        est_processtime = 500
+        buckettime = 10
+        concurrency=20
+
+        total_testtime = 60000
+
+        testusers = [["testuser{}".format(i),"10.11.123.{}".format(random.randint(0,userips)),None,None] for i in range(1,users + 1,1)]
+        exempt = False
+        tcontrol_config = models.TrafficControl(
+            name="unitest_tcontrol05",
+            userlimit=userlimit,
+            userlimitperiod=userlimitperiod,
+            iplimit=iplimit,
+            iplimitperiod=iplimitperiod,
+            est_processtime=est_processtime,
+            buckettime=buckettime,
+            concurrency=concurrency,
+            enabled=True
+        )
+        tcontrol_config.clean()
+        tcontrol_config,created = models.TrafficControl.objects.update_or_create(
+            name=tcontrol_config.name,
+            defaults={
+                "userlimit":tcontrol_config.userlimit,
+                "userlimitperiod":tcontrol_config.userlimitperiod,
+                "iplimit":tcontrol_config.iplimit,
+                "iplimitperiod":tcontrol_config.iplimitperiod,
+                "est_processtime":tcontrol_config.est_processtime,
+                "buckettime":tcontrol_config.buckettime,
+                "buckets":tcontrol_config.buckets,
+                "concurrency":tcontrol_config.concurrency,
+                "active":tcontrol_config.active,
+                "enabled":tcontrol_config.enabled
+        })
+        processes = []
+        now = timezone.localtime()
+        today = now.replace(hour=0,minute=0,second=0,microsecond=0)
+        milliseconds = int((now - today).total_seconds() * 1000)
+    
+        teststarttime = today + timedelta(milliseconds = milliseconds + 2 * est_processtime - milliseconds % est_processtime)
+        testendtime = teststarttime + timedelta(milliseconds=total_testtime + est_processtime - total_testtime % est_processtime)
+            
+        print("\n\nBegin to test traffic control performance from {0} to {1}".format(
+            teststarttime.strftime("%Y-%m-%d %H:%M:%S.%f"),
+            testendtime.strftime("%Y-%m-%d %H:%M:%S.%f")
+        ))
+        for i in range(users):
+            p_conn, c_conn = Pipe()
+            processes.append((testusers[i],p_conn,Process(target=self.run_performancetest,args=(c_conn,tcontrol_config,teststarttime,testendtime,request_interval/1000,testusers[i][0],testusers[i][1]))))
+    
+        for testuser,p_conn,p in processes:
+            p.start()
+
+        total_requests = 0
+        total_allowed_requests = 0
+        total_user_denied_requests = 0
+        total_ip_denied_requests = 0
+        total_concurrency_denied_requests = 0
+        total_failed_requests = 0
+
+        min_exectime = None
+        max_exectime = None
+        total_exectime = 0
+
+        for testuser,p_conn,p in processes:
+            result = p_conn.recv()#((requests,allowd_requests,user_denied_requests,ip_denied_requests,concurrency_denied_requests,failed_requests),(min_exectime,max_exectime,total_exectime))
+            p.join()
+            if isinstance(result,Exception):
+                raise result
+            testuser[2] = result[0] #requests,allowd_requests,user_denied_requests,ip_denied_requests,concurrency_denied_requests,failed_requests
+            testuser[3] = result[1]
+            total_requests += result[0][0]
+            total_allowed_requests += result[0][1]
+            total_user_denied_requests += result[0][2]
+            total_ip_denied_requests += result[0][3]
+            total_concurrency_denied_requests += result[0][4]
+            total_failed_requests += result[0][5]
+
+            if min_exectime is None:
+                min_exectime = result[1][0]
+            elif min_exectime > result[1][0]:
+                min_exectime = result[1][0]
+
+            if max_exectime is None:
+                max_exectime = result[1][1]
+            elif max_exectime < result[1][1]:
+                max_exectime = result[1][1]
+
+            total_exectime += result[1][2]
+
+        print("""Performance Test Environment
+    Total Users: {}
+    Request Interval: {} milliseconds
+    userlimit: {}
+    userlimitperiod: {} seconds
+    iplimit: {} 
+    iplimitperiod: {} seconds
+    est_processtime: {} milliseconds
+    buckettime: {} milliseconds
+    Test Start Time: {}
+    Test End Time: {}
+    Total Test Time: {}
+
+Performance Test Result Summary
+    Total Requests :{}
+    Total Allowed Requests: {}
+    Total User Denied Requests: {}
+    Total IP Denied Requests: {}
+    Total Concurrency Denied Requests: {}
+    Total Failed Requests: {}
+    Min Execute Time: {} milliseconds
+    Max Execute Time: {} milliseconds
+    Avg Execute Time: {} milliseconds
+
+Performance Test Result Details:
+    {}
+    """.format(
+        users,
+        request_interval,
+        tcontrol_config.userlimit,
+        tcontrol_config.userlimitperiod,
+        tcontrol_config.iplimit,
+        tcontrol_config.iplimitperiod,
+        tcontrol_config.est_processtime,
+        tcontrol_config.buckettime,
+        teststarttime.strftime("%Y-%m-%d %H:%M:%S.%f"),
+        testendtime.strftime("%Y-%m-%d %H:%M:%S.%f"),
+        (testendtime - teststarttime).total_seconds() * 1000,
+        
+        total_requests,
+        total_allowed_requests,
+        total_user_denied_requests,
+        total_ip_denied_requests,
+        total_concurrency_denied_requests,
+        total_failed_requests,
+        min_exectime,
+        max_exectime,
+        total_exectime / total_requests,
+
+        "\n    ".join("""Test User: {} , User IP: {}
+        Requests: {} , Allowed Requests: {} , User Denied Requests: {} , IP Denied Requests: {} , Concurrency Denied Requests: {} , Failed Requests: {}
+        Min Execute Time: {} milliseconds , Max Execute Time: {} milliseconds , Avg Execute Time: {}
+""".format(testuser[0],testuser[1],*testuser[2],testuser[3][0],testuser[3][1],testuser[3][2] / testuser[2][0]) for testuser in testusers)
+    ))
+
+    def run_performancetest(self,c_conn,tcontrol_config,teststarttime,testendtime,request_interval,client,clientip):
+        try:
+            conn = connections['default']
+            conn.connect() 
+
+            requests = 0
+            allowed_requests = 0
+            failed_requests = 0
+            user_denied_requests = 0
+            ip_denied_requests = 0
+            concurrency_denied_requests = 0
+            min_exectime = None
+            max_exectime = None
+            total_exectime = 0
+    
+            now = timezone.localtime()
+            waittime = (teststarttime - now).total_seconds()
+            if waittime >= 0:
+                print("\n{}({}): wait {} milliseconds to start performance testing".format(client,clientip,waittime))
+                time.sleep(waittime)
+            else:
+                print("\n{}({}): start performance testing".format(client,clientip))
+     
+            while timezone.localtime() < testendtime:
+                start = timezone.localtime()
+                result = check_tcontrol(tcontrol_config,clientip,client,False)
+                exectime = (timezone.localtime() - start).total_seconds() * 1000
+                requests += 1
+                if min_exectime is None:
+                    min_exectime = exectime
+                elif min_exectime > exectime:
+                    min_exectime = exectime
+    
+                if max_exectime is None:
+                    max_exectime = exectime
+                elif max_exectime < exectime:
+                    max_exectime = exectime
+    
+                total_exectime += exectime
+    
+                if result[0]:
+                    if result[1]:
+                        failed_requests += 1
+                    else:
+                        allowed_requests += 1
+                elif result[1] == "USER":
+                    user_denied_requests += 1
+                elif result[1] == "IP":
+                    ip_denied_requests += 1
+                else:
+                    concurrency_denied_requests += 1
+    
+                time.sleep(request_interval)
+    
+            c_conn.send(((requests,allowed_requests,user_denied_requests,ip_denied_requests,concurrency_denied_requests,failed_requests),(min_exectime,max_exectime,total_exectime)))
+            c_conn.close()
+        except Exception as ex:
+            c_conn.send(ex)
+            c_conn.close()
+
                     

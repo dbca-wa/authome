@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.db import transaction
 from django.db import models as django_models
 from django.contrib.postgres.fields.array import ArrayField as DjangoArrayField
-from django.db.models.signals import pre_delete, pre_save, post_save, post_delete
+from django.db.models.signals import pre_delete, pre_save, post_save, post_delete,m2m_changed
 from django.dispatch import receiver
 from django.contrib.auth.models import AbstractUser,UserManager
 from django.utils.html import mark_safe
@@ -910,22 +910,24 @@ class UserGroup(CacheableMixin,DbObjectMixin,django_models.Model):
         return timeout
 
     @classmethod
-    def get_groupnames(cls,usergroups):
+    def get_pk_and_names(cls,usergroups):
         """
-        return groupname string seprated by "," based on usergroups
+        return (groupname string seprated by "," based on usergroups, group pks)
         """
         groupnames = []
+        pks = set()
         index = 0
         for usergroup in usergroups:
             group = usergroup
             index = len(groupnames)
             while group:
+                pks.add(group.id)
                 if group.groupid in groupnames:
                     break
                 if group.groupid:
                     groupnames.insert(index,group.groupid)
                 group = group.parent_group
-        return ",".join(groupnames)
+        return (",".join(groupnames),pks)
 
     def is_changed(self,update_fields=None):
         changed = super().is_changed(update_fields)
@@ -1220,11 +1222,11 @@ class UserGroup(CacheableMixin,DbObjectMixin,django_models.Model):
                 elif group.parent_group :
                     _add_group(usergroups,group.parent_group)
             if usergroups:
-                usergroups = (usergroups,cls.get_groupnames(usergroups))
+                usergroups = (usergroups,*cls.get_pk_and_names(usergroups))
                 if cacheable:
                     cache.set_email_groups(email,usergroups)
             else:
-                usergroups = (usergroups,"")
+                usergroups = (usergroups,"",set())
 
 
         return usergroups
@@ -1857,7 +1859,7 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
     _buckets_begintime = None
     _buckets_fetchtime = None
 
-    _editable_columns = ("est_processtime","concurrency","iplimit","iplimitperiod","userlimit","userlimitperiod","enabled","active","buckettime","buckets")
+    _editable_columns = ("est_processtime","concurrency","iplimit","iplimitperiod","userlimit","userlimitperiod","enabled","active","buckettime","buckets","exempt_include","exempt_groups")
     name = django_models.SlugField(max_length=128,null=False,editable=True,unique=True)
     enabled = django_models.BooleanField(default=True,editable=True,help_text="Enable/disable the traffic control")
     active = django_models.BooleanField(default=False,editable=False)
@@ -1869,6 +1871,8 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
     iplimitperiod = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The time period(seconds) configured for requests limit per client ip") #in seconds
     userlimit = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The maximum requests per user which can be allowd in configure period")
     userlimitperiod = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The time period(seconds) configured for requests limit per user") #in seconds
+    exempt_include = django_models.BooleanField(default=True,editable=True,help_text="Exempt the traffic control for the user groups which is include/exclude the exempt_groups")
+    exempt_groups = django_models.ManyToManyField(UserGroup,editable=True)
     modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = django_models.DateTimeField(auto_now_add=timezone.now)
 
@@ -2067,6 +2071,27 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
             result += data
 
         return result
+
+    @property
+    def exempt_usergroups(self):
+        try:
+            return self._exempt_usergroups
+        except:
+            exempt_usergroups = []
+            for group in self.exempt_groups.all():
+                exemp_usergroups.append(group.id)
+
+            self._exempt_usergroups = exempt_usergroups
+            return self._exempt_usergroups
+            
+        
+
+    def is_exempt(self,email):
+        if not self.exempt_usergroups:
+            #the data should be cached in method "refresh_cache"
+            return False
+
+        return any(g in UserGroup.find_groups(email)[2] for g in self._exempt_usergroups)
         
 
     @classmethod
@@ -2078,9 +2103,11 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
         refreshtime = timezone.localtime()
         size = 0
         tcontrols = {}
-        for obj in TrafficControlLocation.objects.select_related("tcontrol").all():
+        for obj in TrafficControlLocation.objects.select_related("tcontrol").prefetch_related("tcontrol__exempt_groups"):
             size += 1
             if obj.tcontrol.active :
+                #cache the user groups
+                _groups = obj.tcontrol.exempt_usergroups
                 tcontrols[(obj.domain,obj.location,obj.method)] = obj.tcontrol
                 if settings.TRAFFICCONTROL_SUPPORTED:
                     tcontrols[obj.tcontrol.id] = obj.tcontrol
@@ -2293,6 +2320,11 @@ if defaultcache:
         @staticmethod
         @receiver(post_delete, sender=TrafficControl)
         def post_delete_tcontrol(sender,*args,**kwargs):
+            TrafficControlChange.change()
+
+        @staticmethod
+        @receiver(m2m_changed, sender=TrafficControl.exempt_groups.through)
+        def m2m_changed_tcontrol(sender,*args,**kwargs):
             TrafficControlChange.change()
 
         @staticmethod

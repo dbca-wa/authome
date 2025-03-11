@@ -694,7 +694,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt):
                 if requests == tcontrol.userlimit + 1:
                     if cacheclient.execute_command("set","{}_{}_debuglog".format(tcontrol.name,client),"1","NX","EX",1800):
                         #log interval half an hour
-                        DebugLog.tcontrol(DebugLog.USER_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Send too many requests({}) in {}".format(requests,utils.format_timedelta(tcontrol.userlimitperiod)))
+                        DebugLog.tcontrol(DebugLog.USER_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"The user({}) send too many requests({}) in {}".format(client,requests,utils.format_timedelta(tcontrol.userlimitperiod)))
                 #exceed the user limit
                 return (False,"USER",requests,(today + timedelta(milliseconds=milliseconds + tcontrol.userlimitperiod * 1000 - milliseconds % (tcontrol.userlimitperiod * 1000))).strftime("%Y-%m-%d %H:%M:%S"))
     
@@ -710,7 +710,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt):
                 if requests == tcontrol.iplimit + 1:
                     if cacheclient.execute_command("set","{}_{}_debuglog".format(tcontrol.name,clientip),"1","NX","EX",1800):
                         #log interval half an hour
-                        DebugLog.tcontrol(DebugLog.IP_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Send too many requests({}) in {}".format(requests,utils.format_timedelta(tcontrol.iplimitperiod)))
+                        DebugLog.tcontrol(DebugLog.IP_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"The IP address({}) send too many requests({}) in {}".format(clientip,requests,utils.format_timedelta(tcontrol.iplimitperiod)))
                 #exceed the ip limit
                 if not exempt:
                     if userlimitkey:
@@ -791,15 +791,13 @@ def _tcontrol(request):
         return None
     exempt = False
     if request.user.is_authenticated:
-        client = client=request.user.email
-        if settings.TRAFFICCONTROL_EXEMPT_NONPUBLICUSER:
-            groups = models.UserGroup.find_groups(client)
-            if len(groups[0]) > 1 or groups[0][0].id != cache.public_group.id:
-                #is the user we known,exempt traffic control
-                if (tcontrol.iplimit == 0 or tcontrol.iplimitperiod == 0) and (tcontrol.concurrency == 0 or tcontrol.est_processtime == 0):
-                    return True
-                else:
-                    exempt = True
+        client = request.user.email
+        if tcontrol.is_exempt(client):
+            #is the user we known,exempt traffic control
+            if (tcontrol.iplimit == 0 or tcontrol.iplimitperiod == 0) and (tcontrol.concurrency == 0 or tcontrol.est_processtime == 0):
+                return True
+            else:
+                exempt = True
     else:
         client = request.COOKIES.get(settings.TRAFFICCONTROL_COOKIE_NAME) or None
 
