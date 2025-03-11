@@ -2079,7 +2079,7 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
         except:
             exempt_usergroups = []
             for group in self.exempt_groups.all():
-                exemp_usergroups.append(group.id)
+                exempt_usergroups.append(group.id)
 
             self._exempt_usergroups = exempt_usergroups
             return self._exempt_usergroups
