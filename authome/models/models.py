@@ -1872,7 +1872,7 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
     userlimit = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The maximum requests per user which can be allowd in configure period")
     userlimitperiod = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The time period(seconds) configured for requests limit per user") #in seconds
     exempt_include = django_models.BooleanField(default=True,editable=True,help_text="Exempt the traffic control for the user groups which is include/exclude the exempt_groups")
-    exempt_groups = django_models.ManyToManyField(UserGroup,editable=True)
+    exempt_groups = django_models.ManyToManyField(UserGroup,editable=True,blank=True)
     modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = django_models.DateTimeField(auto_now_add=timezone.now)
 
