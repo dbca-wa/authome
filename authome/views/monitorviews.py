@@ -139,6 +139,23 @@ def _get_localstatus():
                         errors["caches"] = OrderedDict()
                     errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_servers[name])
 
+    if settings.TRAFFICCONTROL_CACHE_SERVER:
+        name = settings.TRAFFICCONTROL_CACHE_ALIAS
+        if settings.CACHE_SERVER.lower().startswith("redis"):
+            cache_healthy,cache_servers[name] = caches[name].server_status
+        else:
+            cache_healthy,cache_error = utils.ping_cacheserver(name)
+            if cache_healthy:
+                cache_servers[name] = "server = {} ,  status = OK".format(settings.TRAFFICCONTROL_CACHE_SERVER)
+            else:
+                cache_servers[name] = "server = {} ,  error = {}".format(settings.TRAFFICCONTROL_CACHE_SERVER,cache_error)
+
+        if not cache_healthy:
+            healthy = False
+            if "caches" not in errors:
+                errors["caches"] = OrderedDict()
+            errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_servers[name])
+
     cache_healthy,cache_msgs = cache.healthy
     healthy = healthy and cache_healthy
     if not cache_healthy:
@@ -272,6 +289,16 @@ def _check_localhealth():
 
                 if not cache_working:
                     working = False
+
+    if settings.TRAFFICCONTROL_CACHE_SERVER:
+        name = settings.TRAFFICCONTROL_CACHE_ALIAS
+        if settings.TRAFFICCONTROL_CACHE_SERVER.lower().startswith("redis"):
+            cache_working,pingstatus = caches[name].ping()
+        else:
+            cache_working,pingstatus = utils.ping_cacheserver(name)
+        status["caches"][name] = {"ping":cache_working,"pingstatus":pingstatus}
+        if not cache_working:
+            working = False
 
     if not working :
         if not settings.AUTH2_CLUSTER_ENABLED:
