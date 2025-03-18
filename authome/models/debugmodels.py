@@ -41,6 +41,7 @@ class DebugLog(django_models.Model):
     USER_TRAFFIC_CONTROL = 300
     IP_TRAFFIC_CONTROL = 301
     CONCURRENCY_TRAFFIC_CONTROL = 302
+    TRAFFIC_CONTROL_ERROR = 399
 
     CATEGORIES = [
         (CREATE_COOKIE , "Create cookie"),
@@ -70,6 +71,7 @@ class DebugLog(django_models.Model):
         (USER_TRAFFIC_CONTROL,"User Traffic Control"),
         (IP_TRAFFIC_CONTROL,"IP Traffic Control"),
         (CONCURRENCY_TRAFFIC_CONTROL,"Concurrency Traffic Control"),
+        (TRAFFIC_CONTROL_ERROR,"Traffic Control Error"),
 
         (ERROR,"Error")
 

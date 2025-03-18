@@ -44,7 +44,7 @@ from .. import emails
 from ..exceptions import HttpResponseException,UserDoesNotExistException,PolicyNotConfiguredException
 from ..patch import load_user,anonymoususer,load_usertoken
 from ..sessionstore import SessionStore
-from ..models import DebugLog
+from authome.models import DebugLog
 
 from .. import performance
 
@@ -694,9 +694,9 @@ def _check_tcontrol(tcontrol,clientip,client,exempt):
                 if requests == tcontrol.userlimit + 1:
                     if cacheclient.execute_command("set","{}_{}_debuglog".format(tcontrol.name,client),"1","NX","EX",1800):
                         #log interval half an hour
-                        DebugLog.tcontrol(DebugLog.USER_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"The user({}) send too many requests({}) in {}".format(client,requests,utils.format_timedelta(tcontrol.userlimitperiod)))
+                        DebugLog.tcontrol(DebugLog.USER_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"The user({}) sent too many requests({}) in {}".format(client,requests,utils.format_timedelta(tcontrol.userlimitperiod)))
                 #exceed the user limit
-                return (False,"USER",requests,(today + timedelta(milliseconds=milliseconds + tcontrol.userlimitperiod * 1000 - milliseconds % (tcontrol.userlimitperiod * 1000))).strftime("%Y-%m-%d %H:%M:%S"))
+                return [False,"USER",requests,tcontrol.userlimitperiod - int(milliseconds / 1000) % tcontrol.userlimitperiod ]
     
         iplimitkey = None
         if clientip and tcontrol.iplimit > 0 and tcontrol.iplimitperiod:
@@ -710,13 +710,13 @@ def _check_tcontrol(tcontrol,clientip,client,exempt):
                 if requests == tcontrol.iplimit + 1:
                     if cacheclient.execute_command("set","{}_{}_debuglog".format(tcontrol.name,clientip),"1","NX","EX",1800):
                         #log interval half an hour
-                        DebugLog.tcontrol(DebugLog.IP_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"The IP address({}) send too many requests({}) in {}".format(clientip,requests,utils.format_timedelta(tcontrol.iplimitperiod)))
+                        DebugLog.tcontrol(DebugLog.IP_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"The IP address({}) sent too many requests({}) in {}".format(clientip,requests,utils.format_timedelta(tcontrol.iplimitperiod)))
                 #exceed the ip limit
                 if not exempt:
                     if userlimitkey:
                         #decrease the user limits which was added before
                         cacheclient.decr(userlimitkey)
-                    return [False,"IP",requests,(today + timedelta(milliseconds=milliseconds + tcontrol.iplimitperiod * 1000 - milliseconds % (tcontrol.iplimitperiod * 1000))).strftime("%Y-%m-%d %H:%M:%S")]
+                    return [False,"IP",requests,tcontrol.iplimitperiod - int(milliseconds / 1000) % tcontrol.iplimitperiod ]
     
     
         #check the concurrency
@@ -728,21 +728,30 @@ def _check_tcontrol(tcontrol,clientip,client,exempt):
             if requests == 1:
                 #set the expire time, 5 seconds later than limitperiod
                 cacheclient.expire(key,math.ceil(tcontrol.est_processtime / 1000) + 5)
-            if expired_buckets:
-                #fetch the data from redis
-                fetchtime = timezone.localtime()
-                expiredbuckets_requests = cacheclient.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in expired_buckets])
-                tcontrol.set_buckets(requests,timezone.localtime(),expiredbuckets_requests)
-            else:
+
+            if requests > tcontrol.concurrency:
+                #already exceed the limit. no need to fetch the requests of other buckets
                 tcontrol.set_buckets(requests)
-    
-            totalrequests = tcontrol.runningrequests
+                totalrequests = requests
+            else:
+                if expired_buckets:
+                    #fetch the data from redis
+                    fetchtime = timezone.localtime()
+                    expiredbuckets_requests = cacheclient.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in expired_buckets])
+                    tcontrol.set_buckets(requests,timezone.localtime(),expiredbuckets_requests)
+                else:
+                    tcontrol.set_buckets(requests)
+                totalrequests = tcontrol.runningrequests
+
             #logger.warning("{}: Have {} running requests,bucket={} , expired buckets = {}({})".format(tcontrol.name,totalrequests,bucketid,len(expired_buckets) if expired_buckets else 0,[d for d in expired_buckets or []]))
             if totalrequests > tcontrol.concurrency:
                 #if exceed the limit, can't access
                 if cacheclient.execute_command("set","{}_debuglog".format(tcontrol.name),"1","NX","EX",300):
                     #the log interval is 5 minutes
-                    DebugLog.tcontrol(DebugLog.CONCURRENCY_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Too many running requests({})".format(totalrequests))
+                    if requests > tcontrol.concurrency:
+                        DebugLog.tcontrol(DebugLog.CONCURRENCY_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Exceed the limit({}); At least have {} running requests".format(tcontrol.concurrency,requests))
+                    else:
+                        DebugLog.tcontrol(DebugLog.CONCURRENCY_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Exceed the limit({}); Now Have {} running requests".format(tcontrol.concurrency,totalrequests))
                 if not exempt:
                     #decrease the concurrency which was added before
                     cacheclient.decr(key)
@@ -757,14 +766,22 @@ def _check_tcontrol(tcontrol,clientip,client,exempt):
         #not exceed any traffic control, allow access
         return [True,None]
     except Exception as ex:
-        if settings.DEBUG:
-            raise
+        #record the error every 5 minutes
+        msg = "{}:{}".format(ex.__class__.__name__,str(ex))
+        if settings.CACHE_KEY_PREFIX:
+            errorkey = "{}:auth2_tcontrol_error_{}".format(settings.CACHE_KEY_PREFIX,hash(msg))
         else:
-            #check failed, ignore traffic control
-            return [True,str(ex)]
+            errorkey = "auth2_tcontrol_error_{}".format(hash(msg))
+
+        defaultcacheclient = defaultcache.redis_client
+        if defaultcacheclient.execute_command("set",errorkey,"1","NX","EX",300):
+            DebugLog.tcontrol(DebugLog.TRAFFIC_CONTROL_ERROR,tcontrol.name,clientip,client,msg)
+
+        #check failed, ignore traffic control
+        return [True,str(ex)]
             
 def _tcontrol(request):
-    clientip = request.META.get('REMOTE_ADDR')
+    clientip = request.headers.get("x-real-ip")
 
     domain = request.get_host()
     path = request.headers.get("x-upstream-request-uri")
@@ -1966,36 +1983,35 @@ def forbidden_tcontrol(request):
 
         page_layout,extracss = _get_userflow_pagelayout(request,domain)
         context = {"body":page_layout,"extracss":extracss,"path":path,"url":url.format(domain,path),"domain":domain}
-        
         try:
             tcontrol = tcontrol.split("|")
             tcontrol[1] = cache.tcontrols.get(int(tcontrol[1])) or None
+            tcontrol[3] = int(tcontrol[3])
 
             if tcontrol[0] == "USER":
                 if tcontrol[1]:
-                    context["msg"] = "You have send too many requests({}) in {}, please try again after {}".format(tcontrol[2],utils.format_timedelta(tcontrol[1].userlimitperiod) ,tcontrol[3])
+                    context["msg"] = "You have sent too many requests({}) in {}, please try again after {}".format(tcontrol[2],utils.format_timedelta(tcontrol[1].userlimitperiod) ,utils.format_timedelta(tcontrol[3]))
                 else:
-                    context["msg"] = "You have send too many requests({}), please try again after {}".format(tcontrol[2],tcontrol[3])
+                    context["msg"] = "You have sent too many requests({}), please try again after {}".format(tcontrol[2],utils.format_timedelta(tcontrol[3]))
             else:
                 if settings.DEBUG:
                     if tcontrol[0] == "IP":
                         if tcontrol[1]:
-                            context["msg"] = "Too many requests({}) have been sent in {}, please try again after {}".format(tcontrol[2],utils.format_timedelta(tcontrol[1].userlimitperiod) ,tcontrol[3])
+                            context["msg"] = "Too many requests({}) have been sent in {}, please try again after {}.".format(tcontrol[2],utils.format_timedelta(tcontrol[1].userlimitperiod) ,utils.format_timedelta(tcontrol[3]))
                         else:
-                            context["msg"] = "Too many requests({}) have been sent, please try again after {}".format(tcontrol[2],tcontrol[3])
+                            context["msg"] = "Too many requests({}) have been sent, please try again after {}.".format(tcontrol[2],utils.format_timedelta(tcontrol[3]))
                     else:
-                        context["msg"] = "Too many requets({}) are running, please wait a few seconds and try again.".format(tcontrol[2])
+                        context["msg"] = "Too many requests({}) are running, please wait a few seconds and try again.".format(tcontrol[2])
                 else:
                     if tcontrol[0] == "IP":
                         if tcontrol[1]:
-                            context["msg"] = "Too many requests have been sent in {}, please try again after {}".format(utils.format_timedelta(tcontrol[1].userlimitperiod) ,tcontrol[3])
+                            context["msg"] = "Too many requests have been sent in {}, please try again after {}".format(utils.format_timedelta(tcontrol[1].userlimitperiod) ,utils.format_timedelta(tcontrol[3]))
                         else:
-                            context["msg"] = "Too many requests have been sent, please try again after {}".format(tcontrol[3])
+                            context["msg"] = "Too many requests have been sent, please try again after {}".format(utils.format_timedelta(tcontrol[3]))
                     else:
-                        context["msg"] = "Too many requets are running, please wait a few seconds and try again."
+                        context["msg"] = "Too many requests are running, please wait a few seconds and try again."
         except:
-            context["msg"] = "Too many requets are running, please wait a few seconds and try again."
-
+            context["msg"] = "Too many requests are running, please wait a few seconds and try again."
 
         return TemplateResponse(request,"authome/tcontrol.html",context=context)
     else:
