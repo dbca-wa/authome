@@ -97,7 +97,7 @@ class TrafficDataPropertyMixin(object):
 
 class SSOMethodTrafficDataInline(TrafficDataPropertyMixin,djangoadmin.TabularInline):
     model = models.SSOMethodTrafficData
-    readonly_fields = ("sso_method","requests","_total_time","_min_time","_max_time","_avg_time","_status","_domains")
+    readonly_fields = ("sso_method","requests","_min_time","_max_time","_avg_time","_status","_domains")
     fields = readonly_fields
 
     def _domains(self,obj):
@@ -203,7 +203,7 @@ class TrafficDataAdmin(TrafficDataPropertyMixin,admin.DatetimeMixin,djangoadmin.
 
 class SSOMethodTrafficReportInline(TrafficDataPropertyMixin,djangoadmin.TabularInline):
     model = models.SSOMethodTrafficReport
-    readonly_fields = ("sso_method","requests","_total_time","_min_time","_max_time","_avg_time","_status","_domains")
+    readonly_fields = ("sso_method","requests","_min_time","_max_time","_avg_time","_status","_domains")
     fields = readonly_fields
 
     def _domains(self,obj):
