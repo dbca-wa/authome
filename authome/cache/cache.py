@@ -26,7 +26,6 @@ if settings.CACHE_SERVER:
 else:
     get_defaultcache = lambda :None
 
-
 defaultcache = get_defaultcache()
 
 class TaskRunable(object):
@@ -174,6 +173,11 @@ class _BaseMemoryCache(object):
         self._idps_size = None
         self._idps_ts = None
 
+        #model TrafficControl cache
+        self._tcontrols = None
+        self._tcontrols_size = None
+        self._tcontrols_ts = None
+
         #user authentication cache
         self._auth_map = OrderedDict() 
         self._staff_auth_map = OrderedDict() 
@@ -208,10 +212,12 @@ class _BaseMemoryCache(object):
         #The runable task to check IdentityProvider cache
         self._idp_cache_check_time = IntervalTaskRunable("idp cache",settings.IDP_CACHE_CHECK_INTERVAL) if settings.IDP_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("idp cache",settings.IDP_CACHE_CHECK_HOURS)
 
+        #The runable task to check TrafficControl cache
+        self._tcontrol_cache_check_time = IntervalTaskRunable("traffic control cache",settings.TRAFFICCONTROL_CACHE_CHECK_INTERVAL) if settings.TRAFFICCONTROL_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("traffic control cache",settings.TRAFFICCONTROL_CACHE_CHECK_HOURS)
+
     @property
     def usergrouptree(self):
         if not self._usergrouptree:
-            logger.error("The usergrouptree cache is Empty, Try to refresh the data to bring the cache back to normal state")
             self.refresh_usergroups()
 
         return self._usergrouptree
@@ -219,7 +225,6 @@ class _BaseMemoryCache(object):
     @property
     def usergroups(self):
         if not self._usergroups:
-            logger.error("The usergroups cache is Empty, Try to refresh the data to bring the cache back to normal state")
             self.refresh_usergroups()
 
         return self._usergroups
@@ -244,7 +249,6 @@ class _BaseMemoryCache(object):
     @property
     def usergroupauthorization(self):
         if not self._usergroupauthorization:
-            logger.error("The usergroupauthorization cache is Empty, Try to refresh the data to bring the cache back to normal state")
             self.refresh_usergroupauthorization()
 
         return self._usergroupauthorization
@@ -279,6 +283,18 @@ class _BaseMemoryCache(object):
             self._idps,self._idps_size,self._idps_ts = value
         else:
             self._idps,self._idps_size,self._idps_ts = None,None,None
+
+    @property
+    def tcontrols(self):
+        self.refresh_tcontrol_cache()
+        return self._tcontrols
+
+    @tcontrols.setter
+    def tcontrols(self,value):
+        if value:
+            self._tcontrols,self._tcontrols_size,self._tcontrols_ts = value
+        else:
+            self._tcontrols,self._tcontrols_size,self._tcontrols_ts = None,None,None
 
     @property
     def userflows(self):
@@ -545,6 +561,15 @@ class _BaseMemoryCache(object):
             if IdentityProviderChange.is_changed():
                 IdentityProvider.refresh_cache()
 
+    def refresh_tcontrol_cache(self,force=False):
+        if not self._tcontrols:
+            from ..models import TrafficControl
+            self._tcontrol_cache_check_time.can_run()
+            TrafficControl.refresh_cache()
+        elif self._tcontrol_cache_check_time.can_run() or force:
+            from ..models import TrafficControlChange,TrafficControl
+            if TrafficControlChange.is_changed():
+                TrafficControl.refresh_cache()
 
     def refresh_userflow_cache(self,force=False):
         if not self._userflows:
@@ -700,7 +725,14 @@ class _BaseMemoryCache(object):
         return (False,msgs) if msgs else (True,["ok"])
 
 if settings.TRAFFIC_MONITOR_LEVEL > 0:
-    class _BaseMemoryCacheWithTrafficMonitor(_BaseMemoryCache):
+    def _clean_traffic_data(data):
+        for key in data.keys():
+            if isinstance(data[key],dict):
+                _clean_traffic_data(data[key])
+            else:
+                data[key] = 0
+        
+    class _MemoryCacheWithTrafficMonitor(_BaseMemoryCache):
         def __init__(self):
             super().__init__()
             self._traffic_data = None
@@ -731,102 +763,90 @@ if settings.TRAFFIC_MONITOR_LEVEL > 0:
             if self._traffic_data :
                 self._traffic_data["starttime"] = data_starttime
                 self._traffic_data["endtime"] = data_endtime
+                traffic_data = json.dumps(self._traffic_data)
+
+                for data in self._traffic_data.values():
+                    if not isinstance(data,dict):
+                        continue
+                    _clean_traffic_data(data)
+    
                 try:
-                    length = self._client.rpush(self.traffic_data_key,json.dumps(self._traffic_data))
+                    length = self._client.rpush(self.traffic_data_key,traffic_data)
                 except:
                     from authome.models import DebugLog
                     DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to save the traffic data to cache.{}".format(traceback.format_exc()))
                     pass
 
-    if settings.TRAFFIC_MONITOR_LEVEL == 1:
-        class _MemoryCacheWithTrafficMonitor(_BaseMemoryCacheWithTrafficMonitor):
-            def __init__(self):
-                super().__init__()
-                logger.debug("Traffic monitor level 1 is enabled")
-
-            def log_request(self,name,host,start,status_code):
-                if start >= self._traffic_data_next_ts:
-                    self._save_traffic_data(start)
-                    if self._traffic_data:
-                        for data in self._traffic_data.values():
-                            if not isinstance(data,dict):
-                                continue
-                            for key in data.keys():
-                                if key == "status":
-                                    for domain in data[key].keys():
-                                        data[key][domain] = 0
-                                else:
-                                    data[key] = 0
-        
-                ptime = round((timezone.localtime() - start).total_seconds() * 1000,2)
-                try:
-                    data = self._traffic_data[name]
-                except KeyError as ex:
-                    # name not in _traffic_data
-                    self._traffic_data[name] = {
+        def _log_request_1(self,name,group,start,status_code,groupname="domains"):
+            if start >= self._traffic_data_next_ts:
+                self._save_traffic_data(start)
+    
+            ptime = round((timezone.localtime() - start).total_seconds() * 1000,2)
+            try:
+                data = self._traffic_data[name]
+            except KeyError as ex:
+                # name not in _traffic_data
+                self._traffic_data[name] = {
+                    "requests":1,
+                    "totaltime":ptime,
+                    "mintime":ptime,
+                    "maxtime":ptime,
+                    "status":{
+                        status_code:1
+                    }
+                }
+                return ptime
+            except:
+                #_traffic_data is None
+                self._traffic_data= {
+                    "serverid":utils.get_processid(),
+                    name: {
                         "requests":1,
                         "totaltime":ptime,
                         "mintime":ptime,
                         "maxtime":ptime,
                         "status":{
-                            status_code:1
+                           status_code:1
                         }
                     }
-                    return ptime
-                except:
-                    #_traffic_data is None
-                    self._traffic_data= {
-                        "serverid":utils.get_processid(),
-                        name: {
-                            "requests":1,
-                            "totaltime":ptime,
-                            "mintime":ptime,
-                            "maxtime":ptime,
-                            "status":{
-                               status_code:1
-                            }
-                        }
-                    }
-                    return ptime
-                data["requests"] += 1
-                data["totaltime"] += ptime
-                if not data["mintime"]  or data["mintime"] > ptime:
-                    data["mintime"] = ptime
-                if data["maxtime"] < ptime:
-                    data["maxtime"] = ptime
-                data["status"][status_code] = data["status"].get(status_code,0) + 1
+                }
                 return ptime
-    elif settings.TRAFFIC_MONITOR_LEVEL == 2:
-        class _MemoryCacheWithTrafficMonitor(_BaseMemoryCacheWithTrafficMonitor):
-            def __init__(self):
-                super().__init__()
-                logger.debug("Traffic monitor level 2 is enabled")
+            data["requests"] += 1
+            data["totaltime"] += ptime
+            if not data["mintime"]  or data["mintime"] > ptime:
+                data["mintime"] = ptime
+            if data["maxtime"] < ptime:
+                data["maxtime"] = ptime
+            data["status"][status_code] = data["status"].get(status_code,0) + 1
+            return ptime
 
-            def log_request(self,name,host,start,status_code):
-                if start >= self._traffic_data_next_ts:
-                    self._save_traffic_data(start)
-                    if self._traffic_data:
-                        for data in self._traffic_data.values():
-                            if not isinstance(data,dict):
-                                continue
-                            for key in data.keys():
-                                if key == "domains":
-                                    for domain in [d for d,v in data[key].items() if v == 0]:
-                                        del data[key][domain]
-                                    for domain in data[key].keys():
-                                        data[key][domain] = 0
-                                elif key in ("status",):
-                                    for domain in data[key].keys():
-                                        data[key][domain] = 0
-                                else:
-                                    data[key] = 0
-        
-                ptime = round((timezone.localtime() - start).total_seconds() * 1000,2)
-                try:
-                    data = self._traffic_data[name]
-                except KeyError as ex:
-                    # name not in _traffic_data
-                    self._traffic_data[name] = {
+        def _log_request_2(self,name,group,start,status_code,groupname="domains"):
+            if start >= self._traffic_data_next_ts:
+                self._save_traffic_data(start)
+    
+            ptime = round((timezone.localtime() - start).total_seconds() * 1000,2)
+            try:
+                data = self._traffic_data[name]
+            except KeyError as ex:
+                # name not in _traffic_data
+                self._traffic_data[name] = {
+                    "requests":1,
+                    "totaltime":ptime,
+                    "mintime":ptime,
+                    "maxtime":ptime,
+                    "status":{
+                        status_code:1
+                    },
+                    groupname: {
+                        group : 1
+                    }
+                }
+                return ptime
+            except:
+                #_traffic_data is None
+                self._traffic_data = {
+                    "serverid":utils.get_processid(),
+                    name: {
                         "requests":1,
                         "totaltime":ptime,
                         "mintime":ptime,
@@ -834,75 +854,57 @@ if settings.TRAFFIC_MONITOR_LEVEL > 0:
                         "status":{
                             status_code:1
                         },
-                        "domains": {
-                            host : 1
+                        groupname: {
+                            group : 1
                         }
                     }
-                    return ptime
-                except:
-                    #_traffic_data is None
-                    self._traffic_data = {
-                        "serverid":utils.get_processid(),
-                        name: {
+                }
+                return ptime
+            data["requests"] += 1
+            data["totaltime"] += ptime
+            if not data["mintime"]  or data["mintime"] > ptime:
+                data["mintime"] = ptime
+            if data["maxtime"] < ptime:
+                data["maxtime"] = ptime
+            data["status"][status_code] = data["status"].get(status_code,0) + 1
+            data[groupname][group] = data[groupname].get(group,0) + 1
+            return ptime
+
+        def _log_request_3(self,name,group,start,status_code,groupname="domains"):
+            if start >= self._traffic_data_next_ts:
+                self._save_traffic_data(start)
+    
+            ptime = round((timezone.localtime() - start).total_seconds() * 1000,2)
+            try:
+                data = self._traffic_data[name]
+            except KeyError as ex:
+                # name not in _traffic_data
+                self._traffic_data[name] = {
+                    "requests":1,
+                    "totaltime":ptime,
+                    "mintime":ptime,
+                    "maxtime":ptime,
+                    "status":{
+                        status_code:1
+                    },
+                    groupname: {
+                        group : {
                             "requests":1,
                             "totaltime":ptime,
                             "mintime":ptime,
                             "maxtime":ptime,
                             "status":{
                                 status_code:1
-                            },
-                            "domains": {
-                                host : 1
                             }
                         }
                     }
-                    return ptime
-                data["requests"] += 1
-                data["totaltime"] += ptime
-                if not data["mintime"]  or data["mintime"] > ptime:
-                    data["mintime"] = ptime
-                if data["maxtime"] < ptime:
-                    data["maxtime"] = ptime
-                data["status"][status_code] = data["status"].get(status_code,0) + 1
-                data["domains"][host] = data["domains"].get(host,0) + 1
+                }
                 return ptime
-    else:
-        class _MemoryCacheWithTrafficMonitor(_BaseMemoryCacheWithTrafficMonitor):
-            def __init__(self):
-                super().__init__()
-                logger.debug("Traffic monitor level 3 is enabled")
-
-            def log_request(self,name,host,start,status_code):
-                if start >= self._traffic_data_next_ts:
-                    self._save_traffic_data(start)
-                    if self._traffic_data:
-                        for data in self._traffic_data.values():
-                            if not isinstance(data,dict):
-                                continue
-                            for key in data.keys():
-                                if key == "status":
-                                    for k in data[key].keys():
-                                        data[key][k] = 0
-                                elif key ==  "domains":
-                                    for domain in [d for d,v in data[key].items() if v["requests"] == 0]:
-                                        del data[key][domain]
-                                    for domain_data in data[key].values():
-                                        for k in domain_data.keys():
-                                            if k == "status":
-                                                for k1 in domain_data[k].keys():
-                                                    domain_data[k][k1] = 0
-                                            else:
-                                                domain_data[k] = 0
-                                else:
-                                    data[key] = 0
-                    
-        
-                ptime = round((timezone.localtime() - start).total_seconds() * 1000,2)
-                try:
-                    data = self._traffic_data[name]
-                except KeyError as ex:
-                    # name not in _traffic_data
-                    self._traffic_data[name] = {
+            except:
+                # _traffic_data is None
+                self._traffic_data = {
+                    "serverid":utils.get_processid(),
+                    name: {
                         "requests":1,
                         "totaltime":ptime,
                         "mintime":ptime,
@@ -910,8 +912,8 @@ if settings.TRAFFIC_MONITOR_LEVEL > 0:
                         "status":{
                             status_code:1
                         },
-                        "domains": {
-                            host : {
+                        groupname: {
+                            group : {
                                 "requests":1,
                                 "totaltime":ptime,
                                 "mintime":ptime,
@@ -922,66 +924,70 @@ if settings.TRAFFIC_MONITOR_LEVEL > 0:
                             }
                         }
                     }
-                    return ptime
-                except:
-                    # _traffic_data is None
-                    self._traffic_data = {
-                        "serverid":utils.get_processid(),
-                        name: {
-                            "requests":1,
-                            "totaltime":ptime,
-                            "mintime":ptime,
-                            "maxtime":ptime,
-                            "status":{
-                                status_code:1
-                            },
-                            "domains": {
-                                host : {
-                                    "requests":1,
-                                    "totaltime":ptime,
-                                    "mintime":ptime,
-                                    "maxtime":ptime,
-                                    "status":{
-                                        status_code:1
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    return ptime
-        
-                data["requests"] += 1
-                data["totaltime"] += ptime
-                if not data["mintime"]  or data["mintime"] > ptime:
-                    data["mintime"] = ptime
-                if data["maxtime"] < ptime:
-                    data["maxtime"] = ptime
-                data["status"][status_code] = data["status"].get(status_code,0) + 1
-        
-                try:
-                    domain_data = data["domains"][host]
-                    domain_data["requests"] += 1
-                    domain_data["totaltime"] += ptime
-                    if not domain_data["mintime"]  or domain_data["mintime"] > ptime:
-                        domain_data["mintime"] = ptime
-                    if domain_data["maxtime"] < ptime:
-                        domain_data["maxtime"] = ptime
-                    domain_data["status"][status_code] = domain_data["status"].get(status_code,0) + 1
-                except:
-                    domain_data = {
-                        "requests":1,
-                        "totaltime":ptime,
-                        "mintime":ptime,
-                        "maxtime":ptime,
-                        "status":{
-                            status_code:1
-                        }
-                    }
-                    data["domains"][host] = domain_data
-        
+                }
                 return ptime
+    
+            data["requests"] += 1
+            data["totaltime"] += ptime
+            if not data["mintime"]  or data["mintime"] > ptime:
+                data["mintime"] = ptime
+            if data["maxtime"] < ptime:
+                data["maxtime"] = ptime
+            data["status"][status_code] = data["status"].get(status_code,0) + 1
+            try:
+                group_data = data[groupname][group]
+                group_data["requests"] += 1
+                group_data["totaltime"] += ptime
+                if not group_data["mintime"]  or group_data["mintime"] > ptime:
+                    group_data["mintime"] = ptime
+                if group_data["maxtime"] < ptime:
+                    group_data["maxtime"] = ptime
+                group_data["status"][status_code] = group_data["status"].get(status_code,0) + 1
+            except:
+                group_data = {
+                    "requests":1,
+                    "totaltime":ptime,
+                    "mintime":ptime,
+                    "maxtime":ptime,
+                    "status":{
+                        status_code:1
+                    }
+                }
+                data[groupname][group] = group_data
+    
+            return ptime
 
-    if True or settings.SYNC_MODE:
+    if settings.TRAFFIC_MONITOR_LEVEL == 1:
+        logger.debug("Traffic monitor level 1 is enabled")
+        _MemoryCacheWithTrafficMonitor.log_request = _MemoryCacheWithTrafficMonitor._log_request_1
+    elif settings.TRAFFIC_MONITOR_LEVEL == 2:
+        logger.debug("Traffic monitor level 2 is enabled")
+        _MemoryCacheWithTrafficMonitor.log_request = _MemoryCacheWithTrafficMonitor._log_request_2
+    else:
+        logger.debug("Traffic monitor level 3 is enabled")
+        _MemoryCacheWithTrafficMonitor.log_request = _MemoryCacheWithTrafficMonitor._log_request_3
+
+    if settings.REDIS_TRAFFIC_MONITOR_LEVEL == 1:
+        logger.debug("Reids traffic monitor level 1 is enabled")
+        _MemoryCacheWithTrafficMonitor.log_redisrequest = _MemoryCacheWithTrafficMonitor._log_request_1
+    elif settings.REDIS_TRAFFIC_MONITOR_LEVEL == 2:
+        logger.debug("Reids traffic monitor level 2 is enabled")
+        _MemoryCacheWithTrafficMonitor.log_redisrequest = _MemoryCacheWithTrafficMonitor._log_request_2
+    elif settings.REDIS_TRAFFIC_MONITOR_LEVEL > 0:
+        logger.debug("Reids traffic monitor level 3 is enabled")
+        _MemoryCacheWithTrafficMonitor.log_redisrequest = _MemoryCacheWithTrafficMonitor._log_request_3
+
+    if settings.DB_TRAFFIC_MONITOR_LEVEL == 1:
+        logger.debug("DB traffic monitor level 1 is enabled")
+        _MemoryCacheWithTrafficMonitor.log_dbrequest = _MemoryCacheWithTrafficMonitor._log_request_1
+    elif settings.DB_TRAFFIC_MONITOR_LEVEL == 2:
+        logger.debug("DB traffic monitor level 2 is enabled")
+        _MemoryCacheWithTrafficMonitor.log_dbrequest = _MemoryCacheWithTrafficMonitor._log_request_2
+    elif settings.DB_TRAFFIC_MONITOR_LEVEL > 0:
+        logger.debug("DB traffic monitor level 3 is enabled")
+        _MemoryCacheWithTrafficMonitor.log_dbrequest = _MemoryCacheWithTrafficMonitor._log_request_3
+
+    if True or settings.SYNC_MODE == "sync":
         class MemoryCache(_MemoryCacheWithTrafficMonitor):
             def __init__(self):
                 super().__init__()
@@ -1001,3 +1007,4 @@ if settings.TRAFFIC_MONITOR_LEVEL > 0:
 else:
     class MemoryCache(_BaseMemoryCache):
         pass
+

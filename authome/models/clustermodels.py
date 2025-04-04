@@ -1,7 +1,7 @@
 import logging
 
 from django.conf import settings
-from django.db import models
+from django.db import models as django_models
 from django.db.models.signals import pre_delete, pre_save, post_save, post_delete
 from django.utils import timezone
 from django.dispatch import receiver
@@ -16,17 +16,17 @@ logger = logging.getLogger(__name__)
 
 defaultcache = get_defaultcache()
 
-class Auth2Cluster(models.Model):
-    clusterid = models.CharField(max_length=32,unique=True,null=False)
-    endpoint = models.CharField(max_length=512,null=False)
-    default = models.BooleanField(default=False,editable=False)
-    usergroup_lastrefreshed = models.DateTimeField(editable=False,null=True)
-    usergroupauthorization_lastrefreshed = models.DateTimeField(editable=False,null=True)
-    userflow_lastrefreshed = models.DateTimeField(editable=False,null=True)
-    idp_lastrefreshed = models.DateTimeField(editable=False,null=True)
-    last_heartbeat = models.DateTimeField(editable=False)
-    registered = models.DateTimeField(auto_now_add=timezone.now)
-    modified = models.DateTimeField(editable=False,auto_now=False)
+class Auth2Cluster(django_models.Model):
+    clusterid = django_models.CharField(max_length=32,unique=True,null=False)
+    endpoint = django_models.CharField(max_length=512,null=False)
+    default = django_models.BooleanField(default=False,editable=False)
+    usergroup_lastrefreshed = django_models.DateTimeField(editable=False,null=True)
+    usergroupauthorization_lastrefreshed = django_models.DateTimeField(editable=False,null=True)
+    userflow_lastrefreshed = django_models.DateTimeField(editable=False,null=True)
+    idp_lastrefreshed = django_models.DateTimeField(editable=False,null=True)
+    last_heartbeat = django_models.DateTimeField(editable=False)
+    registered = django_models.DateTimeField(auto_now_add=timezone.now)
+    modified = django_models.DateTimeField(editable=False,auto_now=False)
 
     class Meta:
         verbose_name_plural = "{}Auth2 Clusters".format(" " * 7)
@@ -78,12 +78,12 @@ class Auth2ClusterListener(object):
 def refresh_cache_wrapper(cls,column):
     _original_func = getattr(cls,"refresh_cache")
     def _func(cls):
+        refreshtime = _original_func()
         try:
-            refreshtime = _original_func()
             setattr(cache.current_auth2_cluster,column,refreshtime)
             cache.current_auth2_cluster.save(update_fields=[column,"modified"])
-        except:
-            logger.error("Failed to save the latest refresh time({1}) to auth2 cluster '{0}'".format(cache.current_auth2_cluster.cluserid,column))
+        except Exception as ex:
+            logger.error("Failed to save the latest refresh time({1}) to auth2 cluster '{0}'. {2}".format(cache.current_auth2_cluster.clusterid,column,str(ex)))
         return refreshtime
     return _func
 

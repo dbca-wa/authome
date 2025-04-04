@@ -179,7 +179,7 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
         cache.refresh_authorization_cache(True)
   
         for email,expected_groups,expected_groupnames in testcases:
-            groups,groupnames = UserGroup.find_groups(email)
+            groups,groupnames,grouppks = UserGroup.find_groups(email)
             groups = [g.name for g in groups]
             groups.sort()
             groupnames = groupnames.split(",")
