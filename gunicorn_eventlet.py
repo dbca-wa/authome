@@ -1,3 +1,5 @@
+import eventlet
+eventlet.monkey_patch(all=True)
 # Gunicorn configuration settings.
 import multiprocessing
 import os
@@ -13,6 +15,7 @@ except:
 if not workers or workers < 1:
     workers = multiprocessing.cpu_count() + 2
 
+worker_class = "eventlet"
 worker_connections = 50000
 # Give workers an expiry:
 max_requests = 100000

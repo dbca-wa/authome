@@ -22,6 +22,7 @@ import hashlib
 from ..cache import cache,get_defaultcache,get_usercache
 from .. import signals
 from .. import utils
+from .. import lists
 from .debugmodels import DebugLog
 
 logger = logging.getLogger(__name__)
@@ -804,7 +805,7 @@ class UserEmailPattern(UserEmail):
     def __init__(self,email):
         super().__init__(email)
         try:
-            self._qs_re = r"^{}$".format(email.replace(".","\\.").replace('*','[a-zA-Z0-9\\._\\-\\+]*'))
+            self._qs_re = r"^{}$".format(email.replace(".","\\.").replace('*','[a-zA-Z0-9\\._\\-\\+#]*'))
             self._re = re.compile(self._qs_re)
         except Exception as ex:
             raise ValidationError("The regex email config({}) is invalid.{}".format(email,str(ex)))
@@ -1854,12 +1855,12 @@ class UserTOTP(django_models.Model):
 class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
     _buckets = None
     _bucketslen = None
-    _buckets_currentid = None
-    _buckets_currenttime = None
+    _buckets_endid = None
+    _buckets_endtime = None
     _buckets_begintime = None
     _buckets_fetchtime = None
 
-    _editable_columns = ("est_processtime","concurrency","iplimit","iplimitperiod","userlimit","userlimitperiod","enabled","active","buckettime","buckets","exempt_include","exempt_groups")
+    _editable_columns = ("est_processtime","concurrency","iplimit","iplimitperiod","userlimit","userlimitperiod","enabled","active","buckettime","buckets","exempt_include","exempt_groups","block")
     name = django_models.SlugField(max_length=128,null=False,editable=True,unique=True)
     enabled = django_models.BooleanField(default=True,editable=True,help_text="Enable/disable the traffic control")
     active = django_models.BooleanField(default=False,editable=False)
@@ -1867,6 +1868,8 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
     buckettime = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="Declare the time period(milliseconds) of the bucket, the est_processtime and the total milliseconds of one day should be divided by this value.") #milliseconds
     buckets = django_models.PositiveIntegerField(default=0,null=False,editable=False)
     concurrency = django_models.PositiveIntegerField(default=0,null=False,editable=True)
+    block = django_models.BooleanField(default=False,editable=True,help_text="If true, block the request until the running requests are less than the concurrency limit")
+
     iplimit = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The maximum requests per client ip which can be allowd in configure period")
     iplimitperiod = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The time period(seconds) configured for requests limit per client ip") #in seconds
     userlimit = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The maximum requests per user which can be allowd in configure period")
@@ -1879,19 +1882,70 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
     class Meta:
         verbose_name_plural = "{}Traffic Control".format(" " * 9)
 
-    class ExpiredBucketIds(object):
+    class BucketIds(object):
+        def __init__(self,tcontrol,startid,length):
+            self.tcontrol = tcontrol
+            self.length = length
+            self.startid = startid
+            self._index = 0
+        def __len__(self):
+            return self.length
+        def __iter__(self):
+            self._index = -1
+
+            return self
+
+        def __next__(self):
+            self._index += 1
+            if self._index >= self.length:
+                raise StopIteration()
+            return self.tcontrol._normalize_bucketid(self.startid + self._index)
+
+        def __str__(self):
+            return str([d for d in self])
+
+        def __repr__(self):
+            return str([d for d in self])
+
+    class BookingBucketIds(object):
+        def __init__(self,tcontrol,startid,length):
+            self.tcontrol = tcontrol
+            self.length = length
+            self.startid = startid
+            self._index = 0
+        def __len__(self):
+            return self.length
+        def __iter__(self):
+            self._index = -1
+
+            return self
+
+        def __next__(self):
+            self._index += 1
+            if self._index >= self.length:
+                raise StopIteration()
+            return self.tcontrol._normalize_bucketid(self.startid + self._index)
+
+        def __str__(self):
+            return str([d for d in self])
+
+        def __repr__(self):
+            return str([d for d in self])
+
+    class NonExpiredBucketIds(object):
         def __init__(self,tcontrol,length):
             self.tcontrol = tcontrol
             self.length = length
             self.bucketid = None
+            self.endbucketid = self.tcontrol._normalize_bucketid(self.tcontrol._buckets_endid - self.tcontrol._bucketslen - 1 + self.length)
         def __len__(self):
             return self.length
         def __iter__(self):
-            self.bucketid = self.tcontrol._normalize_bucketid(self.tcontrol._buckets_currentid - self.length)
+            self.bucketid = self.tcontrol._normalize_bucketid(self.tcontrol._buckets_endid - self.tcontrol._bucketslen - 1)
             return self
 
         def __next__(self):
-            if self.bucketid == self.tcontrol._buckets_currentid:
+            if self.bucketid == self.endbucketid:
                 raise StopIteration()
             try:
                 return self.bucketid
@@ -1911,17 +1965,17 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
         def __iter__(self):
             self.index = 0
             if self.expiredbuckets_beginindex is not None and self.expiredbuckets_beginindex == self.index:
-                self.bucket = [self.tcontrol._buckets_begintime,self.tcontrol._normalize_bucketid(self.tcontrol._buckets_currentid - self.tcontrol._bucketslen + 1),"Expired"]
+                self.bucket = [self.tcontrol._buckets_begintime,self.tcontrol._normalize_bucketid(self.tcontrol._buckets_endid - self.tcontrol._bucketslen + 1),"Expired"]
             else:
-                self.bucket = [self.tcontrol._buckets_begintime,self.tcontrol._normalize_bucketid(self.tcontrol._buckets_currentid - self.tcontrol._bucketslen + 1),self.tcontrol._buckets[self.index]]
+                self.bucket = [self.tcontrol._buckets_begintime,self.tcontrol._normalize_bucketid(self.tcontrol._buckets_endid - self.tcontrol._bucketslen + 1),self.tcontrol._buckets[self.index]]
             return self
 
         def __next__(self):
             if self.index >= self.tcontrol._bucketslen:
                 raise StopIteration()
-            if self.bucket[1] == self.tcontrol._buckets_currentid:
-                if self.bucket[0] != self.tcontrol._buckets_currenttime:
-                    raise Exception("buckets_begintime({}) is incorrect.".format(self.tcontrol._buckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),self.tcontrol._buckets_currenttime.strftime("%Y-%m-%d %H:%M:%S.%f"),self.tcontrol._bucketslen))
+            if self.bucket[1] == self.tcontrol._buckets_endid:
+                if self.bucket[0] != self.tcontrol._buckets_endtime:
+                    raise Exception("buckets_begintime({}) is incorrect.".format(self.tcontrol._buckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),self.tcontrol._buckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),self.tcontrol._bucketslen))
             try:
                 return self.bucket
             finally:
@@ -1976,12 +2030,15 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
         else :
             return bucketid - self.buckets
 
-    def get_buckets(self,today,milliseconds_in_day):
+    def get_checkingbuckets(self,today,milliseconds_in_day,exempt):
         """
         today: 
         milliseconds: milliseconds in today
         get the current bucket
-        return (current bucketid,expired bucketids)
+        return
+            current checking:(True, endbuckettime,endbucketid,retrieving required bucketids,total requests of non-expired buckets)
+            exceed concurrency:(True, None,None,None,total requests)
+            future booking  :(False , endbuckettime,endbucketid,the begintime of the first retrieveing buckets,the endtime,the bucketid of the first retrieveing buckets,retrieving required bucketids,)
         """
         try:
             milliseconds = (milliseconds_in_day % self.totalbucketstime)
@@ -1992,83 +2049,391 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
         currentbucketid = math.floor(milliseconds / self.buckettime)
         currentbuckettime = today + timedelta(milliseconds=milliseconds_in_day - milliseconds % self.buckettime )
 
-        if self._buckets_fetchtime is None:
-            if self._buckets is None:
-                self._buckets = [None] * int(self.est_processtime / self.buckettime)
-                self._bucketslen = len(self._buckets)
-            self._buckets_currenttime = currentbuckettime
-            self._buckets_currentid = currentbucketid
-            self._buckets_begintime = self._buckets_currenttime - timedelta(milliseconds=self.est_processtime - self.buckettime)
-            #logger.warning("First time check,\n    Current bucket {} : {} , Expired Buckets: {}\n    Buckets:\n{}".format(self._buckets_currenttime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currentid,self._bucketslen - 1,"\n".join([ str((d[0].strftime("%Y-%m-%d %H:%M:%S.%f"),d[1],d[2])) for d in self.Buckets(self,self._bucketslen - 1)])))
+        if self._buckets_endtime is None:
+            self._buckets = [0] * int(self.est_processtime / self.buckettime)
+            self._bucketslen = len(self._buckets)
+            self._buckets_endtime = currentbuckettime
+            self._buckets_endid = currentbucketid
+            self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
             if self._bucketslen == 1:
-                return [self._buckets_currentid,None]
+                return [True,self._buckets_endtime,self._buckets_endid,None,0]
             else:
-                return [self._buckets_currentid,self.ExpiredBucketIds(self,self._bucketslen - 1)]
-        elif self._buckets_currenttime != currentbuckettime:
-            #a new bucket is required
-            self._buckets.append(None)
-            del self._buckets[0]
-            self._buckets_currenttime = currentbuckettime
-            self._buckets_currentid = currentbucketid
-            #adjust the beginid and begintime
-            self._buckets_begintime = self._buckets_begintime + timedelta(milliseconds=self.buckettime)
-
-            buckets_begintime = self._buckets_currenttime - timedelta(milliseconds=self.est_processtime - self.buckettime)
-            buckets = int(((self._buckets_currenttime - self._buckets_begintime).total_seconds()) * 1000 / self.buckettime)
-            outdatedbuckets = buckets - self._bucketslen + 1
-            self._buckets_begintime = buckets_begintime
-            if outdatedbuckets >= self._bucketslen - 1:
-                #all data is expired, fetch again.
-                #logger.warning("New bucket time check, Fetch time {}\n    Current bucket {} : {} , Expired Buckets: {}\n    Buckets:\n{} ".format(self._buckets_fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currenttime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currentid,self._bucketslen - 1,"\n".join([ str((d[0].strftime("%Y-%m-%d %H:%M:%S.%f"),d[1],d[2])) for d in self.Buckets(self,self._bucketslen - 1)])))
+                return [True,self._buckets_endtime,self._buckets_endid,self.BucketIds(self,self._normalize_bucketid(self._buckets_endid - self._bucketslen + 1),self._bucketslen - 1),0]
+        elif self._buckets_endtime <= currentbuckettime:
+            #check current concurrency
+            outdatedbuckets = int(((currentbuckettime - self._buckets_endtime).total_seconds()) * 1000 / self.buckettime)
+            if outdatedbuckets >= self._bucketslen:
+                #all buckets are outdated
+                for i in range(self._bucketslen):
+                    self._buckets[i] = 0
+                self._buckets_endtime = currentbuckettime
+                self._buckets_endid = currentbucketid
+                self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
                 self._buckets_fetchtime = None
-                return [self._buckets_currentid,self.ExpiredBucketIds(self,self._bucketslen - 1)]
+                if self._bucketslen == 1:
+                    return [True,self._buckets_endtime,self._buckets_endid,None,0]
+                else:
+                    return [True,self._buckets_endtime,self._buckets_endid,self.BucketIds(self,self._normalize_bucketid(self._buckets_endid - self._bucketslen + 1),self._bucketslen - 1),0]
             elif outdatedbuckets > 0:
-                #part of the data is expired.
-                #shift the not expired buckets
-                for i in range(self._bucketslen - 1 - outdatedbuckets):
-                    self._buckets[i] = self._buckets[i + outdatedbuckets]
-            elif outdatedbuckets < 0:
-                raise Exception("Incorrest status. buckets_begintime: {} , buckets_currenttime: {} , outdatedbuckets: {}".format(self._buckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currenttime.strftime("%Y-%m-%d %H:%M:%S.%f"),outdatedbuckets))
-        else:
-            outdatedbuckets = None
+                for i in range(outdatedbuckets):
+                    self._buckets[i] = 0
+                self._buckets.extend(self._buckets[0:outdatedbuckets])
+                del self._buckets[0:outdatedbuckets]
+                self._buckets_endtime = currentbuckettime
+                self._buckets_endid = currentbucketid
+                self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
 
-        expired_bucketstime = (self._buckets_currenttime - (self._buckets_fetchtime - settings.TRAFFICCONTROL_TIMEDIFF)).total_seconds() * 1000
-        if expired_bucketstime <= 0:
-            #all previous buckets are up-to-date
-            #logger.warning("{} bucket time check, Fetch time {}\n    Current bucket {} : {} , Expired Buckets: {}\n    Buckets:\n{}".format("Same" if outdatedbuckets is None else "New",self._buckets_fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currenttime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currentid,0,"\n".join([ str((d[0].strftime("%Y-%m-%d %H:%M:%S.%f"),d[1],d[2])) for d in self.Buckets(self)])))
-            return [self._buckets_currentid,[]]
-        else:
-            expired_buckets = math.ceil(expired_bucketstime / self.buckettime)
-            if expired_buckets >= self._bucketslen - 1:
-                #all previous buckets are expired
-                #logger.warning("{} bucket time check, Fetch time {}\n    Current bucket {} : {} , Expired Buckets: {}\n    Buckets:\n{}".format("Same" if outdatedbuckets is None else "New",self._buckets_fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currenttime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currentid,self._bucketslen - 1,"\n".join([ str((d[0].strftime("%Y-%m-%d %H:%M:%S.%f"),d[1],d[2])) for d in self.Buckets(self,self._bucketslen - 1)])))
-                self._buckets_fetchtime = None
-                return [self._buckets_currentid,self.ExpiredBucketIds(self,self._bucketslen - 1)]
+
+            if not self._buckets_fetchtime:
+                #all buckets are expired
+                return [True,self._buckets_endtime,self._buckets_endid,self.BucketIds(self,self._normalize_bucketid(self._buckets_endid - self._bucketslen + 1),self._bucketslen - 1),0]
             else:
-                #logger.warning("{} bucket time check, Fetch time {}\n    Current bucket {} : {} , Expired Buckets: {}\n    Buckets:\n{}".format("Same" if outdatedbuckets is None else "New",self._buckets_fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currenttime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets_currentid,expired_buckets,"\n".join([ str((d[0].strftime("%Y-%m-%d %H:%M:%S.%f"),d[1],d[2])) for d in self.Buckets(self,expired_buckets)])))
-                return [self._buckets_currentid,self.ExpiredBucketIds(self,expired_buckets)]
+                total_requests = self.get_runningrequests(0,self._bucketslen)
+                if total_requests > self.concurrency:
+                    raise Exception("Total running requests is greater than concurrency.")
+                elif total_requests == self.concurrency:
+                    #reach the limit, need future booking
+                    if self.block or exempt:
+                        #future booking allowed
+                        basebucketid = self._normalize_bucketid(self._buckets_endid + 1)
+                        return [False,self._buckets_endtime,self._buckets_endid,self._buckets_endtime + timedelta(milliseconds=self.buckettime),self._buckets_endtime + timedelta(milliseconds=self.buckettime * self._bucketslen),basebucketid,self.BookingBucketIds(self,basebucketid,self._bucketslen)]
+                    else:
+                        #future booking not allowed
+                        return [True,None,None,None,total_requests]
+                else:
+                    #don't reach the limit, need future booking
+                    expiredbuckets_starttime = self._buckets_fetchtime - settings.TRAFFICCONTROL_TIMEDIFF
+                    if expiredbuckets_starttime >= self._buckets_endtime:
+                        #all buckets are not expired
+                        return [True,self._buckets_endtime,self._buckets_endid,None,self.get_runningrequests(0,self._bucketslen - 1)]
+                    else:
+                        #some buckets are expired
+                        expiredbuckets = math.ceil(((self._buckets_endtime - expiredbuckets_starttime).total_seconds() * 1000) / self.buckettime)
+                        if expiredbuckets >= self._bucketslen - 1:
+                            #all buckets are expired
+                            self._buckets_fetchtime = None
+                            return [True,self._buckets_endtime,self._buckets_endid,self.BucketIds(self,self._normalize_bucketid(self._buckets_endid - self._bucketslen + 1),self._bucketslen - 1),0]
+                        else:
+                            #some buckets are expired
+                            return [True,self._buckets_endtime,self._buckets_endid,self.BucketIds(self,self._normalize_bucketid(self._buckets_endid - expiredbuckets),expiredbuckets),self.get_runningrequests(0,self._bucketslen - 1 - expiredbuckets)]
+        elif not self.block and not exempt:
+            #future booking not allowed
+            return [True,None,None,None,self.concurrency]
+        else:
+            #already reach the limit, book a running position in the future.
+            total_requests = self.get_runningrequests(0,self._bucketslen)
+            if total_requests > self.concurrency:
+                raise Exception("Total running requests is greater than concurrency.")
+            elif total_requests == self.concurrency:
+                #already reach the limit, retriving ${_bucketslen} buckets from the bucket self._buckets_endid + 1  for future booking.
+                basebucketid = self._normalize_bucketid(self._buckets_endid + 1)
+                return [False,self._buckets_endtime,self._buckets_endid,self._buckets_endtime + timedelta(milliseconds=self.buckettime),self._buckets_endtime + timedelta(milliseconds=self.buckettime * self._bucketslen),basebucketid,self.BookingBucketIds(self,basebucketid,self._bucketslen)]
+            else:
+                #don't reach the limit, retriving ${_bucketslen} buckets from the bucket self._buckets_endid  for future booking.
+                return [False,self._buckets_endtime,self._buckets_endid,self._buckets_endtime,self._buckets_endtime + timedelta(milliseconds=self.buckettime * (self._bucketslen - 1)),self._buckets_endid,self.BookingBucketIds(self,self._buckets_endid,self._bucketslen)]
 
-    def set_buckets(self,current_bucket_requests,fetchtime=None,expiredbuckets_requests=None):
-        self._buckets[-1] = current_bucket_requests
+    def set_buckets(self,buckettime,bucketid,current_bucket_requests,fetchtime=None,expiredbuckets_requests=None):
+        print("***0001 before set_buckets: buckets={}, buckets endtime={}\ncurrent bucket: buckettime={} , bucketid={} , requests={} , expired buckets requests={}".format(self._buckets,self._buckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,current_bucket_requests,expiredbuckets_requests))
+        if buckettime != self._buckets_endtime:
+            outdatedbuckets = int(((self._buckets_endtime - buckettime).total_seconds()) * 1000 / self.buckettime)
+            if outdatedbuckets < self._bucketslen:
+                self._buckets[-1 - outdatedbuckets] = current_bucket_requests
+            if fetchtime:
+                if len(expiredbuckets_requests) > outdatedbuckets: 
+                    #still have some buckets can be set
+                    expiredbuckets_requests = lists.ROListSlice(expiredbuckets_requests,outdatedbuckets,len(expiredbuckets_requests) - outdatedbuckets)
+                else:
+                    expiredbuckets_requests = []
+        else:
+            self._buckets[-1] = current_bucket_requests
+
         if fetchtime:
             self._buckets_fetchtime = fetchtime
             offset = self._bucketslen - 1 - len(expiredbuckets_requests)
             for i in range(len(expiredbuckets_requests)):
                 self._buckets[i + offset] = int(expiredbuckets_requests[i]) if expiredbuckets_requests[i] else 0
         #logger.warning("Fetched the buckets requests, buckets: {} , fetch time:{} , running requests: {},\n    buckets:\n{}".format(self._bucketslen,self._buckets_fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),self.runningrequests,"\n".join([ str((d[0].strftime("%Y-%m-%d %H:%M:%S.%f"),d[1],d[2])) for d in self.Buckets(self)])))
-        
 
-    @property
-    def runningrequests(self):
+        print("***0001 after set_buckets: buckets={}, buckets endtime={}".format(self._buckets,self._buckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f")))
+        
+    def set_bookedbucket(self,buckettime,bucketid,requests,total_requests):
+        """
+        Set the booked bucket data
+        Return True if not exceed the concurrency; otherwise return False
+        """
+        print("***0002 before set_bookedbuckets: buckets={}, buckets endtime={}\nbooked bucket: buckettime={} , bukcetid={} , requests={}".format(self._buckets,self._buckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,requests))
+        try:
+            if buckettime != self._buckets_endtime:
+                #race condition, some other clients have booked some bucket positions.
+                #the bucket request has been set, no need to set again
+                if total_requests <= self.concurrency:
+                    #under concurrency, booked the position succeed
+                    return True
+                total_requests = self.get_runningrequests(0,self._bucketslen)
+                if total_requests > self.concurrency:
+                    #the total requests in self._buckets already full
+                    #skip all buckets from left side until the first bucket which has requests 
+                    move = True
+                    while move:
+                        if self._buckets[0]:
+                            move = False
+                        self._buckets.append(0)
+                        del self._buckets[0]
+                        self._buckets_begintime += timedelta(milliseconds=self.buckettime)
+                        self._buckets_endtime += timedelta(milliseconds=self.buckettime)
+                        self._buckets_endid = self._normalize_bucketid(self._buckets_endid + 1)
+    
+                    if self._buckets_fetchtime <= self._buckets_begintime:
+                        self._buckets_fetchtime = None
+                return False
+            else:
+                if total_requests <= self.concurrency:
+                    #not exceed the concurrency
+                    if self._buckets[-1] < requests:
+                        self._buckets[-1] = requests
+                    else:
+                        #race condition, some other clients have booked some bucket positions. and the bucket requests are set by other clients
+                        pass
+                    return True
+                else:
+                    #exceed the limit
+                    self._buckets[-1] = requests - (total_requests - self.concurrency)
+                    if self._buckets[-1] < 0:
+                        msg = "The requests({1}) of the booked bucket can't be less than 0.{0},total_requests={2}".format(self._buckets,self._buckets[-1],total_requests)
+                        self._buckets[-1] = 0
+                        raise Exception(msg)
+    
+                    #the total requests in self._buckets already full
+                    #skip all buckets with requests 0 from left side
+                    while True:
+                        self._buckets.append(0)
+                        self._buckets_begintime += timedelta(milliseconds=self.buckettime)
+                        self._buckets_endtime += timedelta(milliseconds=self.buckettime)
+                        self._buckets_endid = self._normalize_bucketid(self._buckets_endid + 1)
+                        if self._buckets[0]:
+                            del self._buckets[0]
+                            break
+                        else:
+                            del self._buckets[0]
+                    if self._buckets_fetchtime <= self._buckets_begintime:
+                        self._buckets_fetchtime = None
+                    return False
+        finally:
+            print("***0002 after set_bookedbuckets: buckets={}, buckets endtime={}".format(self._buckets,self._buckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f")))
+        
+    def set_futurebuckets(self,buckets_begintime,buckets_endtime,buckets_beginid,bucketids,bucketsrequests,fetchtime):
+        """
+        should consider the race condition, multiple clients try to increment the value at the same time, so it is possible the value is greater than the final value.
+        Return True if can book the running position from the end bucket; otherwise return false to retrieveing the futurebuckets again
+        """
+        print("***0003 before set_futurebuckets buckets={}, buckets endtime={} \nfuture buckets: begintime={} , endtime={} , buketids={}, bucket requests={}".format(self._buckets,self._buckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),buckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),buckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketids,bucketsrequests))
+        try:
+            if buckets_endtime < self._buckets_begintime:
+                #all expired
+                return False
+    
+            #remove all buckets on the right side with requests 0
+            hasemptybuckets = False
+            while(True):
+                if not bucketsrequests:
+                    break
+                elif not bucketsrequests[-1]:
+                    hasemptybuckets = True
+                    del bucketsrequests[-1]
+                    del bucketids[-1]
+                else:
+                    break
+    
+            #remove expired buckets
+            while buckets_begintime < self._buckets_begintime:
+                if bucketids[0] == buckets_beginid:
+                    #not skipped, delete them
+                    del bucketids[0]
+                    del bucketsrequests[0]
+    
+                buckets_begintime += timedelta(milliseconds=self.buckettime)
+                buckets_beginid = self._normalize_bucketid(buckets_beginid + 1)
+    
+            if not bucketids:
+                #no booking requests are found
+                total_requests = self.get_runningrequests(0,self._bucketslen)
+                if total_requests >= self.concurrency:
+                    #reach the limit,should retrieving the future buckets again
+                    i = 0
+                    while True:
+                        i += 1
+                        self._buckets.append(0)
+                        if self._buckets[0]:
+                            del self._buckets[0]
+                            break
+                        else:
+                            del self._buckets[0]
+
+                    self._buckets_begintime += timedelta(milliseconds=self.buckettime * i)
+                    self._buckets_endtime += timedelta(milliseconds=self.buckettime * i)
+                    self._buckets_endid = self._normalize_bucketid(self._buckets_endid + i)
+
+                    return True
+                else:
+                    return True
+            else:
+                buckettime = None
+                bucketid = None
+                j = 0
+                buckettime = buckets_begintime - timedelta(milliseconds=self.buckettime)
+                bucketid = self._normalize_bucketid(buckets_beginid - 1)
+                #set the overlapped buckets
+                if buckets_begintime <= self._buckets_endtime:
+                    #the bucketsrequests is overlap with self._buckets
+                    i = int(((buckets_begintime - self._buckets_begintime).total_seconds() * 1000) / self.buckettime)
+                    j = 0
+                    while buckettime <= self._buckets_endtime and j < len(bucketids):
+                        bucketid = self._normalize_bucketid(bucketid + 1)
+                        buckettime += timedelta(milliseconds=self.buckettime)
+                        bucketsrequests[j] = bucketsrequests[j] or 0
+    
+                        if bucketid != bucketids[j]:
+                            #this bucketid is skipped,because the requests of the latest corresponding buckets is 0. no requests should be booked on this spot
+                            if self._buckets[i] != 0:
+                                raise Exception("The requests of the skipped bucket in memory should be 0")
+                                
+                        elif buckettime == self._buckets_endtime:
+                            #the last bucket of the list
+                            self._buckets[i] = bucketsrequests[j]
+                            total_requests = self.get_runningrequests(0,self._bucketslen)
+                            if total_requests > self.concurrency:
+                                #maybe be caused by race condition
+                                self._buckets[i] -= total_requests - self.concurrency
+                                if self._buckets[i] < 0:
+                                    self._buckets[i] = 0
+                                    raise Exception("The requests of the end buckets is less than 0")
+                            j += 1
+                        elif self._buckets[i] > bucketsrequests[j]:
+                            raise Exception("The overlapped bucket requests in memory is greater than the bucket requests in cache")
+                        elif self._buckets[i] < bucketsrequests[j]:
+                            #maybe it is caused by race condition
+                            logger.debug("{}:The requests({}) of the overlapped bucket({}) in memory is less than the requests({}) of the bucket({}) in cache".format(self.name,buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets[i],bucketsrequests[j]))
+                            j += 1
+                        i += 1
+                else:
+                    j = 0
+    
+                total_requests = self.get_runningrequests(0,self._bucketslen)
+                if j < len(bucketids):
+                    #have booking in the future buckets, requests in the bucket list should reach the concurrency
+                    #buckettime is the time of the previous bucket of the first non-overlap bucket
+                    if buckettime != self._buckets_endtime:
+                        raise Exception("The non-overlap bucket should be the next bucket of the last bucket in the bucket list")
+                    if total_requests > self.concurrency:
+                        raise Exception("The running requests should be not greater than concurrency if booking requests exsits.")
+                    elif total_requests < self.concurrency:
+                        raise Exception("The running requests should be not less than concurrency if booking requests exsits.")
+    
+                    self._buckets_fetchtime = fetchtime
+                    while j < len(bucketids):
+                        bucketid = self._normalize_bucketid(bucketid + 1)
+                        buckettime += timedelta(milliseconds=self.buckettime)
+                        if bucketid != bucketids[j]:
+                            #skipped future buckets, the corresponding current bucket should have no requests
+                            if self._buckets[0] != 0:
+                                raise Exception("The requests of the skipped bucket in memory should be 0")
+                            else:
+                                self._buckets.append(0)
+                                del self._buckets[0]
+                        elif self._buckets[0] < bucketsrequests[j]: 
+                            #maybe it is caused by race condition
+                            logger.debug("{}:The requests({}) of the future bucket({}) in memory is less than the requests({}) of the bucket({}) in cache".format(self.name,buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),self._buckets[i],bucketsrequests[j]))
+                            del self._buckets[0]
+                            self._buckets.append(self._buckets[0])
+                            j += 1
+                        elif self._buckets[0] > bucketsrequests[j]:
+                            if j < len(bucketids) - 1:
+                                #not the last bucket
+                                raise Exception("The future bucket requests in memory is greater than the bucket requests in cache")
+                            else:
+                                #the last bucket, maybe not fully booked.
+                                total_requests -= self._buckets[0] - bucketsrequests[j]
+                                del self._buckets[0]
+                                self._buckets.append(bucketsrequests[j])
+                                j += 1
+    
+                        else:
+                            self._buckets.append(self._buckets[0])
+                            del self._buckets[0]
+                            j += 1
+    
+                    if total_requests >= self.concurrency:
+                        #reach the limit,should retrieving the future buckets again
+                        if hasemptybuckets:
+                            i = 0
+                            while True:
+                                i += 1
+                                self._buckets.append(0)
+                                if self._buckets[0]:
+                                    del self._buckets[0]
+                                    break
+                                else:
+                                    del self._buckets[0]
+
+                            self._buckets_endtime = buckettime + timedelta(milliseconds=self.buckettime * i)
+                            self._buckets_endid = self._normalize_bucketid(bucketid + i)
+                            self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+
+                            return True
+                        else:
+                            self._buckets_endtime = buckettime
+                            self._buckets_endid = bucketid
+                            self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+                            return False
+                    else:
+                        self._buckets_endtime = buckettime
+                        self._buckets_endid = bucketid
+                        self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+                        return True
+                elif buckettime == self._buckets_endtime:
+                    #the end bucket is the last booking bucket
+                    self._buckets_fetchtime = fetchtime
+                    if total_requests >= self.concurrency:
+                        if hasemptybuckets:
+                            i = 0
+                            while True:
+                                i += 1
+                                self._buckets.append(0)
+                                if self._buckets[0]:
+                                    del self._buckets[0]
+                                    break
+                                else:
+                                    del self._buckets[0]
+
+                            self._buckets_begintime += timedelta(millisecond=self.buckettime * i)
+                            self._buckets_endtime += timedelta(millisecond=self.buckettime * i)
+                            self._buckets_endid = self._normalize_bucketid(self._buckets_endid + i)
+
+                            return True
+                        else:
+                            return False
+                    else:
+                        return True
+                else:
+                    #outdated. need to get_checkingbuckets again
+                    return False
+        finally:
+            print("***0003 after set_futurebuckets: buckets={}, buckets endtime={}".format(self._buckets,self._buckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f")))
+        
+    def get_runningrequests(self,start,length):
         """
         should be called after set_current_buckets , expired_previous_buckets and set_previous_buckets 
         """
         if self._buckets is None:
             return 0
 
+        if length == 1:
+            return self._buckets[start]
+
         result = 0
-        for data in self._buckets:
-            result += data
+        for data in self._buckets if (start == 0 and length == self._bucketslen) else lists.ROListSlice(self._buckets,start,length):
+            if data:
+                result += data
 
         return result
 

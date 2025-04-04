@@ -83,14 +83,16 @@ then
     else
         echo 'Running auth2 cluster in background'
     fi
-    export SYNC_MODE=True
+    export SYNC_MODE="eventlet"
+    #export SYNC_MODE="gevent"
+    #export SYNC_MODE="sync"
     poetry run gunicorn authome.wsgi --bind=:$PORT --config=gunicorn-dev.py  >./logs/auth2_${PORT}.log 2>&1 &
     #poetry run python manage.py runserver 0.0.0.0:$PORT >./logs/auth2_${PORT}.log 2>&1 &
     pid=$!
     echo ${pid} > ./logs/auth2_${PORT}.pid
 elif [[ "$runtype" == "command"  ]]
 then
-    export SYNC_MODE=False
+    export SYNC_MODE="sync"
     if [[ "$envfile" == ".env.standalone" ]]
     then
         echo 'Running auth2 shell in foreground'
@@ -106,7 +108,7 @@ else
         echo 'Running auth2 cluster in foreground'
     fi
     source .env.monitor
-    export SYNC_MODE=False
+    export SYNC_MODE="sync"
     poetry run python manage.py runserver 0.0.0.0:$PORT
 fi
 

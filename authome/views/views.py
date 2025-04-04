@@ -2,6 +2,7 @@ from datetime import timedelta
 import tempfile
 import os
 import math
+import socket
 import random
 import subprocess
 from django.core.cache import caches
@@ -45,6 +46,7 @@ from ..exceptions import HttpResponseException,UserDoesNotExistException,PolicyN
 from ..patch import load_user,anonymoususer,load_usertoken
 from ..sessionstore import SessionStore
 from authome.models import DebugLog
+from .. import lists
 
 from .. import performance
 
@@ -673,100 +675,327 @@ def auth_basic_optional(request):
 def auth_basic(request):
     return _auth_basic(request,)
 
-tcontrolcache = caches[settings.TRAFFICCONTROL_CACHE_ALIAS] if settings.TRAFFICCONTROL_SUPPORTED else None
-def _check_tcontrol(tcontrol,clientip,client,exempt):
+_tcontrolcaches = {}
+def _tcontrolcache(key,cache = False):
+    if settings.TRAFFICCONTROL_CACHE_SERVERS == 1:
+        return caches[settings.TRAFFICCONTROL_CACHE_ALIAS]
+    elif settings.TRAFFICCONTROL_CACHE_SERVERS == 0:
+        return None
+    elif cache:
+        try:
+            return _tcontrolcaches[key]
+        except KeyError as ex:
+            c = caches[settings.TRAFFICCONTROL_CACHE_ALIAS(key)]
+            _tcontrolcaches[key] = c
+            return c
+    else:
+        return caches[settings.TRAFFICCONTROL_CACHE_ALIAS(key)]
+
+def _log_tcontrol(cacheclient,logkey,expiretime):
     try:
+        return cacheclient.execute_command("set",logkey,"1","NX","EX",expiretime)
+    except:
+        #cache is not available, disable log
+        return False
+
+#for debug
+_currentuserlimitkeys = {}
+_currentiplimitkeys = {}
+_currentbuckets = {}
+"""
+_id = 0
+_seq = 0
+_concurrencylog = None
+"""
+def _get_concurrenclylog():
+    global _concurrencylog
+    if not _concurrencylog:
+        serverid="{}-{}".format(socket.gethostname(),os.getpid())
+        _concurrencylog = open(os.path.join(settings.BASE_DIR,"logs","tcontrolconcurrency-{}.log".format(serverid)),'w')
+    return _concurrencylog
+
+def _check_tcontrol(tcontrol,clientip,client,exempt,debug=False):
+    exception = None
+    try:
+        userrequests = None
+        iprequests = None
+        total_requests = None
+        starttime = timezone.localtime()
+
         #check traffic control for client
-        now = timezone.localtime()
-        today = now.replace(hour=0,minute=0,second=0,microsecond=0)
-        milliseconds = math.floor((now - today).total_seconds() * 1000)
-        cacheclient = tcontrolcache.redis_client
         userlimitkey = None
 
-        if not exempt and client and tcontrol.userlimit > 0 and tcontrol.userlimitperiod:
-            userlimitkey = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}_{}_{}".format(tcontrol.name,tcontrol.userlimitperiod,client,math.floor(milliseconds / (tcontrol.userlimitperiod * 1000))))
-            requests = cacheclient.incr(userlimitkey)
-            #logger.warning("{}: The user({}) has already sent {} requests".format(tcontrol.name,client,requests))
-            if requests == 1:
-                #set the expire time, 5 seconds later than limitperiod
-                cacheclient.expire(userlimitkey,tcontrol.userlimitperiod + 5)
-            elif requests > tcontrol.userlimit:
-                if requests == tcontrol.userlimit + 1:
-                    if cacheclient.execute_command("set","{}_{}_debuglog".format(tcontrol.name,client),"1","NX","EX",1800):
-                        #log interval half an hour
-                        DebugLog.tcontrol(DebugLog.USER_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"The user({}) sent too many requests({}) in {}".format(client,requests,utils.format_timedelta(tcontrol.userlimitperiod)))
-                #exceed the user limit
-                return [False,"USER",requests,tcontrol.userlimitperiod - int(milliseconds / 1000) % tcontrol.userlimitperiod ]
+        if not client and (tcontrol.iplimit <= 0 or tcontrol.iplimitperiod <= 0):
+            #iplimit is not enabled. use client ip as client
+            client = clientip
+
+        if not exempt and client and tcontrol.userlimit > 0 and tcontrol.userlimitperiod > 0:
+            try:
+                now = timezone.localtime()
+                today = now.replace(hour=0,minute=0,second=0,microsecond=0)
+                milliseconds = math.floor((now - today).total_seconds() * 1000)
+                keyprefix = "{}_{}_{}".format(tcontrol.name,tcontrol.userlimitperiod,client)
+                userlimitkey = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(keyprefix,math.floor(milliseconds / (tcontrol.userlimitperiod * 1000))))
+                usercacheclient = _tcontrolcache(keyprefix).redis_client
+                #increase the requests and set the expire time if required
+                currentuserlimitkey = _currentuserlimitkeys.get(tcontrol.id)
+                if not currentuserlimitkey:
+                    currentuserlimitkey = [userlimitkey,False]
+                    _currentuserlimitkeys[tcontrol.id] = currentuserlimitkey
+                elif currentuserlimitkey[0] != userlimitkey:
+                    currentuserlimitkey[0] = userlimitkey
+                    currentuserlimitkey[1] = False
+                if currentuserlimitkey[1]:
+                    userrequests = usercacheclient.incr(userlimitkey)
+                else:
+                    pipe = usercacheclient.pipeline()
+                    pipe.incr(userlimitkey)
+                    pipe.expire(userlimitkey,tcontrol.userlimitperiod + 5)
+                    userrequests,_ = pipe.execute()
+                    currentuserlimitkey[1] = True
+
+                if userrequests > tcontrol.userlimit:
+                    if userrequests == tcontrol.userlimit + 1:
+                        if _log_tcontrol(usercacheclient,settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}_debuglog".format(tcontrol.name,client)),1800):
+                            #log interval half an hour
+                            DebugLog.tcontrol(DebugLog.USER_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"The user({}) sent too many requests({}) in {}".format(client,userrequests,utils.format_timedelta(tcontrol.userlimitperiod)))
+                    #exceed the user limit
+                    return [False,"USER",userrequests,tcontrol.userlimitperiod - int(milliseconds / 1000) % tcontrol.userlimitperiod]
+            except Exception as ex:
+                traceback.print_exc()
+                exception = ex
+
     
         iplimitkey = None
-        if clientip and tcontrol.iplimit > 0 and tcontrol.iplimitperiod:
-            iplimitkey = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}_{}_{}".format(tcontrol.name,tcontrol.iplimitperiod,clientip,math.floor(milliseconds / (tcontrol.iplimitperiod * 1000))))
-            requests = cacheclient.incr(iplimitkey)
-            #logger.warning("{}: The IP address({}) has already sent {} requests.key={}".format(tcontrol.name,clientip,requests,iplimitkey))
-            if requests == 1:
-                #set the expire time, 5 seconds later than limitperiod
-                cacheclient.expire(iplimitkey,tcontrol.iplimitperiod + 5)
-            elif requests > tcontrol.iplimit:
-                if requests == tcontrol.iplimit + 1:
-                    if cacheclient.execute_command("set","{}_{}_debuglog".format(tcontrol.name,clientip),"1","NX","EX",1800):
-                        #log interval half an hour
-                        DebugLog.tcontrol(DebugLog.IP_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"The IP address({}) sent too many requests({}) in {}".format(clientip,requests,utils.format_timedelta(tcontrol.iplimitperiod)))
-                #exceed the ip limit
-                if not exempt:
-                    if userlimitkey:
-                        #decrease the user limits which was added before
-                        cacheclient.decr(userlimitkey)
-                    return [False,"IP",requests,tcontrol.iplimitperiod - int(milliseconds / 1000) % tcontrol.iplimitperiod ]
-    
-    
+        if clientip and tcontrol.iplimit > 0 and tcontrol.iplimitperiod > 0:
+            try:
+                now = timezone.localtime()
+                today = now.replace(hour=0,minute=0,second=0,microsecond=0)
+                milliseconds = math.floor((now - today).total_seconds() * 1000)
+                keyprefix = "{}_{}_{}".format(tcontrol.name,tcontrol.iplimitperiod,clientip)
+                iplimitkey = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(keyprefix,math.floor(milliseconds / (tcontrol.iplimitperiod * 1000))))
+                ipcacheclient = _tcontrolcache(keyprefix).redis_client
+                #increase the requests and set the expire time if required
+                currentiplimitkey = _currentiplimitkeys.get(tcontrol.id)
+                if not currentiplimitkey:
+                    currentiplimitkey = [iplimitkey,False]
+                    _currentiplimitkeys[tcontrol.id] = currentiplimitkey
+                elif currentiplimitkey[0] != iplimitkey:
+                    currentiplimitkey[0] = iplimitkey
+                    currentiplimitkey[1] = False
+
+                if currentiplimitkey[1]:
+                    iprequests = ipcacheclient.incr(iplimitkey)
+                else:
+                    pipe = ipcacheclient.pipeline()
+                    pipe.incr(iplimitkey)
+                    pipe.expire(iplimitkey,tcontrol.iplimitperiod + 5)
+                    iprequests,_ = pipe.execute()
+                    currentiplimitkey[1] = True
+
+                if iprequests > tcontrol.iplimit:
+                    if iprequests == tcontrol.iplimit + 1:
+                        if _log_tcontrol(ipcacheclient,settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}_debuglog".format(tcontrol.name,clientip)),1800):
+                            #log interval half an hour
+                            DebugLog.tcontrol(DebugLog.IP_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"The IP address({}) sent too many requests({}) in {}".format(clientip,iprequests,utils.format_timedelta(tcontrol.iplimitperiod)))
+                    #exceed the ip limit
+                    if not exempt:
+                        if userlimitkey:
+                            #decrease the user limits which was added before
+                            try:
+                                usercacheclient.decr(userlimitkey)
+                            except:
+                                #ignore
+                                pass
+                        return [False,"IP",iprequests,tcontrol.iplimitperiod - int(milliseconds / 1000) % tcontrol.iplimitperiod]
+            except Exception as ex:
+                traceback.print_exc()
+                exception = ex
+        
         #check the concurrency
         if tcontrol.concurrency > 0 and tcontrol.est_processtime > 0:
-            bucketid,expired_buckets = tcontrol.get_buckets(today,milliseconds)
-            key = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,bucketid))
-            #use 2 hours as a cycle to reduce the length of value. and use 10 millisecond as minimum time unit
-            requests = cacheclient.incr(key)
-            if requests == 1:
-                #set the expire time, 5 seconds later than limitperiod
-                cacheclient.expire(key,math.ceil(tcontrol.est_processtime / 1000) + 5)
+            try:
+                now = timezone.localtime()
+                today = now.replace(hour=0,minute=0,second=0,microsecond=0)
+                milliseconds = math.floor((now - today).total_seconds() * 1000)
+                expiredbuckets_requests = 0
+                checkingbuckets = tcontrol.get_checkingbuckets(today,milliseconds,exempt)
+                print("***111={},buckets={}".format(checkingbuckets,tcontrol._buckets))
+                cacheclient = _tcontrolcache(tcontrol.name,cache=True).redis_client
+                if checkingbuckets[0]:
+                    #the concurrency is not exceed the limit.
+                    _,buckettime,bucketid,expired_buckets,nonexpired_requests = checkingbuckets
+                    if buckettime is None:
+                        #exceed the concurrency
+                        return [False,"CONCURRENCY",nonexpired_requests]
 
-            if requests > tcontrol.concurrency:
-                #already exceed the limit. no need to fetch the requests of other buckets
-                tcontrol.set_buckets(requests)
-                totalrequests = requests
-            else:
-                if expired_buckets:
-                    #fetch the data from redis
-                    fetchtime = timezone.localtime()
-                    expiredbuckets_requests = cacheclient.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in expired_buckets])
-                    tcontrol.set_buckets(requests,timezone.localtime(),expiredbuckets_requests)
-                else:
-                    tcontrol.set_buckets(requests)
-                totalrequests = tcontrol.runningrequests
-
-            #logger.warning("{}: Have {} running requests,bucket={} , expired buckets = {}({})".format(tcontrol.name,totalrequests,bucketid,len(expired_buckets) if expired_buckets else 0,[d for d in expired_buckets or []]))
-            if totalrequests > tcontrol.concurrency:
-                #if exceed the limit, can't access
-                if cacheclient.execute_command("set","{}_debuglog".format(tcontrol.name),"1","NX","EX",300):
-                    #the log interval is 5 minutes
-                    if requests > tcontrol.concurrency:
-                        DebugLog.tcontrol(DebugLog.CONCURRENCY_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Exceed the limit({}); At least have {} running requests".format(tcontrol.concurrency,requests))
+                    key = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,bucketid))
+                    #increase the requests and set the expire time if required
+                    currentbucket = _currentbuckets.get(tcontrol.id)
+                    if not currentbucket:
+                        currentbucket = [buckettime,False]
+                        _currentbuckets[tcontrol.id] = currentbucket
+                    elif currentbucket[0] != buckettime:
+                        currentbucket[0] = buckettime
+                        currentbucket[1] = False
+                    if currentbucket[1]:
+                        if expired_buckets:
+                            pipe = cacheclient.pipeline()
+                            pipe.incr(key)
+                            pipe.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in expired_buckets])
+                            fetchtime = timezone.localtime()
+                            requests,expiredbuckets_requests = pipe.execute()
+                        else:
+                            fetchtime = None
+                            requests = cacheclient.incr(key)
                     else:
-                        DebugLog.tcontrol(DebugLog.CONCURRENCY_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Exceed the limit({}); Now Have {} running requests".format(tcontrol.concurrency,totalrequests))
-                if not exempt:
-                    #decrease the concurrency which was added before
-                    cacheclient.decr(key)
-                    #decrease the user limit which was added before
-                    if userlimitkey:
-                        cacheclient.decr(userlimitkey)
-                    #decrease the ip limit which was added before
-                    if iplimitkey:
-                        cacheclient.decr(iplimitkey)
-                    return [False,"CONCURRENCY",totalrequests]
+                        pipe = cacheclient.pipeline()
+                        pipe.incr(key)
+                        if expired_buckets:
+                            pipe.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in expired_buckets])
+                            pipe.expire(key,math.ceil(tcontrol.est_processtime / 1000) + 5)
+                            fetchtime = timezone.localtime()
+                            requests,expiredbuckets_requests,_ = pipe.execute()
+                        else:
+                            pipe.expire(key,math.ceil(tcontrol.est_processtime / 1000) + 5)
+                            fetchtime = None
+                            requests,_ = pipe.execute()
+                        currentbucket[1] = True
 
+                    if expired_buckets:
+                        total_requests = requests + nonexpired_requests
+                        for i in range(len(expiredbuckets_requests)):
+                            expiredbuckets_requests[i] = int(expiredbuckets_requests[i]) if expiredbuckets_requests[i] else 0
+                            total_requests += expiredbuckets_requests[i]
+                        if total_requests > tcontrol.concurrency:
+                            #exceed the concurrency, adjust the requests of the end bucket
+                            adjustedrequests = requests - (total_requests - tcontrol.concurrency)
+                            if adjustedrequests <= 0:
+                                raise Exception("The requests of the bucket should be greater than 0.requests={}, expired buckets={}, expired buckets requests={},nonexpired requests={}\nbuckets={} , buckets endid={}".format(requests,expired_buckets,expiredbuckets_requests,nonexpired_requests,tcontrol._buckets,tcontrol._buckets_endid))
+                            tcontrol.set_buckets(buckettime,bucketid,adjustedrequests,fetchtime,expiredbuckets_requests)
+                        else:
+                            tcontrol.set_buckets(buckettime,bucketid,requests,fetchtime,expiredbuckets_requests)
+                    else:
+                        total_requests = requests + nonexpired_requests
+                        if total_requests > tcontrol.concurrency:
+                            #exceed the concurrency, adjust the requests of the end bucket
+                            tcontrol.set_buckets(buckettime,bucketid,tcontrol.concurrency - nonexpired_requests,fetchtime,expiredbuckets_requests)
+                        else:
+                            tcontrol.set_buckets(buckettime,bucketid,requests)
+
+                    if total_requests > tcontrol.concurrency:
+                        #if exceed the limit, can't access
+                        if _log_tcontrol(cacheclient,settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_debuglog".format(tcontrol.name)),300):
+                            #the log interval is 5 minutes
+                            DebugLog.tcontrol(DebugLog.CONCURRENCY_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Exceed the limit({}); Now Have {} running requests".format(tcontrol.concurrency,total_requests))
+                        #decrease the concurrency which was added before
+                        try:
+                            cacheclient.decr(key)
+                        except:
+                            pass
+ 
+                        if tcontrol.block or exempt:
+                            #in block mode
+                            checkingbuckets = tcontrol.get_checkingbuckets(today,milliseconds,exempt)
+                            print("***222={}".format(checkingbuckets))
+                        else:
+                            #not in block mode
+                            #decrease the user limit which was added before
+                            if userlimitkey:
+                                try:
+                                    usercacheclient.decr(userlimitkey)
+                                except:
+                                    pass
+                            #decrease the ip limit which was added before
+                            if iplimitkey:
+                                try:
+                                    ipcacheclient.decr(iplimitkey)
+                                except:
+                                    pass
+
+                            return [False,"CONCURRENCY",total_requests]
+
+                if not checkingbuckets[0]:
+                    #exceed the concurrency, booking a position in the future
+                    _,buckettime,bucketid,checkingbuckets_begintime,checkingbuckets_endtime,checkingbuckets_beginid,checkingbucketids = checkingbuckets
+                    checkingbucketids = [d for d in checkingbucketids]
+                    fetchtime = timezone.localtime()
+                    bucketsrequests = cacheclient.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in checkingbucketids])
+                    for i in range(len(bucketsrequests)):
+                        bucketsrequests[i] = int(bucketsrequests[i]) if bucketsrequests[i] else 0
+                    print("***444  {}={} buckets={}".format(checkingbucketids,bucketsrequests,tcontrol._buckets))
+                    while not tcontrol.set_futurebuckets(checkingbuckets_begintime,checkingbuckets_endtime,checkingbuckets_beginid,checkingbucketids,bucketsrequests,fetchtime):
+                        print("***777  {}".format(tcontrol._buckets))
+                        checkingbuckets = tcontrol.get_checkingbuckets(today,milliseconds,exempt)
+                        print("***333={}".format(checkingbuckets))
+                        if checkingbuckets[0]:
+                            raise Exception("Should return future booking data")
+                            
+                        _,buckettime,bucketid,checkingbuckets_begintime,checkingbuckets_endtime,checkingbuckets_beginid,checkingbucketids = checkingbuckets
+                        checkingbucketids = [d for d in checkingbucketids]
+                        fetchtime = timezone.localtime()
+                        bucketsrequests = cacheclient.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in checkingbucketids])
+                        for i in range(len(bucketsrequests)):
+                            bucketsrequests[i] = int(bucketsrequests[i]) if bucketsrequests[i] else 0
+                        print("***555  {}={}".format(checkingbucketids,bucketsrequests))
+                    print("***888  {}".format(tcontrol._buckets))
+
+                    #start to book the position from end bucket
+                    while True:
+                        total_requests = tcontrol.get_runningrequests(0,tcontrol._bucketslen - 1)
+                        bucketid = tcontrol._buckets_endid
+                        buckettime = tcontrol._buckets_endtime
+                        key = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,bucketid))
+                        currentbucket = _currentbuckets.get(tcontrol.id)
+                        if not currentbucket:
+                            currentbucket = [buckettime,False]
+                            _currentbuckets[tcontrol.id] = currentbucket
+                        elif currentbucket[0] != buckettime:
+                            currentbucket[0] = buckettime
+                            currentbucket[1] = False
+                        if currentbucket[1]:
+                            requests = cacheclient.incr(key)
+                        else:
+                            pipe = cacheclient.pipeline()
+                            pipe.incr(key)
+                            pipe.expire(key,math.ceil(tcontrol.est_processtime / 1000) + 5 + math.ceil((buckettime - timezone.localtime()).total_seconds()))
+                            requests,_ = pipe.execute()
+                        print("***555  {}={}, buckets={}".format(bucketid,requests,tcontrol._buckets))
+                        if tcontrol.set_bookedbucket(buckettime,bucketid,requests,total_requests + requests):
+                            #booked successfully
+                            waittime = (buckettime - timezone.localtime()).total_seconds()
+                            if waittime > 0:
+                                times = int(waittime * 1000 / tcontrol.est_processtime)
+                                if times > 0:
+                                    if _log_tcontrol(cacheclient,settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_debuglog_{}times".format(tcontrol.name,times)),300):
+                                        #the log interval is 5 minutes
+                                        DebugLog.tcontrol(DebugLog.CONCURRENCY_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Have at least {1} requests waiting in the queue;".format(tcontrol.concurrency * times))
+                                if not debug:
+                                    time.sleep(waittime)
+                            total_requests += requests
+                            break
+
+            except Exception as ex:
+                traceback.print_exc()
+                exception = ex
+    
         #not exceed any traffic control, allow access
-        return [True,None]
+        if exception:
+            return [True,str(exception)]
+        elif debug:
+            data = {}
+            if userrequests:
+                data["user_requests"] = userrequests
+            if iprequests:
+                data["ip_requests"] = iprequests
+            if total_requests:
+                data["total_requests"] = total_requests
+            return [True,data]
+        else:
+            return [True,None]
     except Exception as ex:
         #record the error every 5 minutes
+        traceback.print_exc()
         msg = "{}:{}".format(ex.__class__.__name__,str(ex))
         if settings.CACHE_KEY_PREFIX:
             errorkey = "{}:auth2_tcontrol_error_{}".format(settings.CACHE_KEY_PREFIX,hash(msg))
@@ -774,11 +1003,13 @@ def _check_tcontrol(tcontrol,clientip,client,exempt):
             errorkey = "auth2_tcontrol_error_{}".format(hash(msg))
 
         defaultcacheclient = defaultcache.redis_client
-        if defaultcacheclient.execute_command("set",errorkey,"1","NX","EX",300):
+        if _log_tcontrol(defaultcacheclient,settings.GET_TRAFFICCONTROL_CACHE_KEY(errorkey),300):
             DebugLog.tcontrol(DebugLog.TRAFFIC_CONTROL_ERROR,tcontrol.name,clientip,client,msg)
 
         #check failed, ignore traffic control
         return [True,str(ex)]
+    finally:
+        pass
             
 def _tcontrol(request):
     clientip = request.headers.get("x-real-ip")
@@ -812,7 +1043,7 @@ def _tcontrol(request):
         if tcontrol.is_exempt(client):
             #is the user we known,exempt traffic control
             if (tcontrol.iplimit == 0 or tcontrol.iplimitperiod == 0) and (tcontrol.concurrency == 0 or tcontrol.est_processtime == 0):
-                return True
+                return None
             else:
                 exempt = True
     else:
@@ -827,7 +1058,7 @@ def _tcontrol(request):
         return None
     else:
         res = HttpResponseForbidden("Denied")
-        res["x-tcontrol"] = urllib.parse.quote("{1}|{0}|{2}|{3}".format(tcontrol.id,result[1],result[2],result[3]) if len(result) == 4  else "{1}|{0}|{2}".format(tcontrol.id,result[1],result[2]))
+        res["x-tcontrol"] = urllib.parse.quote("{1}|{0}|{2}".format(tcontrol.id,result[1],result[2]) if len(result) >= 4  else "{1}|{0}|{2}|{3}".format(tcontrol.id,result[1],result[2],result[3]))
         return res
 
 def auth_tcontrol(request):
@@ -877,12 +1108,20 @@ def set_expirable_session_data(session,key,value,timeout,now=None):
     session[get_expire_key(key)] = now + timedelta(seconds=timeout)
 
 def get_expirable_session_data(session,key,default=None,now=None):
+    """
+    Return a tuple(data, data age in seconds) if found, otherwise return(default,None)
+    """
     now = now or timezone.localtime()
     expireat = session.get(get_expire_key(key))
     if expireat and now <= expireat:
-        return session.get(key) or default
+        data = session.get(key) or default
+        if data:
+            age = int((expireat - now).total_seconds())
+            return (data, age if age else 1)
+        else:
+            return (default,None)
     else:
-        return default
+        return (default,None)
 
 def del_expirable_session_data(session,key):
     try:
@@ -979,10 +1218,13 @@ def auth_local(request):
                     code = None
                     codeid = None
                 else:
-                    code = get_expirable_session_data(request.session,codekey,None,now)
+                    code,codeage = get_expirable_session_data(request.session,codekey,None,now)
                     if code and code.startswith(codeid + "="):
                         #codeid is matched, reuse the existing code
-                        context["messages"] = [("info",mark_safe("Verification code has already been sent to {}<br>Please entery the verification code.".format(email)))]
+                        context["messages"] = [("info",mark_safe("Your verification code has been sent."))]
+                        context["passcode_age"] = codeage
+                        resend_interval = settings.PASSCODE_RESEND_INTERVAL - (settings.PASSCODE_AGE - codeage)
+                        context["passcode_resend_interval"] = resend_interval if resend_interval > 0 else 0
                         logger.debug("Verification code has already been sent to {}, no need to send again".format(context["email"]))
                     else:
                         #code is outdated, generate a new one
@@ -993,7 +1235,7 @@ def auth_local(request):
                 if defaultcache:
                     sendcode_number = int(defaultcache.get(sendcode_number_key,0) or 0)
                 else:
-                    sendcode_number = get_expirable_session_data(request.session,sendcode_number_key,0,now)
+                    sendcode_number = get_expirable_session_data(request.session,sendcode_number_key,0,now)[0]
 
                 if sendcode_number >= settings.PASSCODE_DAILY_LIMIT:
                     #The daily limits of sending veriy code was reached.
@@ -1024,16 +1266,19 @@ def auth_local(request):
                 emails.send_email(userflow.verifyemail_from,context["email"],userflow.verifyemail_subject,verifyemail_body)
                 if action == "resendcode":
                     context["messages"] = [
-                        ("info",mark_safe("A new verification code has been sent to {}<br>Please enter the new verification code.".format(email))),
-                        ("warning",mark_safe("All previous pin codes will be invalidated.")),
+                        ("info",mark_safe("Your new verification code has been sent.")),
+                        ("warning",mark_safe("The previous code is no longer valid.")),
                     ]
                 else:
-                    context["messages"] = [("info",mark_safe("Verification code has been sent to {}<br>Please enter the verification code.".format(email)))]
+                    context["messages"] = [("info",mark_safe("Your verification code has been sent."))]
 
                 logger.debug("Verification code has been sent to {}.".format(context["email"]))
             context["codeid"] = codeid
             return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
         elif action == "verifycode":
+            codekey = get_verifycode_key(email)
+            code,codeage = get_expirable_session_data(request.session,codekey,None,now)
+
             codeid = request.POST.get("codeid")
             if not codeid:
                 context["messages"] = [("error","Codeid is missing.")]
@@ -1049,32 +1294,39 @@ def auth_local(request):
 
             inputcode = request.POST.get("code","").strip().upper()
             if not inputcode:
-                context["messages"] = [("error","Please input the code to verify.")]
+                context["messages"] = [("error","Please input the verification code to verify.")]
+                context["passcode_age"] = codeage
+                resend_interval = settings.PASSCODE_RESEND_INTERVAL - (settings.PASSCODE_AGE - codeage)
+                context["passcode_resend_interval"] = resend_interval if resend_interval > 0 else 0
                 return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
 
             context["code"] = inputcode
 
             verifycode_number_key = get_verifycode_number_key(email)
 
-            codekey = get_verifycode_key(email)
-            code = get_expirable_session_data(request.session,codekey,None,now)
             if not code:
-                context["messages"] = [("error","The verification code has expired. Send a new code")]
+                context["messages"] = [("error","The verification code is expired. Send a new verification code")]
                 return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
             elif not code.startswith(codeid + "="):
-                context["messages"] = [("error","The verfication code was sent by other device,please resend the code again.")]
+                context["messages"] = [("error","The verfication code was sent by other device,please resend the verification code again.")]
                 return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
             else:
                 verifycode_number = request.session.get(verifycode_number_key) or 0
                 if verifycode_number >= settings.PASSCODE_TRY_TIMES:
                     #The limits of verifying the current code was reached,.
-                    context["messages"] = [("error","You have exceeded the number({}) of retries allowed.".format(settings.PASSCODE_TRY_TIMES))]
+                    context["messages"] = [("error","You have tried too many times, please resend the verification code again.")]
+                    context["passcode_age"] = 0
+                    resend_interval = settings.PASSCODE_RESEND_INTERVAL - (settings.PASSCODE_AGE - codeage)
+                    context["passcode_resend_interval"] = resend_interval if resend_interval > 0 else 0
                     return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
                 elif code[len(codeid) + 1:] != inputcode:
                     #code is invalid.
                     #increase the failed verifing times.
                     request.session[verifycode_number_key] = verifycode_number + 1
-                    context["messages"] = [("error","The input code is invalid, please check the email and verify again.")]
+                    context["messages"] = [("error","The code you entered is invalid. Check your email and try again or send a new code.")]
+                    context["passcode_age"] = codeage
+                    resend_interval = settings.PASSCODE_RESEND_INTERVAL - (settings.PASSCODE_AGE - codeage)
+                    context["passcode_resend_interval"] = resend_interval if resend_interval > 0 else 0
                     return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
 
             #verify successfully
@@ -1145,7 +1397,7 @@ def auth_local(request):
                 return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
 
             tokenkey = get_signuptoken_key(email)
-            token = get_expirable_session_data(request.session,tokenkey,None,now)
+            token = get_expirable_session_data(request.session,tokenkey,None,now)[0]
             if not token:
                 context["codeid"] = get_codeid()
                 context["messages"] = [("error","The signup token is expired, please signin again.")]

@@ -34,6 +34,7 @@ class PerformanceTestCase(testutils.StartServerMixin,TestCase):
     PRINT_USER_PERFORMANCE_DATA = env("PRINT_USER_PERFORMANCE_DATA",default=False)
 
     TESTING_SERVER = env("TESTING_SERVER" ,default=socket.gethostname())
+    UNITEST_AUTH = (env("TEST_USER",default=None),env("TEST_PASSWORD",default=None))
     
 
     authrequest = {
@@ -113,7 +114,7 @@ class PerformanceTestCase(testutils.StartServerMixin,TestCase):
         cls.testusers = []
     
         for testemail in testemails:
-            res = requests.get(cls.get_login_user_url(testemail),headers=cls.request_headers,verify=settings.SSL_VERIFY)
+            res = requests.get(cls.get_login_user_url(testemail),headers=cls.request_headers,verify=settings.SSL_VERIFY,auth=cls.UNITEST_AUTH)
             res.raise_for_status()
             userprofile = res.json()
 

@@ -27,16 +27,21 @@
         }
 
         function enableButton(button,button_text,enabletime,enabled) {
-            setTimeout(function () {
-                enabletime -= 1
-                if (enabletime > 0) {
-                    button.text(button_text + " " + enabletime);
-                    enableButton(button,button_text,enabletime,enabled);
-                } else {
-                    button.prop("disabled",!enabled);
-                    button.text(button_text);
-                }
-            }, 1000);
+            if (enabletime > 0) {
+                setTimeout(function () {
+                    enabletime -= 1
+                    if (enabletime > 0) {
+                        button.text(button_text + " " + enabletime);
+                        enableButton(button,button_text,enabletime,enabled);
+                    } else {
+                        button.prop("disabled",!enabled);
+                        button.text(button_text);
+                    }
+                }, 1000);
+            } else {
+                button.prop("disabled",!enabled);
+                button.text(button_text);
+            }
         }
     </script>
     {% include "authome/inc/idp_icons.html"%}

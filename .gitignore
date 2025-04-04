@@ -12,7 +12,6 @@ venv/
 gmon.out
 .sass-cache/
 .python-version
-gunicorn_*.py
 
 # Database/fixture dumps
 *.pgdump

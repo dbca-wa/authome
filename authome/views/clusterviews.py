@@ -159,7 +159,8 @@ def tcontrol(request):
 
     if not tcontrol or not tcontrol.active:
         #not traffic control configured
-        return views.SUCCEED_RESPONSE
-    result = views._check_tcontrol(tcontrol,clientip,client,exempt)
-    return JsonResponse([1, 2, 3], safe=False)
+        result = [True,"Tcontrol Not Configured",0]
+    else:
+        result = views._check_tcontrol(tcontrol,clientip,client,exempt)
+    return JsonResponse(result, safe=False)
 

@@ -229,14 +229,35 @@ TEMPLATES = [
 
 DATABASES = {
     # Defined in DATABASE_URL env variable.
-    'default': dj_database_url.config(),
+    'default': dj_database_url.config()
 }
 
-DATABASES['default']["CONN_MAX_AGE"] = 3600
 if "OPTIONS" in DATABASES['default']:
     DATABASES['default']["OPTIONS"]["options"] = "-c default_transaction_read_only=off"
 else:
     DATABASES['default']["OPTIONS"] = {"options": "-c default_transaction_read_only=off"}
+
+pool = DATABASES['default']["OPTIONS"].get("pool",False)
+if isinstance(pool,str):
+    DATABASES['default']["OPTIONS"]["pool"]=dict([d.strip().split("=",1) for d in pool.split(",") if d.strip()])
+    for k in DATABASES['default']["OPTIONS"]["pool"].keys():
+        v = DATABASES['default']["OPTIONS"]["pool"][k]
+        try:
+            DATABASES['default']["OPTIONS"]["pool"][k] = int(v)
+        except ValueError as ex:
+            try:
+                DATABASES['default']["OPTIONS"]["pool"][k] = float(v)
+            except ValueError as ex:
+                if v.lower() == "true":
+                    DATABASES['default']["OPTIONS"]["pool"][k] = True
+                elif v.lower() == "false":
+                    DATABASES['default']["OPTIONS"]["pool"][k] = False
+
+    
+if not DATABASES['default']["OPTIONS"].get("pool",False):
+    DATABASES['default']["CONN_MAX_AGE"] = env("CONN_MAX_AGE",default=3600)
+    DATABASES['default']["CONN_HEALTH_CHECKS"] = env("CONN_HEALTH_CHECKS",default=False)
+    
 
 # Static files configuration
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
@@ -385,7 +406,7 @@ LOGGING = {
 ENABLE_B2C_JS_EXTENSION = env("ENABLE_B2C_JS_EXTENSION",default=True)
 ADD_AUTH2_LOCAL_OPTION = env("ADD_AUTH2_LOCAL_OPTION",default=True)
 
-SYNC_MODE = env("SYNC_MODE",True)
+SYNC_MODE = env("SYNC_MODE",default="sync")
 
 CACHE_KEY_PREFIX=env('CACHE_KEY_PREFIX',default="") or None
 CACHE_KEY_VERSION_ENABLED = env('CACHE_KEY_VERSION_ENABLED',default=True)
@@ -513,6 +534,26 @@ if REDIS_TRAFFIC_MONITOR_LEVEL > 0:
                         MonitorEnabledConnection._cache = cache.cache
                     except:
                         MonitorEnabledConnection._cache = None
+                        
+        def send_packed_command(self, command, check_health=True):
+            try:
+                starttime = timezone.localtime()
+                status = "OK"
+                return super().send_packed_command(command,check_health=check_health)
+            except Exception as ex:
+                status = ex.__class__.__name__
+                raise
+            finally:
+                #cache and ignore the exceptions which are thrown before cache is fully initialized
+                try:
+                    MonitorEnabledConnection._cache.log_redisrequest("Redis","pipeline",starttime,status)
+                except:
+                    try:
+                        from . import cache
+                        MonitorEnabledConnection._cache = cache.cache
+                    except:
+                        MonitorEnabledConnection._cache = None
+                
                 
 def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
     if server.lower().startswith('redis'):
@@ -520,8 +561,11 @@ def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
             options["max_connections"] = 10
         if REDIS_TRAFFIC_MONITOR_LEVEL > 0:
             options["connection_class"] = MonitorEnabledConnection
-
-        cluster = options.pop("cluster",None)
+        if "cluster" in options:
+            options = dict(options)
+            cluster = options.pop("cluster")
+        else:
+            cluster = None
         if cluster is None:
             cluster = is_cluster(server)
 
@@ -628,6 +672,7 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER or TRAFFICCONTROL_C
         else:
             #current auth2 cluster does not support traffic control, dependents on other cluster to implement traffic control
             TRAFFICCONTROL_SUPPORTED = False
+            TRAFFICCONTROL_CACHE_SERVERS = 0
     else:
         #standalone auth2 server, should always support traffic control
         TRAFFICCONTROL_SUPPORTED = True
@@ -635,12 +680,24 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER or TRAFFICCONTROL_C
 
     if TRAFFICCONTROL_SUPPORTED :
         if TRAFFICCONTROL_CACHE_SERVER:
-            TRAFFICCONTROL_CACHE_ALIAS = "tcontrol"
-            CACHES[TRAFFICCONTROL_CACHE_ALIAS] = GET_CACHE_CONF(TRAFFICCONTROL_CACHE_ALIAS,TRAFFICCONTROL_CACHE_SERVER,TRAFFICCONTROL_CACHE_SERVER_OPTIONS,key_function=lambda key,key_prefix,version : key)
+            TRAFFICCONTROL_CACHE_SERVER = [s.strip() for s in TRAFFICCONTROL_CACHE_SERVER.split(",") if s and s.strip()]
+            TRAFFICCONTROL_CACHE_SERVERS = len(TRAFFICCONTROL_CACHE_SERVER)
+            if TRAFFICCONTROL_CACHE_SERVERS == 1:
+                TRAFFICCONTROL_CACHE_ALIAS = "tcontrol"
+                CACHES[TRAFFICCONTROL_CACHE_ALIAS] = GET_CACHE_CONF(TRAFFICCONTROL_CACHE_ALIAS,TRAFFICCONTROL_CACHE_SERVER[0],TRAFFICCONTROL_CACHE_SERVER_OPTIONS,key_function=lambda key,key_prefix,version : key)
+            else:
+                for i in range(0,TRAFFICCONTROL_CACHE_SERVERS) :
+                    name = "tcontrol{}".format(i)
+                    CACHES[name] = GET_CACHE_CONF(name,TRAFFICCONTROL_CACHE_SERVER[i],env("TRAFFICCONTROL_CACHE_SERVER{}_OPTIONS".format(i),default=TRAFFICCONTROL_CACHE_SERVER_OPTIONS),key_function=lambda key,key_prefix,version : key)
+
+                def TRAFFICCONTROL_CACHE_ALIAS(key):
+                    h = hash(key) % TRAFFICCONTROL_CACHE_SERVERS
+                    
+                TRAFFICCONTROL_CACHE_ALIAS = lambda key:"tcontrol{}".format(hash(key) % TRAFFICCONTROL_CACHE_SERVERS)
             GET_TRAFFICCONTROL_CACHE_KEY = lambda key:"T_{}".format(key)
         elif CACHE_SERVER:
             TRAFFICCONTROL_CACHE_ALIAS = "default"
-            GET_TRAFFICCONTROL_CACHE_KEY = GET_DEFAULT_CACHE_KEY
+            TRAFFICCONTROL_CACHE_SERVERS = 1
             if CACHE_KEY_PREFIX:
                 trafficcontrol_key_pattern = "{}:T_{{}}".format(CACHE_KEY_PREFIX)
                 GET_TRAFFICCONTROL_CACHE_KEY = lambda key:trafficcontrol_key_pattern.format(key)
@@ -648,8 +705,10 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER or TRAFFICCONTROL_C
                 GET_TRAFFICCONTROL_CACHE_KEY = lambda key:"T_{}".format(key)
         else:
             TRAFFICCONTROL_SUPPORTED = False
+            TRAFFICCONTROL_CACHE_SERVERS = 0
 else:
     TRAFFICCONTROL_SUPPORTED = False
+    TRAFFICCONTROL_CACHE_SERVERS = 0
                 
 
 TEST_RUNNER=env("TEST_RUNNER","django.test.runner.DiscoverRunner")

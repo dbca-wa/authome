@@ -32,7 +32,7 @@ COPY fonts ./fonts
 WORKDIR /app/release
 # Install the project.
 FROM python_libs_authome
-COPY manage.py gunicorn.py testperformance testrequestheaders testrediscluster testperformance pyproject.toml captchautil.py ./
+COPY manage.py gunicorn_sync.py gunicorn_eventlet.py gunicorn_gevent.py testperformance testrequestheaders testrediscluster testperformance pyproject.toml captchautil.py ./
 COPY authome ./authome
 COPY templates ./templates
 RUN export IGNORE_LOADING_ERROR=True ; python manage.py collectstatic --noinput --no-post-process
@@ -53,12 +53,19 @@ RUN find ./ -type f -iname '*.py' -exec sed -i 's/DebugLog\.attach_request/#Debu
 
 WORKDIR /app
 RUN echo "#!/bin/bash \n\
+if [[ \"\$SYNC_MODE\" == \"sync\" ]]; then \n\
+    config=\"gunicorn_sync.py\" \n\
+elif [[ \"\$SYNC_MODE\" == \"eventlet\" ]]; then \n\
+    config=\"gunicorn_eventlet.py\" \n\
+else \n\
+    config=\"gunicorn_eventlet.py\" \n\
+fi \n\
 if [[ \"\$DEBUG\" == \"True\" || \"\${LOGLEVEL}\" == \"DEBUG\" ]]; then \n\
     echo \"Running in dev mode\" \n\
-    cd /app/dev && gunicorn authome.wsgi --bind=:8080 --config=gunicorn.py \n\
+    cd /app/dev && gunicorn authome.wsgi --bind=:8080 --config=\${config} \n\
 else \n\
     echo \"Running in release mode\" \n\
-    cd /app/release && gunicorn authome.wsgi --bind=:8080 --config=gunicorn.py \n\
+    cd /app/release && gunicorn authome.wsgi --bind=:8080 --config=\${config} \n\
 fi \n\
 " > start_app
 

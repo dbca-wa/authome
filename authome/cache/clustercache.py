@@ -508,21 +508,21 @@ class MemoryCache(cache.MemoryCache):
         """
         def _send_request(cluster):
             if client:
-                url = "{}{}?clientip={}&client={}&tcontrol={}&exempt={}".format(
+                url = "{}{}?clientip={}&client={}&tcontrol={}{}".format(
                     cluster.endpoint,
                     reverse('cluster:tcontrol'),
                     quote_plus(clientip),
                     client,
                     tcontrolid,
-                    "1" if exempt else "0"
+                    "&exempt=1" if exempt else ""
                 )
             else:
-                url = "{}{}?clientip={}&tcontrol={}&exempt={}".format(
+                url = "{}{}?clientip={}&tcontrol={}&{}".format(
                     cluster.endpoint,
                     reverse('cluster:tcontrol'),
                     quote_plus(clientip),
                     tcontrolid,
-                    "1" if exempt else "0"
+                    "&exempt=1" if exempt else ""
                 )
             return requests.get(url,headers=self._get_headers(),timeout=settings.TRAFFICCONTROL_TIMEOUT,verify=settings.SSL_VERIFY)
         try:
