@@ -1,5 +1,6 @@
+# syntax=docker/dockerfile:1
 # Prepare the base environment.
-FROM python:3.12.4-slim-bookworm as builder_base_authome
+FROM python:3.12.4-slim-bookworm AS builder_base_authome
 LABEL org.opencontainers.image.authors=asi@dbca.wa.gov.au
 LABEL org.opencontainers.image.source=https://github.com/dbca-wa/authome
 RUN apt-get update -y \
@@ -25,7 +26,7 @@ RUN addgroup -gid 1000 app
 RUN adduser -uid 1000 --gid 1000 --no-create-home --disabled-login app
 
 # Install Python libs from pyproject.toml.
-FROM builder_base_authome as python_libs_authome
+FROM builder_base_authome AS python_libs_authome
 WORKDIR /app/release
 # Install the project.
 FROM python_libs_authome
@@ -78,4 +79,4 @@ RUN chown -R app:app /app
 # Run the application as the non-root user.
 USER app
 EXPOSE 8080
-CMD ./start_app
+CMD ["./start_app"]
