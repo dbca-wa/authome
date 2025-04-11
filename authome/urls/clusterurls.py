@@ -1,4 +1,5 @@
 from django.urls import path
+from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 
 from .. import views
@@ -16,4 +17,8 @@ urlpatterns = [
     path('status',views.statusfactory("local"),name="cluster_status"),
     path('healthcheck',views.healthcheckfactory("remote"),name="cluster_healthcheck")
 ]
+
+if settings.AUTH2_MONITORING_DIR:
+    urlpatterns.append(path('auth2status/<str:clusterid>', views.auth2_status,name="auth2_status"))
+    urlpatterns.append(path('liveness/<str:clusterid>/<str:serviceid>/<str:monitordate>.html', views.auth2_liveness,name="auth2_liveness"))
 

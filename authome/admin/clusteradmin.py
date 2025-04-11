@@ -177,10 +177,7 @@ class SystemUserAccessTokenAdmin(SyncObjectChangeMixin,admin.SystemUserAccessTok
     def _sync_change(self,objids):
         return cache.usertokens_changed(objids,True)
         
-class Auth2ClusterAdmin(admin.ExtraToolsMixin,admin.DeleteMixin,admin.DatetimeMixin,admin.CatchModelExceptionMixin,djangoadmin.ModelAdmin):
-    list_display = ('clusterid','_running_status','default','endpoint','_last_heartbeat','_usergroup_status','_usergroupauthorization_status','_userflow_status','_idp_status')
-    readonly_fields = ('clusterid','_running_status','default','endpoint','_last_heartbeat','_usergroup_status','_usergroup_lastrefreshed','_usergroupauthorization_status','_usergroupauthorization_lastrefreshed','_userflow_status','_userflow_lastrefreshed','_idp_status','_idp_lastrefreshed','modified','registered')
-    fields = readonly_fields
+class BaseAuth2ClusterAdmin(admin.ExtraToolsMixin,admin.DeleteMixin,admin.DatetimeMixin,admin.CatchModelExceptionMixin,djangoadmin.ModelAdmin):
     ordering = ('clusterid',)
     extra_tools = [("cluster status",'cluster_status',"clusterstatus")]
 
@@ -271,3 +268,14 @@ class Auth2ClusterAdmin(admin.ExtraToolsMixin,admin.DeleteMixin,admin.DatetimeMi
 
     def has_delete_permission(self, request, obj=None):
         return True
+
+if settings.AUTH2_MONITORING_DIR:
+    class Auth2ClusterAdmin(BaseAuth2ClusterAdmin):
+        list_display = ('clusterid','_running_status','default','endpoint','_usergroup_status','_usergroupauthorization_status','_userflow_status','_idp_status')
+        readonly_fields = ('clusterid','_running_status','default','endpoint','_usergroup_status','_usergroup_lastrefreshed','_usergroupauthorization_status','_usergroupauthorization_lastrefreshed','_userflow_status','_userflow_lastrefreshed','_idp_status','_idp_lastrefreshed','modified','registered')
+        fields = readonly_fields
+else:
+    class Auth2ClusterAdmin(BaseAuth2ClusterAdmin):
+        list_display = ('clusterid','_running_status','default','endpoint','_last_heartbeat','_usergroup_status','_usergroupauthorization_status','_userflow_status','_idp_status')
+        readonly_fields = ('clusterid','_running_status','default','endpoint','_last_heartbeat','_usergroup_status','_usergroup_lastrefreshed','_usergroupauthorization_status','_usergroupauthorization_lastrefreshed','_userflow_status','_userflow_lastrefreshed','_idp_status','_idp_lastrefreshed','modified','registered')
+        fields = readonly_fields

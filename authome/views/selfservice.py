@@ -13,13 +13,16 @@ from ipware.ip import get_client_ip
 from .. import models
 from ..cache import cache
 from .. import utils
-from .views  import get_absolute_url, _populate_response,_get_userflow_pagelayout,_get_next_url,MFA_METHOD_MAPPING
+from .views  import get_absolute_url, _populate_response,_get_userflow_pagelayout,_get_next_url,MFA_METHOD_MAPPING, auth_required_response_factory
 
 logger = logging.getLogger(__name__)
 
 def user_setting(request):
     #get the auth response
     user = request.user
+    if not request.user.is_authenticated or not request.user.is_active:
+        return auth_required_response_factory(request)
+
     auth_key = request.session.session_key
     back_url = request.GET.get("back") or request.POST.get("back")
     logout_url = request.GET.get("logout") or request.POST.get("logout")

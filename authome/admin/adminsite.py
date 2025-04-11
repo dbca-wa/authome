@@ -12,6 +12,7 @@ from django.urls import resolve
 from .. import models as auth2_models
 from .. import utils
 from .. import signals
+from ..cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -109,12 +110,41 @@ class Auth2AdminSite(djangoadmin.AdminSite):
             app_label = auth2_models.UserGroup._meta.app_label
             if app_label in app_dict:
                 app_dict[app_label]["models"].append({
-                    'name': "Renew Apple Secret Key",
+                    'name': "{}Renew Apple Secret Key".format(" " * 3),
                     'object_name': "Renew Apple Secret Key",
                     'perms': [],
                     'admin_url': reverse("admin:renew_apple_secretkey"),
                     'add_url': None,
                 })
+        if settings.AUTH2_MONITORING_DIR:
+            if auth2_models.can_access(request.user.email,settings.AUTH2_DOMAIN,'/admin/monitor/'):
+                app_label = auth2_models.UserGroup._meta.app_label
+                if app_label in app_dict:
+                    if settings.AUTH2_CLUSTER_ENABLED:
+                        app_dict[app_label]["models"].append({
+                            'name': "{1}Healthcheck({0})".format(settings.AUTH2_CLUSTERID," " * 2),
+                            'object_name': "{}_Healthcheck".format(settings.AUTH2_CLUSTERID),
+                            'perms': [],
+                            'admin_url': reverse("admin:auth2_status",kwargs={"clusterid":settings.AUTH2_CLUSTERID}),
+                            'add_url': None,
+                        })
+                        for cluster in cache.auth2_clusters.values():
+                            app_dict[app_label]["models"].append({
+                                'name': "{1}Healthcheck({0})".format(cluster.clusterid," " * 2),
+                                'object_name': "{}_Healthcheck".format(cluster.clusterid),
+                                'perms': [],
+                                'admin_url': reverse("admin:auth2_status",kwargs={"clusterid":cluster.clusterid}),
+                                'add_url': None,
+                            })
+
+                    else:
+                        app_dict[app_label]["models"].append({
+                            'name': "{}Healthcheck".format(" " * 2),
+                            'object_name': "Healthcheck",
+                            'perms': [],
+                            'admin_url': reverse("admin:auth2_status"),
+                            'add_url': None,
+                        })
 
 
         return app_dict

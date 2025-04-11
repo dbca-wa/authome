@@ -100,7 +100,7 @@ class AzureADB2COAuth2(azuread_b2c.AzureADB2COAuth2):
     def logout_url(self):
         return self.LOGOUT_URL.format(base_url=self.base_url)
 
-    error_re = re.compile("^\s*(?P<code>[A-Z0-9]+)\s*:")
+    error_re = re.compile("^\\s*(?P<code>[A-Z0-9]+)\\s*:")
     def process_error(self, data):
         try:
             super().process_error(data)

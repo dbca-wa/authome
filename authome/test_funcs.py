@@ -3,8 +3,9 @@ from django.test import TestCase
 from . import models
 from . import utils
 
+from .basetest import BaseTestCase
 
-class UserEmailTestCase(TestCase):
+class UserEmailTestCase(BaseTestCase):
     def test_parse_url(self):
         print("============================================================================")
         testcases = [

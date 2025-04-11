@@ -13,3 +13,6 @@ if settings.AUTH2_CLUSTER_ENABLED:
 if settings.TESTMODE:
     from .testviews import *
 
+if settings.AUTH2_MONITORING_DIR:
+    from .healthcheckviews import *
+
