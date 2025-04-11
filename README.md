@@ -1,17 +1,17 @@
-[![Build
-status](https://travis-ci.org/dbca-wa/authome.svg?branch=master)](https://travis-ci.org/dbca-wa/authome/builds) [![Coverage Status](https://coveralls.io/repos/github/dbca-wa/authome/badge.svg?branch=master)](https://coveralls.io/github/dbca-wa/authome?branch=master)
-
 # authome
 
 HTTP service for single sign-on session tracking authenticated against Microsoft Azure AD.
 
 ## How it works
+
 Authome acts like middleware for a proxy server, and behaves as a single application to a third party (in this case only Azure AD), that then injects authentication headers and an authentication suburl `/sso/auth`. As long as your network is secure between nginx and your backend app server, this can be used for easy serverside authentication by trusting headers, and clientside authentication with a basic fetch of a suburl like so:
+
 ```javascript
 fetch('/sso/auth').then(response => response.json()).then(window.identity => data);
 ```
 
 ## Nginx config for an authome client
+
     # nginx.conf client section
     server {
         server_name     ...;
@@ -70,7 +70,9 @@ fetch('/sso/auth').then(response => response.json()).then(window.identity => dat
         }
 
     }
-## Nginx config for an authome identity server 
+
+## Nginx config for an authome identity server
+
     # nginx.conf server section
 
     http {
@@ -109,5 +111,3 @@ fetch('/sso/auth').then(response => response.json()).then(window.identity => dat
     uwsgi_param  REMOTE_PORT        $remote_port;
     uwsgi_param  SERVER_PORT        $server_port;
     uwsgi_param  SERVER_NAME        $server_name;
-    
-
