@@ -22,7 +22,7 @@ qrcode = "7.4.2"
 pyotp = "2.9.0"
 Pillow = "10.3.0"
 PyJWT = "2.9.0"
-psutil = "6.0.0"
+psutil = "7.0.0"
 redis = "5.0.4"
 sentry-sdk = {version = "2.16.0", extras = ["django"]}
 
