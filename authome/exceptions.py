@@ -11,6 +11,9 @@ class UserDoesNotExistException(MultiPartParserError):
 class PolicyNotConfiguredException(MultiPartParserError): 
     pass
 
+class InvalidDomainException(MultiPartParserError): 
+    pass
+
 class HttpResponseException(MultiPartParserError): 
     http_code = None
 

@@ -10,6 +10,7 @@ from django.core.cache import caches
 from django.urls import reverse
 
 from .. import utils
+from ..exceptions import InvalidDomainException
 
 
 logger = logging.getLogger(__name__)
@@ -196,6 +197,8 @@ class _BaseMemoryCache(object):
         self._groups_map = {}
         self._emailgroups_ts = None
 
+        self._clientdomains = set()
+
         #the map between (groups,domain) and  authorization
         self._groups_authorization_map = OrderedDict() 
         self._groups_authorization_map_ts = None
@@ -214,6 +217,38 @@ class _BaseMemoryCache(object):
 
         #The runable task to check TrafficControl cache
         self._tcontrol_cache_check_time = IntervalTaskRunable("traffic control cache",settings.TRAFFICCONTROL_CACHE_CHECK_INTERVAL) if settings.TRAFFICCONTROL_CACHE_CHECK_INTERVAL > 0 else HourListTaskRunable("traffic control cache",settings.TRAFFICCONTROL_CACHE_CHECK_HOURS)
+
+
+        self._client = defaultcache.redis_client if defaultcache else None
+
+    _clientdomains_key = None
+    @property
+    def clientdomains_key(self):
+        if not self._clientdomains_key:
+            self._clientdomains_key = settings.GET_DEFAULT_CACHE_KEY("clientdomains")
+        return self._clientdomains_key
+    
+    def check_clientdomain(self,domain):
+        if domain.endswith(".dbca.wa.gov.au") or domain.endswith(".dpaw.wa.gov.au"):
+            return True
+
+        if domain in self._clientdomains:
+            return True
+
+        if self._client.sismember(self.clientdomains_key,domain):
+            self._clientdomains.add(domain)
+            return True
+        elif settings.RAISE_EXCEPTION_4_INVALID_DOMAIN:
+            raise InvalidDomainException("Redirect to '{}' is strictly forbidden.".format(domain))
+        else:
+            return False
+
+    def register_clientdomain(self,domain):
+        if domain.endswith(".dbca.wa.gov.au") or domain.endswith(".dpaw.wa.gov.au"):
+            return
+
+        self._clientdomains.add(domain)
+        self._client.sadd(self.clientdomains_key,domain)
 
     @property
     def usergrouptree(self):
@@ -741,7 +776,6 @@ if settings.TRAFFIC_MONITOR_LEVEL > 0:
             seconds_in_day = (now - today).seconds
             self._traffic_data_ts = today + timedelta(seconds =  seconds_in_day - seconds_in_day % settings.TRAFFIC_MONITOR_INTERVAL.seconds)
             self._traffic_data_next_ts = self._traffic_data_ts + settings.TRAFFIC_MONITOR_INTERVAL
-            self._client = defaultcache.redis_client if defaultcache else None
     
         _traffic_data_key = None
         @property

@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta,datetime
 import tempfile
 import os
 import math
@@ -127,6 +127,12 @@ def _get_next_url(request):
     5. get the domain from next url, if failed, use request host, and then use this domain to build a absoulute next  url
     """
     next_url = request.GET.get(REDIRECT_FIELD_NAME)
+    if next_url:
+        domain = utils.get_domain(next_url)
+        if domain and not cache.check_clientdomain(domain):
+            #next_url is invalid, use the default next url
+            next_url = None
+
     #try to get next url from request
     if not next_url and request.headers.get("x-upstream-request-uri"):
         next_url = "https://{}{}".format(request.get_host(),request.headers.get("x-upstream-request-uri"))
@@ -139,6 +145,7 @@ def _get_next_url(request):
         #found next url, build its absolute url
         domain = utils.get_domain(next_url)
         if not domain:
+            #no domain in next_url, use request host as domain
             domain = request.get_host()
         next_url = get_absolute_url(next_url,domain)
         logger.debug("Found next url '{}'".format(next_url))
@@ -235,7 +242,13 @@ def get_post_b2c_logout_url(request,encode=True):
         encode: encode the url if True;
     Return 	quoted post logout url
     """
-    host = request.GET.get("domain") or request.get_host()
+    host = request.GET.get("domain")
+    if host:
+        if not cache.check_clientdomain(host):
+            #invalid domain, back to use the request host
+            host = request.get_host()
+    else:
+        host = request.get_host()
 
     message = request.GET.get("message")
     #get the idp and idepid
@@ -261,13 +274,28 @@ def get_post_b2c_logout_url(request,encode=True):
     relogin_url = None
     if next_url:
         domain,next_url= utils.get_domain_path(next_url)
-        domain = domain or host
-        next_url = next_url or "/"
+        if domain:
+            if not cache.check_clientdomain(domain):
+                domain = host
+                next_url = "/"
+            else:
+                next_url = next_url or "/"
+        else:
+            domain = host
+            next_url = next_url or "/"
     else:
         relogin_url = request.GET.get("relogin")
         if relogin_url:
             domain,relogin_url= utils.get_domain_path(relogin_url)
-            domain = domain or host
+            if domain:
+                if not cache.check_clientdomain(domain):
+                    domain = host
+                    relogin_url = "/"
+                else:
+                    relogin_url = relogin_url or "/"
+            else:
+                domain = host
+                relogin_url = relogin_url or "/"
         else:
             domain = host
 
@@ -458,6 +486,7 @@ def auth_captcha(request):
             request.session.modified = False
         else:
             request.session[key] = "R"
+
         return auth_required_response_factory(request)
 
 @csrf_exempt
@@ -486,6 +515,7 @@ def auth_and_captcha(request):
                 request.session.modified = False
             else:
                 request.session[key] = "R"
+
             return auth_required_response_factory(request)
     else:
         #not authenticated
@@ -673,7 +703,7 @@ def auth_basic_optional(request):
 
 @csrf_exempt
 def auth_basic(request):
-    return _auth_basic(request,)
+    return _auth_basic(request)
 
 _tcontrolcaches = {}
 def _tcontrolcache(key,cache = False):
@@ -698,28 +728,46 @@ def _log_tcontrol(cacheclient,logkey,expiretime):
         #cache is not available, disable log
         return False
 
-#for debug
 _currentuserlimitkeys = {}
 _currentiplimitkeys = {}
 _currentbuckets = {}
-"""
-_id = 0
-_seq = 0
-_concurrencylog = None
-"""
-def _get_concurrenclylog():
-    global _concurrencylog
-    if not _concurrencylog:
-        serverid="{}-{}".format(socket.gethostname(),os.getpid())
-        _concurrencylog = open(os.path.join(settings.BASE_DIR,"logs","tcontrolconcurrency-{}.log".format(serverid)),'w')
-    return _concurrencylog
 
-def _check_tcontrol(tcontrol,clientip,client,exempt,debug=False):
+#begin for debug
+import socket
+_req_seq = 0
+_processid = None
+def _get_processid():
+    global _processid
+    if not _processid:
+        _processid = "{}-{}".format(socket.gethostname(),os.getpid())
+
+    return _processid
+
+#end for debug
+
+def _check_tcontrol(tcontrol,clientip,client,exempt,test=False):
     exception = None
+
+    #begin for debug
+    global _req_seq
+    _req_seq += 1
+    requestid = _req_seq
+    _bucket_endtime_before=None
+    _endbucket_requests_before=None
+    def _requestid():
+        return "{0} Request-{1}-{2}:".format(timezone.localtime().strftime("%H:%M:%S.%f"),_get_processid(),requestid,tcontrol.name,client,clientip,exempt)
+
+    def _debug(msg):
+        if tcontrol._buckets:
+            return "{} : Buckets of tcontrol: buckets={} , begintime={} , endtime={} , endid={} , total requests={}, fetchtime={}\n    {}".format(_requestid(),tcontrol._buckets,tcontrol._buckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),tcontrol._buckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),tcontrol._buckets_endid,tcontrol._buckets_totalrequests,tcontrol._buckets_fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f") if tcontrol._buckets_fetchtime else None,msg)
+        else:
+            return "{} : Buckets of tcontrol: None.\n    {}".format(_requestid(),msg)
+    #end for debug
+
     try:
         userrequests = None
         iprequests = None
-        total_requests = None
+        totalrequests = None
         starttime = timezone.localtime()
 
         #check traffic control for client
@@ -811,169 +859,234 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,debug=False):
             except Exception as ex:
                 traceback.print_exc()
                 exception = ex
-        
+
         #check the concurrency
+        """
+        concurrency checking is hard to guarantee the total running requests is acurate and not exceed the concurrency.
+        1. First the est_processtime is an assumption, can't guarantee that every request spents just the est_processtime
+        2. For the booking requests, if the browser or client cancel the request. the request will never run, but it is still in the running queue and count an pending request
+        3. if a bucket with request 3 is exceed the concurrency, the coming request will increment the requests first and then desc the request later, if one or more request increment the requests and then another request retrieves the buckets, the requests retrievied by the request will be greater than 3. but if this happens, means the total requests is exceed the concurrency
+        4. race condition, for example, est_processtime has 10 buckets, the concurrency is 10.
+          the requests in bucket 0 to 8 is 9 requests, a request with the endbucket 9 get the permission to run in bucket 9, now the requests in bucket 0 to 8 is 9 requests, and the requests in bucket 0 to 9 is 10 requests; another request with the endbucket 8 get the permission to run in bucket 8, now the requests in bucket 0 to 8 is already 10 requests, and the requests in bucket 0 to 9 is 11 requests which is exceed the limit.
+        5. Because the time delay between increment and decrement, so the data fetched from the cache will be greater than the final result, should do some adjustment in memory
+        """
         if tcontrol.concurrency > 0 and tcontrol.est_processtime > 0:
             try:
+                pipe = None
                 now = timezone.localtime()
                 today = now.replace(hour=0,minute=0,second=0,microsecond=0)
                 milliseconds = math.floor((now - today).total_seconds() * 1000)
                 expiredbuckets_requests = 0
+
                 checkingbuckets = tcontrol.get_checkingbuckets(today,milliseconds,exempt)
-                print("***111={},buckets={}".format(checkingbuckets,tcontrol._buckets))
+
                 cacheclient = _tcontrolcache(tcontrol.name,cache=True).redis_client
-                if checkingbuckets[0]:
-                    #the concurrency is not exceed the limit.
-                    _,buckettime,bucketid,expired_buckets,nonexpired_requests = checkingbuckets
-                    if buckettime is None:
-                        #exceed the concurrency
-                        return [False,"CONCURRENCY",nonexpired_requests]
 
-                    key = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,bucketid))
-                    #increase the requests and set the expire time if required
-                    currentbucket = _currentbuckets.get(tcontrol.id)
-                    if not currentbucket:
-                        currentbucket = [buckettime,False]
-                        _currentbuckets[tcontrol.id] = currentbucket
-                    elif currentbucket[0] != buckettime:
-                        currentbucket[0] = buckettime
-                        currentbucket[1] = False
-                    if currentbucket[1]:
-                        if expired_buckets:
+                succeed = False
+                while not succeed:
+                    if checkingbuckets[0]:
+                        #the concurrency is not exceed the limit.
+                        _,buckettime,bucketid,expired_buckets,nonexpired_requests = checkingbuckets
+                        #begin for debug
+                        _debug("After get_checkingbuckets(checking). buckettime={} , bucketid= {} , expired_buckets={} , nonexpired_requsts={}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f") if buckettime else None,bucketid,expired_buckets,nonexpired_requests))
+                        #end for debug
+                        if buckettime is None:
+                            #exceed the concurrency
+                            totalrequests = tcontrol.concurrency + 1
+                        else:
+                            key = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,bucketid))
+                            #increase the requests and set the expire time if required
+                            currentbucket = _currentbuckets.get(tcontrol.id)
+                            if not currentbucket:
+                                currentbucket = [buckettime,False]
+                                _currentbuckets[tcontrol.id] = currentbucket
+                            elif currentbucket[0] != buckettime:
+                                currentbucket[0] = buckettime
+                                currentbucket[1] = False
                             pipe = cacheclient.pipeline()
+                            pipe.time() 
                             pipe.incr(key)
-                            pipe.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in expired_buckets])
-                            fetchtime = timezone.localtime()
-                            requests,expiredbuckets_requests = pipe.execute()
-                        else:
-                            fetchtime = None
-                            requests = cacheclient.incr(key)
-                    else:
-                        pipe = cacheclient.pipeline()
-                        pipe.incr(key)
-                        if expired_buckets:
-                            pipe.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in expired_buckets])
-                            pipe.expire(key,math.ceil(tcontrol.est_processtime / 1000) + 5)
-                            fetchtime = timezone.localtime()
-                            requests,expiredbuckets_requests,_ = pipe.execute()
-                        else:
-                            pipe.expire(key,math.ceil(tcontrol.est_processtime / 1000) + 5)
-                            fetchtime = None
-                            requests,_ = pipe.execute()
-                        currentbucket[1] = True
+                            if currentbucket[1]:
+                                if expired_buckets:
+                                    pipe.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in expired_buckets])
+                                    fetchtime,requests,expiredbuckets_requests = pipe.execute()
+                                else:
+                                    fetchtime,requests = pipe.execute()
+                            else:
+                                if expired_buckets:
+                                    pipe.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in expired_buckets])
+                                    pipe.expire(key,math.ceil(tcontrol.est_processtime / 1000) + 5)
+                                    fetchtime,requests,expiredbuckets_requests,_ = pipe.execute()
+                                else:
+                                    pipe.expire(key,math.ceil(tcontrol.est_processtime / 1000) + 5)
+                                    fetchtime,requests,_ = pipe.execute()
+                                currentbucket[1] = True
+                            fetchtime = timezone.make_aware(datetime.fromtimestamp(int(fetchtime[0]) + int(fetchtime[1]) / 1000000))
+        
+                            if expired_buckets:
+                                #do some adjustment in memory if necessary because of race condition
+                                totalrequests = nonexpired_requests
+                                for i in range(len(expiredbuckets_requests)):
+                                    if totalrequests >= tcontrol.concurrency:
+                                        #already exceed the concurrency, the requests of the bucket should be 0
+                                        #the reason why it is greater than 0 is the time gap between increment operation and decrement operation
+                                        #adjust the requests to 0 in memory
+                                        expiredbuckets_requests[i] = 0
+                                        totalrequests += expiredbuckets_requests[i]
+                                    else:
+                                        expiredbuckets_requests[i] = int(expiredbuckets_requests[i]) if expiredbuckets_requests[i] else 0
+                                        totalrequests += expiredbuckets_requests[i]
+                                        if totalrequests > tcontrol.concurrency:
+                                            #exceed the concurrency. caused by time gap between increment operation and decrement operation.
+                                            #adjust the requests
+                                            expiredbuckets_requests[i] -= totalrequests - tcontrol.concurrency
+                                            totalrequests = tcontrol.concurrency
 
-                    if expired_buckets:
-                        total_requests = requests + nonexpired_requests
-                        for i in range(len(expiredbuckets_requests)):
-                            expiredbuckets_requests[i] = int(expiredbuckets_requests[i]) if expiredbuckets_requests[i] else 0
-                            total_requests += expiredbuckets_requests[i]
-                        if total_requests > tcontrol.concurrency:
-                            #exceed the concurrency, adjust the requests of the end bucket
-                            adjustedrequests = requests - (total_requests - tcontrol.concurrency)
-                            if adjustedrequests <= 0:
-                                raise Exception("The requests of the bucket should be greater than 0.requests={}, expired buckets={}, expired buckets requests={},nonexpired requests={}\nbuckets={} , buckets endid={}".format(requests,expired_buckets,expiredbuckets_requests,nonexpired_requests,tcontrol._buckets,tcontrol._buckets_endid))
-                            tcontrol.set_buckets(buckettime,bucketid,adjustedrequests,fetchtime,expiredbuckets_requests)
+                                totalrequests += requests
+                            else:
+                                totalrequests = requests + nonexpired_requests
+        
+                        if totalrequests <= tcontrol.concurrency:
+                            #not exceed the limit
+                            succeed = True
+                            if expired_buckets:
+                                tcontrol.set_buckets(buckettime,bucketid,requests,fetchtime,expiredbuckets_requests)
+                            else:
+                                tcontrol.set_buckets(buckettime,bucketid,requests,fetchtime)
+                            #begin for debug
+                            _debug("After set_buckets.buckettime={0} , bucketid={1} , expired_buckets={2}, nonexpired bucket requests={3} , bucket requests={4} , expired bucket requests={5}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,expired_buckets or None,nonexpired_requests,requests,expiredbuckets_requests))
+                            #end for debug
                         else:
-                            tcontrol.set_buckets(buckettime,bucketid,requests,fetchtime,expiredbuckets_requests)
-                    else:
-                        total_requests = requests + nonexpired_requests
-                        if total_requests > tcontrol.concurrency:
-                            #exceed the concurrency, adjust the requests of the end bucket
-                            tcontrol.set_buckets(buckettime,bucketid,tcontrol.concurrency - nonexpired_requests,fetchtime,expiredbuckets_requests)
-                        else:
-                            tcontrol.set_buckets(buckettime,bucketid,requests)
+                            #if exceed the limit, can't access
+                            if _log_tcontrol(cacheclient,settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_debuglog".format(tcontrol.name)),300):
+                                #the log interval is 5 minutes
+                                DebugLog.tcontrol(DebugLog.CONCURRENCY_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Exceed the limit({}); Now Have {} running requests".format(tcontrol.concurrency,totalrequests))
 
-                    if total_requests > tcontrol.concurrency:
-                        #if exceed the limit, can't access
-                        if _log_tcontrol(cacheclient,settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_debuglog".format(tcontrol.name)),300):
-                            #the log interval is 5 minutes
-                            DebugLog.tcontrol(DebugLog.CONCURRENCY_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Exceed the limit({}); Now Have {} running requests".format(tcontrol.concurrency,total_requests))
-                        #decrease the concurrency which was added before
-                        try:
-                            cacheclient.decr(key)
-                        except:
-                            pass
- 
-                        if tcontrol.block or exempt:
-                            #in block mode
-                            checkingbuckets = tcontrol.get_checkingbuckets(today,milliseconds,exempt)
-                            print("***222={}".format(checkingbuckets))
-                        else:
-                            #not in block mode
-                            #decrease the user limit which was added before
-                            if userlimitkey:
+                            if buckettime:
+                                #decrease the concurrency which was added before
+                                requests -= totalrequests - tcontrol.concurrency
+                                if expired_buckets:
+                                    tcontrol.set_buckets(buckettime,bucketid,requests,fetchtime,expiredbuckets_requests)
+                                else:
+                                    tcontrol.set_buckets(buckettime,bucketid,requests,fetchtime)
+                                #begin for debug
+                                _debug("After set_buckets.buckettime={0} , bucketid={1} , expired_buckets={2}, nonexpired bucket requests={3} , bucket requests={4} , expired bucket requests={5}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,expired_buckets or None,nonexpired_requests,requests,expiredbuckets_requests))
+                                #end for debug
+
                                 try:
-                                    usercacheclient.decr(userlimitkey)
+                                    cacheclient.decr(key)
                                 except:
                                     pass
-                            #decrease the ip limit which was added before
-                            if iplimitkey:
-                                try:
-                                    ipcacheclient.decr(iplimitkey)
-                                except:
-                                    pass
 
-                            return [False,"CONCURRENCY",total_requests]
-
-                if not checkingbuckets[0]:
-                    #exceed the concurrency, booking a position in the future
-                    _,buckettime,bucketid,checkingbuckets_begintime,checkingbuckets_endtime,checkingbuckets_beginid,checkingbucketids = checkingbuckets
-                    checkingbucketids = [d for d in checkingbucketids]
-                    fetchtime = timezone.localtime()
-                    bucketsrequests = cacheclient.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in checkingbucketids])
-                    for i in range(len(bucketsrequests)):
-                        bucketsrequests[i] = int(bucketsrequests[i]) if bucketsrequests[i] else 0
-                    print("***444  {}={} buckets={}".format(checkingbucketids,bucketsrequests,tcontrol._buckets))
-                    while not tcontrol.set_futurebuckets(checkingbuckets_begintime,checkingbuckets_endtime,checkingbuckets_beginid,checkingbucketids,bucketsrequests,fetchtime):
-                        print("***777  {}".format(tcontrol._buckets))
-                        checkingbuckets = tcontrol.get_checkingbuckets(today,milliseconds,exempt)
-                        print("***333={}".format(checkingbuckets))
-                        if checkingbuckets[0]:
-                            raise Exception("Should return future booking data")
-                            
+       
+                            if tcontrol.block or exempt:
+                                #in block mode
+                
+                                checkingbuckets = tcontrol.get_checkingbuckets(today,milliseconds,exempt)
+                            else:
+                                #not in block mode
+                                #decrease the user limit which was added before
+                                if userlimitkey:
+                                    try:
+                                        usercacheclient.decr(userlimitkey)
+                                    except:
+                                        pass
+                                #decrease the ip limit which was added before
+                                if iplimitkey:
+                                    try:
+                                        ipcacheclient.decr(iplimitkey)
+                                    except:
+                                        pass
+                                return [False,"CONCURRENCY",totalrequests]
+    
+                    if not checkingbuckets[0]:
+                        #exceed the concurrency, booking a position in the future
                         _,buckettime,bucketid,checkingbuckets_begintime,checkingbuckets_endtime,checkingbuckets_beginid,checkingbucketids = checkingbuckets
+                        #begin for debug
+                        _debug("After get_checkingbuckets(booking).buckettime={} , bucketid={} , bookingbukcets_begintime={} , bookingbukcets_begintime={} , bookingbuckets_beginid={} , bookingbucketids={}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,checkingbuckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_beginid,checkingbucketids))
+                        #end for debug
                         checkingbucketids = [d for d in checkingbucketids]
-                        fetchtime = timezone.localtime()
-                        bucketsrequests = cacheclient.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in checkingbucketids])
+                        pipe = pipe or cacheclient.pipeline()
+                        pipe.time() 
+                        pipe.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in checkingbucketids])
+                        fetchtime,bucketsrequests = pipe.execute()
+                        fetchtime = timezone.make_aware(datetime.fromtimestamp(int(fetchtime[0]) + int(fetchtime[1]) / 1000000))
                         for i in range(len(bucketsrequests)):
                             bucketsrequests[i] = int(bucketsrequests[i]) if bucketsrequests[i] else 0
-                        print("***555  {}={}".format(checkingbucketids,bucketsrequests))
-                    print("***888  {}".format(tcontrol._buckets))
+                        result = tcontrol.set_bookedbuckets(buckettime,checkingbuckets_begintime,checkingbuckets_endtime,checkingbuckets_beginid,checkingbucketids,bucketsrequests,fetchtime)
+                        #begin for debug
+                        _debug("After set_bookedbuckets.buckets begintime={} , buckets endtime={} , buckets endid={} , bucket ids={}, buckets requests={}".format(checkingbuckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_beginid,checkingbucketids,bucketsrequests))
+                        #end for debug
+                        while not result:
+                            checkingbuckets = tcontrol.get_checkingbuckets(today,milliseconds,exempt)
+                            if checkingbuckets[0]:
+                                #not a future booking, retry the concurrency logic again
+                                break
+                                
+                            _,buckettime,bucketid,checkingbuckets_begintime,checkingbuckets_endtime,checkingbuckets_beginid,checkingbucketids = checkingbuckets
+                            #begin for debug
+                            _debug("After get_checkingbuckets(booking).buckettime={} , bucketid={} , bookingbukcets_begintime={} , bookingbukcets_begintime={} , bookingbuckets_beginid={} , bookingbucketids={}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,checkingbuckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_beginid,checkingbucketids))
+                            #end for debug
+                            checkingbucketids = [d for d in checkingbucketids]
+                            pipe.time() 
+                            pipe.mget([settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,d)) for d in checkingbucketids])
+                            fetchtime,bucketsrequests = pipe.execute()
+                            fetchtime = timezone.make_aware(datetime.fromtimestamp(int(fetchtime[0]) + int(fetchtime[1]) / 1000000))
+                            for i in range(len(bucketsrequests)):
+                                bucketsrequests[i] = int(bucketsrequests[i]) if bucketsrequests[i] else 0
+    
+                            result = tcontrol.set_bookedbuckets(checkingbuckets_begintime,checkingbuckets_endtime,checkingbuckets_beginid,checkingbucketids,bucketsrequests,fetchtime)
+                            #begin for debug
+                            _debug("After set_bookedbuckets.buckets begintime={} , buckets endtime={} , buckets endid={} , bucket ids={}, buckets requests={}".format(checkingbuckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_beginid,checkingbucketids,bucketsrequests))
+                            #end for debug
+    
+                        #start to book the position from end bucket
+                        while not succeed:
+                            totalrequests = tcontrol._buckets_totalrequests - tcontrol._buckets[-1]
+                            bucketid = tcontrol._buckets_endid
+                            buckettime = tcontrol._buckets_endtime
+                            key = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,bucketid))
+                            currentbucket = _currentbuckets.get(tcontrol.id)
+                            if not currentbucket:
+                                currentbucket = [buckettime,False]
+                                _currentbuckets[tcontrol.id] = currentbucket
+                            elif currentbucket[0] != buckettime:
+                                currentbucket[0] = buckettime
+                                currentbucket[1] = False
+                            if currentbucket[1]:
+                                requests = cacheclient.incr(key)
+                            else:
+                                pipe = cacheclient.pipeline()
+                                pipe.incr(key)
+                                pipe.expire(key,math.ceil(tcontrol.est_processtime / 1000) + 5 + math.ceil((buckettime - timezone.localtime()).total_seconds()))
+                                requests,_ = pipe.execute()
 
-                    #start to book the position from end bucket
-                    while True:
-                        total_requests = tcontrol.get_runningrequests(0,tcontrol._bucketslen - 1)
-                        bucketid = tcontrol._buckets_endid
-                        buckettime = tcontrol._buckets_endtime
-                        key = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,bucketid))
-                        currentbucket = _currentbuckets.get(tcontrol.id)
-                        if not currentbucket:
-                            currentbucket = [buckettime,False]
-                            _currentbuckets[tcontrol.id] = currentbucket
-                        elif currentbucket[0] != buckettime:
-                            currentbucket[0] = buckettime
-                            currentbucket[1] = False
-                        if currentbucket[1]:
-                            requests = cacheclient.incr(key)
-                        else:
-                            pipe = cacheclient.pipeline()
-                            pipe.incr(key)
-                            pipe.expire(key,math.ceil(tcontrol.est_processtime / 1000) + 5 + math.ceil((buckettime - timezone.localtime()).total_seconds()))
-                            requests,_ = pipe.execute()
-                        print("***555  {}={}, buckets={}".format(bucketid,requests,tcontrol._buckets))
-                        if tcontrol.set_bookedbucket(buckettime,bucketid,requests,total_requests + requests):
-                            #booked successfully
-                            waittime = (buckettime - timezone.localtime()).total_seconds()
-                            if waittime > 0:
-                                times = int(waittime * 1000 / tcontrol.est_processtime)
-                                if times > 0:
-                                    if _log_tcontrol(cacheclient,settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_debuglog_{}times".format(tcontrol.name,times)),300):
-                                        #the log interval is 5 minutes
-                                        DebugLog.tcontrol(DebugLog.CONCURRENCY_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Have at least {1} requests waiting in the queue;".format(tcontrol.concurrency * times))
-                                if not debug:
-                                    time.sleep(waittime)
-                            total_requests += requests
-                            break
+                            if totalrequests + requests > tcontrol.concurrency:
+                                #exceed the limit,decrease the requests and adjust the requests
+                                requests =  tcontrol.concurrency - totalrequests
+                                tcontrol.set_bookingbucket(buckettime,bucketid,requests,exceedlimit=True)
+                                #begin for debug
+                                _debug("After set_bookingbucket, Succeed to book the spot in the bucket.bucket begintime={} , bucketid={} , bucket requests={}, total requests={}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,requests,totalrequests + requests))
+                                #end for debug
+                                cacheclient.decr(key)
+                                continue
+                            else:
+                                tcontrol.set_bookingbucket(buckettime,bucketid,requests)
+                                #begin for debug
+                                _debug("After set_bookingbucket, Succeed to book the spot in the bucket.bucket begintime={} , bucketid={} , bucket requests={}, total requests={}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,requests,totalrequests + requests))
+                                #end for debug
+
+                                waittime = (buckettime - timezone.localtime()).total_seconds()
+                                if waittime > 0:
+                                    times = int(waittime * 1000 / tcontrol.est_processtime)
+                                    if times > 0:
+                                        if _log_tcontrol(cacheclient,settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_debuglog_{}times".format(tcontrol.name,times)),300):
+                                            #the log interval is 5 minutes
+                                            DebugLog.tcontrol(DebugLog.CONCURRENCY_TRAFFIC_CONTROL,tcontrol.name,clientip,client,"Have at least {0} requests waiting in the queue;".format(tcontrol.concurrency * times))
+                                    if not test:
+                                        time.sleep(waittime)
+                                totalrequests += requests
+                                succeed = True
 
             except Exception as ex:
                 traceback.print_exc()
@@ -982,14 +1095,14 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,debug=False):
         #not exceed any traffic control, allow access
         if exception:
             return [True,str(exception)]
-        elif debug:
+        elif test:
             data = {}
             if userrequests:
                 data["user_requests"] = userrequests
             if iprequests:
                 data["ip_requests"] = iprequests
-            if total_requests:
-                data["total_requests"] = total_requests
+            if totalrequests:
+                data["totalrequests"] = totalrequests
             return [True,data]
         else:
             return [True,None]
@@ -1008,8 +1121,6 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,debug=False):
 
         #check failed, ignore traffic control
         return [True,str(ex)]
-    finally:
-        pass
             
 def _tcontrol(request):
     clientip = request.headers.get("x-real-ip")
@@ -1139,10 +1250,17 @@ def auth_local(request):
     and sigin in to auth2 domain first and then signin to other domain via login_domain.
     """
     if request.method == "GET":
+        #register the client domain
+        cache.register_clientdomain(request.get_host())
+
         next_url = _get_next_url(request)
     else:
         next_url = request.POST.get("next","")
-        if not next_url:
+        if next_url:
+            domain = utils.get_domain(next_url)
+            if domain and not cache.check_clientdomain(domain):
+                return HttpResponseForbidden("Redirecting to '{}' is strictly forbidden.".format(next_url))
+        else:
             domain = request.get_host()
             if domain == settings.AUTH2_DOMAIN:
                 next_url = "https://{}/sso/setting".format(domain)
@@ -1495,10 +1613,17 @@ def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
     generate and check captcha
     """
     if request.method == "GET":
+        #register the client domain
+        cache.register_clientdomain(request.get_host())
+
         next_url = _get_next_url(request)
     else:
         next_url = request.POST.get("next","")
-        if not next_url:
+        if next_url:
+            domain = utils.get_domain(next_url)
+            if domain and not cache.check_clientdomain(domain):
+                return HttpResponseForbidden("Redirecting to '{}' is strictly forbidden.".format(next_url))
+        else:
             domain = request.get_host()
             if domain == settings.AUTH2_DOMAIN:
                 next_url = "https://{}/sso/setting".format(domain)
@@ -1613,6 +1738,8 @@ def logout_view(request):
     """
     View method for path '/sso/auth_logout'
     """
+    cache.register_clientdomain(request.get_host())
+
     from ..backends import AzureADB2COAuth2
     host = request.get_host()
     if not host.endswith(settings.SESSION_COOKIE_DOMAIN):
@@ -1680,20 +1807,42 @@ def home(request):
     redirect to '/sso/forbidden' if authenticated but not authorized
     Trigger authentication user flow if not authenticated
     """
+    #register client domain
+    cache.register_clientdomain(request.get_host())
+
     next_url = request.GET.get('next', None)
     if next_url:
         #build an absolute url
         if not next_url.startswith("http"):
             if next_url[0] == "/":
+                #without domain
                 host = request.get_host()
                 next_url = "https://{}{}".format(host,next_url)
             else:
+                #with domain
                 next_url = "https://{}".format(next_url)
-
-    if next_url and "?" in next_url:
-        next_path = next_url[0:next_url.index('?')]
+                domain = utils.get_domain(next_url)
+                if not domain or not cache.check_clientdomain(domain):
+                    #client domain is invalid
+                    next_url = None
+        else:
+            #an complete url
+            domain = utils.get_domain(next_url)
+            if not domain or not cache.check_clientdomain(domain):
+                #client domain is invalid
+                next_url = None
+    #now, next_url should be None or an complete url               
+    if next_url:
+        if "?" in next_url:
+            next_path = next_url[0:next_url.index('?')]
+        elif "#" in next_url:
+            next_path = next_url[0:next_url.index('#')]
+        else:
+            next_path = next_url
     else:
-        next_path = next_url
+        next_path = None
+    #next_path should be None or a complete url without paramters and anchor
+
     #check whether rquest is authenticated and authorized
     if not request.user.is_authenticated or not request.user.is_active:
         if next_path and any(next_path.endswith(p) for p in ["/sso/auth_logout","/sso/signedout","/sso/signout_socialmedia"]):
@@ -1708,12 +1857,20 @@ def home(request):
                         relogin_url = "https://{}{}".format(utils.get_domain(next_url) or request.get_host(),relogin_url)
 
             if relogin_url:
+                domain = utils.get_domain(relogin_url)
+                if domain and not cache.check_clientdomain(domain):
+                    #relogin url is invalid.
+                    relogin_url = None
+
+            if relogin_url:
                 next_url = relogin_url
                 if not next_url.startswith("http"):
                     if next_url[0] == "/":
+                        #relative url
                         host = utils.get_domain(next_path)
                         next_url = "https://{}{}".format(host,next_url)
                     else:
+                        #url without protocol
                         next_url = "https://{}".format(next_url)
             else:
                 #can't find next_url, use default next_url
@@ -1728,18 +1885,19 @@ def home(request):
 
         if (not request.user.is_authenticated and request.session.expired_session_key) or (request.user.is_authenticated and not request.user.is_active):
             #session expired or user is inactive, logout from backend
-            request.session["next"]=next_url
+            if next_url:
+                request.session["next"]=next_url
             return logout_view(request)
         else:
             #not authenticated, authenticate user via azure b2c
-            url = reverse('social:begin', args=['azuread-b2c-oauth2'])
+            url = "https://{}{}".format(settings.AUTH2_DOMAIN,reverse('social:begin', args=['azuread-b2c-oauth2']))
             if next_url:
                 #has next_url, add next url to authentication url as url parameter
                 next_url_domain = utils.get_domain(next_url)
                 if next_url_domain and not next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                     #crosss domain authentication
-                    next_url = "https://{}?{}".format(settings.AUTH2_DOMAIN,urlencode({'next': next_url}))
-                url = '{}?{}'.format(url,urlencode({'next': next_url}))
+                    next_url = "https://{}?next={}".format(settings.AUTH2_DOMAIN,urllib.parse.quote(next_url))
+                url = '{}?next={}'.format(url,urllib.parse.quote(next_url))
             else:
                 #no next_url, clean the next url  from session
                 try:
@@ -1770,10 +1928,15 @@ def home(request):
                         relogin_url = "https://{}{}".format(utils.get_domain(next_url) or request.get_host(),relogin_url)
 
             if relogin_url:
+                domain = utils.get_domain(relogin_url)
+                if domain and not cache.check_clientdomain(domain):
+                    relogin_url = None
+
+            if relogin_url:
                 next_url = relogin_url
                 if not next_url.startswith("http"):
                     if next_url[0] == "/":
-                        host = utils.get_domain(next_path)
+                        host = utils.get_domain(next_url)
                         next_url = "https://{}{}".format(host,next_url)
                     else:
                         next_url = "https://{}".format(next_url)
@@ -1898,8 +2061,14 @@ def signout_socialmedia(request):
     else:
         context["failed_message"] = "Failed to logout from the social media '{}' because popup window was blocked".format(context["idp"])
 
-    if request.GET.get("relogin"):
-        context["relogin"] = request.GET.get("relogin")
+    relogin_url = request.GET.get("relogin")
+    if relogin_url:
+        domain = utils.get_domain(relogin_url)
+        if domain and not cache.check_clientdomain(domain):
+            relogin_url = None
+
+    if relogin_url:
+        context["relogin"] = relogin_url
     else:
         userflow_signout =  _get_userflow_signout(request,domain)
         if userflow_signout.relogin_url:
@@ -1935,8 +2104,14 @@ def signedout(request):
         context["idp"] = request.GET.get("idp")
         context["idplogout"] = request.GET.get("idplogout")
 
-    if request.GET.get("relogin"):
-        context["relogin"] = request.GET.get("relogin")
+    relogin_url = request.GET.get("relogin")
+    if relogin_url:
+        domain = utils.get_domain(relogin_url)
+        if domain and not cache.check_clientdomain(domain):
+            relogin_url = None
+
+    if relogin_url:
+        context["relogin"] = relogin_url
     else:
         if userflow_signout.relogin_url:
             context["relogin"] = userflow_signout.relogin_url
@@ -2269,95 +2444,12 @@ def forbidden_tcontrol(request):
     else:
         return forbidden(request)
 
-def profile_edit(request):
-    """
-    View method for path '/sso/profile/edit'
-    """
-    def _get_context(next_url):
-        domain = utils.get_domain(next_url)
-        page_layout,extracss = _get_userflow_pagelayout(request,domain)
-
-        return {"body":page_layout,"extracss":extracss,"domain":domain,"next":next_url,"user":request.user}
-
-
-    if request.method == "GET":
-        next_url = _get_next_url(request)
-        context = _get_context(next_url)
-        return TemplateResponse(request,"authome/profile_edit.html",context=context)
-    else:
-        next_url = request.POST.get("next")
-
-        action = request.POST.get("action")
-        if action == "change":
-            first_name = (request.POST.get("first_name") or "").strip()
-            last_name = (request.POST.get("last_name") or "").strip()
-            if not first_name:
-                context = _get_context(next_url)
-                context["messages"] = [("error","Fist name is empty")]
-                return TemplateResponse(request,"authome/profile_edit.html",context=context)
-            if not last_name:
-                context = _get_context(next_url)
-                context["messages"] = [("error","Last name is empty")]
-                return TemplateResponse(request,"authome/profile_edit.html",context=context)
-
-            if request.user.first_name != first_name or request.user.last_name != last_name:
-                request.user.first_name = first_name
-                request.user.last_name = last_name
-                request.user.save(update_fields=["first_name","last_name","modified"])
-
-        next_url_parsed = utils.parse_url(next_url)
-        if next_url_parsed["path"].startswith("/sso/profile"):
-            if next_url_parsed["domain"]:
-                if next_url_parsed["parameters"]:
-                    next_url = "https://{}/sso/setting?{}".format(next_url_parsed["domain"],next_url_parsed["parameters"])
-                else:
-                    next_url = "https://{}/sso/setting".format(next_url_parsed["domain"])
-            else:
-                if next_url_parsed["parameters"]:
-                    next_url = "/sso/setting?{}".format(next_url_parsed["parameters"])
-                else:
-                    next_url = "/sso/setting"
-
-        return HttpResponseRedirect(next_url)
-
-
-@never_cache
-@psa("/sso/profile/edit/complete")
-def profile_edit_b2c(request,backend):
-    """
-    View method for path '/sso/profile/edit'
-    Start a profile edit user flow
-    called after user authentication
-    """
-    next_url = _get_next_url(request)
-    domain = utils.get_domain(next_url)
-
-    request.session[REDIRECT_FIELD_NAME] = next_url
-    request.policy = models.CustomizableUserflow.get_userflow(domain).profile_edit
-    return do_auth(request.backend, redirect_name="__already_set")
 
 def _do_login(*args,**kwargs):
     """
     Dummy login method
     """
     pass
-
-@never_cache
-@csrf_exempt
-@psa("/sso/profile/edit/complete")
-def profile_edit_complete(request,backend,*args,**kwargs):
-    """
-    View method for path '/sso/profile/edit/complete'
-    Callback url from b2c to complete a user profile editing request
-    """
-    domain = utils.get_domain(request.session.get(utils.REDIRECT_FIELD_NAME))
-    request.policy = models.CustomizableUserflow.get_userflow(domain).profile_edit
-    request.http_error_code = 417
-    request.http_error_message = "Failed to edit user profile.{}"
-
-    return do_complete(request.backend, _do_login, user=request.user,
-                       redirect_name=REDIRECT_FIELD_NAME, request=request,
-                       *args, **kwargs)
 
 @never_cache
 @psa("/sso/password/reset/complete")
@@ -2367,6 +2459,9 @@ def password_reset(request,backend):
     Start a password reset user flow
     Triggered by hyperlink 'Forgot your password' in idp selection page
     """
+    #register the client domain
+    cache.register_clientdomain(request.get_host())
+
     next_url = _get_next_url(request)
     domain = utils.get_domain(next_url)
 
@@ -2399,6 +2494,9 @@ def mfa_set(request,backend):
     Start a user mfa set user flow
     called after user authentication
     """
+    #register the client domain
+    cache.register_clientdomain(request.get_host())
+
     next_url = _get_next_url(request)
     domain = utils.get_domain(next_url)
 
@@ -2431,6 +2529,9 @@ def mfa_reset(request,backend):
     Start a user mfa set user flow
     called after user authentication
     """
+    #register the client domain
+    cache.register_clientdomain(request.get_host())
+
     next_url = _get_next_url(request)
     domain = utils.get_domain(next_url)
 

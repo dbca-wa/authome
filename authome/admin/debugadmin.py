@@ -87,7 +87,7 @@ class DebugLogAdmin(djangoadmin.ModelAdmin):
         if not obj or not obj.message :
             return ""
         else:
-            return mark_safe("<pre>{}</pre>".format(obj.message))
+            return mark_safe("<pre style='white-space:wrap;word-wrap:break-word;'>{}</pre>".format(obj.message))
     _message.short_description = "Message"
 
     def _useragent(self,obj):

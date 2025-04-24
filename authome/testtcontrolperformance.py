@@ -621,6 +621,7 @@ AUth Performance Test Result Details:
                     res.raise_for_status()
                     failed = None
                 except Exception as ex:
+                    traceback.print_exc()
                     failed = ex.__class__.__name__
 
                 exectime = (timezone.localtime() - start).total_seconds() * 1000

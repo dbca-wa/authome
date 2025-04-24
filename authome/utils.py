@@ -615,4 +615,9 @@ def decode_integer(s,base=len(NUMBER2CHAR)):
             result += CHAR2NUMBER[c] * pow(base,i)
 
     return result
-        
+ 
+crosssiteattack_re = re.compile("""(?P<htmltag>\\<[a-zA-Z0-9_\\-]+( +[a-zA-Z0-9\\-_]+( *= *['"]?.+['"]?)?)* */?\\>)|(?P<htmlendtag>\\</[a-zA-Z0-9_\\-]+ *\\>)""")
+def check_crosssiteattack(s):
+    if not s:
+        return True
+    return crosssiteattack_re.search(s)

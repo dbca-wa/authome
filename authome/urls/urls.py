@@ -27,6 +27,7 @@ if settings.AUTH2_MONITORING_DIR:
 admin_urls[0].insert(0,path('authome/tools/apple/secretkey/renew', views.renew_apple_secretkey,name="renew_apple_secretkey"))
 
 urlpatterns = [
+    path('sso', views.home, name='home'),
     path('sso/auth_logout', views.logout_view, name='logout'),
     path('sso/auth_local', views.auth_local, name='auth_local'),
     path('sso/auth', traffic_monitor("auth",views.auth), name='auth'),
@@ -78,7 +79,6 @@ urlpatterns = [
 
     path('sso/', include('social_django.urls', namespace='social')),
     path('admin/', admin_urls),
-    path('', views.home, name='home'),
     path('check_captcha/', views.check_captcha, name='check_captcha'),
     path('check_captcha/<slug:kind>', views.check_captcha, name='check_captcha2'),
     path('check_auth_and_captcha/', views.check_auth_and_captcha, name='check_auth_and_captcha'),

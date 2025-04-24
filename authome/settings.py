@@ -146,6 +146,8 @@ GUEST_SESSION_AGE=env('GUEST_SESSION_AGE',default=3600) #login session timeout i
 SESSION_AGE=env('SESSION_AGE',default=1209600)
 SESSION_COOKIE_AGE=SESSION_AGE + 86400
 
+RAISE_EXCEPTION_4_INVALID_DOMAIN = env("RAISE_EXCEPTION_4_INVALID_DOMAIN",default=True)
+
 if SESSION_COOKIE_DOMAIN:
     _session_cookie_domain_len = len(SESSION_COOKIE_DOMAIN)
     _session_cookie_domain_index = len(SESSION_COOKIE_DOMAIN) * -1

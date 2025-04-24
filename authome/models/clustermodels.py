@@ -29,7 +29,7 @@ class Auth2Cluster(django_models.Model):
     modified = django_models.DateTimeField(editable=False,auto_now=False)
 
     class Meta:
-        verbose_name_plural = "{}Auth2 Clusters".format(" " * 7)
+        verbose_name_plural = "{}Auth2 Clusters".format(" " * 6)
 
     @classmethod
     def register(cls,only_update_heartbeat=False):

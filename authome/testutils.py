@@ -140,7 +140,7 @@ class StartServerMixin(object):
         return url
 
     @classmethod
-    def get_basicauth_optioanl_url(cls,servername="standalone"):
+    def get_basicauth_optional_url(cls,servername="standalone"):
         url =  "{}/sso/auth_basic_optional".format(cls.get_baseurl(servername))
         return url
 

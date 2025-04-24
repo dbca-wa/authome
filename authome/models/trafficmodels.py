@@ -40,7 +40,7 @@ class TrafficData(django_models.Model):
     domains = django_models.JSONField(null=True,editable=False)
 
     class Meta:
-        verbose_name_plural = "{}Traffic Data".format(" " * 6)
+        verbose_name_plural = "{}Traffic Data".format(" " * 5)
         unique_together = [["clusterid","start_time","end_time","batchid"]]
 
 class SSOMethodTrafficData(django_models.Model):
@@ -129,7 +129,7 @@ class TrafficReport(django_models.Model):
     domains = django_models.JSONField(null=True,editable=False)
 
     class Meta:
-        verbose_name_plural = "{}Traffic Report".format(" " * 5)
+        verbose_name_plural = "{}Traffic Report".format(" " * 4)
         unique_together = [["clusterid","report_type","start_time"]]
 
     @classmethod
