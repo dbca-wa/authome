@@ -1799,7 +1799,7 @@ def login_domain(request):
     DebugLog.log(DebugLog.CREATE_COOKIE,utils.get_lb_hash_key(session_cookie),utils.get_clusterid(session_cookie),utils.get_session_key(session_cookie),session_cookie,message="Return a new session cookie({}) for domain({})".format("{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPARATOR,domain or host),domain or host),userid=None,target_session_cookie="{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPARATOR,domain or host),request=request)
     return res
 
-
+sessioncookiedomain = ".{}".format(settings.SESSION_COOKIE_DOMAIN)
 def home(request):
     """
     View method for path '/'
@@ -1842,6 +1842,12 @@ def home(request):
     else:
         next_path = None
     #next_path should be None or a complete url without paramters and anchor
+
+    if not request.user.is_authenticated:
+        #user is not authenticated 
+        if request.get_host() != settings.SESSION_COOKIE_DOMAIN and not request.get_host().endswith(sessioncookiedomain):
+            #not the subdomain of the session cookie domain, maybe the user is authenticated into auth2, redirect to auth2 domain to check
+            return HttpResponseRedirect("https://{}/sso?next={}".format(settings.AUTH2_DOMAIN,urllib.parse.quote(next_url)))
 
     #check whether rquest is authenticated and authorized
     if not request.user.is_authenticated or not request.user.is_active:
@@ -1896,7 +1902,7 @@ def home(request):
                 next_url_domain = utils.get_domain(next_url)
                 if next_url_domain and not next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                     #crosss domain authentication
-                    next_url = "https://{}?next={}".format(settings.AUTH2_DOMAIN,urllib.parse.quote(next_url))
+                    next_url = "https://{}/sso?next={}".format(settings.AUTH2_DOMAIN,urllib.parse.quote(next_url))
                 url = '{}?next={}'.format(url,urllib.parse.quote(next_url))
             else:
                 #no next_url, clean the next url  from session
