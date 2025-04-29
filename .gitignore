@@ -12,6 +12,8 @@ venv/
 gmon.out
 .sass-cache/
 .python-version
+localstuff/
+monitoring/
 
 # Database/fixture dumps
 *.pgdump

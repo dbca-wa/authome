@@ -1021,7 +1021,7 @@ if settings.TRAFFIC_MONITOR_LEVEL > 0:
         logger.debug("DB traffic monitor level 3 is enabled")
         _MemoryCacheWithTrafficMonitor.log_dbrequest = _MemoryCacheWithTrafficMonitor._log_request_3
 
-    if True or settings.SYNC_MODE == "sync":
+    if settings.SYNC_MODE in ("sync","gevent","eventlet"):
         class MemoryCache(_MemoryCacheWithTrafficMonitor):
             def __init__(self):
                 super().__init__()

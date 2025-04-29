@@ -759,9 +759,9 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False):
 
     def _debug(msg):
         if tcontrol._buckets:
-            return "{} : Buckets of tcontrol: buckets={} , begintime={} , endtime={} , endid={} , total requests={}, fetchtime={}\n    {}".format(_requestid(),tcontrol._buckets,tcontrol._buckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),tcontrol._buckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),tcontrol._buckets_endid,tcontrol._buckets_totalrequests,tcontrol._buckets_fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f") if tcontrol._buckets_fetchtime else None,msg)
+            print("\n{} : {} \n    Buckets of tcontrol: buckets={} , begintime={} , endtime={} , endid={} , total requests={}, fetchtime={}".format(_requestid(),msg,tcontrol._buckets,tcontrol._buckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),tcontrol._buckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),tcontrol._buckets_endid,tcontrol._buckets_totalrequests,tcontrol._buckets_fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f") if tcontrol._buckets_fetchtime else None))
         else:
-            return "{} : Buckets of tcontrol: None.\n    {}".format(_requestid(),msg)
+            print("\n{} : {}\n    Buckets of tcontrol: None.".format(_requestid(),msg))
     #end for debug
 
     try:
