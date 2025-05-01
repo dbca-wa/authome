@@ -1015,7 +1015,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False):
                             bucketsrequests[i] = int(bucketsrequests[i]) if bucketsrequests[i] else 0
                         result = tcontrol.set_bookedbuckets(buckettime,checkingbuckets_begintime,checkingbuckets_endtime,checkingbuckets_beginid,checkingbucketids,bucketsrequests,fetchtime)
                         #begin for debug
-                        _debug("After set_bookedbuckets.buckets begintime={} , buckets endtime={} , buckets endid={} , bucket ids={}, buckets requests={}".format(checkingbuckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_beginid,checkingbucketids,bucketsrequests))
+                        _debug("After set_bookedbuckets.buckettime={} , checkingbuckets begintime={} , checkingbuckets endtime={} , checkingbuckets beginid={} , checkingbucket ids={}, checkingbuckets requests={} , fetchtime={}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_beginid,checkingbucketids,bucketsrequests,fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f")))
                         #end for debug
                         while not result:
                             checkingbuckets = tcontrol.get_checkingbuckets(today,milliseconds,exempt)
@@ -1307,6 +1307,7 @@ def auth_local(request):
         action = request.POST.get("action")
         email = request.POST.get("email","").strip().lower()
         context["email"] = email
+
         if not action:
             context["messages"] = [("error","Action is missing")]
             context["codeid"] = request.POST.get("codeid")

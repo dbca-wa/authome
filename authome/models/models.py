@@ -335,10 +335,10 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,django_models.Model):
         self.name = self.name.strip()
         if not self.name:
             raise ValidationError("Name is empty")
-        elif utils.check_crosssiteattack(self.name):
+        elif utils.check_xssattack(self.name):
             raise ValidationError("Name includes a html tag")
 
-        if self.userflow and utils.check_crosssiteattack(self.userflow):
+        if self.userflow and utils.check_xssattack(self.userflow):
             raise ValidationError("Userflow includes a html tag")
 
     @classmethod
@@ -948,7 +948,7 @@ class UserGroup(CacheableMixin,DbObjectMixin,django_models.Model):
         self.name = self.name.strip()
         if not self.name:
             raise ValidationError("Name is empty.")
-        elif utils.check_crosssiteattack(self.name):
+        elif utils.check_xssattack(self.name):
             raise ValidationError("Name includs a html tag.")
         user_emails = self.get_useremails(self.users)
         if user_emails:
@@ -1723,12 +1723,12 @@ class User(AbstractUser):
         super().clean()
         if not self.first_name :
             raise ValidationError("The user's first_name is empty.")
-        elif utils.check_crosssiteattack(self.first_name):
+        elif utils.check_xssattack(self.first_name):
             raise ValidationError("The user's first_name includes a html tag.")
 
         if not self.last_name :
             raise ValidationError("The user's last_name is empty.")
-        elif utils.check_crosssiteattack(self.last_name):
+        elif utils.check_xssattack(self.last_name):
             raise ValidationError("The user's last_name includes a html tag.")
 
         self.email = self.email.strip().lower() if self.email else None
@@ -2158,12 +2158,7 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
                     #already hit the concurrency limit
                     #the reason why the total requests can be greater than concurrency is the time gap between increment and decrement for exceed concurrency requests. but eventually the total requests should be not greater than concurrency.
                     #reach the limit, need future booking
-                    if self.block or exempt:
-                        #future booking allowed, start from the next bucket
-                        #return the metadata to start booking a running spot in the future
-                        basebucketid = self._normalize_bucketid(self._buckets_endid + 1)
-                        return [False,self._buckets_endtime,self._buckets_endid,self._buckets_endtime + timedelta(milliseconds=self.buckettime),self._buckets_endtime + timedelta(milliseconds=self.buckettime * self.prefetch_buckets),basebucketid,self.BookingBucketIds(self,basebucketid,self.prefetch_buckets)]
-                    else:
+                    if not self.block and not exempt:
                         #future booking not allowed
                         return [True,None,None,None,self._buckets_totalrequests]
                 else:
@@ -2187,17 +2182,32 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
             #have some requests in the waiting queue.
             #future booking not allowed
             return [True,None,None,None,self.concurrency]
-        else:
-            #have some requests in the waiting queue.
-            #return the metadata to start booking a running spot in the future
-            if self._buckets_totalrequests >= self.concurrency:
-                #the total requests in the self._buckets already reach the limit. should book the running spot from the next bucket
-                basebucketid = self._normalize_bucketid(self._buckets_endid + 1)
-                return [False,self._buckets_endtime,self._buckets_endid,self._buckets_endtime + timedelta(milliseconds=self.buckettime),self._buckets_endtime + timedelta(milliseconds=self.buckettime * self.prefetch_buckets),basebucketid,self.BookingBucketIds(self,basebucketid,self.prefetch_buckets)]
-            else:
-                #the total requests in the self._buckets doesn't reach the limit. book the running spot from the last bucket
-                #don't reach the limit, retriving ${_bucketslen} buckets from the bucket self._buckets_endid  for future booking.
-                return [False,self._buckets_endtime,self._buckets_endid,self._buckets_endtime,self._buckets_endtime + timedelta(milliseconds=self.buckettime * (self.prefetch_buckets - 1)),self._buckets_endid,self.BookingBucketIds(self,self._buckets_endid,self.prefetch_buckets)]
+
+        #have some requests in the waiting queue.
+        #return the metadata to start booking a running spot in the future
+        if self._buckets_totalrequests >= self.concurrency:
+            #the total requests in the self._buckets already reach the limit. should book the running spot from the next bucket
+            i = 0
+            while i < self._bucketslen:
+                i += 1
+                self._buckets.append(0)
+                if self._buckets[0]:
+                    self._buckets_totalrequests -= self._buckets[0]
+                    del self._buckets[0]
+                    break
+                else:
+                    del self._buckets[0]
+
+            self._buckets_endtime += timedelta(milliseconds=self.buckettime * i)
+            self._buckets_endid = self._normalize_bucketid(self._buckets_endid + i)
+            self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+            if i >= self._bucketslen:
+                self._log_buckets_error("get_checkingbuckets: All buckets in memory are empty")
+                raise Exception("All buckets are empty")
+
+        #the total requests in the self._buckets doesn't reach the limit. book the running spot from the last bucket
+        #don't reach the limit, retriving ${_bucketslen} buckets from the bucket self._buckets_endid  for future booking.
+        return [False,self._buckets_endtime,self._buckets_endid,self._buckets_endtime,self._buckets_endtime + timedelta(milliseconds=self.buckettime * (self.prefetch_buckets - 1)),self._buckets_endid,self.BookingBucketIds(self,self._buckets_endid,self.prefetch_buckets)]
 
     def set_buckets(self,buckettime,bucketid,current_bucket_requests,fetchtime,expiredbuckets_requests=None):
         """
@@ -2271,7 +2281,7 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
             if exceedlimit:
                 #reach the limit
                 i = 0
-                while True:
+                while i < self._bucketslen:
                     i += 1
                     self._buckets.append(0)
                     if self._buckets[0]:
@@ -2280,14 +2290,15 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
                         break
                     else:
                         del self._buckets[0]
-                    if i >= self._bucketslen:
-                        self._log_buckets_error("set_bookingbuckets: All buckets in memory are empty")
-                        raise Exception("All buckets are empty")
     
                 self._buckets_endtime += timedelta(milliseconds=self.buckettime * i)
                 self._buckets_endid = self._normalize_bucketid(self._buckets_endid + i)
                 self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
         
+                if i >= self._bucketslen:
+                    self._log_buckets_error("set_bookingbuckets: All buckets in memory are empty")
+                    raise Exception("All buckets are empty")
+
     def set_bookedbuckets(self,buckets_endtime,bookedbuckets_begintime,bookedbuckets_endtime,bookedbuckets_beginid,bookedbucketids,bookedbuckets_requests,fetchtime):
         """
         should consider the race condition, multiple clients try to increment the value at the same time, so it is possible the value is greater than the final value; if that happens, adjust the requests value
@@ -2329,11 +2340,19 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
                 #set the endbucket of self._buckets if required
                 if bookedbuckets_begintime == self._buckets_endtime:
                     #bookedbuckets is from the end bucket of self._buckets
-                    if bookedbuckets_beginid == bookedbucketids[0]:
-                        if self._buckets_totalrequests < self.concurrency and self._buckets_totalrequests + (bookedbuckets_requests[j] - self._buckets[-1]) > self.concurrency:
+                    if bookedbuckets_beginid == bookedbucketids[j]:
+                        self._buckets_totalrequests += bookedbuckets_requests[j] - self._buckets[-1]
+                        if self._buckets_totalrequests  <= self.concurrency:
+                            self._buckets[-1] = bookedbuckets_requests[j]
+                        else:
                             #exceed the concurrency, caused by the time gap between increment and decrement. adjust the requests
-                            self._buckets[-1] = self.concurrency  - (self._buckets_totalrequests - self._buckets[-1])
-                            self._buckets_totalrequests = self.concurrency
+                            self._buckets[-1] = bookedbuckets_requests[j] - (self._buckets_totalrequests - self.concurrency)
+                            if self._buckets[-1] >= 0:
+                                self._buckets_totalrequests = self.concurrency
+                            else: 
+                                self._log_buckets_error("set_bookedbuckets: The requests({1}} of the bucket({0}) is less than 0.".format(j,self._buckets[-1]))
+                                self._buckets_totalrequests -= self._buckets[-1]
+                                self._buckets[-1] = 0 
                         j += 1
     
                 #set next buckets if have
@@ -2383,7 +2402,7 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
             #reach the limit, try to book the running spot from the next available bucket
             #fetched some empty buckets in the right side
             i = 0
-            while True:
+            while i < self._bucketslen:
                 i += 1
                 self._buckets.append(0)
                 if self._buckets[0]:
@@ -2392,13 +2411,14 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
                     break
                 else:
                     del self._buckets[0]
-                if i >= self._bucketslen:
-                    self._log_buckets_error("set_bookedbuckets: All buckets in memory are empty")
-                    raise Exception("All buckets are empty")
 
             self._buckets_endtime += timedelta(milliseconds=self.buckettime * i)
             self._buckets_endid = self._normalize_bucketid(self._buckets_endid + i)
             self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+
+            if i >= self._bucketslen:
+                self._log_buckets_error("set_bookedbuckets: All buckets in memory are empty")
+                raise Exception("All buckets are empty")
 
             return True
         else:
