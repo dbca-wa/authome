@@ -954,7 +954,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False):
                             else:
                                 tcontrol.set_buckets(buckettime,bucketid,requests,fetchtime)
                             #begin for debug
-                            _debug("After set_buckets{6}: buckets_endtime={0} , buckets_endid={1} , expired_buckets={2}, nonexpired bucket requests={3} , bucket requests={4} , expired bucket requests={5}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,expired_buckets or None,nonexpired_requests,requests,expiredbuckets_requests,"(Ignored)" if tcontrol._buckets_fetchtime and fetchtime < tcontrol._buckets_fetchtime else ""))
+                            _debug("After set_buckets{7}: buckets_endtime={0} , buckets_endid={1} , expired_buckets={2}, nonexpired bucket requests={3} , bucket requests={4} , expired bucket requests={5} , fetchtime={6}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,expired_buckets or None,nonexpired_requests,requests,expiredbuckets_requests,fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),"(Ignored)" if tcontrol._buckets_fetchtime and fetchtime < tcontrol._buckets_fetchtime else ""))
                             #end for debug
                         else:
                             #if exceed the limit, can't access
@@ -970,7 +970,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False):
                                 else:
                                     tcontrol.set_buckets(buckettime,bucketid,requests,fetchtime)
                                 #begin for debug
-                                _debug("After set_buckets{6}.buckettime={0} , bucketid={1} , expired_buckets={2}, nonexpired bucket requests={3} , bucket requests={4} , expired bucket requests={5}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,expired_buckets or None,nonexpired_requests,requests,expiredbuckets_requests,"(Ignored)" if tcontrol._buckets_fetchtime and fetchtime < tcontrol._buckets_fetchtime else ""))
+                                _debug("After set_buckets{7}: buckets_endtime={0} , buckets_endid={1} , expired_buckets={2}, nonexpired bucket requests={3} , bucket requests={4} , expired bucket requests={5} , fetchtime={6}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,expired_buckets or None,nonexpired_requests,requests,expiredbuckets_requests,fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),"(Ignored)" if tcontrol._buckets_fetchtime and fetchtime < tcontrol._buckets_fetchtime else ""))
                                 #end for debug
 
                                 try:
@@ -1015,7 +1015,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False):
                             bucketsrequests[i] = int(bucketsrequests[i]) if bucketsrequests[i] else 0
                         result = tcontrol.set_bookedbuckets(buckettime,checkingbuckets_begintime,checkingbuckets_endtime,checkingbuckets_beginid,checkingbucketids,bucketsrequests,fetchtime)
                         #begin for debug
-                        _debug("After set_bookedbuckets{7}.buckettime={0} , checkingbuckets begintime={1} , checkingbuckets endtime={2} , checkingbuckets beginid={3} , checkingbucket ids={4}, checkingbuckets requests={5} , fetchtime={6}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_beginid,checkingbucketids,bucketsrequests,fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),"(Ignored)" if tcontrol._buckets_fetchtime and fetchtime < tcontrol._buckets_fetchtime else ""))
+                        _debug("After set_bookedbuckets{7}.buckets_endtime={0} , checkingbuckets begintime={1} , checkingbuckets endtime={2} , checkingbuckets beginid={3} , checkingbucket ids={4}, checkingbuckets requests={5} , fetchtime={6}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_beginid,checkingbucketids,bucketsrequests,fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),"(Ignored)" if tcontrol._buckets_fetchtime and fetchtime < tcontrol._buckets_fetchtime else ""))
                         #end for debug
                         while not result:
                             checkingbuckets = tcontrol.get_checkingbuckets(today,milliseconds,exempt)
@@ -1037,7 +1037,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False):
     
                             result = tcontrol.set_bookedbuckets(checkingbuckets_begintime,checkingbuckets_endtime,checkingbuckets_beginid,checkingbucketids,bucketsrequests,fetchtime)
                             #begin for debug
-                            _debug("After set_bookedbuckets{5}.buckets begintime={0} , buckets endtime={1} , buckets endid={2} , bucket ids={3}, buckets requests={4}".format(checkingbuckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_beginid,checkingbucketids,bucketsrequests,"(Ignored)" if tcontrol._buckets_fetchtime and fetchtime < tcontrol._buckets_fetchtime else ""))
+                            _debug("After set_bookedbuckets{7}.buckets_endtime={0} , checkingbuckets begintime={1} , checkingbuckets endtime={2} , checkingbuckets beginid={3} , checkingbucket ids={4}, checkingbuckets requests={5} , fetchtime={6}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_beginid,checkingbucketids,bucketsrequests,fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),"(Ignored)" if tcontrol._buckets_fetchtime and fetchtime < tcontrol._buckets_fetchtime else ""))
                             #end for debug
     
                         #start to book the position from end bucket
