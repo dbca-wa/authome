@@ -1,4 +1,0 @@
-#!/bin/bash
-#source venv/bin/activate && python manage.py test authome --keepdb
-export IGNORE_LOADING_ERROR=True;export CACHE_SERVER=redis://@127.0.0.1:6379/1; poetry run python manage.py test authome --pattern="test_*.py" #--keepdb
-#export IGNORE_LOADING_ERROR=True ; poetry run python manage.py test authome --keepdb --pattern="test_authorization.py"

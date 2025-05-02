@@ -1,0 +1,135 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_list %}
+
+{% block extrastyle %}
+  <link rel="stylesheet" type="text/css" href="{% static "admin/css/forms.css" %}">
+  <script src="{% url 'admin:jsi18n' %}"></script>
+  {{ media.css }}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+    <style>
+        #content table {
+        	border-collapse: collapse;
+            font-family: Tahoma, Geneva, sans-serif;
+        }
+        #content table td {
+        	padding: 15px;
+        }
+        #content table thead th {
+        	background-color: #54585d;
+        	color: #ffffff;
+        	font-weight: bold;
+        	font-size: 13px;
+        	border: 1px solid #54585d;
+        }
+        #content table tbody td {
+        	color: #636363;
+        	font-size: 14px;
+        	border: 1px solid #dddfe1;
+        }
+        #content table tbody tr {
+        	background-color: #f9fafb;
+        }
+        #content table tbody tr:nth-child(odd) {
+        	background-color: #ffffff;
+        }
+        #content table caption {
+          font-weight: bold;
+          font-size: 16px;
+          color: #636363;
+          margin: 20px;
+         }
+        #content a{
+            color: blue;
+            font-weight: bold;
+            font-size: 14;
+            padding-left: 5px;
+            padding-right: 5px;
+        }
+        #content pre {
+            font-size: 14px;
+            font-style: italic;
+            margin-left: 30px;
+            margin-top: 0px;
+            color: #2c7114;
+        }
+
+    </style>       
+{{ media.js }}
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} change-list{% endblock %}
+
+{% if not is_popup %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label='authome' %}"> AUTHENTICATION AND AUTHORIZATION </a>
+&rsaquo; Auth2 Online Status
+</div>
+{% endblock %}
+{% endif %}
+
+{% block coltype %}{% endblock %}
+
+{% block content %}
+    <table>
+         <caption>Auth2 Online Status</caption>
+        <thead>
+            <tr>
+                <th>Begin Time</th>
+                <th>End Time</th>
+                <th>Servers</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for onlinestatus in onlinestatuslist %}
+            <tr>
+                <td>{{onlinestatus.0}}</td>
+                <td>{{onlinestatus.1}}</td>
+                <td>
+                {% if onlinestatus.2 %}
+                <ul>
+                {% for serverstatus in onlinestatus.2 %}
+                  {% if serverstatus.3 == onlinestatus.1 %}
+                    {% if serverstatus.0 == onlinestatus.0 %}
+                      <li style="color:green;text-decoration-line:line-through">{{ serverstatus.2 }} ({{ serverstatus.0 }} - {{ serverstatus.1 }}) {{serverstatus.3}}</li>
+                    {% else %}
+                      <li style="text-decoration-line:line-through">{{ serverstatus.2 }} ({{ serverstatus.0 }} - {{ serverstatus.1 }}) {{serverstatus.3}}</li>
+                    {% endif %}
+                  {% elif serverstatus.0 == onlinestatus.0 %}
+                  <li style="color:green">{{ serverstatus.2 }} ({{ serverstatus.0 }} - {{ serverstatus.1 }}) {{serverstatus.3}}</li>
+                  {% else %}
+                  <li>{{ serverstatus.2 }} ({{ serverstatus.0 }} - {{ serverstatus.1 }}) {{serverstatus.3}}</li>
+                  {% endif %}
+                {% endfor %}
+                </ul>
+                {% else %}
+                <span style="padding-left:30px;color:red">Offline</span>
+                {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <table>
+        <caption>Failed Auth2 Server List</caption>
+        <thead>
+            <tr>
+                <th>ServerId</th>
+                <th>Last Active Time</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for server in failedserverlist %}
+            <tr>
+                <td>{{server.1}}</td>
+                <td>{{server.0}}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+{% endblock %}

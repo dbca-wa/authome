@@ -149,26 +149,26 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
         dresult = result["domains"]
         
         for data in traffic_data:
-            result["requests"] = result.get("requests",0) + data["requests"]
-            result["total_time"] = result.get("total_time",0) + data["total_time"]
-            if "min_time"  not in result or result["min_time"] > data["min_time"]:
-                result["min_time"] = data["min_time"]
-            if "max_time"  not in result or result["max_time"] < data["max_time"]:
-                result["max_time"] = data["max_time"]
+            result["requests"] = result.get("requests",0) + (data["requests"] or 0)
+            result["total_time"] = result.get("total_time",0) + (data["total_time"] or 0)
+            if "min_time"  not in result or (data["min_time"] is not None and result["min_time"] > data["min_time"]):
+                result["min_time"] = data["min_time"] or 0
+            if "max_time"  not in result or (data["max_time"] and result["max_time"] < data["max_time"]):
+                result["max_time"] = data["max_time"] or 0
             result["avg_time"] = result["total_time"] / result["requests"] if result["requests"] else 0
             for k,v in (data["domains"] or {}).items():
                 if k not in dresult:
                     dresult[k] = {}
                 if isinstance(v,dict):
-                    dresult[k]["requests"] = dresult[k].get("requests",0) + v["requests"]
-                    dresult[k]["total_time"] = dresult[k].get("total_time",0) + v["total_time"]
-                    if "min_time"  not in dresult[k] or dresult[k]["min_time"] > v["min_time"]:
-                        dresult[k]["min_time"] = v["min_time"]
-                    if "max_time"  not in dresult[k] or dresult[k]["max_time"] < v["max_time"]:
-                        dresult[k]["max_time"] = v["max_time"]
+                    dresult[k]["requests"] = dresult[k].get("requests",0) + (v["requests"] or 0)
+                    dresult[k]["total_time"] = dresult[k].get("total_time",0) + (v["total_time"] or 0)
+                    if "min_time"  not in dresult[k] or (v["min_time"] and dresult[k]["min_time"] > v["min_time"]):
+                        dresult[k]["min_time"] = v["min_time"] or 0
+                    if "max_time"  not in dresult[k] or (v["max_time"] and dresult[k]["max_time"] < v["max_time"]):
+                        dresult[k]["max_time"] = v["max_time"] or 0
                     dresult[k]["avg_time"] = dresult[k]["total_time"] / dresult[k]["requests"] if dresult[k]["requests"] else 0
                 else:
-                    dresult[k]["requests"] = dresult[k].get("requests",0) + v
+                    dresult[k]["requests"] = dresult[k].get("requests",0) + (v or 0)
         return result
 
     def test_monitoring(self):

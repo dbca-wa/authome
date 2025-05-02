@@ -7,14 +7,14 @@ from django.utils import timezone
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.handlers import exception
-from django.http import HttpRequest
+from django.http import HttpRequest,HttpResponseForbidden
 
 from social_core.exceptions import AuthException
 
 from ..models import User,UserToken
 from authome.models import DebugLog
 from ..cache import get_usercache
-from ..exceptions import UserDoesNotExistException
+from ..exceptions import UserDoesNotExistException,InvalidDomainException
 from .. import utils
 
 from .. import performance
@@ -191,6 +191,8 @@ def get_response_for_exception():
         from .. import views
         if isinstance(exc, AuthException):
             return views.handler400(request,exc)
+        elif isinstance(exc, InvalidDomainException):
+            return HttpResponseForbidden(str(exc))
         else:
             try:
                 useremail = request.user.email
