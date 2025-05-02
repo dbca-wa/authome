@@ -2233,7 +2233,7 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
         if self._buckets_fetchtime and self._buckets_fetchtime > fetchtime:
             #the self._buckets data was set by the request which fetch the data from cache later than fetchtime
             #return directly.
-            return
+            return 
 
         outdatedbuckets = 0
         if buckettime != self._buckets_endtime:
@@ -2268,13 +2268,14 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
     def set_bookingbucket(self,buckettime,bucketid,requests,exceedlimit=False):
         """
         Set the already booked bucket data
+        Return Ture if set the data to memory cache ;return False if the data is outdated
         """
         if buckettime != self._buckets_endtime:
             #race condition, some other clients have booked some bucket positions, the data should already be in latest status
-            pass
+            return False
         elif self._buckets[-1] >= requests:
             #race condition, some other clients have booked some bucket positions, the data should already be in latest status
-            pass
+            return False
         else:
             self._buckets_totalrequests += requests - self._buckets[-1]
             self._buckets[-1] = requests
@@ -2298,6 +2299,7 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
                 if i >= self._bucketslen:
                     self._log_buckets_error("set_bookingbuckets: All buckets in memory are empty")
                     raise Exception("All buckets are empty")
+            return True
 
     def set_bookedbuckets(self,buckets_endtime,bookedbuckets_begintime,bookedbuckets_endtime,bookedbuckets_beginid,bookedbucketids,bookedbuckets_requests,fetchtime):
         """
