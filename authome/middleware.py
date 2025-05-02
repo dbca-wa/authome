@@ -133,7 +133,7 @@ class SessionMiddleware(MiddlewareMixin):
                     max_age=86400,
                     domain=settings.GET_SESSION_COOKIE_DOMAIN(request.get_host()),
                     secure=True,
-                    httponly=False,
+                    httponly=True,
                     samesite="Lax"
                 )
             try:
