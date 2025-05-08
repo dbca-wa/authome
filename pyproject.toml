@@ -7,7 +7,7 @@ license = "Apache-2.0"
 
 [tool.poetry.dependencies]
 python = "~3.12"
-Django = "4.2.16"
+Django = "4.2.21"
 django-ipware = "7.0.1"
 social-auth-app-django = "5.4.1"
 social-auth-core = "4.5.4"
