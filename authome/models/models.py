@@ -2,14 +2,16 @@ import re
 import logging
 import traceback
 import random
+import math
 from datetime import timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from django.db import models, transaction
+from django.db import transaction
+from django.db import models as django_models
 from django.contrib.postgres.fields.array import ArrayField as DjangoArrayField
-from django.db.models.signals import pre_delete, pre_save, post_save, post_delete
+from django.db.models.signals import pre_delete, pre_save, post_save, post_delete,m2m_changed
 from django.dispatch import receiver
 from django.contrib.auth.models import AbstractUser,UserManager
 from django.utils.html import mark_safe
@@ -20,6 +22,7 @@ import hashlib
 from ..cache import cache,get_defaultcache,get_usercache
 from .. import signals
 from .. import utils
+from .. import lists
 from .debugmodels import DebugLog
 
 logger = logging.getLogger(__name__)
@@ -64,7 +67,7 @@ The following lists all valid options in the checking order
     4. Exact path  : Starts with '=', represents a single request path . For example =/register
 """
 
-sortkey_c = models.Func('sortkey',function='C',template='(%(expressions)s) COLLATE "%(function)s"')
+sortkey_c = django_models.Func('sortkey',function='C',template='(%(expressions)s) COLLATE "%(function)s"')
 
 class ArrayField(DjangoArrayField):
     """
@@ -284,7 +287,7 @@ class CacheableMixin(object):
         cls.get_model_change_cls().refresh_cache_if_required()
 
 
-class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
+class IdentityProvider(CacheableMixin,DbObjectMixin,django_models.Model):
     """
     The identity provider to authenticate user.
     IdentityProvider 'local' means local account
@@ -307,18 +310,18 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     _editable_columns = ("name","userflow","logout_url","logout_method","secretkey_expireat")
 
     #meaningful name set in auth2, this name will be used in some other place, so change it only if necessary
-    name = models.CharField(max_length=64,unique=True,null=True)
+    name = django_models.CharField(max_length=64,unique=True,null=True)
     #unique name returned from b2c
-    idp = models.CharField(max_length=256,unique=True,null=False,editable=False)
+    idp = django_models.CharField(max_length=256,unique=True,null=False,editable=False)
     #the user flow id dedicated for this identity provider
-    userflow = models.CharField(max_length=64,blank=True,null=True)
+    userflow = django_models.CharField(max_length=64,blank=True,null=True)
     #the logout url to logout the user from identity provider
-    logout_url = models.CharField(max_length=512,blank=True,null=True)
+    logout_url = django_models.CharField(max_length=512,blank=True,null=True)
     #the way to logout from idp
-    logout_method = models.PositiveSmallIntegerField(choices=LOGOUT_METHODS,blank=True,null=True)
-    secretkey_expireat = models.DateTimeField(null=True,editable=True,blank=True)
-    modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
-    created = models.DateTimeField(auto_now_add=timezone.now)
+    logout_method = django_models.PositiveSmallIntegerField(choices=LOGOUT_METHODS,blank=True,null=True)
+    secretkey_expireat = django_models.DateTimeField(null=True,editable=True,blank=True)
+    modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
         verbose_name_plural = "{}Identity Providers".format(" " * 9)
@@ -332,6 +335,11 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
         self.name = self.name.strip()
         if not self.name:
             raise ValidationError("Name is empty")
+        elif utils.check_xssattack(self.name):
+            raise ValidationError("Name includes a html tag")
+
+        if self.userflow and utils.check_xssattack(self.userflow):
+            raise ValidationError("Userflow includes a html tag")
 
     @classmethod
     def refresh_cache(cls):
@@ -384,7 +392,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     def __str__(self):
         return self.name or self.idp
 
-class CustomizableUserflow(CacheableMixin,DbObjectMixin,models.Model):
+class CustomizableUserflow(CacheableMixin,DbObjectMixin,django_models.Model):
     """
     Customize userflow for domain.
     The domain '*' is the default settings.
@@ -526,28 +534,28 @@ Email: enquiries@dbca.wa.gov.au
 
     _editable_columns = ("default","mfa_set","mfa_reset","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body","signedout_url","relogin_url","signout_body","sortkey")
 
-    domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
-    fixed = models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
-    default = models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
-    mfa_set = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa set user flow")
-    mfa_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa reset user flow")
-    password_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The user password reset user flow")
+    domain = django_models.CharField(max_length=128,null=False,help_text=help_text_domain)
+    fixed = django_models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
+    default = django_models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
+    mfa_set = django_models.CharField(max_length=64,null=True,blank=True,help_text="The mfa set user flow")
+    mfa_reset = django_models.CharField(max_length=64,null=True,blank=True,help_text="The mfa reset user flow")
+    password_reset = django_models.CharField(max_length=64,null=True,blank=True,help_text="The user password reset user flow")
 
-    extracss = models.TextField(null=True,blank=True)
-    page_layout = models.TextField(null=True,blank=True)
+    extracss = django_models.TextField(null=True,blank=True)
+    page_layout = django_models.TextField(null=True,blank=True)
 
-    verifyemail_from = models.EmailField(null=True,blank=True)
-    verifyemail_subject = models.CharField(max_length=512,null=True,blank=True)
-    verifyemail_body = models.TextField(null=True,blank=True)
+    verifyemail_from = django_models.EmailField(null=True,blank=True)
+    verifyemail_subject = django_models.CharField(max_length=512,null=True,blank=True)
+    verifyemail_body = django_models.TextField(null=True,blank=True)
 
-    signedout_url = models.CharField(max_length=256,null=True,blank=True,help_text="Redirect to this url after sign out from sso")
-    relogin_url = models.CharField(max_length=256,null=True,blank=True,help_text="A link can be used in signed out page to let user relogin to the system after signout from sso.")
-    signout_body = models.TextField(null=True,blank=True,help_text="The body template used in the signed out page")
+    signedout_url = django_models.CharField(max_length=256,null=True,blank=True,help_text="Redirect to this url after sign out from sso")
+    relogin_url = django_models.CharField(max_length=256,null=True,blank=True,help_text="A link can be used in signed out page to let user relogin to the system after signout from sso.")
+    signout_body = django_models.TextField(null=True,blank=True,help_text="The body template used in the signed out page")
 
-    sortkey = models.CharField(max_length=128,editable=True,help_text="A sorting string consisted with a 2 digitals and string separated by ':', the sorting string is auto generated if the digitals is in {}".format(RequestDomain.all_base_sort_keys()))
+    sortkey = django_models.CharField(max_length=128,editable=True,help_text="A sorting string consisted with a 2 digitals and string separated by ':', the sorting string is auto generated if the digitals is in {}".format(RequestDomain.all_base_sort_keys()))
 
-    modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
-    created = models.DateTimeField(auto_now_add=timezone.now)
+    modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
         verbose_name_plural = "{}Customizable Userflows".format(" " * 10)
@@ -748,7 +756,7 @@ class ExactUserEmail(UserEmail):
 
     @property
     def qs_filter(self):
-        return models.Q(email=self.config)
+        return django_models.Q(email=self.config)
 
     def contain(self,useremail):
         if isinstance(useremail,RegexUserEmail):
@@ -763,7 +771,7 @@ class DomainEmail(UserEmail):
 
     @property
     def qs_filter(self):
-        return models.Q(email__endswith=self.config)
+        return django_models.Q(email__endswith=self.config)
 
     def contain(self,useremail):
         if isinstance(useremail,AllUserEmail):
@@ -792,7 +800,7 @@ class RegexUserEmail(UserEmail):
 
     @property
     def qs_filter(self):
-        return models.Q(email__regex=self._qs_re)
+        return django_models.Q(email__regex=self._qs_re)
 
     def contain(self,useremail):
         return None
@@ -802,7 +810,7 @@ class UserEmailPattern(UserEmail):
     def __init__(self,email):
         super().__init__(email)
         try:
-            self._qs_re = r"^{}$".format(email.replace(".","\\.").replace('*','[a-zA-Z0-9\\._\\-\\+]*'))
+            self._qs_re = r"^{}$".format(email.replace(".","\\.").replace('*','[a-zA-Z0-9\\._\\-\\+#]*'))
             self._re = re.compile(self._qs_re)
         except Exception as ex:
             raise ValidationError("The regex email config({}) is invalid.{}".format(email,str(ex)))
@@ -812,7 +820,7 @@ class UserEmailPattern(UserEmail):
 
     @property
     def qs_filter(self):
-        return models.Q(email__regex=self._qs_re)
+        return django_models.Q(email__regex=self._qs_re)
 
     def contain(self,useremail):
         if isinstance(useremail,AllUserEmail):
@@ -857,21 +865,21 @@ class UserEmailPattern(UserEmail):
 
             return p_index >= len(self.config)
 
-class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
+class UserGroup(CacheableMixin,DbObjectMixin,django_models.Model):
     _useremails = None
     _excluded_useremails = None
 
     _editable_columns = ("users","parent_group","excluded_users","identity_provider","groupid","session_timeout")
 
-    name = models.CharField(max_length=32,unique=True,null=False)
-    groupid = models.SlugField(max_length=32,null=False,blank=True)
-    parent_group = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
-    users = ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
-    excluded_users = ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
-    identity_provider = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,null=True,blank=True,limit_choices_to=~models.Q(idp__exact=IdentityProvider.AUTH_EMAIL_VERIFY[0]))
-    session_timeout = models.PositiveSmallIntegerField(null=True,editable=True,blank=True,help_text="Session timeout in seconds, 0 means never timeout")
-    modified = models.DateTimeField(editable=False,db_index=True)
-    created = models.DateTimeField(auto_now_add=timezone.now)
+    name = django_models.CharField(max_length=32,unique=True,null=False)
+    groupid = django_models.SlugField(max_length=32,null=False,blank=True)
+    parent_group = django_models.ForeignKey('self', on_delete=django_models.SET_NULL,null=True,blank=True)
+    users = ArrayField(django_models.CharField(max_length=64,null=False),help_text=help_text_users)
+    excluded_users = ArrayField(django_models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
+    identity_provider = django_models.ForeignKey(IdentityProvider, on_delete=django_models.SET_NULL,null=True,blank=True,limit_choices_to=~django_models.Q(idp__exact=IdentityProvider.AUTH_EMAIL_VERIFY[0]))
+    session_timeout = django_models.PositiveSmallIntegerField(null=True,editable=True,blank=True,help_text="Session timeout in seconds, 0 means never timeout")
+    modified = django_models.DateTimeField(editable=False,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
         unique_together = [["users","excluded_users"]]
@@ -882,8 +890,8 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     def sessiontimeout(self):
         if self.session_timeout is not None:
             return self.session_timeout
-        elif self.parent_group:
-            return self.parent_group.sessiontimeout
+        elif self.parent_group_id is not None:
+            return (cache.usergroups.get(self.parent_group_id) or self.parent_group).sessiontimeout
         else:
             return 0
 
@@ -908,22 +916,24 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
         return timeout
 
     @classmethod
-    def get_groupnames(cls,usergroups):
+    def get_pk_and_names(cls,usergroups):
         """
-        return groupname string seprated by "," based on usergroups
+        return (groupname string seprated by "," based on usergroups, group pks)
         """
         groupnames = []
+        pks = set()
         index = 0
         for usergroup in usergroups:
             group = usergroup
             index = len(groupnames)
             while group:
+                pks.add(group.id)
                 if group.groupid in groupnames:
                     break
                 if group.groupid:
                     groupnames.insert(index,group.groupid)
                 group = group.parent_group
-        return ",".join(groupnames)
+        return (",".join(groupnames),pks)
 
     def is_changed(self,update_fields=None):
         changed = super().is_changed(update_fields)
@@ -937,8 +947,9 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
         super().clean()
         self.name = self.name.strip()
         if not self.name:
-            raise ValidationError("Name is empty")
-
+            raise ValidationError("Name is empty.")
+        elif utils.check_xssattack(self.name):
+            raise ValidationError("Name includs a html tag.")
         user_emails = self.get_useremails(self.users)
         if user_emails:
             self.users = [u.config for u in user_emails]
@@ -1055,13 +1066,11 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
         if users:
             user_emails = []
             for user in users:
-                try:
+                if user:
                     user_email = UserEmail.get_instance(user)
                     if not user_email:
                         continue
                     user_emails.append(user_email)
-                except:
-                    continue
             user_emails.sort(key=lambda o:o.sort_key)
             match_all_user = next((u for u in user_emails if u.match_all),None)
             if match_all_user:
@@ -1218,11 +1227,11 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                 elif group.parent_group :
                     _add_group(usergroups,group.parent_group)
             if usergroups:
-                usergroups = (usergroups,cls.get_groupnames(usergroups))
+                usergroups = (usergroups,*cls.get_pk_and_names(usergroups))
                 if cacheable:
                     cache.set_email_groups(email,usergroups)
             else:
-                usergroups = (usergroups,"")
+                usergroups = (usergroups,"",set())
 
 
         return usergroups
@@ -1327,7 +1336,7 @@ class RegexRequestPath(RequestPath):
         return True if self._re.search(path) else False
 
 
-class AuthorizationMixin(DbObjectMixin,models.Model):
+class AuthorizationMixin(DbObjectMixin,django_models.Model):
 
     _request_domain = None
     _excluded_request_paths = None
@@ -1338,12 +1347,12 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
 
     _editable_columns = ("domain","paths","excluded_paths")
 
-    domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
-    paths = ArrayField(models.CharField(max_length=512,null=False),null=True,blank=True,help_text=help_text_paths)
-    excluded_paths = ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
-    sortkey = models.CharField(max_length=128,editable=False)
-    modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
-    created = models.DateTimeField(auto_now_add=timezone.now)
+    domain = django_models.CharField(max_length=128,null=False,help_text=help_text_domain)
+    paths = ArrayField(django_models.CharField(max_length=512,null=False),null=True,blank=True,help_text=help_text_paths)
+    excluded_paths = ArrayField(django_models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
+    sortkey = django_models.CharField(max_length=128,editable=False)
+    modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
         abstract = True
@@ -1600,11 +1609,11 @@ def can_access(email,domain,path):
         return False
 
 class UserAuthorization(CacheableMixin,AuthorizationMixin):
-    user = models.EmailField(max_length=64)
+    user = django_models.EmailField(max_length=64)
 
     class Meta:
         unique_together = [["user","domain"]]
-        verbose_name_plural = "{}User Authorizations".format(" " * 7)
+        verbose_name_plural = "User Authorizations"
 
     @classmethod
     def get_model_change_cls(self):
@@ -1646,7 +1655,7 @@ class UserAuthorization(CacheableMixin,AuthorizationMixin):
         return self.user
 
 class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
-    usergroup = models.ForeignKey(UserGroup, on_delete=models.CASCADE)
+    usergroup = django_models.ForeignKey(UserGroup, on_delete=django_models.CASCADE)
 
     class Meta:
         unique_together = [["usergroup","domain"]]
@@ -1665,6 +1674,11 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
         refreshtime = timezone.localtime()
         for authorization in UserGroupAuthorization.objects.all().order_by("usergroup","sortkey"):
             size += 1
+            #try to get the data from cache to avoid a extra db access
+            try:
+                authorization.usergroup = cache.usergroups[authorization.usergroup_id]
+            except:
+                pass
 
             if not previous_usergroup:
                 usergroupauthorization[authorization.usergroup] = [authorization]
@@ -1694,19 +1708,29 @@ class NormalUserManager(UserManager):
         return super().get_queryset().filter(systemuser=False)
 
 class User(AbstractUser):
-    last_idp = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,editable=False,null=True)
-    systemuser = models.BooleanField(default=False,editable=False)
-    comments = models.TextField(null=True,editable=True,blank=True)
-    modified = models.DateTimeField(auto_now=timezone.now)
+    last_idp = django_models.ForeignKey(IdentityProvider, on_delete=django_models.SET_NULL,editable=False,null=True)
+    systemuser = django_models.BooleanField(default=False,editable=False)
+    comments = django_models.TextField(null=True,editable=True,blank=True)
+    modified = django_models.DateTimeField(auto_now=timezone.now)
 
     class Meta(AbstractUser.Meta):
         swappable = 'AUTH_USER_MODEL'
         db_table = "auth_user"
-        verbose_name_plural = "{}Users".format(" " * 14)
+        verbose_name_plural = "Users"
         unique_together = [["email"]]
 
     def clean(self):
         super().clean()
+        if not self.first_name :
+            raise ValidationError("The user's first_name is empty.")
+        elif utils.check_xssattack(self.first_name):
+            raise ValidationError("The user's first_name includes a html tag.")
+
+        if not self.last_name :
+            raise ValidationError("The user's last_name is empty.")
+        elif utils.check_xssattack(self.last_name):
+            raise ValidationError("The user's last_name includes a html tag.")
+
         self.email = self.email.strip().lower() if self.email else None
         if not self.email:
             raise ValidationError("Email is empty")
@@ -1726,7 +1750,7 @@ class User(AbstractUser):
     def __str__(self):
         return self.email
 
-class UserToken(models.Model):
+class UserToken(django_models.Model):
     DISABLED = -1
     NOT_CREATED = -2
     EXPIRED = -3
@@ -1736,15 +1760,15 @@ class UserToken(models.Model):
     RANDOM_CHARS="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYA0123456789~!@#$%^&*()-_+=`{}[];':\",./<>?"
     RANDOM_CHARS_MAX_INDEX = len(RANDOM_CHARS) - 1
 
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,primary_key=True,related_name="token",editable=False)
-    enabled = models.BooleanField(default=False,editable=False)
-    token = models.CharField(max_length=128,null=True,editable=False)
-    created = models.DateTimeField(null=True,editable=False)
-    expired = models.DateField(null=True,editable=False)
-    modified = models.DateTimeField(editable=False,db_index=True,auto_now=True)
+    user = django_models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=django_models.CASCADE,primary_key=True,related_name="token",editable=False)
+    enabled = django_models.BooleanField(default=False,editable=False)
+    token = django_models.CharField(max_length=128,null=True,editable=False)
+    created = django_models.DateTimeField(null=True,editable=False)
+    expired = django_models.DateField(null=True,editable=False)
+    modified = django_models.DateTimeField(editable=False,db_index=True,auto_now=True)
 
     class Meta:
-        verbose_name_plural = "{}Access Tokens".format(" " * 8)
+        verbose_name_plural = "Access Tokens"
 
     def __str__(self):
         return self.user.email
@@ -1826,21 +1850,692 @@ class UserToken(models.Model):
         with transaction.atomic():
             super().save(*args,**kwargs)
 
-class UserTOTP(models.Model):
-    email = models.CharField(max_length=64,null=False,editable=False,unique=True)
-    secret_key = models.CharField(max_length=512,null=False,editable=False)
-    timestep = models.PositiveSmallIntegerField(null=False,editable=False)
-    prefix = models.CharField(max_length=64,null=False,editable=False)
-    issuer = models.CharField(max_length=64,null=False,editable=False)
-    name = models.CharField(max_length=128,null=False,editable=False)
-    algorithm = models.CharField(max_length=32,null=False,editable=False)
-    digits = models.PositiveSmallIntegerField(null=False,editable=False)
-    last_verified_code = models.CharField(max_length=16,null=True,editable=False)
-    last_verified = models.DateTimeField(null=True,editable=False)
-    created = models.DateTimeField(null=False,editable=False)
+class UserTOTP(django_models.Model):
+    email = django_models.CharField(max_length=64,null=False,editable=False,unique=True)
+    secret_key = django_models.CharField(max_length=512,null=False,editable=False)
+    timestep = django_models.PositiveSmallIntegerField(null=False,editable=False)
+    prefix = django_models.CharField(max_length=64,null=False,editable=False)
+    issuer = django_models.CharField(max_length=64,null=False,editable=False)
+    name = django_models.CharField(max_length=128,null=False,editable=False)
+    algorithm = django_models.CharField(max_length=32,null=False,editable=False)
+    digits = django_models.PositiveSmallIntegerField(null=False,editable=False)
+    last_verified_code = django_models.CharField(max_length=16,null=True,editable=False)
+    last_verified = django_models.DateTimeField(null=True,editable=False)
+    created = django_models.DateTimeField(null=False,editable=False)
 
     class Meta:
         verbose_name_plural = "{}User TOTPs".format(" " * 8)
+
+class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
+    _buckets = None
+    _bucketslen = None
+    _buckets_endid = None
+    _buckets_endtime = None
+    _buckets_begintime = None
+    _buckets_fetchtime = None
+    _buckets_totalrequests = 0
+
+    _editable_columns = ("est_processtime","concurrency","iplimit","iplimitperiod","userlimit","userlimitperiod","enabled","active","buckettime","buckets","exempt_include","exempt_groups","block")
+    name = django_models.SlugField(max_length=128,null=False,editable=True,unique=True)
+    enabled = django_models.BooleanField(default=True,editable=True,help_text="Enable/disable the traffic control")
+    active = django_models.BooleanField(default=False,editable=False)
+    est_processtime = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The estimated processing time(milliseconds) used to calculate the concurrency requests") #millisecond
+    buckettime = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="Declare the time period(milliseconds) of the bucket, the est_processtime and the total milliseconds of one day should be divided by this value.") #milliseconds
+    buckets = django_models.PositiveIntegerField(default=0,null=False,editable=False)
+    concurrency = django_models.PositiveIntegerField(default=0,null=False,editable=True)
+    block = django_models.BooleanField(default=False,editable=True,help_text="If true, block the request until the running requests are less than the concurrency limit")
+
+    iplimit = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The maximum requests per client ip which can be allowd in configure period")
+    iplimitperiod = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The time period(seconds) configured for requests limit per client ip") #in seconds
+    userlimit = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The maximum requests per user which can be allowd in configure period")
+    userlimitperiod = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The time period(seconds) configured for requests limit per user") #in seconds
+    exempt_include = django_models.BooleanField(default=True,editable=True,help_text="Exempt the traffic control for the user groups which is include/exclude the exempt_groups")
+    exempt_groups = django_models.ManyToManyField(UserGroup,editable=True,blank=True)
+    modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
+
+    class Meta:
+        verbose_name_plural = "{}Traffic Control".format(" " * 7)
+
+    class BucketIds(object):
+        def __init__(self,tcontrol,startid,length):
+            self.tcontrol = tcontrol
+            self.length = length
+            self.startid = startid
+            self._index = 0
+        def __len__(self):
+            return self.length
+        def __iter__(self):
+            self._index = -1
+
+            return self
+
+        def __next__(self):
+            self._index += 1
+            if self._index >= self.length:
+                raise StopIteration()
+            return self.tcontrol._normalize_bucketid(self.startid + self._index)
+
+        def __str__(self):
+            return str([d for d in self])
+
+        def __repr__(self):
+            return str([d for d in self])
+
+    class BookingBucketIds(object):
+        def __init__(self,tcontrol,startid,length):
+            self.tcontrol = tcontrol
+            self.length = length
+            self.startid = startid
+            self._index = 0
+        def __len__(self):
+            return self.length
+        def __iter__(self):
+            self._index = -1
+
+            return self
+
+        def __next__(self):
+            self._index += 1
+            if self._index >= self.length:
+                raise StopIteration()
+            return self.tcontrol._normalize_bucketid(self.startid + self._index)
+
+        def __str__(self):
+            return str([d for d in self])
+
+        def __repr__(self):
+            return str([d for d in self])
+
+    class NonExpiredBucketIds(object):
+        def __init__(self,tcontrol,length):
+            self.tcontrol = tcontrol
+            self.length = length
+            self.bucketid = None
+            self.endbucketid = self.tcontrol._normalize_bucketid(self.tcontrol._buckets_endid - self.tcontrol._bucketslen - 1 + self.length)
+        def __len__(self):
+            return self.length
+        def __iter__(self):
+            self.bucketid = self.tcontrol._normalize_bucketid(self.tcontrol._buckets_endid - self.tcontrol._bucketslen - 1)
+            return self
+
+        def __next__(self):
+            if self.bucketid == self.endbucketid:
+                raise StopIteration()
+            try:
+                return self.bucketid
+            finally:
+                self.bucketid = self.tcontrol._normalize_bucketid(self.bucketid + 1)
+
+    class Buckets(object):
+        def __init__(self,tcontrol,expiredbuckets = 0):
+            self.tcontrol = tcontrol
+            if expiredbuckets == 0:
+                self.expiredbuckets_beginindex = None
+            else:
+                self.expiredbuckets_beginindex = self.tcontrol._bucketslen - expiredbuckets - 1
+            self.bucket = None
+            self.index = None
+            
+        def __iter__(self):
+            self.index = 0
+            if self.expiredbuckets_beginindex is not None and self.expiredbuckets_beginindex == self.index:
+                self.bucket = [self.tcontrol._buckets_begintime,self.tcontrol._normalize_bucketid(self.tcontrol._buckets_endid - self.tcontrol._bucketslen + 1),"Expired"]
+            else:
+                self.bucket = [self.tcontrol._buckets_begintime,self.tcontrol._normalize_bucketid(self.tcontrol._buckets_endid - self.tcontrol._bucketslen + 1),self.tcontrol._buckets[self.index]]
+            return self
+
+        def __next__(self):
+            if self.index >= self.tcontrol._bucketslen:
+                raise StopIteration()
+            if self.bucket[1] == self.tcontrol._buckets_endid:
+                if self.bucket[0] != self.tcontrol._buckets_endtime:
+                    raise Exception("buckets_begintime({}) is incorrect.".format(self.tcontrol._buckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),self.tcontrol._buckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),self.tcontrol._bucketslen))
+            try:
+                return self.bucket
+            finally:
+                self.index += 1
+                if self.index < self.tcontrol._bucketslen:
+                    if self.expiredbuckets_beginindex is not None and self.index >= self.expiredbuckets_beginindex and self.index < self.tcontrol._bucketslen - 1:
+                        self.bucket = [self.bucket[0] + timedelta(milliseconds=self.tcontrol.buckettime),self.tcontrol._normalize_bucketid(self.bucket[1] + 1),"Expired"]
+                    else:
+                        self.bucket = [self.bucket[0] + timedelta(milliseconds=self.tcontrol.buckettime),self.tcontrol._normalize_bucketid(self.bucket[1] + 1),self.tcontrol._buckets[self.index]]
+
+    @classmethod
+    def get_model_change_cls(self):
+        return TrafficControlChange
+
+    def clean(self):
+        super().clean()
+        timediff = math.floor(settings.TRAFFICCONTROL_TIMEDIFF.microseconds / 1000)
+
+        if self.userlimitperiod and 86400 % self.userlimitperiod != 0:
+            raise ValidationError("The total seconds of a day(86400) should be divided by userlimitperiod.")
+        
+        if self.iplimitperiod and 86400 % self.iplimitperiod != 0:
+            raise ValidationError("The total seconds of a day(86400) should be divided by iplimitperiod.")
+        
+        if self.est_processtime and self.est_processtime > 21600000:
+            raise ValidationError("The estimate processtime can't be larger than 6 hours")
+
+        if self.buckettime and self.est_processtime:
+            #find the maximum buckets which can be used to uniquely identity each bucket
+            #the maximum buckets should meet the following requirements
+            #1. the whold day can be divided by the total times of the mximum buckets.
+            #2. The bucket must be safely expired before it can be reused.normally, the bucket expire time is the bucket time plus 5 seconds
+            if self.buckettime < timediff or self.est_processtime % self.buckettime != 0 or 86400000 % self.buckettime != 0:
+                raise ValidationError("The buckettime should be larger than {}; Both the total milleseconds of one day(86400000) and estimated processing time({}) must be divided by the value of buckettime.".format(timediff,self.est_processtime))
+
+            if int(self.est_processtime / self.buckettime) > settings.TRAFFICCONTROL_MAX_BUCKETS:
+                raise ValidationError("The buckettime is too small, will slow the performance, it should be larger than {}".format( math.ceil(self.est_processtime / settings.TRAFFICCONTROL_MAX_BUCKETS)))
+
+            totalbucketstime = self.est_processtime +  (50000 + self.est_processtime - 50000 % self.est_processtime)
+
+            minbuckets = int(totalbucketstime / self.buckettime)
+
+            while 86400000 % totalbucketstime != 0 and int((86400000 % totalbucketstime) / self.buckettime) < minbuckets:
+                totalbucketstime += self.buckettime
+
+            self.buckets = int(totalbucketstime / self.buckettime)
+        else:
+            self.buckets = 0
+        self.active = True if (self.enabled and ((self.concurrency > 0 and self.est_processtime > 0 and self.buckettime) or (self.iplimit > 0 and self.iplimitperiod > 0) or (self.userlimit > 0 and self.userlimitperiod > 0))) else False
+
+    def _normalize_bucketid(self,bucketid):
+        if bucketid < 0:
+            return bucketid + self.buckets
+        elif bucketid < self.buckets:
+            return bucketid
+        else :
+            return bucketid - self.buckets
+
+    def _log_buckets_error(self,msg):
+        DebugLog.tcontrol(DebugLog.TRAFFIC_CONTROL_ERROR,self.name,None,None,"{11}.\ntcontrol={0} , est_processtime={1} milliseconds , buckettime={2} milliseconds , concurrency={3}\nbuckets_begintime={4} , buckets_beginid={5} , buckets_endtime={6} , buckets_endid={7} , buckets_fetchtime={8} , totalrequests={9}\nbuckets={10}".format(
+            self.name,
+            self.est_processtime,
+            self.buckettime,
+            self.concurrency,
+            self._buckets_begintime.strftime("%Y-%m-%dT%H:%M:%S.%f"),
+            self._normalize_bucketid(self._buckets_endid - self._bucketslen + 1),
+            self._buckets_endtime.strftime("%Y-%m-%dT%H:%M:%S.%f"),
+            self._buckets_endid,
+            self._buckets_fetchtime.strftime("%Y-%m-%dT%H:%M:%S.%f") if self._buckets_fetchtime else None,
+            self._buckets_totalrequests,
+            self._buckets,
+            msg
+        ))
+    @property
+    def prefetch_buckets(self):
+        """
+        Prefetch half of buckets for future booking
+        """
+        try:
+            return self._prefetch_buckets
+        except:
+            if self._bucketslen:
+                self._prefetch_buckets = math.ceil(self._bucketslen / 2)
+            else:
+                self._prefetch_buckets = math.ceil(self.est_processtime / (self.buckettime * 2))
+            return self._prefetch_buckets
+
+
+    def get_checkingbuckets(self,today,milliseconds_in_day,exempt):
+        """
+        today: 
+        milliseconds: milliseconds in today
+        get the checking bucket status for concurrency checking
+        return
+            current checking:(True, endbuckettime,endbucketid,retrieving required bucketids,total requests of non-expired buckets)
+            exceed concurrency:(True, None,None,None,total requests)
+            future booking  :(False , endbuckettime,endbucketid,the begintime of the first retrieveing buckets,the endtime,the bucketid of the first retrieveing buckets,retrieving required bucketids,)
+        """
+        #get the milliseconds in totalbucketstime
+        try:
+            milliseconds = (milliseconds_in_day % self._totalbucketstime)
+        except:
+            self._totalbucketstime = self.buckets * self.buckettime
+            milliseconds = (milliseconds_in_day % self._totalbucketstime)
+
+        #get the id and time of the current bucket
+        currentbucketid = math.floor(milliseconds / self.buckettime)
+        currentbuckettime = today + timedelta(milliseconds=milliseconds_in_day - milliseconds % self.buckettime )
+
+        if self._buckets_endtime is None:
+            #_buckets is not initialized before. initialize it.
+            self._buckets = [0] * int(self.est_processtime / self.buckettime)
+            self._bucketslen = len(self._buckets)
+            self._buckets_endtime = currentbuckettime
+            self._buckets_endid = currentbucketid
+            self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+            self._buckets_totalrequests = 0
+            if self._bucketslen == 1:
+                self._buckets_begintime = self._buckets_endtime
+                return [True,self._buckets_endtime,self._buckets_endid,None,0]
+            else:
+                self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+                return [True,self._buckets_endtime,self._buckets_endid,self.BucketIds(self,self._normalize_bucketid(self._buckets_endid - self._bucketslen + 1),self._bucketslen - 1),0]
+        elif self._buckets_endtime <= currentbuckettime:
+            #check current concurrency
+            #get how many buckets in self._buckets are outdated.
+            outdatedbuckets = int(((currentbuckettime - self._buckets_endtime).total_seconds()) * 1000 / self.buckettime)
+            if outdatedbuckets >= self._bucketslen:
+                #all buckets in self._bucketslen are outdated
+                #reset all requests in buckets to 0
+                for i in range(self._bucketslen):
+                    self._buckets[i] = 0
+                self._buckets_totalrequests = 0
+                self._buckets_endtime = currentbuckettime
+                self._buckets_endid = currentbucketid
+                self._buckets_fetchtime = None
+                if self._bucketslen == 1:
+                    self._buckets_begintime = self._buckets_endtime
+                    return [True,self._buckets_endtime,self._buckets_endid,None,0]
+                else:
+                    self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+                    return [True,self._buckets_endtime,self._buckets_endid,self.BucketIds(self,self._normalize_bucketid(self._buckets_endid - self._bucketslen + 1),self._bucketslen - 1),0]
+            elif outdatedbuckets > 0:
+                #some buckets in self._buckets are outdated.
+                #remove the outdated buckets, and append the same number of empty buckets to self._buckets
+                for i in range(outdatedbuckets):
+                    self._buckets_totalrequests -= self._buckets[i]
+                    self._buckets[i] = 0
+                self._buckets.extend(self._buckets[0:outdatedbuckets])
+                del self._buckets[0:outdatedbuckets]
+
+                self._buckets_endtime = currentbuckettime
+                self._buckets_endid = currentbucketid
+                if self._bucketslen == 1:
+                    self._buckets_begintime = self._buckets_endtime
+                else:
+                    self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+
+            #now self._buckets has up-to-date buckets 
+            if not self._buckets_fetchtime:
+                #all buckets are expired or never fetch before.
+                return [True,self._buckets_endtime,self._buckets_endid,self.BucketIds(self,self._normalize_bucketid(self._buckets_endid - self._bucketslen + 1),self._bucketslen - 1),0]
+            else:
+                if self._buckets_totalrequests >= self.concurrency:
+                    #already hit the concurrency limit
+                    #the reason why the total requests can be greater than concurrency is the time gap between increment and decrement for exceed concurrency requests. but eventually the total requests should be not greater than concurrency.
+                    #reach the limit, need future booking
+                    if not self.block and not exempt:
+                        #future booking not allowed
+                        return [True,None,None,None,self._buckets_totalrequests]
+                else:
+                    #don't reach the limit,
+                    #try to find how many buckets need to be fetched again.
+                    expiredbuckets_starttime = self._buckets_fetchtime - settings.TRAFFICCONTROL_TIMEDIFF
+                    if expiredbuckets_starttime >= self._buckets_endtime:
+                        #all buckets data are not expired
+                        return [True,self._buckets_endtime,self._buckets_endid,None,self._buckets_totalrequests - self._buckets[-1]]
+                    else:
+                        #some buckets are expired
+                        expiredbuckets = math.ceil(((self._buckets_endtime - expiredbuckets_starttime).total_seconds() * 1000) / self.buckettime)
+                        if expiredbuckets >= self._bucketslen - 1:
+                            #all buckets are expired
+                            self._buckets_fetchtime = None
+                            return [True,self._buckets_endtime,self._buckets_endid,self.BucketIds(self,self._normalize_bucketid(self._buckets_endid - self._bucketslen + 1),self._bucketslen - 1),0]
+                        else:
+                            #some buckets are expired
+                            return [True,self._buckets_endtime,self._buckets_endid,self.BucketIds(self,self._normalize_bucketid(self._buckets_endid - expiredbuckets),expiredbuckets),self.get_runningrequests(0,self._bucketslen - 1 - expiredbuckets)]
+        elif not self.block and not exempt:
+            #have some requests in the waiting queue.
+            #future booking not allowed
+            return [True,None,None,None,self.concurrency]
+
+        #have some requests in the waiting queue.
+        #return the metadata to start booking a running spot in the future
+        if self._buckets_totalrequests >= self.concurrency:
+            #the total requests in the self._buckets already reach the limit. should book the running spot from the next bucket
+            i = 0
+            while i < self._bucketslen:
+                i += 1
+                self._buckets.append(0)
+                if self._buckets[0]:
+                    self._buckets_totalrequests -= self._buckets[0]
+                    del self._buckets[0]
+                    break
+                else:
+                    del self._buckets[0]
+
+            self._buckets_endtime += timedelta(milliseconds=self.buckettime * i)
+            self._buckets_endid = self._normalize_bucketid(self._buckets_endid + i)
+            self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+            if i >= self._bucketslen:
+                self._log_buckets_error("get_checkingbuckets: All buckets in memory are empty")
+                raise Exception("All buckets are empty")
+
+        #the total requests in the self._buckets doesn't reach the limit. book the running spot from the last bucket
+        #don't reach the limit, retriving ${_bucketslen} buckets from the bucket self._buckets_endid  for future booking.
+        return [False,self._buckets_endtime,self._buckets_endid,self._buckets_endtime,self._buckets_endtime + timedelta(milliseconds=self.buckettime * (self.prefetch_buckets - 1)),self._buckets_endid,self.BookingBucketIds(self,self._buckets_endid,self.prefetch_buckets)]
+
+    def set_buckets(self,buckettime,bucketid,current_bucket_requests,fetchtime,expiredbuckets_requests=None):
+        """
+        For current concurrency checking called after checking whether concurrency is exceed or not
+        Called after fetching the expired buckets and increment the current bucket
+        Should consider the race condition among threads, auth2 servers; adjust the bucket requests if required before call this method
+
+        buckettime, bucketid: the self._buckets_endtime and self._buckets_endid when calling method 'get_checkingbuckets' to get the metadata for concurrency checking
+        The possible out-of-sync scenario can happen because of race condition and delay running.
+        1. the current status of self._buckets is different with the status of self._buckets when calling method 'get_checkingbuckets' to get the metadata for concurrency checking because more requests are pocessed between get_checkingbuckets and set_buckets in multithreads environment
+        2. the endtime of self._buckets is not match the endtime of current time bucket because the time gap between get_checkingbuckets and set_buckets is greater than self._buckettime
+        3. If the fetchtime in memory is later than the fetchtime parameters, means the memory has the latest status and ignore the status parameters
+        """
+        if current_bucket_requests < 0:
+            self._log_buckets_error("set_buckets: current_bucket_requsts({0}) is less than 0. buckettime={1} , bucketid={2}, fetchtime={3}, expiredbuckets_requests={4}".format(
+                current_bucket_requests,
+                buckettime.strftime("%Y-%m-%dT%H:%M:%S.%f"),
+                bucketid,
+                fetchtime.strftime("%Y-%m-%dT%H:%M:%S.%f"),
+                expiredbuckets_requests
+            ))
+
+        if self._buckets_fetchtime and self._buckets_fetchtime > fetchtime:
+            #the self._buckets data was set by the request which fetch the data from cache later than fetchtime
+            #return directly.
+            return 
+
+        outdatedbuckets = 0
+        if buckettime != self._buckets_endtime:
+            #the status of the self._buckets has been changed by other requests
+            #find how many buckets are outdated in the previous self_buckets, 
+            #during setting the fetched buckets data, will ignore the outdated buckets
+            outdatedbuckets = int(((self._buckets_endtime - buckettime).total_seconds()) * 1000 / self.buckettime)
+            if expiredbuckets_requests:
+                if len(expiredbuckets_requests) > outdatedbuckets: 
+                    #still have some buckets can be set
+                    expiredbuckets_requests = lists.ROListSlice(expiredbuckets_requests,outdatedbuckets,len(expiredbuckets_requests) - outdatedbuckets)
+                else:
+                    expiredbuckets_requests = []
+
+        #latest fetchtime
+        self._buckets_fetchtime = fetchtime
+        if expiredbuckets_requests:
+            index = self._bucketslen - 1 - len(expiredbuckets_requests)
+            for i in range(len(expiredbuckets_requests)):
+                if expiredbuckets_requests[i] != self._buckets[index]:
+                    self._buckets_totalrequests += expiredbuckets_requests[i] - self._buckets[index]
+                    self._buckets[index] = expiredbuckets_requests[i]
+                index += 1
+
+        if outdatedbuckets == 0:
+            self._buckets_totalrequests += current_bucket_requests - self._buckets[-1]
+            self._buckets[-1] = current_bucket_requests
+        elif outdatedbuckets < self._bucketslen:
+            self._buckets_totalrequests += current_bucket_requests - self._buckets[-1 - outdatedbuckets]
+            self._buckets[-1 - outdatedbuckets] = current_bucket_requests
+
+    def set_bookingbucket(self,buckettime,bucketid,requests,exceedlimit=False):
+        """
+        Set the already booked bucket data
+        Return Ture if set the data to memory cache ;return False if the data is outdated
+        """
+        if buckettime != self._buckets_endtime:
+            #race condition, some other clients have booked some bucket positions, the data should already be in latest status
+            return False
+        elif self._buckets[-1] >= requests:
+            #race condition, some other clients have booked some bucket positions, the data should already be in latest status
+            return False
+        else:
+            self._buckets_totalrequests += requests - self._buckets[-1]
+            self._buckets[-1] = requests
+            if exceedlimit:
+                #reach the limit
+                i = 0
+                while i < self._bucketslen:
+                    i += 1
+                    self._buckets.append(0)
+                    if self._buckets[0]:
+                        self._buckets_totalrequests -= self._buckets[0]
+                        del self._buckets[0]
+                        break
+                    else:
+                        del self._buckets[0]
+    
+                self._buckets_endtime += timedelta(milliseconds=self.buckettime * i)
+                self._buckets_endid = self._normalize_bucketid(self._buckets_endid + i)
+                self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+        
+                if i >= self._bucketslen:
+                    self._log_buckets_error("set_bookingbuckets: All buckets in memory are empty")
+                    raise Exception("All buckets are empty")
+            return True
+
+    def set_bookedbuckets(self,buckets_endtime,bookedbuckets_begintime,bookedbuckets_endtime,bookedbuckets_beginid,bookedbucketids,bookedbuckets_requests,fetchtime):
+        """
+        should consider the race condition, multiple clients try to increment the value at the same time, so it is possible the value is greater than the final value; if that happens, adjust the requests value
+        If fetchtime in memory is later than the fetchtime parameter, the memory has the latest status
+        Return True if can book the running position from the end bucket; otherwise return false to retrieveing the futurebuckets again
+        """
+
+        if not self._buckets_fetchtime or self._buckets_fetchtime <= fetchtime:
+            #update the memory status
+            self._buckets_fetchtime = fetchtime
+            if buckets_endtime != self._buckets_endtime:
+                #after get_checkingbuckets, some book requests changes the endtime.
+                #ignore all the data before self._buckets_endtime
+                while bookedbuckets_begintime < self._buckets_endtime:
+                    if bookedbucketids and bookedbuckets_beginid == bookedbucketids[0]:
+                        #not skipped, delete the data
+                        del bookedbucketids[0]
+                        del bookedbuckets_requests[0]
+                    bookedbuckets_begintime += timedelta(milliseconds=self.buckettime)
+                    bookedbuckets_beginid = self._normalize_bucketid(bookedbuckets_beginid + 1)
+    
+            #set bookedbuckets's requests to memory
+
+            #remove all buckets on the right side with requests 0
+            while True:
+                if not bookedbuckets_requests:
+                    break
+                elif not bookedbuckets_requests[-1]:
+                    #the right buckets data is 0.
+                    del bookedbuckets_requests[-1]
+                    del bookedbucketids[-1]
+                else:
+                    #the right buckets data is not 0.
+                    break
+    
+            if bookedbucketids:
+                #found some booked requests
+                j = 0
+                #set the endbucket of self._buckets if required
+                if bookedbuckets_begintime == self._buckets_endtime:
+                    #bookedbuckets is from the end bucket of self._buckets
+                    if bookedbuckets_beginid == bookedbucketids[j]:
+                        self._buckets_totalrequests += bookedbuckets_requests[j] - self._buckets[-1]
+                        if self._buckets_totalrequests  <= self.concurrency:
+                            self._buckets[-1] = bookedbuckets_requests[j]
+                        else:
+                            #exceed the concurrency, caused by the time gap between increment and decrement. adjust the requests
+                            self._buckets[-1] = bookedbuckets_requests[j] - (self._buckets_totalrequests - self.concurrency)
+                            if self._buckets[-1] >= 0:
+                                self._buckets_totalrequests = self.concurrency
+                            else: 
+                                self._log_buckets_error("set_bookedbuckets: The requests({1}} of the bucket({0}) is less than 0.".format(j,self._buckets[-1]))
+                                self._buckets_totalrequests -= self._buckets[-1]
+                                self._buckets[-1] = 0 
+                        j += 1
+    
+                #set next buckets if have
+                if j < len(bookedbucketids):
+                    #have booking in the future buckets, requests in the bucket list should reach the concurrency
+                    #buckettime is the time of the previous bucket of the first non-overlap bucket
+                    if self._buckets_totalrequests > self.concurrency:
+                        self._log_buckets_error("set_bookedbuckets: The running requests({1}) is greater than the concurrency({0}),bookedbucketids={2} , bookedbuckets_requests={3} , bookedbuckets_beginid={4} , bookedbuckets_begintime={5}".format(self.concurrency,total_requests,bookedbucketids,bookedbuckets_requests,bookedbuckets_beginid,bookedbuckets_begintime.strftime("%Y-%m-%dT%H:%M:%S.%f")))
+                    elif self._buckets_totalrequests < self.concurrency:
+                        self._log_buckets_error("set_bookedbuckets: The running requests({1}) is less than the concurrency({0}),bookedbucketids={2} , bookedbuckets_requests={3} , bookedbuckets_beginid={4} , bookedbuckets_begintime={5}".format(self.concurrency,total_requests,bookedbucketids,bookedbuckets_requests,bookedbuckets_beginid,bookedbuckets_begintime.strftime("%Y-%m-%dT%H:%M:%S.%f")))
+    
+                    while j < len(bookedbucketids):
+                        self._buckets_endid = self._normalize_bucketid(self._buckets_endid + 1)
+                        self._buckets_endtime += timedelta(milliseconds=self.buckettime)
+                        self._buckets_begintime += timedelta(milliseconds=self.buckettime)
+                        if bucketid != bookedbucketids[j]:
+                            #skipped future buckets, the corresponding current bucket should have no requests
+                            if self._buckets[0] != 0:
+                                self._log_buckets_error("set_bookedbuckets: The requests of the skipped bucket({0}) in memory should be 0.".format(j))
+                            self._buckets.append(0)
+                            del self._buckets[0]
+                        elif self._buckets[0] < bookedbuckets_requests[j]: 
+                            #maybe it is caused by race condition
+                            self._buckets.append(self._buckets[0])
+                            del self._buckets[0]
+                            j += 1
+                        elif self._buckets[0] > bookedbuckets_requests[j]:
+                            if j == len(bucketids) - 1:
+                                #the last bucket
+                                diff = self._buckets[0] - bookedbuckets_requests[j]
+                                self._buckets.append(bookedbuckets_requests[j])
+                                self._buckets_totalrequests -= diff
+                                del self._buckets[0]
+                            else:
+                                #not the last bucket, caused by race condition
+                                #use the memory data
+                                self._log_buckets_error("set_bookedbuckets: The requests({1}) of the non-tail bucket({0}) should be not less than the requests({2}) of the first bucket.".format(j,bookedbuckets_requests[j],self._buckets[0]))
+                                self._buckets.append(self._buckets[0])
+                                del self._buckets[0]
+                            j += 1
+                        else:
+                            self._buckets.append(self._buckets[0])
+                            del self._buckets[0]
+                            j += 1
+
+        if self._buckets_totalrequests >= self.concurrency:
+            #reach the limit, try to book the running spot from the next available bucket
+            #fetched some empty buckets in the right side
+            i = 0
+            while i < self._bucketslen:
+                i += 1
+                self._buckets.append(0)
+                if self._buckets[0]:
+                    self._buckets_totalrequests -= self._buckets[0]
+                    del self._buckets[0]
+                    break
+                else:
+                    del self._buckets[0]
+
+            self._buckets_endtime += timedelta(milliseconds=self.buckettime * i)
+            self._buckets_endid = self._normalize_bucketid(self._buckets_endid + i)
+            self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+
+            if i >= self._bucketslen:
+                self._log_buckets_error("set_bookedbuckets: All buckets in memory are empty")
+                raise Exception("All buckets are empty")
+
+            return True
+        else:
+            #don't reach the limit. try to book the running spot from the endbucket
+            return True
+        
+    def get_runningrequests(self,start,length):
+        """
+        should be called after set_current_buckets , expired_previous_buckets and set_previous_buckets 
+        """
+        if self._buckets is None:
+            return 0
+
+        if length == 1:
+            return self._buckets[start]
+        elif length == self._bucketslen:
+            return self._buckets_totalrequests
+        elif length <= int(self._bucketslen / 2):
+            result = 0
+            for data in lists.ROListSlice(self._buckets,start,length):
+                if data:
+                    result += data
+        else:
+            result = self._buckets_totalrequests
+            if start > 0:
+                for data in lists.ROListSlice(self._buckets,0,start):
+                    if data:
+                        result -= data
+            for data in lists.ROListSlice(self._buckets,start + length,self._bucketslen - start - length):
+                if data:
+                    result -= data
+
+        return result
+
+    @property
+    def exempt_usergroups(self):
+        try:
+            return self._exempt_usergroups
+        except:
+            exempt_usergroups = []
+            for group in self.exempt_groups.all():
+                exempt_usergroups.append(group.id)
+
+            self._exempt_usergroups = exempt_usergroups
+            return self._exempt_usergroups
+            
+        
+
+    def is_exempt(self,email):
+        if not self.exempt_usergroups:
+            #the data should be cached in method "refresh_cache"
+            return False
+
+        return any(g in UserGroup.find_groups(email)[2] for g in self._exempt_usergroups)
+        
+
+    @classmethod
+    def refresh_cache(cls):
+        """
+        Popuate the data and save them to cache
+        """
+        logger.debug("Refresh TrafficControl cache")
+        refreshtime = timezone.localtime()
+        size = 0
+
+        tmp_tcontrols = {}
+        for obj in TrafficControl.objects.filter(active=True).prefetch_related("exempt_groups"):
+            if obj.active:
+                _groups = obj.exempt_usergroups
+                tmp_tcontrols[obj.id] = obj
+        #don't need the map items(tcontrol.id,tcontrol) for auth2 server without tcontrol support
+        tcontrols = tmp_tcontrols if settings.TRAFFICCONTROL_SUPPORTED else {}
+        for obj in TrafficControlLocation.objects.all():
+            size += 1
+            tcontrol = tmp_tcontrols.get(obj.tcontrol_id)
+
+            if tcontrol and tcontrol.active :
+                #cache the user groups
+                tcontrols[(obj.domain,obj.location,obj.method)] = tcontrol
+        cache.tcontrols = (tcontrols,size,refreshtime)
+        return refreshtime
+
+    
+
+class TrafficControlLocation(DbObjectMixin,django_models.Model):
+    GET = 1
+    POST = 2
+    PUT = 3
+    DELETE = 4
+
+    METHOD_CHOICES = (
+        (GET,"GET"),
+        (POST,"POST"),
+        (PUT,"PUT"),
+        (DELETE,"DELETE")
+    )
+    METHODS = {
+        "GET":GET,
+        "POST":POST,
+        "PUT":PUT,
+        "DELETE":DELETE
+    }
+
+    _editable_columns = ("domain","method","location")
+    tcontrol = django_models.ForeignKey(TrafficControl, on_delete=django_models.CASCADE,editable=False,null=False)
+    domain = django_models.CharField(max_length=128,null=False,editable=True)
+    method = django_models.PositiveSmallIntegerField(choices=METHOD_CHOICES,null=False,editable=True)
+    location = django_models.CharField(max_length=256,null=False,editable=True)
+    modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
+
+    class Meta:
+        verbose_name_plural = "{}Traffic Control Locations"
+        unique_together = [["domain","method","location"]]
+
 
 class UserListener(object):
     @staticmethod
@@ -1925,8 +2620,8 @@ if defaultcache:
         def status(cls):
             try:
                 last_refreshed = cls.get_cachetime()
-                last_synced = defaultcache.get(cls.key)
-                if not last_synced:
+                cls.last_synced = defaultcache.get(cls.key)
+                if not cls.last_synced:
                     if last_refreshed:
                         return (UP_TO_DATE,last_refreshed)
                     else:
@@ -1936,7 +2631,7 @@ if defaultcache:
                 count =  cls.model.objects.all().count()
                 if count != cls.get_cachesize():
                     #cache is outdated
-                    if last_synced > last_refreshed:
+                    if cls.last_synced > last_refreshed:
                         return (OUTDATED,last_refreshed)
                     else:
                         return (OUT_OF_SYNC,last_refreshed)
@@ -1948,14 +2643,14 @@ if defaultcache:
                 if o:
                     if last_refreshed and last_refreshed >= o.modified:
                         return (UP_TO_DATE,last_refreshed)
-                    elif o.modified > last_synced:
+                    elif o.modified > cls.last_synced:
                         return (OUT_OF_SYNC,last_refreshed)
                 else:
                     return (UP_TO_DATE,last_refreshed)
     
                 if not last_refreshed:
                     return (OUTDATED,last_refreshed)
-                elif last_synced > last_refreshed:
+                elif cls.last_synced > last_refreshed:
                     return (OUTDATED,last_refreshed)
                 else:
                     return (UP_TO_DATE,last_refreshed)
@@ -1986,6 +2681,74 @@ if defaultcache:
                 return False
 
 
+    class TrafficControlChange(ModelChange):
+        key = "tcontrol_last_modified"
+        model = TrafficControlLocation
+
+        @classmethod
+        def get_cachetime(cls):
+            return cache._tcontrols_ts
+
+        @classmethod
+        def get_cachesize(cls):
+            return cache._tcontrolss_size
+
+        @classmethod
+        def get_next_refreshtime(cls):
+            return cache._tcontrol_cache_check_time.next_runtime
+
+        @classmethod
+        def refresh_cache_if_required(cls):
+            cache.refresh_tcontrol_cache()
+
+        @staticmethod
+        @receiver(post_save, sender=TrafficControl)
+        def post_save_tcontrol(sender,*args,**kwargs):
+            TrafficControlChange.change()
+
+        @staticmethod
+        @receiver(post_delete, sender=TrafficControl)
+        def post_delete_tcontrol(sender,*args,**kwargs):
+            TrafficControlChange.change()
+
+        @staticmethod
+        @receiver(m2m_changed, sender=TrafficControl.exempt_groups.through)
+        def m2m_changed_tcontrol(sender,*args,**kwargs):
+            TrafficControlChange.change()
+
+        @staticmethod
+        @receiver(post_save, sender=TrafficControlLocation)
+        def post_save_location(sender,*args,**kwargs):
+            TrafficControlChange.change()
+
+        @staticmethod
+        @receiver(post_delete, sender=TrafficControlLocation)
+        def post_delete_location(sender,*args,**kwargs):
+            TrafficControlChange.change()
+
+        @classmethod
+        def status(cls):
+            status = super().status()
+            if status[0] != UP_TO_DATE:
+                return status
+
+            try:
+                last_refreshed = cls.get_cachetime()
+                o = TrafficControl.objects.all().order_by("-modified").first()
+                if o:
+                    if last_refreshed and last_refreshed >= o.modified:
+                        return (UP_TO_DATE,last_refreshed)
+                    elif o.modified > cls.last_synced:
+                        return (OUT_OF_SYNC,last_refreshed)
+                else:
+                    return (UP_TO_DATE,last_refreshed)
+    
+                return (UP_TO_DATE,last_refreshed)
+            except:
+                #Failed, assume it is up to date
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to get the status of the model 'TrafficControl' from cache.{}".format(traceback.format_exc()))
+                return (UP_TO_DATE,last_refreshed)
+
     class IdentityProviderChange(ModelChange):
         key = "idp_last_modified"
         model = IdentityProvider
@@ -2008,12 +2771,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=IdentityProvider)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             IdentityProviderChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=IdentityProvider)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             IdentityProviderChange.change()
 
     class CustomizableUserflowChange(ModelChange):
@@ -2038,12 +2801,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=CustomizableUserflow)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             CustomizableUserflowChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=CustomizableUserflow)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             CustomizableUserflowChange.change()
 
     class UserGroupChange(ModelChange):
@@ -2070,12 +2833,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=UserGroup)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             UserGroupChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=UserGroup)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             UserGroupChange.change()
 
     class UserAuthorizationChange(ModelChange):
@@ -2102,12 +2865,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=UserAuthorization)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             UserAuthorizationChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=UserAuthorization)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             UserAuthorizationChange.change()
 
     class UserGroupAuthorizationChange(ModelChange):
@@ -2134,12 +2897,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=UserGroupAuthorization)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             UserGroupAuthorizationChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=UserGroupAuthorization)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             UserGroupAuthorizationChange.change()
 
 else:
@@ -2185,6 +2948,47 @@ else:
                 #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
 
+    class TrafficControlChange(ModelChange):
+        model = TrafficControlLocation
+
+        @classmethod
+        def get_cachetime(cls):
+            return cache._tcontrols_ts
+
+        @classmethod
+        def get_cachesize(cls):
+            return cache._tcontrols_size
+
+        @classmethod
+        def get_next_refreshtime(cls):
+            return cache._tcontrol_cache_check_time.next_runtime
+
+        @classmethod
+        def refresh_cache_if_required(cls):
+            cache.refresh_tcontrol_cache()
+
+        @classmethod
+        def status(cls):
+            status = super().status()
+            if status[0] != UP_TO_DATE:
+                return status
+
+            try:
+                last_refreshed = cls.get_cachetime()
+                o = TrafficControl.objects.all().order_by("-modified").first()
+                if o:
+                    if last_refreshed and last_refreshed >= o.modified:
+                        return (UP_TO_DATE,last_refreshed)
+                    elif o.modified > cls.last_synced:
+                        return (OUT_OF_SYNC,last_refreshed)
+                else:
+                    return (UP_TO_DATE,last_refreshed)
+    
+                return (UP_TO_DATE,last_refreshed)
+            except:
+                #Failed, assume it is up to date
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to get the status of the model 'TrafficControl' from cache.{}".format(traceback.format_exc()))
+                return (UP_TO_DATE,last_refreshed)
     class IdentityProviderChange(ModelChange):
         model = IdentityProvider
 

@@ -8,6 +8,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://ajax.aspnetcdn.com/ajax/bootstrap/3.3.5/css/bootstrap.min.css" rel="stylesheet" type="text/css">
     <script src="/sso/static/admin/js/vendor/jquery/jquery.min.js"></script>
+    <style>
+        .buttons button:disabled,
+        .buttons button[disabled] {
+            border: 1px solid #999999;
+            background-color: #cccccc;
+            color: #666666;
+    </style>
+    <script type="text/javascript">
+        var submitted = false
+        function submitonce() {
+            if (submitted) {
+                return false
+            } else {
+                submitted = true
+                return true
+            }
+        }
+
+        function enableButton(button,button_text,enabletime,enabled) {
+            if (enabletime > 0) {
+                setTimeout(function () {
+                    enabletime -= 1
+                    if (enabletime > 0) {
+                        button.text(button_text + " " + enabletime);
+                        enableButton(button,button_text,enabletime,enabled);
+                    } else {
+                        button.prop("disabled",!enabled);
+                        button.text(button_text);
+                    }
+                }, 1000);
+            } else {
+                button.prop("disabled",!enabled);
+                button.text(button_text);
+            }
+        }
+    </script>
     {% include "authome/inc/idp_icons.html"%}
     {% include "authome/inc/self_assertedcss.html"%}
     {{extracss | safe}}
