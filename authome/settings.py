@@ -147,6 +147,7 @@ SESSION_AGE=env('SESSION_AGE',default=1209600)
 SESSION_COOKIE_AGE=SESSION_AGE + 86400
 
 RAISE_EXCEPTION_4_INVALID_DOMAIN = env("RAISE_EXCEPTION_4_INVALID_DOMAIN",default=True)
+DOMAIN_WHITELIST=env('DOMAIN_WHITELIST',default=[".dbca.wa.gov.au",".dpaw.wa.gov.au"])
 
 if SESSION_COOKIE_DOMAIN:
     _session_cookie_domain_len = len(SESSION_COOKIE_DOMAIN)
@@ -733,6 +734,7 @@ else:
 SSL_VERIFY=env("SSL_VERIFY",default=True)
 
 SOCIAL_AUTH_ADMIN_SEARCH_FIELDS=["uid"]
+
 
 # Sentry settings
 project = tomllib.load(open(os.path.join(BASE_DIR, "pyproject.toml"), "rb"))

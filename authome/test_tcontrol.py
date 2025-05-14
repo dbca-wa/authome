@@ -6,7 +6,8 @@ from datetime import timedelta
 
 from django.test import TestCase
 from django.db import connections
-
+from django.conf import settings
+from django.core.cache import caches
 from django.utils import timezone
 
 from . import models
@@ -17,9 +18,25 @@ from authome.views.testviews import pseudo_auth
 from .basetest import BaseTestCase
 
 class TrafficControlTestCase(BaseTestCase):
+
+    def _clean_tcontrol_data(self,tcontrol):
+        keypattern = "{}*".format(settings.GET_TRAFFICCONTROL_CACHE_KEY(tcontrol.name))
+        for i in range(settings.TRAFFICCONTROL_CACHE_SERVERS):
+            if settings.TRAFFICCONTROL_CACHE_SERVERS == 1:
+                name = "tcontrol"
+            else:
+                name = "tcontrol{}".format(i)
+            client = caches[name].redis_client
+            tcontrolkeys = client.keys(keypattern)
+            if tcontrolkeys:
+                print("Delete existing tcontrol keys({}),which is set by previous unitest, from redis server({}).".format(tcontrolkeys,settings.TRAFFICCONTROL_CACHE_SERVER[i]))
+                client.delete(*tcontrolkeys)
+
+            
+            
     def test_tcontrol_per_user(self):
         userlimit = 5
-        userlimitperiod = 10
+        userlimitperiod = 20
         client = "testuser01"
         clientip = "10.11.123.111"
         exempt = False
@@ -34,6 +51,7 @@ class TrafficControlTestCase(BaseTestCase):
                 "active":tcontrol_config.active
         })
         print("\n\nTest user traffic control, userlimit: {} , userlimitperiod: {}".format(userlimit,utils.format_timedelta(userlimitperiod)))
+        self._clean_tcontrol_data(tcontrol_config)
         try:
             now = timezone.localtime()
             today = now.replace(hour=0,minute=0,second=0,microsecond=0)
@@ -65,8 +83,8 @@ class TrafficControlTestCase(BaseTestCase):
             tcontrol_config.delete()
                     
     def test_tcontrol_per_ip(self):
-        iplimit = 50
-        iplimitperiod = 10
+        iplimit = 10
+        iplimitperiod = 20
         users = 10
         clients = dict([("testuser{}".format(i),[0,0,0,0]) for i in range(1,users + 1,1)])
         clientip = "10.11.123.111"
@@ -82,6 +100,7 @@ class TrafficControlTestCase(BaseTestCase):
                 "active":tcontrol_config.active
         })
         print("\n\nTest IP traffic control, iplimit: {} , iplimitperiod: {}".format(iplimit,utils.format_timedelta(iplimitperiod)))
+        self._clean_tcontrol_data(tcontrol_config)
         try:
             now = timezone.localtime()
             today = now.replace(hour=0,minute=0,second=0,microsecond=0)
@@ -155,6 +174,7 @@ class TrafficControlTestCase(BaseTestCase):
                 "block":tcontrol_config.block,
         })
         print("\n\nTest user traffic control, est_processtime: {} milliseconds , buckettime: {} milliseconds, concurrency: {}".format(est_processtime,buckettime,concurrency))
+        self._clean_tcontrol_data(tcontrol_config)
         try:
             buckets = int(est_processtime / buckettime)
             #totalbuckets = buckets * 6
@@ -174,11 +194,12 @@ class TrafficControlTestCase(BaseTestCase):
             milliseconds = int((now - today).total_seconds() * 1000)
     
             starttime = today + timedelta(milliseconds = milliseconds + est_processtime - milliseconds % est_processtime)
+            firstbucketstarttime = starttime
             
             bucketrequests = [] * buckets
 
             def _detailmessage():
-                details="\n        ".join(["{0} : Requests :{1}, Allowed Requests: {2}, Denied Requests: {3}, Exempt Requests: {4}".format( (starttime - timedelta(milliseconds=(len(bucketrequests) - 1 - i) * buckettime)).strftime("%Y-%m-%d %H:%M:%S.%f"),*bucketrequests[i]) for i in range(len(bucketrequests))])
+                details="\n        ".join(["{0} : Requests :{1}, Allowed Requests: {2}, Denied Requests: {3}, Exempt Requests: {4}".format( (firstbucketstarttime + timedelta(milliseconds= i * buckettime)).strftime("%Y-%m-%d %H:%M:%S.%f"),*bucketrequests[i]) for i in range(len(bucketrequests))])
                 return "{0}: Total Requests: {1}, Total Allowed Requests: {2}, Total Denied Requests: {3}, Total Exempt Requests: {4}\n    Current Requests: {5}, Allowed Requests: {6}, Denied Requests: {7}, Exempt Requests: {8}\n        {9}".format(
                     starttime.strftime("%Y-%m-%d %H:%M:%S.%f"),
                     total_requests,
@@ -215,18 +236,26 @@ class TrafficControlTestCase(BaseTestCase):
 
                 waittime = starttime - timezone.localtime()
 
-                print("\n{} Bucket Test: Start to run the test at {}. wait {} milliseconds\n{}".format(bucketindex,starttime.strftime("%Y-%m-%d %H:%M:%S.%f"),waittime.total_seconds() * 1000,_detailmessage()))
-                time.sleep(waittime.total_seconds())
+                if waittime.total_seconds() > 0:
+                    time.sleep(waittime.total_seconds())
+                    print("\n^^^{} Begin to test {} bucket at {}. wait {} milliseconds\n{}".format(timezone.localtime().strftime("%Y-%m-%d %H:%M:%S.%f"),bucketindex,starttime.strftime("%Y-%m-%d %H:%M:%S.%f"),waittime.total_seconds() * 1000,_detailmessage()))
+                else:
+                    print("\n^^^{} Begin to test {} bucket at {}.{}".format(timezone.localtime().strftime("%Y-%m-%d %H:%M:%S.%f"),bucketindex,starttime.strftime("%Y-%m-%d %H:%M:%S.%f"),_detailmessage()))
 
                 for j in range(1,random.randint(1,math.ceil(concurrency * 3 / buckets)) + 1,1):
+                    now = timezone.localtime()
+                    if now >= starttime + timedelta(milliseconds=buckettime - 10):
+                        #current bucket is end
+                        break
+
                     if bucketindex < totalbuckets - buckets:
                         exempt = False if random.randint(0,1) == 0 else True
                     else:
                         exempt = False
-                    print("*** send a {} request.{}".format("exempt" if exempt else "non-exempt",tcontrol_config._buckets))
+                    total_requests += 1
+                    print("*** {}: send a {} request.{}".format(total_requests,"exempt" if exempt else "non-exempt",tcontrol_config._buckets))
                     result = check_tcontrol(tcontrol_config,clientip,client,exempt,test=True)
                     self.assertTrue(not result[0] or not isinstance(result[1],str),msg="{0}:  Check failed.{1}\n{2}\n{3}".format(timezone.localtime().strftime("%Y-%m-%d %H:%M:%S.%f"),result[1],_detailmessage(),tcontrol_config._buckets))
-                    total_requests += 1
                     if (allowed_requests + exempt_requests ) < concurrency:
                         #under limit
                         current_requests += 1
@@ -285,7 +314,7 @@ class TrafficControlTestCase(BaseTestCase):
                         self.assertFalse(result[0],msg="{0}:  already received {2} requests which is equal or greater than the concurrency({1}), should be denied by traffic control.result={3}\n{4}".format(timezone.localtime().strftime("%Y-%m-%d %H:%M:%S.%f"),concurrency,(allowed_requests + exempt_requests),result,_detailmessage()))
                         self.assertEqual(result[1],"CONCURRENCY",msg="{0}:  already received {2} requests which is equal or greater than the concurrency({1}), should be denied by concurrency traffic control.result={3}\n{4}".format(timezone.localtime().strftime("%Y-%m-%d %H:%M:%S.%f"),concurrency,(allowed_requests + exempt_requests),result,_detailmessage()))
 
-                print(_detailmessage())
+                print("\n$$${} End to test {} bucket: Start to run the test at {}.{}".format(timezone.localtime().strftime("%Y-%m-%d %H:%M:%S.%f"),bucketindex,starttime.strftime("%Y-%m-%d %H:%M:%S.%f"),_detailmessage()))
                 starttime = starttime + timedelta(milliseconds = buckettime)
         finally:
             tcontrol_config.delete()
@@ -334,6 +363,7 @@ class TrafficControlTestCase(BaseTestCase):
                 "enabled":tcontrol_config.enabled
         })
         print("\n\nTest user traffic control, est_processtime: {} milliseconds , buckettime: {} milliseconds, concurrency: {}".format(est_processtime,buckettime,concurrency))
+        self._clean_tcontrol_data(tcontrol_config)
         try:
             buckets = int(est_processtime / buckettime)
             if userlimitperiod >= iplimitperiod:
@@ -364,6 +394,7 @@ class TrafficControlTestCase(BaseTestCase):
             milliseconds = int((now - today).total_seconds() * 1000)
     
             bucketstarttime = today + timedelta(milliseconds = milliseconds + est_processtime - milliseconds % est_processtime)
+            firstbucketstarttime = bucketstarttime
 
             userstarttime = today + timedelta(milliseconds = milliseconds + userlimitperiod * 1000 - milliseconds % (userlimitperiod * 1000))
             if userstarttime < bucketstarttime:
@@ -373,7 +404,7 @@ class TrafficControlTestCase(BaseTestCase):
                 ipstarttime += timedelta(seconds=iplimitperiod)
             
             def _detailmessage():
-                details="\n        ".join(["{0} : Requests :{1}, Allowed Requests: {2}, Denied Requests: {3}, Exempt Requests: {4}".format( (bucketstarttime - timedelta(milliseconds=(len(bucketrequests) - 1 - i) * buckettime)).strftime("%Y-%m-%d %H:%M:%S.%f"),*bucketrequests[i]) for i in range(len(bucketrequests))])
+                details="\n        ".join(["{0} : Requests :{1}, Allowed Requests: {2}, Denied Requests: {3}, Exempt Requests: {4}".format( (firstbucketstarttime + timedelta(milliseconds=i * buckettime)).strftime("%Y-%m-%d %H:%M:%S.%f"),*bucketrequests[i]) for i in range(len(bucketrequests))])
                 return "{0}: Total Requests: {1}, Total Allowed Requests: {2}, Total Denied Requests: {3}, Total Exempt Requests: {4}\n    Current Requests: {5}, Allowed Requests: {6}, Denied Requests: {7}, Exempt Requests: {8}\n        {9}".format(
                     bucketstarttime.strftime("%Y-%m-%d %H:%M:%S.%f"),
                     total_requests,
@@ -434,18 +465,24 @@ class TrafficControlTestCase(BaseTestCase):
                 now = timezone.localtime()
                 waittime = bucketstarttime - now
 
-                print("\n{}({}): Test: Start to run the test at {}. wait {} milliseconds. allowed requests={} , exempt requests={}".format(bucketindex,now.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketstarttime.strftime("%Y-%m-%d %H:%M:%S.%f"),waittime.total_seconds() * 1000 ,allowed_requests,exempt_requests))
-                time.sleep(waittime.total_seconds())
+                print("\n^^^{} Start to test {} bucket at {}. wait {} milliseconds. allowed requests={} , exempt requests={}".format(now.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketindex,bucketstarttime.strftime("%Y-%m-%d %H:%M:%S.%f"),waittime.total_seconds() * 1000 ,allowed_requests,exempt_requests))
+                if waittime.total_seconds() > 0:
+                    time.sleep(waittime.total_seconds())
 
                 bucket_test_requests = random.randint(1,math.ceil(concurrency * 5 / buckets))
                 for j in range(1,bucket_test_requests + 1,1):
+                    now = timezone.localtime()
+                    if now >= bucketstarttime + timedelta(milliseconds=buckettime - 10):
+                        #current bucket is end
+                        break
                     if bucketindex < totalbuckets - buckets:
                         exempt = False if random.randint(0,1) == 0 else True
                     else:
                         exempt = False
                     client = "testuser{}".format(random.randint(1,users))
-                    print("\n****************************\n{}: send traccif control request. client={} ,clientip={} , exempt={} , user allowed requests={} , user exempted requests={}, ip allowed requests={} , ip exempted requests={} , allowd requests={} , exempt requests={}".format(now.strftime("%Y-%m-%d %H:%M:%S.%f"),client,clientip,exempt,clients[client][1],clients[client][3],ip_allowed_requests ,ip_exempt_requests ,allowed_requests,exempt_requests))
-                    result = check_tcontrol(tcontrol_config,clientip,client,exempt,test=True)
+                    total_requests += 1
+                    print("\n***{}: send a traffic control request. client={} ,clientip={} , exempt={} , user allowed requests={} , user exempted requests={}, ip allowed requests={} , ip exempted requests={} , allowd requests={} , exempt requests={}".format(now.strftime("%Y-%m-%d %H:%M:%S.%f"),client,clientip,exempt,clients[client][1],clients[client][3],ip_allowed_requests ,ip_exempt_requests ,allowed_requests,exempt_requests))
+                    result = check_tcontrol(tcontrol_config,clientip,client,exempt,test=True,checktime=now)
                     self.assertTrue(not result[0] or not isinstance(result[1],str),msg="{0}:  Check failed.{1}\n{2}\n{3}".format(timezone.localtime().strftime("%Y-%m-%d %H:%M:%S.%f"),result[1],_detailmessage(),tcontrol_config._buckets))
                     #check user limit
                     clients[client][0] += 1
@@ -478,7 +515,7 @@ class TrafficControlTestCase(BaseTestCase):
                         clients[client][4] += 1
                         total_denied_by_others_requests += 1
                         self.assertFalse(result[0],msg="{0}: The IP has sent {2} requests, {7} requests({3} allowed,{5} exmpted) which is greater than the ip limit({1}) are allowed, {4} requests are denied, {6} requests are denied because of others; should be denied by ip traffic control. {8}".format(timezone.localtime().strftime("%Y-%m-%d %H:%M:%S.%f"),iplimit,ip_requests,ip_allowed_requests,ip_denied_requests,ip_exempt_requests,ip_denied_by_others_requests,(ip_allowed_requests + ip_exempt_requests),result))
-                        self.assertEqual(result[1],"IP",msg="{0}: The IP has sent {2} requests, {7} requests({3} allowed,{5} exmpted) which is greater than the ip limit({1}) are allowed, {4} requests are denied, {6} requests are denied because of others; should be denied by ip traffic control. {8}".format(timezone.localtime().strftime("%Y-%m-%d %H:%M:%S.%f"),iplimit,ip_requests,ip_allowed_requests,ip_denied_requests,ip_exempt_requests,ip_denied_by_others_requests,(ip_allowed_requests + ip_exempt_requests),result))
+                        self.assertEqual(result[1],"IP",msg="{0}: The IP has sent {2} requests, {7} requests({3} allowed,{5} exmpted) which is greater than the ip limit({1}) are allowed, {4} requests are denied, {6} requests are denied because of others; should be denied by ip traffic control. {8}\r\n{9}".format(timezone.localtime().strftime("%Y-%m-%d %H:%M:%S.%f"),iplimit,ip_requests,ip_allowed_requests,ip_denied_requests,ip_exempt_requests,ip_denied_by_others_requests,(ip_allowed_requests + ip_exempt_requests),result,_detailmessage()))
 
                         continue
                     else:
@@ -553,8 +590,8 @@ class TrafficControlTestCase(BaseTestCase):
                         self.assertEqual(result[1],"CONCURRENCY",msg="{0}:  already received {2} requests which is equal or greater than the concurrency({1}), should be denied by concurrency traffic control.result={5}\nallowed requests={3} , exempt requests={4}\n{6}".format(timezone.localtime().strftime("%Y-%m-%d %H:%M:%S.%f"),concurrency,(allowed_requests + exempt_requests),result,allowed_requests,exempt_requests,_detailmessage()))
 
                 clients_details="\n        ".join(["{0} : Requests :{1}, Allowed Requests: {2}, Denied Requests: {3}, Exempt Requests: {4}, Denined By Others Requests: {5}".format(k,*v) for k,v in clients.items()])
-                bucket_details="\n            ".join(["{0} : Requests :{1}, Allowed Requests: {2}, Denied Requests: {3}, Exempt Requests: {4}".format( (bucketstarttime - timedelta(milliseconds=(len(bucketrequests) - 1 - i) * buckettime)).strftime("%Y-%m-%d %H:%M:%S.%f"),*bucketrequests[i]) for i in range(len(bucketrequests))])
-                print("""{0}: {21} requests have been sent.
+                bucket_details="\n            ".join(["{0} : Requests :{1}, Allowed Requests: {2}, Denied Requests: {3}, Exempt Requests: {4}".format( (firstbucketstarttime + timedelta(milliseconds=i * buckettime)).strftime("%Y-%m-%d %H:%M:%S.%f"),*bucketrequests[i]) for i in range(len(bucketrequests))])
+                print("""$$$ {0}: End to test {22} bucket. {21} requests have been sent.
     User Traffic Control({1} - {2})
         {3}
     IP Traffic Control({4} - {5}): 
@@ -589,7 +626,9 @@ class TrafficControlTestCase(BaseTestCase):
 
                     bucket_details,
 
-                    bucket_test_requests
+                    bucket_test_requests,
+
+                    bucketindex
                 ))
     
                 bucketstarttime = bucketstarttime + timedelta(milliseconds = buckettime)

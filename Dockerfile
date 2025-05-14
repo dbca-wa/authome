@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Prepare the base environment.
-FROM python:3.12.4-slim-bookworm AS builder_base_authome
+FROM python:3.12.10-slim-bookworm AS builder_base_authome
 LABEL org.opencontainers.image.authors=asi@dbca.wa.gov.au
 LABEL org.opencontainers.image.source=https://github.com/dbca-wa/authome
 RUN apt-get update -y \

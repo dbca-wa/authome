@@ -745,7 +745,7 @@ def _get_processid():
 
 #end for debug
 
-def _check_tcontrol(tcontrol,clientip,client,exempt,test=False):
+def _check_tcontrol(tcontrol,clientip,client,exempt,test=False,checktime=None):
     exception = None
 
     #begin for debug
@@ -779,7 +779,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False):
 
         if not exempt and client and tcontrol.userlimit > 0 and tcontrol.userlimitperiod > 0:
             try:
-                now = timezone.localtime()
+                now = checktime or timezone.localtime()
                 today = now.replace(hour=0,minute=0,second=0,microsecond=0)
                 milliseconds = math.floor((now - today).total_seconds() * 1000)
                 keyprefix = "{}_{}_{}".format(tcontrol.name,tcontrol.userlimitperiod,client)
@@ -817,7 +817,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False):
         iplimitkey = None
         if clientip and tcontrol.iplimit > 0 and tcontrol.iplimitperiod > 0:
             try:
-                now = timezone.localtime()
+                now = checktime or timezone.localtime()
                 today = now.replace(hour=0,minute=0,second=0,microsecond=0)
                 milliseconds = math.floor((now - today).total_seconds() * 1000)
                 keyprefix = "{}_{}_{}".format(tcontrol.name,tcontrol.iplimitperiod,clientip)
@@ -873,7 +873,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False):
         if tcontrol.concurrency > 0 and tcontrol.est_processtime > 0:
             try:
                 pipe = None
-                now = timezone.localtime()
+                now = checktime or timezone.localtime()
                 today = now.replace(hour=0,minute=0,second=0,microsecond=0)
                 milliseconds = math.floor((now - today).total_seconds() * 1000)
                 expiredbuckets_requests = 0
@@ -1810,7 +1810,6 @@ def home(request):
     """
     #register client domain
     cache.register_clientdomain(request.get_host())
-
     next_url = request.GET.get('next', None)
     if next_url:
         #build an absolute url
@@ -1843,11 +1842,12 @@ def home(request):
     else:
         next_path = None
     #next_path should be None or a complete url without paramters and anchor
-
     if not request.user.is_authenticated:
         #user is not authenticated 
         if request.get_host() != settings.SESSION_COOKIE_DOMAIN and not request.get_host().endswith(sessioncookiedomain):
             #not the subdomain of the session cookie domain, maybe the user is authenticated into auth2, redirect to auth2 domain to check
+            if not next_url:
+                next_url = "https://{}".format(request.get_host())
             return HttpResponseRedirect("https://{}/sso?next={}".format(settings.AUTH2_DOMAIN,urllib.parse.quote(next_url)))
 
     #check whether rquest is authenticated and authorized

@@ -229,7 +229,7 @@ class _BaseMemoryCache(object):
         return self._clientdomains_key
     
     def check_clientdomain(self,domain):
-        if domain.endswith(".dbca.wa.gov.au") or domain.endswith(".dpaw.wa.gov.au"):
+        if any(domain.endswith(d) for d in settings.DOMAIN_WHITELIST):
             return True
 
         if domain in self._clientdomains:
@@ -244,7 +244,7 @@ class _BaseMemoryCache(object):
             return False
 
     def register_clientdomain(self,domain):
-        if domain.endswith(".dbca.wa.gov.au") or domain.endswith(".dpaw.wa.gov.au"):
+        if any(domain.endswith(d) for d in settings.DOMAIN_WHITELIST):
             return
 
         self._clientdomains.add(domain)

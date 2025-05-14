@@ -177,7 +177,6 @@ class SessionMiddleware(MiddlewareMixin):
                         max_age = request.session.get_expiry_age()
                         expires_time = time.time() + max_age
                         expires = http_date(expires_time)
-
                     response.set_cookie(
                         settings.SESSION_COOKIE_NAME,
                         request.session.cookie_value,

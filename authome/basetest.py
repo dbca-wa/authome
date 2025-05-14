@@ -140,7 +140,8 @@ class BaseTestCase(TestCase):
                 if obj:
                     obj.email = test_user[1]
                 else:
-                    obj = User(username=test_user[0],email=test_user[1])
+                    firstname,lastname = test_user[1].split('@',1)
+                    obj = User(username=test_user[0],email=test_user[1],first_name=firstname,last_name=lastname)
                 obj.clean()
                 obj.save()
                 users[test_user[0]] = obj
