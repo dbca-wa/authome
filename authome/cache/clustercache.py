@@ -501,29 +501,31 @@ class MemoryCache(cache.MemoryCache):
         res = self._send_request_to_cluster(None,clusterid,_send_request)
         return res.text
 
-    def tcontrol(self,clusterid,tcontrolid,clientip,client,exempt):
+    def clear_tcontroldata(self,clusterid,tcontrolid):
+        def _send_request(cluster):
+            url = "{}{}?tcontrol={}".format(
+                cluster.endpoint,
+                reverse('test:clear_tcontroldata'),
+                tcontrolid
+            )
+            return requests.get(url,headers=self._get_headers(),timeout=settings.TRAFFICCONTROL_TIMEOUT,verify=settings.SSL_VERIFY)
+        self._send_request_to_cluster(None,clusterid,_send_request)
+
+    def tcontrol(self,clusterid,tcontrolid,clientip,client,exempt,test=False):
         """
         traffic control
         Return True if allowed; otherwise False
         """
         def _send_request(cluster):
-            if client:
-                url = "{}{}?clientip={}&client={}&tcontrol={}{}".format(
-                    cluster.endpoint,
-                    reverse('cluster:tcontrol'),
-                    quote_plus(clientip),
-                    client,
-                    tcontrolid,
-                    "&exempt=1" if exempt else ""
-                )
-            else:
-                url = "{}{}?clientip={}&tcontrol={}&{}".format(
-                    cluster.endpoint,
-                    reverse('cluster:tcontrol'),
-                    quote_plus(clientip),
-                    tcontrolid,
-                    "&exempt=1" if exempt else ""
-                )
+            url = "{}{}?clientip={}&tcontrol={}{}{}".format(
+                cluster.endpoint,
+                reverse('cluster:tcontrol'),
+                quote_plus(clientip),
+                tcontrolid,
+                "&client={}" if client else "",
+                "&exempt=1" if exempt else "",
+                "&test=1" if test else "",
+            )
             return requests.get(url,headers=self._get_headers(),timeout=settings.TRAFFICCONTROL_TIMEOUT,verify=settings.SSL_VERIFY)
         try:
             res = self._send_request_to_cluster(None,clusterid,_send_request)

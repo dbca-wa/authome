@@ -6,7 +6,7 @@ import time
 import random
 import socket
 import requests
-from datetime import timedelta
+from datetime import timedelta,datetime
 from urllib.parse import quote_plus
 
 from django.test import TestCase
@@ -92,6 +92,7 @@ class TrafficControlPerformanceTestCase(testutils.StartServerMixin,TestCase):
         est_processtime = 800
         buckettime = 40
         concurrency=10
+        timeout=60
 
         if self.TCONTROLREQUEST_INTERVAL:
             tcontrol_data = {
@@ -107,6 +108,7 @@ class TrafficControlPerformanceTestCase(testutils.StartServerMixin,TestCase):
                     "buckettime":buckettime,
                     "concurrency":concurrency,
                     "block":block,
+                    "timeout":timeout,
                     "enabled":True
                 }
             }
@@ -138,6 +140,10 @@ class TrafficControlPerformanceTestCase(testutils.StartServerMixin,TestCase):
                 print("Wait the traffic control data to be refreshed.")
                 res = requests.get(self.get_refresh_modelcache_url("TrafficControl"),headers=self.request_headers,verify=settings.SSL_VERIFY,auth=self.UNITEST_AUTH)
                 res.raise_for_status()
+
+            #print("Try to delete tcontrol data")
+            #res = requests.get(cls.get_clear_tcontroldata_url(),headers=cls.request_headers,allow_redirects=False,verify=settings.SSL_VERIFY,auth=self.UNITEST_AUTH)
+            #res.raise_for_status()
 
         processes = []
         authprocesses = []
@@ -543,7 +549,19 @@ AUth Performance Test Result Details:
                     traceback.print_exc()
                     result = [True,str(ex),0]
                 print("***Get tcontrol result {1}\t\t\t url='{0}'".format(url,result))
-                exectime = (timezone.localtime() - start).total_seconds() * 1000
+                if isinstance(result[1],dict):
+                    if result[1].get("bookingtime"):
+                        endtime = timezone.make_aware(datetime.strptime(result[1].get("bookingtime"),"%Y-%m-%d %H:%M:%S.%f"))
+                    else:
+                        endtime = timezone.localtime()
+                elif result[1]:
+                    try:
+                        endtime = timezone.make_aware(datetime.strptime(result[1],"%Y-%m-%d %H:%M:%S.%f"))
+                    except:
+                        endtime = timezone.localtime()
+                else:
+                    endtime = timezone.localtime()
+                exectime = (endtime - start).total_seconds() * 1000
                 total_requests += 1
                 if min_exectime is None:
                     min_exectime = exectime

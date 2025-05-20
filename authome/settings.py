@@ -355,6 +355,14 @@ else:
 TRAFFICCONTROL_TIMEDIFF=env('TRAFFICCONTROL_TIMEDIFF',default=5)# milliseconds, the maximum time difference among auth2 server processes, it should be less than a few milliseconds
 TRAFFICCONTROL_TIMEDIFF=timedelta(milliseconds=TRAFFICCONTROL_TIMEDIFF)
 
+TRAFFICCONTROL_TIMEOUT=env('TRAFFICCONTROL_TIMEOUT',default=300)# seconds, the default timeout setting of  concurrency traffic control
+if TRAFFICCONTROL_TIMEOUT <= 0:
+    TRAFFICCONTROL_TIMEOUT = 300
+elif TRAFFICCONTROL_TIMEOUT > 1800:
+    TRAFFICCONTROL_TIMEOUT = 1800
+
+TRAFFICCONTROL_TIMEOUT=timedelta(seconds=TRAFFICCONTROL_TIMEOUT)
+
 PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
 
 DBCA_STAFF_GROUPID=env('DBCA_STAFF_GROUPID',default="DBCA") # The emails belongs to group 'dbca staff' are allowed to self sign up (no pre-registration required).

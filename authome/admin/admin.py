@@ -744,9 +744,9 @@ class TrafficControlLocationInline(DatetimeMixin,djangoadmin.TabularInline):
 
 
 class TrafficControlAdmin(PermissionCheckMixin,CacheableListTitleMixin,DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmin):
-    list_display = ('name','enabled','est_processtime','buckettime','concurrency','block','iplimit','iplimitperiod','userlimit','userlimitperiod','_modified','_created')
+    list_display = ('name','enabled','est_processtime','buckettime','concurrency','timeout','block','iplimit','iplimitperiod','userlimit','userlimitperiod','_modified','_created')
     readonly_fields = ('_modified','_created')
-    fields = ('name','enabled','est_processtime','buckettime','concurrency',"block",'iplimit','iplimitperiod','userlimit','userlimitperiod','exempt_include','exempt_groups','_modified','_created')
+    fields = ('name','enabled','est_processtime','buckettime','concurrency','timeout',"block",'iplimit','iplimitperiod','userlimit','userlimitperiod','exempt_include','exempt_groups','_modified','_created')
     ordering = ('name',)
     search_fields=("email",)
     form = forms.TrafficControlForm

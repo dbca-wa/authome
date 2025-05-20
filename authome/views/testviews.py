@@ -355,20 +355,41 @@ def search_model_4_test(request,name):
 def test_tcontrol(request):
     client = request.GET.get("client")
     clientip = request.GET.get("clientip")
-    debug = request.GET.get("debug","0") == "1"
+    test = request.GET.get("test","0") == "1"
     tcontrol = cache.tcontrols.get(int(request.GET.get("tcontrol")))
     exempt = True if request.GET.get("exempt") == "1" else False
     if not tcontrol or not tcontrol.active:
         #not traffic control configured
         result = [True,"Tcontrol Not Configured",0]
     else:
-        result = views._check_tcontrol(tcontrol,clientip,client,exempt,debug=debug)
+        result = views._check_tcontrol(tcontrol,clientip,client,exempt,test=test)
     return JsonResponse(result, safe=False)
+
+def clear_tcontroldata(request):
+    tcontrol = cache.tcontrols.get(int(request.GET.get("tcontrol")))
+
+    if not settings.TRAFFICCONTROL_SUPPORTED:
+        cahce.clear_tcontroldata(settings.TRAFFICCONTROL_CLUSTERID,tcontrol.id)
+    else:
+        keypattern = "{}*".format(settings.GET_TRAFFICCONTROL_CACHE_KEY(tcontrol.name))
+        for i in range(settings.TRAFFICCONTROL_CACHE_SERVERS):
+            if settings.TRAFFICCONTROL_CACHE_SERVERS == 1:
+                name = "tcontrol"
+            else:
+                name = "tcontrol{}".format(i)
+            client = caches[name].redis_client
+            tcontrolkeys = client.keys(keypattern)
+            if tcontrolkeys:
+                client.delete(*tcontrolkeys)
+
+    return views.SUCCEED_RESPONSE
+
+
 
 def _tcontrol(request):
     clientip = request.headers.get("x-real-ip")
 
-    debug = request.GET.get("debug","false").lower() == "true"
+    test = request.GET.get("test","1") == "1"
     domain = request.get_host()
     path = request.headers.get("x-upstream-request-uri")
     if path:
@@ -405,9 +426,9 @@ def _tcontrol(request):
         client = request.COOKIES.get(settings.TRAFFICCONTROL_COOKIE_NAME) or None
 
     if settings.TRAFFICCONTROL_SUPPORTED:
-        result = views._check_tcontrol(tcontrol,clientip,client,exempt,debug)
+        result = views._check_tcontrol(tcontrol,clientip,client,exempt,test)
     else:
-        result = cahce.tcontrol(settings.TRAFFICCONTROL_CLUSTERID,tcontrol.id,clientip,client,exempt)
+        result = cahce.tcontrol(settings.TRAFFICCONTROL_CLUSTERID,tcontrol.id,clientip,client,exempt,test)
     
     return JsonResponse(result, safe=False)
 

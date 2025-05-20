@@ -150,6 +150,11 @@ class StartServerMixin(object):
         return url
 
     @classmethod
+    def get_clear_tcontroldata_url(cls,servername="standalone"):
+        url =  "{}/test/clear_tcontroldata".format(cls.get_baseurl(servername))
+        return url
+
+    @classmethod
     def get_login_user_url(cls,user,enabletoken=True,refreshtoken=False,servername="standalone"):
         return "{}/test/login_user?user={}&enabletoken={}&refreshtoken={}".format(cls.get_baseurl(servername),user,enabletoken,refreshtoken)
 

@@ -1891,11 +1891,21 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
     userlimitperiod = django_models.PositiveIntegerField(default=0,null=False,editable=True,help_text="The time period(seconds) configured for requests limit per user") #in seconds
     exempt_include = django_models.BooleanField(default=True,editable=True,help_text="Exempt the traffic control for the user groups which is include/exclude the exempt_groups")
     exempt_groups = django_models.ManyToManyField(UserGroup,editable=True,blank=True)
+    timeout = django_models.PositiveIntegerField(null=True,editable=True,help_text="The maximum seconds between the booking time and the current time.")
     modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
     created = django_models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
-        verbose_name_plural = "{}Traffic Control".format(" " * 7)
+        verbose_name_plural = "{}Traffic Control".format(" " * 7) 
+
+    _timeout = None
+    def get_timeout(self):
+        if not self._timeout:
+            if self.timeout:
+                self._timeout = timedelta(seconds=self.timeout)
+            else:
+                self._timeout = settings.TRAFFICCONTROL_TIMEOUT
+        return self._timeout
 
     class BucketIds(object):
         def __init__(self,tcontrol,startid,length):
@@ -2029,7 +2039,7 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
             if int(self.est_processtime / self.buckettime) > settings.TRAFFICCONTROL_MAX_BUCKETS:
                 raise ValidationError("The buckettime is too small, will slow the performance, it should be larger than {}".format( math.ceil(self.est_processtime / settings.TRAFFICCONTROL_MAX_BUCKETS)))
 
-            totalbucketstime = self.est_processtime +  (50000 + self.est_processtime - 50000 % self.est_processtime)
+            totalbucketstime = self.est_processtime +  (7200000 + self.est_processtime - 7200000 % self.est_processtime)
 
             minbuckets = int(totalbucketstime / self.buckettime)
 
@@ -2047,7 +2057,7 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
         elif bucketid < self.buckets:
             return bucketid
         else :
-            return bucketid - self.buckets
+            return bucketid % self.buckets
 
     def _log_buckets_error(self,msg):
         DebugLog.tcontrol(DebugLog.TRAFFIC_CONTROL_ERROR,self.name,None,None,"{11}.\ntcontrol={0} , est_processtime={1} milliseconds , buckettime={2} milliseconds , concurrency={3}\nbuckets_begintime={4} , buckets_beginid={5} , buckets_endtime={6} , buckets_endid={7} , buckets_fetchtime={8} , totalrequests={9}\nbuckets={10}".format(
@@ -2067,16 +2077,12 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
     @property
     def prefetch_buckets(self):
         """
-        Prefetch half of buckets for future booking
+        Prefetch all buckets for future booking
         """
-        try:
-            return self._prefetch_buckets
-        except:
-            if self._bucketslen:
-                self._prefetch_buckets = math.ceil(self._bucketslen / 2)
-            else:
-                self._prefetch_buckets = math.ceil(self.est_processtime / (self.buckettime * 2))
-            return self._prefetch_buckets
+        if self._bucketslen:
+            return self._bucketslen
+        else:
+            return self.est_processtime / self.buckettime
 
 
     def get_checkingbuckets(self,today,milliseconds_in_day,exempt):
@@ -2187,29 +2193,30 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
         #return the metadata to start booking a running spot in the future
         if self._buckets_totalrequests >= self.concurrency:
             #the total requests in the self._buckets already reach the limit. should book the running spot from the next bucket
+            #move forward the buckets until the requests of the left bucket is not zero
             i = 0
             while i < self._bucketslen:
-                i += 1
-                self._buckets.append(0)
                 if self._buckets[0]:
-                    self._buckets_totalrequests -= self._buckets[0]
-                    del self._buckets[0]
                     break
                 else:
+                    i += 1
+                    self._buckets.append(0)
                     del self._buckets[0]
 
             self._buckets_endtime += timedelta(milliseconds=self.buckettime * i)
             self._buckets_endid = self._normalize_bucketid(self._buckets_endid + i)
             self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
-            if i >= self._bucketslen:
+            if i > self._bucketslen:
                 self._log_buckets_error("get_checkingbuckets: All buckets in memory are empty")
                 raise Exception("All buckets are empty")
+            #the total requests in the self._buckets  reach the limit.
+            return [False,self._buckets_endtime,self._buckets_endid,self._buckets_endtime + timedelta(milliseconds=self.buckettime),self._buckets_endtime + timedelta(milliseconds=self.buckettime * self.prefetch_buckets),self._normalize_bucketid(self._buckets_endid + 1),self.BookingBucketIds(self,self._normalize_bucketid(self._buckets_endid + 1),self.prefetch_buckets)]
+        else:
+            #the total requests in the self._buckets doesn't reach the limit.
+            #don't reach the limit, retriving ${_bucketslen} buckets from the bucket self._buckets_endid  for future booking.
+            return [False,self._buckets_endtime,self._buckets_endid,self._buckets_endtime,self._buckets_endtime + timedelta(milliseconds=self.buckettime * (self.prefetch_buckets - 1)),self._buckets_endid,self.BookingBucketIds(self,self._buckets_endid,self.prefetch_buckets)]
 
-        #the total requests in the self._buckets doesn't reach the limit. book the running spot from the last bucket
-        #don't reach the limit, retriving ${_bucketslen} buckets from the bucket self._buckets_endid  for future booking.
-        return [False,self._buckets_endtime,self._buckets_endid,self._buckets_endtime,self._buckets_endtime + timedelta(milliseconds=self.buckettime * (self.prefetch_buckets - 1)),self._buckets_endid,self.BookingBucketIds(self,self._buckets_endid,self.prefetch_buckets)]
-
-    def set_buckets(self,buckettime,bucketid,current_bucket_requests,fetchtime,expiredbuckets_requests=None):
+    def set_buckets(self,buckettime,bucketid,bucketrequests,fetchtime,expiredbuckets_requests=None):
         """
         For current concurrency checking called after checking whether concurrency is exceed or not
         Called after fetching the expired buckets and increment the current bucket
@@ -2221,9 +2228,9 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
         2. the endtime of self._buckets is not match the endtime of current time bucket because the time gap between get_checkingbuckets and set_buckets is greater than self._buckettime
         3. If the fetchtime in memory is later than the fetchtime parameters, means the memory has the latest status and ignore the status parameters
         """
-        if current_bucket_requests < 0:
+        if bucketrequests < 0:
             self._log_buckets_error("set_buckets: current_bucket_requsts({0}) is less than 0. buckettime={1} , bucketid={2}, fetchtime={3}, expiredbuckets_requests={4}".format(
-                current_bucket_requests,
+                bucketrequests,
                 buckettime.strftime("%Y-%m-%dT%H:%M:%S.%f"),
                 bucketid,
                 fetchtime.strftime("%Y-%m-%dT%H:%M:%S.%f"),
@@ -2233,7 +2240,7 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
         if self._buckets_fetchtime and self._buckets_fetchtime > fetchtime:
             #the self._buckets data was set by the request which fetch the data from cache later than fetchtime
             #return directly.
-            return 
+           return 
 
         outdatedbuckets = 0
         if buckettime != self._buckets_endtime:
@@ -2248,8 +2255,9 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
                 else:
                     expiredbuckets_requests = []
 
-        #latest fetchtime
+        #set the latest fetchtime
         self._buckets_fetchtime = fetchtime
+        #set the expired buckets requests
         if expiredbuckets_requests:
             index = self._bucketslen - 1 - len(expiredbuckets_requests)
             for i in range(len(expiredbuckets_requests)):
@@ -2257,49 +2265,51 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
                     self._buckets_totalrequests += expiredbuckets_requests[i] - self._buckets[index]
                     self._buckets[index] = expiredbuckets_requests[i]
                 index += 1
-
+        #set the bucketrequests
         if outdatedbuckets == 0:
-            self._buckets_totalrequests += current_bucket_requests - self._buckets[-1]
-            self._buckets[-1] = current_bucket_requests
+            self._buckets_totalrequests += bucketrequests - self._buckets[-1]
+            self._buckets[-1] = bucketrequests
         elif outdatedbuckets < self._bucketslen:
-            self._buckets_totalrequests += current_bucket_requests - self._buckets[-1 - outdatedbuckets]
-            self._buckets[-1 - outdatedbuckets] = current_bucket_requests
+            self._buckets_totalrequests += bucketrequests - self._buckets[-1 - outdatedbuckets]
+            self._buckets[-1 - outdatedbuckets] = bucketrequests
 
-    def set_bookingbucket(self,buckettime,bucketid,requests,exceedlimit=False):
+    def set_bookingbucket(self,buckettime,bucketid,requests,totalrequests):
         """
         Set the already booked bucket data
-        Return Ture if set the data to memory cache ;return False if the data is outdated
+        Return Ture if set the data to memory  ;return False if memory is already in latest status
         """
+        up2date = True
         if buckettime != self._buckets_endtime:
             #race condition, some other clients have booked some bucket positions, the data should already be in latest status
             return False
         elif self._buckets[-1] >= requests:
             #race condition, some other clients have booked some bucket positions, the data should already be in latest status
-            return False
+            up2date = False
         else:
+            up2date = True
             self._buckets_totalrequests += requests - self._buckets[-1]
             self._buckets[-1] = requests
-            if exceedlimit:
-                #reach the limit
-                i = 0
-                while i < self._bucketslen:
-                    i += 1
-                    self._buckets.append(0)
-                    if self._buckets[0]:
-                        self._buckets_totalrequests -= self._buckets[0]
-                        del self._buckets[0]
-                        break
-                    else:
-                        del self._buckets[0]
+        if totalrequests >= self.concurrency:
+            #reach or exceed the limit and also the bucket endtime is not changed, move the buckets forward
+            i = 0
+            while i < self._bucketslen:
+                i += 1
+                self._buckets.append(0)
+                if self._buckets[0]:
+                    self._buckets_totalrequests -= self._buckets[0]
+                    del self._buckets[0]
+                    break
+                else:
+                    del self._buckets[0]
     
-                self._buckets_endtime += timedelta(milliseconds=self.buckettime * i)
-                self._buckets_endid = self._normalize_bucketid(self._buckets_endid + i)
-                self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+            self._buckets_endtime += timedelta(milliseconds=self.buckettime * i)
+            self._buckets_endid = self._normalize_bucketid(self._buckets_endid + i)
+            self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
         
-                if i >= self._bucketslen:
-                    self._log_buckets_error("set_bookingbuckets: All buckets in memory are empty")
-                    raise Exception("All buckets are empty")
-            return True
+            if i > self._bucketslen:
+                self._log_buckets_error("set_bookingbuckets: All buckets in memory are empty")
+                raise Exception("All buckets are empty")
+        return up2date
 
     def set_bookedbuckets(self,buckets_endtime,bookedbuckets_begintime,bookedbuckets_endtime,bookedbuckets_beginid,bookedbucketids,bookedbuckets_requests,fetchtime):
         """
@@ -2309,7 +2319,7 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
         """
 
         if not self._buckets_fetchtime or self._buckets_fetchtime <= fetchtime:
-            #update the memory status
+            #update the memory status of the buckets
             self._buckets_fetchtime = fetchtime
             if buckets_endtime != self._buckets_endtime:
                 #after get_checkingbuckets, some book requests changes the endtime.
@@ -2324,19 +2334,17 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
     
             #set bookedbuckets's requests to memory
 
-            #remove all buckets on the right side with requests 0
-            while True:
-                if not bookedbuckets_requests:
-                    break
-                elif not bookedbuckets_requests[-1]:
+            #found the index of the right bucket which request is not zero
+            endindex = len(bookedbuckets_requests) - 1
+            while endindex >= 0:
+                if not bookedbuckets_requests[endindex]:
                     #the right buckets data is 0.
-                    del bookedbuckets_requests[-1]
-                    del bookedbucketids[-1]
+                    endindex -= 1
                 else:
                     #the right buckets data is not 0.
                     break
     
-            if bookedbucketids:
+            if endindex >= 0:
                 #found some booked requests
                 j = 0
                 #set the endbucket of self._buckets if required
@@ -2362,27 +2370,27 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
                     #have booking in the future buckets, requests in the bucket list should reach the concurrency
                     #buckettime is the time of the previous bucket of the first non-overlap bucket
                     if self._buckets_totalrequests > self.concurrency:
-                        self._log_buckets_error("set_bookedbuckets: The running requests({1}) is greater than the concurrency({0}),bookedbucketids={2} , bookedbuckets_requests={3} , bookedbuckets_beginid={4} , bookedbuckets_begintime={5}".format(self.concurrency,total_requests,bookedbucketids,bookedbuckets_requests,bookedbuckets_beginid,bookedbuckets_begintime.strftime("%Y-%m-%dT%H:%M:%S.%f")))
+                        self._log_buckets_error("set_bookedbuckets: The running requests({1}) is greater than the concurrency({0}),bookedbucketids={2} , bookedbuckets_requests={3} , bookedbuckets_beginid={4} , bookedbuckets_begintime={5}".format(self.concurrency,self._buckets_totalrequests,bookedbucketids,bookedbuckets_requests,bookedbuckets_beginid,bookedbuckets_begintime.strftime("%Y-%m-%dT%H:%M:%S.%f")))
                     elif self._buckets_totalrequests < self.concurrency:
-                        self._log_buckets_error("set_bookedbuckets: The running requests({1}) is less than the concurrency({0}),bookedbucketids={2} , bookedbuckets_requests={3} , bookedbuckets_beginid={4} , bookedbuckets_begintime={5}".format(self.concurrency,total_requests,bookedbucketids,bookedbuckets_requests,bookedbuckets_beginid,bookedbuckets_begintime.strftime("%Y-%m-%dT%H:%M:%S.%f")))
+                        self._log_buckets_error("set_bookedbuckets: The running requests({1}) is less than the concurrency({0}),bookedbucketids={2} , bookedbuckets_requests={3} , bookedbuckets_beginid={4} , bookedbuckets_begintime={5}".format(self.concurrency,self._buckets_totalrequests,bookedbucketids,bookedbuckets_requests,bookedbuckets_beginid,bookedbuckets_begintime.strftime("%Y-%m-%dT%H:%M:%S.%f")))
     
-                    while j < len(bookedbucketids):
+                    while j <= endindex:
                         self._buckets_endid = self._normalize_bucketid(self._buckets_endid + 1)
                         self._buckets_endtime += timedelta(milliseconds=self.buckettime)
                         self._buckets_begintime += timedelta(milliseconds=self.buckettime)
-                        if bucketid != bookedbucketids[j]:
+                        if self._buckets_endid != bookedbucketids[j]:
                             #skipped future buckets, the corresponding current bucket should have no requests
                             if self._buckets[0] != 0:
                                 self._log_buckets_error("set_bookedbuckets: The requests of the skipped bucket({0}) in memory should be 0.".format(j))
                             self._buckets.append(0)
                             del self._buckets[0]
+                            continue
                         elif self._buckets[0] < bookedbuckets_requests[j]: 
-                            #maybe it is caused by race condition
+                            #maybe it is caused by race condition, the requests in memory should be not less than the requests in redis
                             self._buckets.append(self._buckets[0])
                             del self._buckets[0]
-                            j += 1
                         elif self._buckets[0] > bookedbuckets_requests[j]:
-                            if j == len(bucketids) - 1:
+                            if j == endindex:
                                 #the last bucket
                                 diff = self._buckets[0] - bookedbuckets_requests[j]
                                 self._buckets.append(bookedbuckets_requests[j])
@@ -2394,35 +2402,43 @@ class TrafficControl(CacheableMixin,DbObjectMixin,django_models.Model):
                                 self._log_buckets_error("set_bookedbuckets: The requests({1}) of the non-tail bucket({0}) should be not less than the requests({2}) of the first bucket.".format(j,bookedbuckets_requests[j],self._buckets[0]))
                                 self._buckets.append(self._buckets[0])
                                 del self._buckets[0]
-                            j += 1
                         else:
                             self._buckets.append(self._buckets[0])
                             del self._buckets[0]
+                        j += 1
+
+                    if self._buckets_totalrequests >= self.concurrency and endindex < len(bookedbuckets_requests) - 1:
+                        #already reach the limit, still have some buckets with zero requests at the right side. add them to the buckets
+                        while j < len(bookedbuckets_requests):
                             j += 1
+                            self._buckets.append(self._buckets[0])
+                            del self._buckets[0]
+                            j += 1
+            elif self._buckets_totalrequests >= self.concurrency:
+                #alrdady reach the limit
+                #can't find any buckets with non-zero requests. move the buckets to the next availabe bucket
+                i = 0
+                while i < self._bucketslen:
+                    i += 1
+                    self._buckets.append(0)
+                    if self._buckets[0]:
+                        self._buckets_totalrequests -= self._buckets[0]
+                        del self._buckets[0]
+                        break
+                    else:
+                        del self._buckets[0]
+
+                self._buckets_endtime += timedelta(milliseconds=self.buckettime * i)
+                self._buckets_endid = self._normalize_bucketid(self._buckets_endid + i)
+                self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
+                if i > self._bucketslen:
+                    self._log_buckets_error("get_checkingbuckets: All buckets in memory are empty")
+                    raise Exception("All buckets are empty")
+
 
         if self._buckets_totalrequests >= self.concurrency:
-            #reach the limit, try to book the running spot from the next available bucket
-            #fetched some empty buckets in the right side
-            i = 0
-            while i < self._bucketslen:
-                i += 1
-                self._buckets.append(0)
-                if self._buckets[0]:
-                    self._buckets_totalrequests -= self._buckets[0]
-                    del self._buckets[0]
-                    break
-                else:
-                    del self._buckets[0]
-
-            self._buckets_endtime += timedelta(milliseconds=self.buckettime * i)
-            self._buckets_endid = self._normalize_bucketid(self._buckets_endid + i)
-            self._buckets_begintime = self._buckets_endtime - timedelta(milliseconds=self.est_processtime - self.buckettime)
-
-            if i >= self._bucketslen:
-                self._log_buckets_error("set_bookedbuckets: All buckets in memory are empty")
-                raise Exception("All buckets are empty")
-
-            return True
+            #reach the limit, fetch the future buckets
+            return False
         else:
             #don't reach the limit. try to book the running spot from the endbucket
             return True
