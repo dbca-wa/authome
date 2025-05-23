@@ -747,6 +747,7 @@ def _get_processid():
 
 def _check_tcontrol(tcontrol,clientip,client,exempt,test=False,checktime=None):
     exception = None
+    warnings = []
 
     #begin for debug
     global _req_seq
@@ -885,7 +886,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False,checktime=None):
                 #begin for debug
                 previous_bucketsstatus = _bucketsstatus("Previous")
                 #end for debug
-                checkingbuckets = tcontrol.get_checkingbuckets(today,milliseconds,exempt)
+                checkingbuckets = tcontrol.get_checkingbuckets(warnings,today,milliseconds,exempt)
 
                 cacheclient = _tcontrolcache(tcontrol.name,cache=True).redis_client
 
@@ -960,9 +961,9 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False,checktime=None):
                             #end for debug
                             succeed = True
                             if expired_buckets:
-                                tcontrol.set_buckets(buckettime,bucketid,requests,fetchtime,expiredbuckets_requests)
+                                tcontrol.set_buckets(warnings,buckettime,bucketid,requests,fetchtime,expiredbuckets_requests)
                             else:
-                                tcontrol.set_buckets(buckettime,bucketid,requests,fetchtime)
+                                tcontrol.set_buckets(warnings,buckettime,bucketid,requests,fetchtime)
                             #begin for debug
                             _debug("After set_buckets{7}: buckets_endtime={0} , buckets_endid={1} , expired_buckets={2}, nonexpired bucket requests={3} , bucket requests={4} , expired bucket requests={5} , fetchtime={6}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,expired_buckets or None,nonexpired_requests,requests,expiredbuckets_requests,fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),"(Ignored)" if tcontrol._buckets_fetchtime and fetchtime < tcontrol._buckets_fetchtime else ""),previous_bucketsstatus)
                             #end for debug
@@ -980,9 +981,9 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False,checktime=None):
                                 redisrequests = requests
                                 requests -= totalrequests - tcontrol.concurrency
                                 if expired_buckets:
-                                    tcontrol.set_buckets(buckettime,bucketid,requests,fetchtime,expiredbuckets_requests)
+                                    tcontrol.set_buckets(warnings,buckettime,bucketid,requests,fetchtime,expiredbuckets_requests)
                                 else:
-                                    tcontrol.set_buckets(buckettime,bucketid,requests,fetchtime)
+                                    tcontrol.set_buckets(warnings,buckettime,bucketid,requests,fetchtime)
                                 #begin for debug
                                 _debug("After set_buckets{7}: buckets_endtime={0} , buckets_endid={1} , expired_buckets={2}, nonexpired bucket requests={3} , bucket requests={4} ,requests from redis={8} , expired bucket requests={5} , fetchtime={6}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,expired_buckets or None,nonexpired_requests,requests,expiredbuckets_requests,fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),"(Ignored)" if tcontrol._buckets_fetchtime and fetchtime < tcontrol._buckets_fetchtime else "",redisrequests),previous_bucketsstatus)
                                 #end for debug
@@ -999,7 +1000,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False,checktime=None):
                                 #begin for debug
                                 previous_bucketsstatus = _bucketsstatus("Previous")
                                 #end for debug
-                                checkingbuckets = tcontrol.get_checkingbuckets(today,milliseconds,exempt)
+                                checkingbuckets = tcontrol.get_checkingbuckets(warnings,today,milliseconds,exempt)
                             else:
                                 #not in block mode
                                 #decrease the user limit which was added before
@@ -1036,7 +1037,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False,checktime=None):
                             #begin for debug
                             previous_bucketsstatus = _bucketsstatus("Previous")
                             #end for debug
-                            result = tcontrol.set_bookedbuckets(buckettime,checkingbuckets_begintime,checkingbuckets_endtime,checkingbuckets_beginid,checkingbucketids,bucketsrequests,fetchtime)
+                            result = tcontrol.set_bookedbuckets(warnings,buckettime,checkingbuckets_begintime,checkingbuckets_endtime,checkingbuckets_beginid,checkingbucketids,bucketsrequests,fetchtime)
                             #begin for debug
                             _debug("After set_bookedbuckets, {7} , buckets_endtime={0} , checkingbuckets begintime={1} , checkingbuckets endtime={2} , checkingbuckets beginid={3} , checkingbucket ids={4}, checkingbuckets requests={5} , fetchtime={6}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_begintime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_endtime.strftime("%Y-%m-%d %H:%M:%S.%f"),checkingbuckets_beginid,checkingbucketids,bucketsrequests,fetchtime.strftime("%Y-%m-%d %H:%M:%S.%f"),"Try to book the running spot from the endbucket" if result else "Already reach the limit, fetch the requests of furture buckets again."),previous_bucketsstatus)
                             #end for debug
@@ -1044,21 +1045,31 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False,checktime=None):
                                 #begin for debug
                                 previous_bucketsstatus = _bucketsstatus("Previous")
                                 #end for debug
-                                checkingbuckets = tcontrol.get_checkingbuckets(today,milliseconds,exempt)
+                                if warnings:
+                                    #save the warnings first
+                                    for warning in warnings:
+                                        warning.save()
+                                    warning.clear()
+                                checkingbuckets = tcontrol.get_checkingbuckets(warnings,today,milliseconds,exempt)
                                 if checkingbuckets[0]:
                                     #not a future booking, retry the concurrency logic again
                                     break
+
+                        if not result:
+                            #not a future booking, retry the concurrency logic again
+                            break
     
                         #start to book the position from end bucket
                         while not succeed:
                             totalrequests = tcontrol._buckets_totalrequests - tcontrol._buckets[-1]
                             bucketid = tcontrol._buckets_endid
                             buckettime = tcontrol._buckets_endtime
-                            if buckettime - timezone.localtime() > tcontrol.get_timeout():
+                            waitingtime = (buckettime - timezone.localtime()).total_seconds()
+                            if waitingtime> tcontrol.bookingtimeout:
                                 #begin for debug
-                                _debug("Booking timeout. the time({2}) between booking time({1}) and now is greater than timeout({0})".format(tcontrol.get_timeout().total_seconds(),buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),(buckettime - timezone.localtime()).total_seconds()),_bucketsstatus("Previous"))
+                                _debug("Booking timeout. the time({2}) between booking time({1}) and now is greater than timeout({0})".format(tcontrol.bookingtimeout,buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),(buckettime - timezone.localtime()).total_seconds()),_bucketsstatus("Previous"))
                                 #end for debug
-                                return [False,"CONCURRENCY","TIMEOUT",(buckettime - timezone.localtime()).total_seconds()]
+                                return [False,"CONCURRENCY","TIMEOUT",waitingtime]
                             key = settings.GET_TRAFFICCONTROL_CACHE_KEY("{}_{}".format(tcontrol.name,bucketid))
                             currentbucket = _currentbuckets.get(tcontrol.id)
                             if not currentbucket:
@@ -1083,7 +1094,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False,checktime=None):
                                 previous_bucketsstatus = _bucketsstatus("Previous")
                                 #end for debug
                                 try:
-                                    setted = tcontrol.set_bookingbucket(buckettime,bucketid,requests,(totalrequests + redisrequests))
+                                    setted = tcontrol.set_bookingbucket(warnings,buckettime,bucketid,requests,(totalrequests + redisrequests))
 
                                     #begin for debug
                                     _debug("After set_bookingbucket{4}, Failed to book the spot in the bucket.bookingbuckets endtime={0} , bookingbuckets endid={1} , bucket requests={2}, redis requests={5} , total requests={3}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,requests,totalrequests + requests,"{Ignored}" if not setted else "",redisrequests),previous_bucketsstatus)
@@ -1100,7 +1111,7 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False,checktime=None):
                                 previous_bucketsstatus = _bucketsstatus("Previous")
                                 #end for debug
                                 try:
-                                    setted = tcontrol.set_bookingbucket(buckettime,bucketid,requests,(totalrequests + requests))
+                                    setted = tcontrol.set_bookingbucket(warnings,buckettime,bucketid,requests,(totalrequests + requests))
                                 except Exception as ex:
                                     #begin for debug
                                     _debug("After set_bookingbucket{4}, Failed to book the spot in the bucket.bookingbuckets endtime={0} , bookingbuckets endid={1} , bucket requests={2}, redis requests={5} , total requests={3} , msg={6}".format(buckettime.strftime("%Y-%m-%d %H:%M:%S.%f"),bucketid,requests,totalrequests + requests,"{Ignored}" if not setted else "",redisrequests,msg),previous_bucketsstatus)
@@ -1162,6 +1173,10 @@ def _check_tcontrol(tcontrol,clientip,client,exempt,test=False,checktime=None):
 
         #check failed, ignore traffic control
         return [True,str(ex)]
+    finally:
+        if warnings:
+            for warning in warnings:
+                warning.save()
             
 def _tcontrol(request):
     clientip = request.headers.get("x-real-ip")

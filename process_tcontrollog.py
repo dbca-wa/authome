@@ -17,7 +17,7 @@ def readrecord(instream):
                 m = record_re.search(record)
                 if not m:
                     raise Exception("Failed to parse record:{}".format(record))
-                key = ["0000-00-00 00:00:00.000000" if m.group("bucketsbegintime") == "None" else m.group("bucketsbegintime"),json.loads(m.group("bucketsdata")),"0000-00-00 00:00:00.000000" if m.group("fetchtime") == "None" else m.group("fetchtime"),m.group("runtime")]
+                key = ["0000-00-00 00:00:00.000000" if m.group("bucketsbegintime") == "None" else m.group("bucketsbegintime"),"0000-00-00 00:00:00.000000" if m.group("fetchtime") == "None" else m.group("fetchtime"),m.group("runtime"),json.loads(m.group("bucketsdata"))]
                 return (key,record)
         elif line.strip() == "====BEGIN====":
             record_started = True

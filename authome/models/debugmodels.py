@@ -190,7 +190,11 @@ class DebugLog(django_models.Model):
             logger.error("Failed to log the message '{}' to DebugLog.{}".format(message,traceback.format_exc()))
 
     @classmethod
-    def tcontrol(cls,category,tcontrol_name,ip,email,message):
+    def tcontrol(cls,category,tcontrol_name,ip,email,message,save=True):
+        """
+        Return DebugLog 
+        """
+        log = None
         try:
             log = DebugLog(
                 clusterid = settings.AUTH2_CLUSTERID if settings.AUTH2_CLUSTER_ENABLED else None,
@@ -200,7 +204,9 @@ class DebugLog(django_models.Model):
                 email = email,
                 request=tcontrol_name
             )
-            log.save()
+            if save:
+                log.save()
         except:
             logger.error("Failed to log the message '{}' to DebugLog.{}".format(message,traceback.format_exc()))
+        return log
 
