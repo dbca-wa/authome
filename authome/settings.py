@@ -703,7 +703,10 @@ if TRAFFICCONTROL_ENABLED:
     
     if CACHE_SERVER  or TRAFFICCONTROL_CACHE_SERVER:
         if AUTH2_CLUSTER_ENABLED:
-            if TRAFFICCONTROL_CLUSTERID == AUTH2_CLUSTERID:
+            if TRAFFICCONTROL_CACHE_SERVER:
+                TRAFFICCONTROL_CLUSTERID = AUTH2_CLUSTERID
+                TRAFFICCONTROL_SUPPORTED = True
+            elif TRAFFICCONTROL_CLUSTERID == AUTH2_CLUSTERID:
                 #current auth2 cluster supports traffic control
                 TRAFFICCONTROL_SUPPORTED = True
             else:
