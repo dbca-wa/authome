@@ -86,7 +86,7 @@ then
     export SYNC_MODE="eventlet"
     #export SYNC_MODE="gevent"
     #export SYNC_MODE="sync"
-    poetry run gunicorn authome.wsgi --bind=:$PORT --config=gunicorn-dev.py  >./logs/auth2_${PORT}.log 2>&1 &
+    poetry run gunicorn authome.wsgi  --config=gunicorn-dev.py  >./logs/auth2_${PORT}.log 2>&1 &
     #poetry run python manage.py runserver 0.0.0.0:$PORT >./logs/auth2_${PORT}.log 2>&1 &
     pid=$!
     echo ${pid} > ./logs/auth2_${PORT}.pid

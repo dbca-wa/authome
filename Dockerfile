@@ -63,10 +63,10 @@ else \n\
 fi \n\
 if [[ \"\$DEBUG\" == \"True\" || \"\${LOGLEVEL}\" == \"DEBUG\" ]]; then \n\
     echo \"Running in dev mode\" \n\
-    cd /app/dev && gunicorn authome.wsgi --bind=:8080 --config=\${config} \n\
+    cd /app/dev && gunicorn authome.wsgi --config=\${config} \n\
 else \n\
     echo \"Running in release mode\" \n\
-    cd /app/release && gunicorn authome.wsgi --bind=:8080 --config=\${config} \n\
+    cd /app/release && gunicorn authome.wsgi --config=\${config} \n\
 fi \n\
 " > start_app
 

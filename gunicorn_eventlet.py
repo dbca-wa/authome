@@ -4,8 +4,12 @@ eventlet.monkey_patch(all=True)
 import multiprocessing
 import os
 
+try:
+    port = int(os.environ["PORT"])
+except:
+    port = 8080
+bind = ":{}".format(port)
 
-#bind = ":8080"
 # Don't start too many workers:
 try:
     workers = int(os.environ["AUTH2_WORKERS"])
