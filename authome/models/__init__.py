@@ -4,9 +4,9 @@ import logging
 from django.conf import settings
 
 from .models import *
+from .tcontrolmodels import *
 from .clustermodels import *
 from .trafficmodels import *
-from .models import ArrayField
 from .debugmodels import *
 
 logger = logging.getLogger(__name__)

@@ -173,11 +173,11 @@ from .admin import NormalUser,SystemUser,NormalUserToken,SystemUserToken
 if settings.AUTH2_CLUSTER_ENABLED:
     from .clusteradmin import Auth2ClusterAdmin
     admin_site.register(auth2_models.Auth2Cluster,Auth2ClusterAdmin)
-    from .clusteradmin import (UserGroupAdmin,IdentityProviderAdmin,CustomizableUserflowAdmin,UserGroupAuthorizationAdmin,UserAdmin,UserAccessTokenAdmin,SystemUserAccessTokenAdmin,TrafficControlAdmin)
+    from .clusteradmin import (UserGroupAdmin,IdentityProviderAdmin,CustomizableUserflowAdmin,UserGroupAuthorizationAdmin,UserAdmin,UserAccessTokenAdmin,SystemUserAccessTokenAdmin)
     from .admin import (SystemUserAdmin,UserTOTPAdmin)
 else:
     from .admin import (UserAdmin,SystemUserAdmin,UserGroupAuthorizationAdmin,UserGroupAdmin,UserAccessTokenAdmin,SystemUserAccessTokenAdmin,
-        IdentityProviderAdmin,CustomizableUserflowAdmin,UserTOTPAdmin,TrafficControlAdmin)
+        IdentityProviderAdmin,CustomizableUserflowAdmin,UserTOTPAdmin)
 
 from .debugadmin import DebugLogAdmin
 admin_site.register(auth2_models.DebugLog,DebugLogAdmin)
@@ -197,4 +197,10 @@ admin_site.register(NormalUserToken,UserAccessTokenAdmin)
 admin_site.register(auth2_models.IdentityProvider,IdentityProviderAdmin)
 admin_site.register(auth2_models.CustomizableUserflow,CustomizableUserflowAdmin)
 admin_site.register(auth2_models.UserTOTP,UserTOTPAdmin)
-#admin_site.register(auth2_models.TrafficControl,TrafficControlAdmin)
+
+if settings.TRAFFICCONTROL_ENABLED:
+    if settings.AUTH2_CLUSTER_ENABLED:
+        from .clusteradmin import TrafficControlAdmin
+    else:
+        from .tcontroladmin import TrafficControlAdmin
+    admin_site.register(auth2_models.TrafficControl,TrafficControlAdmin)

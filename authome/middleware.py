@@ -74,7 +74,7 @@ def check_integrity(lb_hash_key,auth2_clusterid,session_key,signature):
 
     return True
 
-class SessionMiddleware(MiddlewareMixin):
+class BaseSessionMiddleware(MiddlewareMixin):
     def __init__(self, get_response=None):
         super().__init__(get_response)
         engine = import_module(settings.SESSION_ENGINE)
@@ -124,18 +124,6 @@ class SessionMiddleware(MiddlewareMixin):
         the session cookie if the session has been emptied.
         """
         try:
-            if settings.TRAFFICCONTROL_COOKIE_NAME and settings.TRAFFICCONTROL_COOKIE_NAME not in request.COOKIES:
-                value = "{}{}".format(timezone.localtime().strftime("%Y%m%d%H%M%S%f"),base64.b64encode(secrets.token_bytes(nbytes=24)).decode().rstrip('='))
-                response.set_cookie(
-                    settings.TRAFFICCONTROL_COOKIE_NAME,
-                    value,
-                    path="/",
-                    max_age=86400,
-                    domain=settings.GET_SESSION_COOKIE_DOMAIN(request.get_host()),
-                    secure=True,
-                    httponly=True,
-                    samesite="Lax"
-                )
             try:
                 accessed = request.session.accessed
                 modified = request.session.modified
@@ -197,6 +185,33 @@ class SessionMiddleware(MiddlewareMixin):
             DebugLog.warning(DebugLog.ERROR,utils.get_source_lb_hash_key(request),utils.get_source_clusterid(request),utils.get_source_session_key(request),utils.get_source_session_cookie(request),message="Failed to process request . request={}, cookies={}. {}".format("{}{}".format(request.get_host(),request.path_info),request.headers.get("cookie"),str(ex)),request=request)
             raise ex
 
+if settings.TRAFFICCONTROL_ENABLED:
+    class SessionMiddleware(BaseSessionMiddleware):
+        def process_response(self, request, response):
+            """
+            If request.session was modified, or if the configuration is to save the
+            session every time, save the changes and set a session cookie or delete
+            the session cookie if the session has been emptied.
+            """
+            #set the traffic control cookie if required
+            if settings.TRAFFICCONTROL_COOKIE_NAME and settings.TRAFFICCONTROL_COOKIE_NAME not in request.COOKIES:
+                value = "{}{}".format(timezone.localtime().strftime("%Y%m%d%H%M%S%f"),base64.b64encode(secrets.token_bytes(nbytes=24)).decode().rstrip('='))
+                response.set_cookie(
+                    settings.TRAFFICCONTROL_COOKIE_NAME,
+                    value,
+                    path="/",
+                    max_age=86400,
+                    domain=settings.GET_SESSION_COOKIE_DOMAIN(request.get_host()),
+                    secure=True,
+                    httponly=True,
+                    samesite="Lax"
+                )
+            
+            return super().process_response(request,response)
+
+            
+else:
+    SessionMiddleware = BaseSessionMiddleware
 
 class ClusterSessionMiddleware(SessionMiddleware):
     def process_request(self, request):

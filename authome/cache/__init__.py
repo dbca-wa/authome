@@ -8,6 +8,9 @@ from .cache import get_usercache,get_defaultcache,defaultcache,IntervalTaskRunab
 if settings.AUTH2_CLUSTER_ENABLED:
     from .clustercache import MemoryCache
     cache = MemoryCache()
+elif settings.TRAFFICCONTROL_ENABLED:
+    from .tcontrolcache import MemoryCache
+    cache = MemoryCache()
 else:
     from .cache import MemoryCache
     cache = MemoryCache()

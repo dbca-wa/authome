@@ -339,29 +339,6 @@ USERFLOW_CACHE_CHECK_INTERVAL=env('USERFLOW_CACHE_CHECK_INTERVAL',default=0) #in
 if USERFLOW_CACHE_CHECK_INTERVAL < 0:
     USERFLOW_CACHE_CHECK_INTERVAL = 0
 
-TRAFFICCONTROL_COOKIE_NAME = env('TRAFFICCONTROL_COOKIE_NAME')
-TRAFFICCONTROL_CACHE_CHECK_HOURS=env('TRAFFICCONTROL_CACHE_CHECK_HOURS',default=[0]) #the hours in the day when traffic control can be checked
-TRAFFICCONTROL_CACHE_CHECK_INTERVAL=env('TRAFFICCONTROL_CACHE_CHECK_INTERVAL',default=0) #in seconds,the interval to check traffic control cache, if it is not greater than 0, use TRAFFICCONTROL_CACHE_CHECK_HOURS
-if TRAFFICCONTROL_CACHE_CHECK_INTERVAL < 0:
-    TRAFFICCONTROL_CACHE_CHECK_INTERVAL = 0
-
-TRAFFICCONTROL_MAX_BUCKETS=env('TRAFFICCONTROL_MAX_BUCKETS',default=25)
-TRAFFICCONTROL_CLUSTERID=env('TRAFFICCONTROL_CLUSTERID')
-TRAFFICCONTROL_TIMEOUT = env('TRAFFICCONTROL_TIMEOUT',default=100)
-if not TRAFFICCONTROL_TIMEOUT or TRAFFICCONTROL_TIMEOUT <= 0:
-    TRAFFICCONTROL_TIMEOUT = 0.1
-else:
-    TRAFFICCONTROL_TIMEOUT /= 1000
-TRAFFICCONTROL_TIMEDIFF=env('TRAFFICCONTROL_TIMEDIFF',default=5)# milliseconds, the maximum time difference among auth2 server processes, it should be less than a few milliseconds
-TRAFFICCONTROL_TIMEDIFF=timedelta(milliseconds=TRAFFICCONTROL_TIMEDIFF)
-
-TRAFFICCONTROL_BOOKINGTIMEOUT=env('TRAFFICCONTROL_BOOKINGTIMEOUT',default=300)# seconds, the default timeout setting of  concurrency traffic control
-if TRAFFICCONTROL_BOOKINGTIMEOUT <= 0:
-    TRAFFICCONTROL_BOOKINGTIMEOUT = 300
-elif TRAFFICCONTROL_BOOKINGTIMEOUT > 1800:
-    TRAFFICCONTROL_BOOKINGTIMEOUT = 1800
-
-
 PREFERED_IDP_COOKIE_NAME=env('PREFERED_IDP_COOKIE_NAME',default='idp_auth2_dbca_wa_gov_au')
 
 DBCA_STAFF_GROUPID=env('DBCA_STAFF_GROUPID',default="DBCA") # The emails belongs to group 'dbca staff' are allowed to self sign up (no pre-registration required).
@@ -471,9 +448,6 @@ else:
 
 CACHE_SERVER = env("CACHE_SERVER")
 CACHE_SERVER_OPTIONS = env("CACHE_SERVER_OPTIONS",default={})
-
-TRAFFICCONTROL_CACHE_SERVER = env("TRAFFICCONTROL_CACHE_SERVER")
-TRAFFICCONTROL_CACHE_SERVER_OPTIONS = env("TRAFFICCONTROL_CACHE_SERVER_OPTIONS",default={})
 
 CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
 CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
@@ -605,8 +579,7 @@ def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
             "OPTIONS": options
         }
 
-TRAFFICCONTROL_CACHE_ALIAS = None
-if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER or TRAFFICCONTROL_CACHE_SERVER:
+if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     CACHES = {}
     if CACHE_SERVER:
         CACHES['default'] = GET_CACHE_CONF('default',CACHE_SERVER,CACHE_SERVER_OPTIONS,key_function=KEY_FUNCTION)
@@ -675,51 +648,6 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER or TRAFFICCONTROL_C
     if STAFF_CACHE_TIMEOUT <= 0:
         STAFF_CACHE_TIMEOUT = None
 
-    if AUTH2_CLUSTER_ENABLED:
-        if TRAFFICCONTROL_CLUSTERID == AUTH2_CLUSTERID:
-            #current auth2 cluster supports traffic control
-            TRAFFICCONTROL_SUPPORTED = True
-        else:
-            #current auth2 cluster does not support traffic control, dependents on other cluster to implement traffic control
-            TRAFFICCONTROL_SUPPORTED = False
-            TRAFFICCONTROL_CACHE_SERVERS = 0
-    else:
-        #standalone auth2 server, should always support traffic control
-        TRAFFICCONTROL_SUPPORTED = True
-
-
-    if TRAFFICCONTROL_SUPPORTED :
-        if TRAFFICCONTROL_CACHE_SERVER:
-            TRAFFICCONTROL_CACHE_SERVER = [s.strip() for s in TRAFFICCONTROL_CACHE_SERVER.split(",") if s and s.strip()]
-            TRAFFICCONTROL_CACHE_SERVERS = len(TRAFFICCONTROL_CACHE_SERVER)
-            if TRAFFICCONTROL_CACHE_SERVERS == 1:
-                TRAFFICCONTROL_CACHE_ALIAS = "tcontrol"
-                CACHES[TRAFFICCONTROL_CACHE_ALIAS] = GET_CACHE_CONF(TRAFFICCONTROL_CACHE_ALIAS,TRAFFICCONTROL_CACHE_SERVER[0],TRAFFICCONTROL_CACHE_SERVER_OPTIONS,key_function=lambda key,key_prefix,version : key)
-            else:
-                for i in range(0,TRAFFICCONTROL_CACHE_SERVERS) :
-                    name = "tcontrol{}".format(i)
-                    CACHES[name] = GET_CACHE_CONF(name,TRAFFICCONTROL_CACHE_SERVER[i],env("TRAFFICCONTROL_CACHE_SERVER{}_OPTIONS".format(i),default=TRAFFICCONTROL_CACHE_SERVER_OPTIONS),key_function=lambda key,key_prefix,version : key)
-
-                def TRAFFICCONTROL_CACHE_ALIAS(key):
-                    h = hash(key) % TRAFFICCONTROL_CACHE_SERVERS
-                    
-                TRAFFICCONTROL_CACHE_ALIAS = lambda key:"tcontrol{}".format(hash(key) % TRAFFICCONTROL_CACHE_SERVERS)
-            GET_TRAFFICCONTROL_CACHE_KEY = lambda key:"T_{}".format(key)
-        elif CACHE_SERVER:
-            TRAFFICCONTROL_CACHE_ALIAS = "default"
-            TRAFFICCONTROL_CACHE_SERVERS = 1
-            if CACHE_KEY_PREFIX:
-                trafficcontrol_key_pattern = "{}:T_{{}}".format(CACHE_KEY_PREFIX)
-                GET_TRAFFICCONTROL_CACHE_KEY = lambda key:trafficcontrol_key_pattern.format(key)
-            else:
-                GET_TRAFFICCONTROL_CACHE_KEY = lambda key:"T_{}".format(key)
-        else:
-            TRAFFICCONTROL_SUPPORTED = False
-            TRAFFICCONTROL_CACHE_SERVERS = 0
-else:
-    TRAFFICCONTROL_SUPPORTED = False
-    TRAFFICCONTROL_CACHE_SERVERS = 0
-                
 
 TEST_RUNNER=env("TEST_RUNNER","django.test.runner.DiscoverRunner")
 
@@ -742,6 +670,80 @@ SSL_VERIFY=env("SSL_VERIFY",default=True)
 
 SOCIAL_AUTH_ADMIN_SEARCH_FIELDS=["uid"]
 
+#TRAFFIC CONTROL SETTINGS
+TRAFFICCONTROL_ENABLED = env('TRAFFICCONTROL_ENABLED',default=False)
+TRAFFICCONTROL_MAX_BUCKETS=env('TRAFFICCONTROL_MAX_BUCKETS',default=25)
+TRAFFICCONTROL_TIMEDIFF=env('TRAFFICCONTROL_TIMEDIFF',default=5)# milliseconds, the maximum time difference among auth2 server processes, it should be less than a few milliseconds
+TRAFFICCONTROL_TIMEDIFF=timedelta(milliseconds=TRAFFICCONTROL_TIMEDIFF)
+    
+TRAFFICCONTROL_BOOKINGTIMEOUT=env('TRAFFICCONTROL_BOOKINGTIMEOUT',default=300)# seconds, the default timeout setting of  concurrency traffic control
+if TRAFFICCONTROL_BOOKINGTIMEOUT <= 0:
+    TRAFFICCONTROL_BOOKINGTIMEOUT = 300
+elif TRAFFICCONTROL_BOOKINGTIMEOUT > 1800:
+    TRAFFICCONTROL_BOOKINGTIMEOUT = 1800
+    
+if TRAFFICCONTROL_ENABLED:
+    TRAFFICCONTROL_COOKIE_NAME = env('TRAFFICCONTROL_COOKIE_NAME')
+    TRAFFICCONTROL_CACHE_CHECK_HOURS=env('TRAFFICCONTROL_CACHE_CHECK_HOURS',default=[0]) #the hours in the day when traffic control can be checked
+    TRAFFICCONTROL_CACHE_CHECK_INTERVAL=env('TRAFFICCONTROL_CACHE_CHECK_INTERVAL',default=0) #in seconds,the interval to check traffic control cache, if it is not greater than 0, use TRAFFICCONTROL_CACHE_CHECK_HOURS
+    if TRAFFICCONTROL_CACHE_CHECK_INTERVAL < 0:
+        TRAFFICCONTROL_CACHE_CHECK_INTERVAL = 0
+    
+    TRAFFICCONTROL_CLUSTERID=env('TRAFFICCONTROL_CLUSTERID')
+    TRAFFICCONTROL_TIMEOUT = env('TRAFFICCONTROL_TIMEOUT',default=100)
+    if not TRAFFICCONTROL_TIMEOUT or TRAFFICCONTROL_TIMEOUT <= 0:
+        TRAFFICCONTROL_TIMEOUT = 0.1
+    else:
+        TRAFFICCONTROL_TIMEOUT /= 1000
+
+    TRAFFICCONTROL_CACHE_SERVER = env("TRAFFICCONTROL_CACHE_SERVER")
+    TRAFFICCONTROL_CACHE_SERVER_OPTIONS = env("TRAFFICCONTROL_CACHE_SERVER_OPTIONS",default={})
+    
+    TRAFFICCONTROL_CACHE_ALIAS = None
+    
+    if CACHE_SERVER  or TRAFFICCONTROL_CACHE_SERVER:
+        if AUTH2_CLUSTER_ENABLED:
+            if TRAFFICCONTROL_CLUSTERID == AUTH2_CLUSTERID:
+                #current auth2 cluster supports traffic control
+                TRAFFICCONTROL_SUPPORTED = True
+            else:
+                #current auth2 cluster does not support traffic control, dependents on other cluster to implement traffic control
+                TRAFFICCONTROL_SUPPORTED = False
+                TRAFFICCONTROL_CACHE_SERVERS = 0
+        else:
+            #standalone auth2 server, should always support traffic control
+            TRAFFICCONTROL_SUPPORTED = True
+    
+        if TRAFFICCONTROL_SUPPORTED :
+            if TRAFFICCONTROL_CACHE_SERVER:
+                TRAFFICCONTROL_CACHE_SERVER = [s.strip() for s in TRAFFICCONTROL_CACHE_SERVER.split(",") if s and s.strip()]
+                TRAFFICCONTROL_CACHE_SERVERS = len(TRAFFICCONTROL_CACHE_SERVER)
+                if TRAFFICCONTROL_CACHE_SERVERS == 1:
+                    TRAFFICCONTROL_CACHE_ALIAS = "tcontrol"
+                    CACHES[TRAFFICCONTROL_CACHE_ALIAS] = GET_CACHE_CONF(TRAFFICCONTROL_CACHE_ALIAS,TRAFFICCONTROL_CACHE_SERVER[0],TRAFFICCONTROL_CACHE_SERVER_OPTIONS,key_function=lambda key,key_prefix,version : key)
+                else:
+                    for i in range(0,TRAFFICCONTROL_CACHE_SERVERS) :
+                        name = "tcontrol{}".format(i)
+                        CACHES[name] = GET_CACHE_CONF(name,TRAFFICCONTROL_CACHE_SERVER[i],env("TRAFFICCONTROL_CACHE_SERVER{}_OPTIONS".format(i),default=TRAFFICCONTROL_CACHE_SERVER_OPTIONS),key_function=lambda key,key_prefix,version : key)
+    
+                    def TRAFFICCONTROL_CACHE_ALIAS(key):
+                        h = hash(key) % TRAFFICCONTROL_CACHE_SERVERS
+                        
+                    TRAFFICCONTROL_CACHE_ALIAS = lambda key:"tcontrol{}".format(hash(key) % TRAFFICCONTROL_CACHE_SERVERS)
+                GET_TRAFFICCONTROL_CACHE_KEY = lambda key:"T_{}".format(key)
+            else:
+                TRAFFICCONTROL_CACHE_ALIAS = "default"
+                TRAFFICCONTROL_CACHE_SERVERS = 1
+                if CACHE_KEY_PREFIX:
+                    trafficcontrol_key_pattern = "{}:T_{{}}".format(CACHE_KEY_PREFIX)
+                    GET_TRAFFICCONTROL_CACHE_KEY = lambda key:trafficcontrol_key_pattern.format(key)
+                else:
+                    GET_TRAFFICCONTROL_CACHE_KEY = lambda key:"T_{}".format(key)
+    else:
+        TRAFFICCONTROL_ENABLED = False
+        TRAFFICCONTROL_SUPPORTED = False
+else:
+    TRAFFICCONTROL_SUPPORTED = False
 
 # Sentry settings
 project = tomllib.load(open(os.path.join(BASE_DIR, "pyproject.toml"), "rb"))

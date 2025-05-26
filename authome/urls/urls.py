@@ -37,17 +37,11 @@ urlpatterns = [
     path('sso/auth_captcha', traffic_monitor("auth_captcha",views.auth_captcha), name='auth_captcha'),
     path('sso/auth_and_captcha', traffic_monitor("auth_and_captcha",views.auth_and_captcha), name='auth_and_captcha'),
 
-    path('sso/auth_tcontrol', traffic_monitor("auth&tcontrol",views.auth_tcontrol,False), name='auth_and_tcontrol'),
-    path('sso/auth_optional_tcontrol', traffic_monitor("auth_optional&tcontrol",views.auth_optional_tcontrol,False), name='auth_optional_and_tcontrol'),
-    path('sso/auth_basic_tcontrol', traffic_monitor("auth_basic&tcontrol",views.auth_basic_tcontrol,False), name='auth_basic_and_tcontrol'),
-    path('sso/auth_basic_optional_tcontrol', traffic_monitor("auth_basic_optional&tcontrol",views.auth_basic_optional_tcontrol,False), name='auth_basic_optional_and_tcontrol'),
-
     path('sso/login_domain', csrf_exempt(views.login_domain), name='login_domain'),
     path('sso/profile', views.profile, name='profile'),
     path('sso/signout_socialmedia', views.signout_socialmedia, name='signout_socialmedia'),
     path('sso/signedout', views.signedout, name='signedout'),
     path('sso/forbidden', views.forbidden, name='forbidden'),
-    path('sso/forbidden_tcontrol', views.forbidden_tcontrol, name='forbidden_tcontrol'),
     path('sso/loginstatus', views.loginstatus, name='loginstatus'),
 
     path('sso/verifycode', views.verify_code_via_email, name='verify_code'),
@@ -87,6 +81,15 @@ urlpatterns = [
 
     path("favicon.ico",RedirectView.as_view(url="{}images/favicon.ico".format(settings.STATIC_URL)))
 ]
+
+if settings.TRAFFICCONTROL_ENABLED:
+    urlpatterns.append(path('sso/auth_tcontrol', traffic_monitor("auth&tcontrol",views.auth_tcontrol,False), name='auth_and_tcontrol'))
+    urlpatterns.append(path('sso/auth_optional_tcontrol', traffic_monitor("auth_optional&tcontrol",views.auth_optional_tcontrol,False), name='auth_optional_and_tcontrol'))
+    urlpatterns.append(path('sso/auth_basic_tcontrol', traffic_monitor("auth_basic&tcontrol",views.auth_basic_tcontrol,False), name='auth_basic_and_tcontrol'))
+    urlpatterns.append(path('sso/auth_basic_optional_tcontrol', traffic_monitor("auth_basic_optional&tcontrol",views.auth_basic_optional_tcontrol,False), name='auth_basic_optional_and_tcontrol'))
+    urlpatterns.append(path('sso/forbidden_tcontrol', views.forbidden_tcontrol, name='forbidden_tcontrol'))
+
+
 if settings.DEBUG:
     #import debug_toolbar
     pass

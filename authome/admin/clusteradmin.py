@@ -147,8 +147,10 @@ class IdentityProviderAdmin(SyncConfigChangeMixin,admin.IdentityProviderAdmin):
 class CustomizableUserflowAdmin(SyncConfigChangeMixin,admin.CustomizableUserflowAdmin):
     pass
         
-class TrafficControlAdmin(SyncConfigChangeMixin,admin.TrafficControlAdmin):
-    pass
+if settings.TRAFFICCONTROL_ENABLED:
+    from .tcontroladmin import TrafficControlAdmin
+    class TrafficControlAdmin(SyncConfigChangeMixin,TrafficControlAdmin):
+        pass
 
 class UserAdmin(SyncObjectChangeMixin,admin.UserAdmin):
     def _sync_change(self,objids):

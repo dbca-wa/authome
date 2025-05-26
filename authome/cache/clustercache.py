@@ -10,7 +10,7 @@ from django.urls import reverse
 
 from ..serializers import JSONDecoder
 from .. import utils
-from . import cache,get_usercache
+from .cache import get_usercache,IntervalTaskRunable
 from ..exceptions import Auth2ClusterException
 
 
@@ -53,8 +53,12 @@ def traffic_monitor(name,func):
         
     return _monitor if settings.TRAFFIC_MONITOR_LEVEL > 0 else func
 
+if settings.TRAFFICCONTROL_ENABLED:
+    from .tcontrolcache  import MemoryCache as BaseMemoryCache
+else:
+    from .cache  import MemoryCache as BaseMemoryCache
 
-class MemoryCache(cache.MemoryCache):
+class MemoryCache(BaseMemoryCache):
     def __init__(self):
         super().__init__()
         #not includeing the current cluster
@@ -62,7 +66,7 @@ class MemoryCache(cache.MemoryCache):
         self._default_auth2_cluster = None
         self._current_auth2_cluster = None
         self._auth2_clusters_ts = None
-        self._auth2_clusters_check_time = cache.IntervalTaskRunable("auth2 clusters cache",settings.AUTH2_CLUSTERS_CHECK_INTERVAL) 
+        self._auth2_clusters_check_time = IntervalTaskRunable("auth2 clusters cache",settings.AUTH2_CLUSTERS_CHECK_INTERVAL) 
 
     @property
     def default_auth2_cluster(self):

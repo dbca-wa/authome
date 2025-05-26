@@ -23,15 +23,16 @@ urlpatterns = [
     path('session/get',views.get_session,name="get_session"),
     path('settings/get',views.get_settings,name="get_settings"),
     path('trafficdata/flush',views.flush_trafficdata,name="flush_trafficdata"),
-    path('trafficdata/save',views.save_trafficdata_to_db,name="save_trafficdata"),
-
-    path('sso/auth_tcontrol', traffic_monitor("auth&tcontrol",views.test_auth_tcontrol,False), name='test_auth_and_tcontrol'),
-    path('sso/auth_optional_tcontrol', traffic_monitor("auth_optional&tcontrol",views.test_auth_optional_tcontrol,False), name='test_auth_optional_and_tcontrol'),
-    path('sso/auth_basic_tcontrol', traffic_monitor("auth_basic&tcontrol",views.test_auth_basic_tcontrol,False), name='test_auth_basic_and_tcontrol'),
-    path('sso/auth_basic_optional_tcontrol', traffic_monitor("auth_basic_optional&tcontrol",views.test_auth_basic_optional_tcontrol,False), name='test_auth_basic_optional_and_tcontrol'),
-    path('clear_tcontroldata', views.clear_tcontroldata,name="clear_tcontroldata")
-
+    path('trafficdata/save',views.save_trafficdata_to_db,name="save_trafficdata")
 ]
-if settings.TRAFFICCONTROL_SUPPORTED:
-    urlpatterns.append(path('tcontrol', views.test_tcontrol,name="test_tcontrol"))
+if settings.TRAFFICCONTROL_ENABLED:
+    urlpatterns.append(path('clear_tcontroldata', views.clear_tcontroldata,name="clear_tcontroldata"))
+    urlpatterns.append(path('sso/auth_tcontrol', traffic_monitor("auth&tcontrol",views.test_auth_tcontrol,False), name='test_auth_and_tcontrol'))
+    urlpatterns.append(path('sso/auth_optional_tcontrol', traffic_monitor("auth_optional&tcontrol",views.test_auth_optional_tcontrol,False), name='test_auth_optional_and_tcontrol'))
+    urlpatterns.append(path('sso/auth_basic_tcontrol', traffic_monitor("auth_basic&tcontrol",views.test_auth_basic_tcontrol,False), name='test_auth_basic_and_tcontrol'))
+    urlpatterns.append(path('sso/auth_basic_optional_tcontrol', traffic_monitor("auth_basic_optional&tcontrol",views.test_auth_basic_optional_tcontrol,False), name='test_auth_basic_optional_and_tcontrol'))
+
+    urlpatterns.append(path('clear_tcontroldata', views.clear_tcontroldata,name="clear_tcontroldata"))
+    if settings.TRAFFICCONTROL_SUPPORTED:
+        urlpatterns.append(path('tcontrol', views.test_tcontrol,name="test_tcontrol"))
 

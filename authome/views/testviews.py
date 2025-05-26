@@ -11,6 +11,7 @@ from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 
 from . import views
+from .tcontrolviews import _check_tcontrol
 from .. import models
 from .. import utils
 from ..sessionstore.sessionstore import SessionStore 
@@ -362,7 +363,7 @@ def test_tcontrol(request):
         #not traffic control configured
         result = [True,"Tcontrol Not Configured",0]
     else:
-        result = views._check_tcontrol(tcontrol,clientip,client,exempt,test=test)
+        result = _check_tcontrol(tcontrol,clientip,client,exempt,test=test)
     return JsonResponse(result, safe=False)
 
 def clear_tcontroldata(request):
@@ -422,11 +423,13 @@ def _tcontrol(request):
                 return JsonResponse([True,None,0], safe=False)
             else:
                 exempt = True
-    else:
+    elif settings.TRAFFICCONTROL_COOKIE_NAME:
         client = request.COOKIES.get(settings.TRAFFICCONTROL_COOKIE_NAME) or None
+    else:
+        client = None
 
     if settings.TRAFFICCONTROL_SUPPORTED:
-        result = views._check_tcontrol(tcontrol,clientip,client,exempt,test)
+        result = _check_tcontrol(tcontrol,clientip,client,exempt,test)
     else:
         result = cahce.tcontrol(settings.TRAFFICCONTROL_CLUSTERID,tcontrol.id,clientip,client,exempt,test)
     
