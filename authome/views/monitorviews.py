@@ -310,28 +310,29 @@ def _check_localhealth():
                 if not cache_working:
                     working = False
 
-    if settings.TRAFFICCONTROL_CACHE_SERVER:
-        if settings.TRAFFICCONTROL_CACHE_SERVERS  == 1:
-            name = settings.TRAFFICCONTROL_CACHE_ALIAS
-            if settings.TRAFFICCONTROL_CACHE_SERVER[0].lower().startswith("redis"):
-                cache_working,pingstatus = caches[name].ping()
-            else:
-                cache_working,pingstatus = utils.ping_cacheserver(name)
-            status["caches"][name] = {"ping":cache_working,"pingstatus":pingstatus}
-            if not cache_working:
-                working = False
-
-        else:
-            for i in range(settings.TRAFFICCONTROL_CACHE_SERVERS):
-                name = "tcontrol{}".format(i)
-                if settings.TRAFFICCONTROL_CACHE_SERVER[i].lower().startswith("redis"):
+    if settings.TRAFFICCONTROL_SUPPORTED:
+        if settings.TRAFFICCONTROL_CACHE_SERVER:
+            if settings.TRAFFICCONTROL_CACHE_SERVERS  == 1:
+                name = settings.TRAFFICCONTROL_CACHE_ALIAS
+                if settings.TRAFFICCONTROL_CACHE_SERVER[0].lower().startswith("redis"):
                     cache_working,pingstatus = caches[name].ping()
                 else:
-                    cache_working,cache_error = utils.ping_cacheserver(name)
+                    cache_working,pingstatus = utils.ping_cacheserver(name)
                 status["caches"][name] = {"ping":cache_working,"pingstatus":pingstatus}
-
                 if not cache_working:
                     working = False
+    
+            else:
+                for i in range(settings.TRAFFICCONTROL_CACHE_SERVERS):
+                    name = "tcontrol{}".format(i)
+                    if settings.TRAFFICCONTROL_CACHE_SERVER[i].lower().startswith("redis"):
+                        cache_working,pingstatus = caches[name].ping()
+                    else:
+                        cache_working,cache_error = utils.ping_cacheserver(name)
+                    status["caches"][name] = {"ping":cache_working,"pingstatus":pingstatus}
+    
+                    if not cache_working:
+                        working = False
 
     if not working :
         if not settings.AUTH2_CLUSTER_ENABLED:
