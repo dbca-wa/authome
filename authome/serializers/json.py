@@ -1,5 +1,5 @@
 import json
-from datetime import datetime,date,timedelta
+from datetime import datetime,date,timedelta,UTC
 
 from django.utils import timezone
 
@@ -24,7 +24,7 @@ class JSONDecoder(json.JSONDecoder):
             return d
 
         if d["__type__"] == "datetime":
-            return timezone.localtime(timezone.make_aware(datetime.strptime(d["value"],"%Y-%m-%dT%H:%M:%S.%f"),timezone=timezone.utc))
+            return timezone.localtime(timezone.make_aware(datetime.strptime(d["value"],"%Y-%m-%dT%H:%M:%S.%f"),timezone=UTC))
         elif d["__type__"] == "date":
             return date(*d["value"])
         elif d["__type__"] == "timedelta":
@@ -42,7 +42,7 @@ class JSONEncoder(json.JSONEncoder):
         if isinstance(obj, datetime):
             return {
                 '__type__' : 'datetime',
-                'value' : timezone.localtime(obj,timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")
+                'value' : timezone.localtime(obj,UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")
             }   
         elif isinstance(obj, date):
             return {

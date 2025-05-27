@@ -37,6 +37,7 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
     TESTED_SERVER = utils.env("TESTED_SERVER",default="https://auth2-dev.dbca.wa.gov.au")
     TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=utils.env("TEST_TRAFFIC_MONITOR_INTERVAL",default=60))
     TEST_DOMAINS = [s.strip() for s in utils.env("TEST_DOMAINS","auth2-dev.dbca.wa.gov.au,whoami-dev.dbca.wa.gov.au").split(",") if s.strip()]
+    UNITEST_AUTH = (utils.env("TEST_USER",default=None),utils.env("TEST_PASSWORD",default=None))
 
     TESTING_SERVER = utils.env("TESTING_SERVER" ,default=socket.gethostname())
 
@@ -75,7 +76,7 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
         cls.testusers = []
         cls.postuserindexes = {}
         for testemail in testemails:
-            res = requests.get(cls.get_login_user_url(testemail),headers=cls.headers,verify=settings.SSL_VERIFY)
+            res = requests.get(cls.get_login_user_url(testemail),headers=cls.headers,verify=settings.SSL_VERIFY,auth=cls.UNITEST_AUTH)
             res.raise_for_status()
             userprofile = res.json()
 
@@ -150,23 +151,24 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
         
         for data in traffic_data:
             result["requests"] = result.get("requests",0) + (data["requests"] or 0)
-            result["total_time"] = result.get("total_time",0) + (data["total_time"] or 0)
-            if "min_time"  not in result or (data["min_time"] is not None and result["min_time"] > data["min_time"]):
-                result["min_time"] = data["min_time"] or 0
-            if "max_time"  not in result or (data["max_time"] and result["max_time"] < data["max_time"]):
-                result["max_time"] = data["max_time"] or 0
-            result["avg_time"] = result["total_time"] / result["requests"] if result["requests"] else 0
+            result["totaltime"] = result.get("totaltime",0) + (data["totaltime"] or 0)
+            if "mintime"  not in result or (data["mintime"] is not None and result["mintime"] > data["mintime"]):
+                result["mintime"] = data["mintime"] or 0
+            if "maxtime"  not in result or (data["maxtime"] and result["maxtime"] < data["maxtime"]):
+                result["maxtime"] = data["maxtime"] or 0
+            result["avgtime"] = result["totaltime"] / result["requests"] if result["requests"] else 0
             for k,v in (data["domains"] or {}).items():
                 if k not in dresult:
                     dresult[k] = {}
                 if isinstance(v,dict):
+                    print("v={}".format(v))
                     dresult[k]["requests"] = dresult[k].get("requests",0) + (v["requests"] or 0)
-                    dresult[k]["total_time"] = dresult[k].get("total_time",0) + (v["total_time"] or 0)
-                    if "min_time"  not in dresult[k] or (v["min_time"] and dresult[k]["min_time"] > v["min_time"]):
-                        dresult[k]["min_time"] = v["min_time"] or 0
-                    if "max_time"  not in dresult[k] or (v["max_time"] and dresult[k]["max_time"] < v["max_time"]):
-                        dresult[k]["max_time"] = v["max_time"] or 0
-                    dresult[k]["avg_time"] = dresult[k]["total_time"] / dresult[k]["requests"] if dresult[k]["requests"] else 0
+                    dresult[k]["totaltime"] = dresult[k].get("totaltime",0) + (v["totaltime"] or 0)
+                    if "mintime"  not in dresult[k] or (v["mintime"] and dresult[k]["mintime"] > v["mintime"]):
+                        dresult[k]["mintime"] = v["mintime"] or 0
+                    if "maxtime"  not in dresult[k] or (v["maxtime"] and dresult[k]["maxtime"] < v["maxtime"]):
+                        dresult[k]["maxtime"] = v["maxtime"] or 0
+                    dresult[k]["avgtime"] = dresult[k]["totaltime"] / dresult[k]["requests"] if dresult[k]["requests"] else 0
                 else:
                     dresult[k]["requests"] = dresult[k].get("requests",0) + (v or 0)
         return result
@@ -214,10 +216,10 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
         #send requests to flush the traffic data to redis
         print("Begin to sent {} requests to auth2 to flush the existing traffic data to redis".format(cls.POST_REQUESTS))
         for i in range(50):
-            self.flush_traffic_data(cls.testusers[0])
+            self.flush_traffic_data(cls.UNITEST_AUTH,cls.testusers[0])
 
         print("Begin to sent {} requests to auth2 to save the existing traffic data from redis to db".format(cls.POST_REQUESTS))
-        trafficdata = self.save_traffic_data(cls.testusers[0])
+        trafficdata = self.save_traffic_data(cls.UNITEST_AUTH,cls.testusers[0])
         merged_trafficdata = self.merge_trafficdata(trafficdata)
         print("The data was saved to db.{}".format(merged_trafficdata))
 
@@ -248,11 +250,11 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
         #send requests to flush the traffic data to redis
         print("Begin to sent {} requests to auth2 to flush the traffic data to redis".format(cls.POST_REQUESTS))
         for i in range(50):
-            self.flush_traffic_data(cls.testusers[0])
+            self.flush_traffic_data(cls.UNITEST_AUTH,cls.testusers[0])
 
         #save and return the traffic data
         print("Sent requests to auth2 to save the traffic data from redis to database")
-        trafficdata = self.save_traffic_data(cls.testusers[0])
+        trafficdata = self.save_traffic_data(cls.UNITEST_AUTH,cls.testusers[0])
         print("Get the traffic data from auth2")
         print("\n".join(json.dumps(d,cls=JSONFormater) for d in trafficdata))
         merged_trafficdata = self.merge_trafficdata(trafficdata)

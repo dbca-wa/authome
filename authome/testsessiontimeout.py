@@ -36,7 +36,7 @@ class UserSessionTimeoutTestCase(testutils.StartServerMixin,BaseTestCase):
                 timeout = models.UserGroup.get_session_timeout(usergroups) or 0
                 print("=============================user={} , timeout = {}====================".format(user,timeout))
                 before_login = timezone.localtime()
-                res = requests.get(self.get_login_user_url(user,"auth01"),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_login_user_url(user,servername="auth01"),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
                 after_login = timezone.localtime()
                 res.raise_for_status()
                 session_cookie = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
@@ -50,7 +50,7 @@ class UserSessionTimeoutTestCase(testutils.StartServerMixin,BaseTestCase):
 
                 time.sleep(5)
                 before_profile = timezone.localtime()
-                res = requests.get(self.get_profile_url("auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 after_profile = timezone.localtime()
 
                 sessiondata,ttl2 = self.get_session_data(session_cookie,"auth01",exist=True)

@@ -264,6 +264,9 @@ def get_session(request):
         raise
 
 def flush_trafficdata(requests):
+    res = views.auth_basic(requests)
+    if res.status_code >= 300:
+        return res
     if cache._traffic_data and len(cache._traffic_data) > 1:
         cache._save_traffic_data(timezone.localtime())
         cache._traffic_data.clear()
@@ -273,6 +276,10 @@ def flush_trafficdata(requests):
         return JsonResponse({"flushed":False,"server":utils.get_processid()},status=200,encoder=JSONEncoder)
     
 def save_trafficdata_to_db(requests):
+    res = views.auth_basic(requests)
+    if res.status_code >= 300:
+        return res
+
     batchid = trafficdata.save2db()
     data = []
     for d in models.TrafficData.objects.filter(batchid=batchid).defer("cluster"):
@@ -283,10 +290,10 @@ def save_trafficdata_to_db(requests):
             "end_time" : d.end_time,
             "batchid" : d.batchid,
             "requests" : d.requests,
-            "total_time" : d.total_time,
-            "min_time" : d.min_time,
-            "max_time" : d.max_time,
-            "avg_time" : d.avg_time,
+            "totaltime" : d.total_time,
+            "mintime" : d.min_time,
+            "maxtime" : d.max_time,
+            "avgtime" : d.avg_time,
             "get_remote_sessions" : d.get_remote_sessions,
             "delete_remote_sessions" : d.delete_remote_sessions,
             "status" : d.status,
