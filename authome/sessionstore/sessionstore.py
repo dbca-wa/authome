@@ -327,7 +327,7 @@ class _AbstractSessionStore(SessionBase):
 
     def save(self, must_create=False):
         try:
-            performance.start_processingstep("save_session_in_cache")
+            performance.start_processingstep("save_session_to_cache")
             if self.session_key is None:
                 return self.create()
             if must_create:
@@ -340,7 +340,7 @@ class _AbstractSessionStore(SessionBase):
             if must_create and not result:
                 raise CreateError
         finally:
-            performance.end_processingstep("save_session_in_cache")
+            performance.end_processingstep("save_session_to_cache")
             logger.debug("Save a session({}) for {} into cache".format(self.session_key,self.get(USER_SESSION_KEY,'GUEST')))
             pass
 

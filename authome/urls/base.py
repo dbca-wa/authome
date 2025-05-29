@@ -10,7 +10,7 @@ from authome.models import DebugLog
 
 logger = logging.getLogger(__name__)
 
-def traffic_monitor(name,func):
+def traffic_monitor(name,func,slowrequestenabled=True):
     def _monitor(request):
         start = timezone.localtime()
         res = None
@@ -20,7 +20,7 @@ def traffic_monitor(name,func):
         finally:
             try:
                 ptime = cache.log_request(name,request.get_host(),start,res.status_code if res else 500) 
-                if ptime > settings.AUTH_TOO_SLOW_THRESHOLD:
+                if slowrequestenabled and ptime > settings.AUTH_TOO_SLOW_THRESHOLD:
                     try:
                         useremail = request.user.email
                     except:

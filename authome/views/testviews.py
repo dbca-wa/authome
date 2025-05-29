@@ -1,5 +1,7 @@
 import re
+import time
 import logging
+import json
 from collections import OrderedDict
 from datetime import datetime,timedelta
 
@@ -9,12 +11,16 @@ from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 
 from . import views
+from .tcontrolviews import _check_tcontrol
 from .. import models
 from .. import utils
 from ..sessionstore.sessionstore import SessionStore 
-from ..serializers import JSONEncoder
+from ..serializers import JSONEncoder,JSONFormater
 from .. import trafficdata
-from ..cache import cache
+from ..cache import cache, get_defaultcache
+from django.db import connections
+
+defaultcache = get_defaultcache()
 
 if settings.AUTH2_CLUSTER_ENABLED:
     from ..sessionstore.clustersessionstore import SessionStore as ClusterSessionStore
@@ -93,10 +99,59 @@ def login_user(request):
 
     return views.profile(request)
 
+def pseudo_auth(logics):
+    if not logics:
+        return []
+    processdata = []
+    for logic in logics:
+        method = logic[0] if logic[0] else "computing"
+        if logic[1] <= 0:
+            continue
+        starttime = timezone.localtime()
+        if method == "sleep":
+            time.sleep(logic[1])
+        elif method == "db":
+            with connections["default"].cursor() as cursor:
+                try:
+                    cursor.execute("select pg_sleep({})".format(logic[1]))
+                except Exception as ex:
+                    pass
+        elif method == "redis":
+            defaultcacheclient = defaultcache.redis_client
+            defaultcacheclient.execute_command("blpop","__does_not_exist__",logic[1])
+        elif method == "computing":
+            if settings.RUNNING_MODE == "eventlet":
+                import eventlet
+                eventlet.patcher.original('time').sleep(logic[1])
+            elif settings.RUNNING_MODE == "gevent":
+                import gevent
+                gevent.monkey.get_original("time","sleep")(logic[1])
+            else:
+                time.sleep(logic[1])
+        else:
+            method = "sleep"
+            time.sleep(logic[1])
+        endtime = timezone.localtime()
+        processdata.append((method,logic[1],starttime,endtime))
+    return processdata
+
 def echo(request):
+    logics = request.GET.get("logic")
+    if logics:
+        logics = [d.strip().split(".",1) if "." in d else ["computing",d] for d in logics.split(",") if d.strip()]
+        for logic in logics:
+            logic[0] = logic[0].lower()
+            logic[1] = float(logic[1])
+
+    processdata = pseudo_auth(logics)
+
     data = OrderedDict()
     data["url"] = "https://{}{}".format(request.get_host(),request.get_full_path())
     data["method"] = request.method
+    if processdata:
+        data["processing"] = []
+    for d in processdata:
+        data["processing"].append("{2} - {3} : {0}({1} seconds)".format(d[0],d[1],d[2].strftime("%Y-%m-%dT%H:%M:%S.%f"),d[3].strftime("%Y-%m-%dT%H:%M:%S.%f")))
     
     keys = [k for k in request.GET.keys()]
     keys.sort()
@@ -209,6 +264,9 @@ def get_session(request):
         raise
 
 def flush_trafficdata(requests):
+    res = views.auth_basic(requests)
+    if res.status_code >= 300:
+        return res
     if cache._traffic_data and len(cache._traffic_data) > 1:
         cache._save_traffic_data(timezone.localtime())
         cache._traffic_data.clear()
@@ -218,6 +276,10 @@ def flush_trafficdata(requests):
         return JsonResponse({"flushed":False,"server":utils.get_processid()},status=200,encoder=JSONEncoder)
     
 def save_trafficdata_to_db(requests):
+    res = views.auth_basic(requests)
+    if res.status_code >= 300:
+        return res
+
     batchid = trafficdata.save2db()
     data = []
     for d in models.TrafficData.objects.filter(batchid=batchid).defer("cluster"):
@@ -228,10 +290,10 @@ def save_trafficdata_to_db(requests):
             "end_time" : d.end_time,
             "batchid" : d.batchid,
             "requests" : d.requests,
-            "total_time" : d.total_time,
-            "min_time" : d.min_time,
-            "max_time" : d.max_time,
-            "avg_time" : d.avg_time,
+            "totaltime" : d.total_time,
+            "mintime" : d.min_time,
+            "maxtime" : d.max_time,
+            "avgtime" : d.avg_time,
             "get_remote_sessions" : d.get_remote_sessions,
             "delete_remote_sessions" : d.delete_remote_sessions,
             "status" : d.status,
@@ -240,6 +302,172 @@ def save_trafficdata_to_db(requests):
 
     return JsonResponse({"data":data,"status":200},status=200,encoder=JSONEncoder)
 
-    
+def _model_to_dict(obj):
+    result = {}
+    for f in obj.__class__._meta.fields:
+        o = getattr(obj,f.name)
+        if isinstance(o,models.django_models.Model):
+            result[f.name] = _model_to_dict(o)
+        else:
+            result[f.name] = o
 
+    return result
+
+
+def update_model_4_test(request,name):
+    modelcls = getattr(models,name)
+    data = json.loads(request.POST.get("data"))
+    obj = modelcls.objects.filter(**data["filter"]).first()
+    if not obj:
+        obj = modelcls(**data["filter"])
+    changed = False
+    for k,v in data.get("defaults",{}).items():
+        if getattr(obj,k) != v:
+            setattr(obj,k,v)
+            changed = True
+    if changed:
+        obj.clean()
+        obj.save()
+
+    result = _model_to_dict(obj)
+    result["_changed"] = changed
+            
+    return JsonResponse(result,status=200,encoder=JSONFormater)
+
+
+def del_model_4_test(request,name):
+    modelcls = getattr(models,name)
+    data = json.loads(request.POST.get("data"))
+    result = modelcls.objects.filter(**data).delete()
+    return JsonResponse(result,status=200,encoder=JSONFormater,safe=True)
+
+def refresh_modelcache_4_test(request,name):
+    modelcls = getattr(models,name)
+    #wait cache to refresh
+    waitseconds = (modelcls.get_next_refreshtime() - timezone.localtime()).total_seconds()
+    if waitseconds > 0:
+        time.sleep(waitseconds)
+    return views.SUCCEED_RESPONSE
+
+
+def search_model_4_test(request,name):
+    modelcls = getattr(models,name)
+    data = json.loads(request.POST.get("data"))
+    result = []
+    for obj in  modelcls.objects.filter(**data):
+        result.append(_model_to_dict(obj))
+
+    return JsonResponse(result,status=200,encoder=JSONFormater,safe=True)
+
+
+def test_tcontrol(request):
+    client = request.GET.get("client")
+    clientip = request.GET.get("clientip")
+    test = request.GET.get("test","0") == "1"
+    tcontrol = cache.tcontrols.get(int(request.GET.get("tcontrol")))
+    exempt = True if request.GET.get("exempt") == "1" else False
+    if not tcontrol or not tcontrol.active:
+        #not traffic control configured
+        result = [True,"Tcontrol Not Configured",0]
+    else:
+        result = _check_tcontrol(tcontrol,clientip,client,exempt,test=test)
+    return JsonResponse(result, safe=False)
+
+def clear_tcontroldata(request):
+    tcontrol = cache.tcontrols.get(int(request.GET.get("tcontrol")))
+
+    if not settings.TRAFFICCONTROL_SUPPORTED:
+        cahce.clear_tcontroldata(settings.TRAFFICCONTROL_CLUSTERID,tcontrol.id)
+    else:
+        keypattern = "{}*".format(settings.GET_TRAFFICCONTROL_CACHE_KEY(tcontrol.name))
+        for i in range(settings.TRAFFICCONTROL_CACHE_SERVERS):
+            if settings.TRAFFICCONTROL_CACHE_SERVERS == 1:
+                name = "tcontrol"
+            else:
+                name = "tcontrol{}".format(i)
+            client = caches[name].redis_client
+            tcontrolkeys = client.keys(keypattern)
+            if tcontrolkeys:
+                client.delete(*tcontrolkeys)
+
+    return views.SUCCEED_RESPONSE
+
+
+
+def _tcontrol(request):
+    clientip = request.headers.get("x-real-ip")
+
+    test = request.GET.get("test","1") == "1"
+    domain = request.get_host()
+    path = request.headers.get("x-upstream-request-uri")
+    if path:
+        #get the original request path
+        #remove the query string
+        try:
+            path = path[:path.index("?")]
+        except:
+            pass
+    else:
+        #can't get the original path, use request path directly
+        path = request.path
+
+    method = request.headers.get("x-upstream-request-method") or "GET"
+    if not method:
+        method = models.TrafficControlLocation.GET
+    else:
+        method = models.TrafficControlLocation.METHODS.get(method) or models.TrafficControlLocation.METHODS.get(method.upper()) or models.TrafficControlLocation.GET
+
+    tcontrol = cache.tcontrols.get((domain,path,method))
+    if not tcontrol or not tcontrol.active:
+        #no traffic control policies are enabled.
+        return JsonResponse([True,"_DISABLED_",0], safe=False)
+    exempt = False
+    if request.user.is_authenticated:
+        client = request.user.email
+        if tcontrol.is_exempt(client):
+            #is the user we known,exempt traffic control
+            if (tcontrol.iplimit == 0 or tcontrol.iplimitperiod == 0) and (tcontrol.concurrency == 0 or tcontrol.est_processtime == 0):
+                return JsonResponse([True,None,0], safe=False)
+            else:
+                exempt = True
+    elif settings.TRAFFICCONTROL_COOKIE_NAME:
+        client = request.COOKIES.get(settings.TRAFFICCONTROL_COOKIE_NAME) or None
+    else:
+        client = None
+
+    if settings.TRAFFICCONTROL_SUPPORTED:
+        result = _check_tcontrol(tcontrol,clientip,client,exempt,test)
+    else:
+        result = cahce.tcontrol(settings.TRAFFICCONTROL_CLUSTERID,tcontrol.id,clientip,client,exempt,test)
+    
+    return JsonResponse(result, safe=False)
+
+def test_auth_tcontrol(request):
+    res = views.auth(request)
+    if res.status_code > 300:
+        return res
+    #authentication and authorization succeed
+    #check the traffic control
+    return _tcontrol(request)
+
+def test_auth_optional_tcontrol(request):
+    res = views.auth_optional(request)
+    if res.status_code > 300:
+        return res
+    #check the traffic control
+    return _tcontrol(request)
+
+def test_auth_basic_tcontrol(request):
+    res = views.auth_basic(request)
+    if res.status_code > 300:
+        return res
+    #check the traffic control
+    return _tcontrol(request)
+
+def test_auth_basic_optional_tcontrol(request):
+    res = views.auth_basic_optional(request)
+    if res.status_code > 300:
+        return res
+    #check the traffic control
+    return _tcontrol(request)
 

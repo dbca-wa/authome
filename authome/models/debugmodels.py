@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models as django_models
 import traceback
 import logging
 from django.conf  import settings
@@ -9,7 +9,7 @@ from .. import utils
 
 logger = logging.getLogger(__name__)
 
-class DebugLog(models.Model):
+class DebugLog(django_models.Model):
     INFO = 0,
     CREATE_COOKIE = 10
     UPDATE_COOKIE = 11
@@ -38,6 +38,11 @@ class DebugLog(models.Model):
     DOMAIN_NOT_MATCH = 202
     SESSION_COOKIE_HACKED = 210
 
+    USER_TRAFFIC_CONTROL = 300
+    IP_TRAFFIC_CONTROL = 301
+    CONCURRENCY_TRAFFIC_CONTROL = 302
+    TRAFFIC_CONTROL_ERROR = 399
+
     CATEGORIES = [
         (CREATE_COOKIE , "Create cookie"),
         (UPDATE_COOKIE , "Update cookie"),
@@ -63,24 +68,29 @@ class DebugLog(models.Model):
         (DOMAIN_NOT_MATCH, "Domain not match"),
         (SESSION_COOKIE_HACKED,"Session cookie hacked"),
 
+        (USER_TRAFFIC_CONTROL,"User Traffic Control"),
+        (IP_TRAFFIC_CONTROL,"IP Traffic Control"),
+        (CONCURRENCY_TRAFFIC_CONTROL,"Concurrency Traffic Control"),
+        (TRAFFIC_CONTROL_ERROR,"Traffic Control Error"),
+
         (ERROR,"Error")
 
     ]
-    logtime = models.DateTimeField(auto_now_add=timezone.now,db_index=True)
-    lb_hash_key = models.CharField(max_length=128,editable=False,null=True,db_index=True)
-    clusterid = models.CharField(max_length=32,editable=False,null=True,db_index=True)
-    session_clusterid = models.CharField(max_length=32,editable=False,null=True,db_index=True)
-    session_key = models.CharField(max_length=128,editable=False,null=True,db_index=True)
-    source_session_cookie = models.CharField(max_length=128,editable=False,null=True)
-    target_session_cookie = models.CharField(max_length=128,editable=False,null=True)
-    email = models.CharField(max_length=128,editable=False,null=True,db_index=True)
-    request = models.CharField(max_length=256,editable=False,null=True,db_index=True)
-    category = models.PositiveSmallIntegerField(choices=CATEGORIES,default=CREATE_COOKIE)
-    useragent = models.CharField(max_length=512,editable=False,null=True)
-    message = models.TextField(editable=False,null=True)
+    logtime = django_models.DateTimeField(auto_now_add=timezone.now,db_index=True)
+    lb_hash_key = django_models.CharField(max_length=128,editable=False,null=True,db_index=True)
+    clusterid = django_models.CharField(max_length=32,editable=False,null=True,db_index=True)
+    session_clusterid = django_models.CharField(max_length=32,editable=False,null=True,db_index=True)
+    session_key = django_models.CharField(max_length=128,editable=False,null=True,db_index=True)
+    source_session_cookie = django_models.CharField(max_length=128,editable=False,null=True)
+    target_session_cookie = django_models.CharField(max_length=128,editable=False,null=True)
+    email = django_models.CharField(max_length=128,editable=False,null=True,db_index=True)
+    request = django_models.CharField(max_length=256,editable=False,null=True,db_index=True)
+    category = django_models.PositiveSmallIntegerField(choices=CATEGORIES,default=CREATE_COOKIE)
+    useragent = django_models.CharField(max_length=512,editable=False,null=True)
+    message = django_models.TextField(editable=False,null=True)
 
     class Meta:
-        verbose_name_plural = "{}Auth2 Logs".format(" " * 4)
+        verbose_name_plural = "{}Auth2 Logs".format(" " * 3)
 
     @classmethod
     def attach_request(cls,request):
@@ -179,7 +189,24 @@ class DebugLog(models.Model):
         except:
             logger.error("Failed to log the message '{}' to DebugLog.{}".format(message,traceback.format_exc()))
 
-
-
-
+    @classmethod
+    def tcontrol(cls,category,tcontrol_name,ip,email,message,save=True):
+        """
+        Return DebugLog 
+        """
+        log = None
+        try:
+            log = DebugLog(
+                clusterid = settings.AUTH2_CLUSTERID if settings.AUTH2_CLUSTER_ENABLED else None,
+                lb_hash_key = ip,
+                message = message,
+                category=category,
+                email = email,
+                request=tcontrol_name
+            )
+            if save:
+                log.save()
+        except:
+            logger.error("Failed to log the message '{}' to DebugLog.{}".format(message,traceback.format_exc()))
+        return log
 

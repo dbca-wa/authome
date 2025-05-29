@@ -122,6 +122,13 @@ class Auth2AdminSite(djangoadmin.AdminSite):
                 if app_label in app_dict:
                     if settings.AUTH2_CLUSTER_ENABLED:
                         app_dict[app_label]["models"].append({
+                            'name': "{0}Auth2 Online Status".format(" " * 2),
+                            'object_name': "AUTH2_ONLINE_STATUS",
+                            'perms': [],
+                            'admin_url': reverse("admin:auth2_onlinestatus"),
+                            'add_url': None,
+                        })
+                        app_dict[app_label]["models"].append({
                             'name': "{1}Healthcheck({0})".format(settings.AUTH2_CLUSTERID," " * 2),
                             'object_name': "{}_Healthcheck".format(settings.AUTH2_CLUSTERID),
                             'perms': [],
@@ -190,3 +197,10 @@ admin_site.register(NormalUserToken,UserAccessTokenAdmin)
 admin_site.register(auth2_models.IdentityProvider,IdentityProviderAdmin)
 admin_site.register(auth2_models.CustomizableUserflow,CustomizableUserflowAdmin)
 admin_site.register(auth2_models.UserTOTP,UserTOTPAdmin)
+
+if settings.TRAFFICCONTROL_ENABLED:
+    if settings.AUTH2_CLUSTER_ENABLED:
+        from .clusteradmin import TrafficControlAdmin
+    else:
+        from .tcontroladmin import TrafficControlAdmin
+    admin_site.register(auth2_models.TrafficControl,TrafficControlAdmin)

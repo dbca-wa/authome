@@ -4,9 +4,9 @@ import logging
 from django.conf import settings
 
 from .models import *
+from .tcontrolmodels import *
 from .clustermodels import *
 from .trafficmodels import *
-from .models import ArrayField
 from .debugmodels import *
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,14 @@ def initialize():
     except:
         if not settings.IGNORE_LOADING_ERROR:
             raise Exception("Failed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
+    
+    if settings.TRAFFICCONTROL_ENABLED:
+        logger.debug("Begin to load TrafficControl cache")
+        try:
+            cache.refresh_tcontrol_cache(True)
+        except:
+            if not settings.IGNORE_LOADING_ERROR:
+                raise Exception("Failed to load TrafficControl cache during server starting.{}".format(traceback.format_exc()))
         
     logger.debug("Begin to load IDP cache")
     try:

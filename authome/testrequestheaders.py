@@ -25,6 +25,7 @@ class RequestHeaderTestCase(testutils.StartServerMixin,TestCase):
     headers = {"x-lb-hash-key":"dummykey"}
 
     TESTED_SERVER = env("TESTED_SERVER")
+    UNITEST_AUTH = (env("TEST_USER",default=None),env("TEST_PASSWORD",default=None))
     noauth_url = "/test/echo"
     auth_url = "/test/echo/auth"
     auth_basic_url = "/test/echo/auth_basic"
@@ -37,7 +38,7 @@ class RequestHeaderTestCase(testutils.StartServerMixin,TestCase):
         cls.disable_messages()
 
         #login and get the user profile and session cookie; user and access token will be created as required.
-        res = requests.get(cls.get_login_user_url("test_user01@dbca.wa.gov.au"),verify=settings.SSL_VERIFY)
+        res = requests.get(cls.get_login_user_url("test_user01@dbca.wa.gov.au"),verify=settings.SSL_VERIFY,auth=cls.UNITEST_AUTH)
         res.raise_for_status()
         userprofile = res.json()
         cls.session_key = cls.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])

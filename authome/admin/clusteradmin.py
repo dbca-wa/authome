@@ -38,8 +38,9 @@ class SyncConfigChangeMixin(object):
         return urls
 
     def sync_config(self,request):
+        changelist_url_name = 'admin:{}_{}_changelist'.format(self.model._meta.app_label,self.model._meta.model_name)
         obj = self.model.objects.all().only("id","modified").order_by("-modified").first()
-        if not obj:
+        if not obj :
             #no data, no need to sync
             self.message_user(
                 request, 
@@ -91,7 +92,6 @@ class SyncConfigChangeMixin(object):
                 request, 
                 message
             )
-        changelist_url_name = 'admin:{}_{}_changelist'.format(self.model._meta.app_label,self.model._meta.model_name)
         return HttpResponseRedirect(reverse(changelist_url_name))
 
 class SyncObjectChangeMixin(object):
@@ -147,6 +147,11 @@ class IdentityProviderAdmin(SyncConfigChangeMixin,admin.IdentityProviderAdmin):
 class CustomizableUserflowAdmin(SyncConfigChangeMixin,admin.CustomizableUserflowAdmin):
     pass
         
+if settings.TRAFFICCONTROL_ENABLED:
+    from .tcontroladmin import TrafficControlAdmin
+    class TrafficControlAdmin(SyncConfigChangeMixin,TrafficControlAdmin):
+        pass
+
 class UserAdmin(SyncObjectChangeMixin,admin.UserAdmin):
     def _sync_change(self,objids):
         return cache.users_changed(objids,True)

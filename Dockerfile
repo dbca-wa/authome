@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Prepare the base environment.
-FROM python:3.12.4-slim-bookworm AS builder_base_authome
+FROM python:3.12.10-slim-bookworm AS builder_base_authome
 LABEL org.opencontainers.image.authors=asi@dbca.wa.gov.au
 LABEL org.opencontainers.image.source=https://github.com/dbca-wa/authome
 RUN apt-get update -y \
@@ -27,10 +27,13 @@ RUN adduser -uid 1000 --gid 1000 --no-create-home --disabled-login app
 
 # Install Python libs from pyproject.toml.
 FROM builder_base_authome AS python_libs_authome
+WORKDIR /app
+COPY fonts ./fonts
+
 WORKDIR /app/release
 # Install the project.
 FROM python_libs_authome
-COPY manage.py gunicorn.py testperformance testrequestheaders testrediscluster testperformance pyproject.toml ./
+COPY manage.py gunicorn_sync.py gunicorn_eventlet.py gunicorn_gevent.py testperformance testrequestheaders testrediscluster testperformance pyproject.toml captchautil.py ./
 COPY authome ./authome
 COPY templates ./templates
 RUN export IGNORE_LOADING_ERROR=True ; python manage.py collectstatic --noinput --no-post-process
@@ -51,12 +54,19 @@ RUN find ./ -type f -iname '*.py' -exec sed -i 's/DebugLog\.attach_request/#Debu
 
 WORKDIR /app
 RUN echo "#!/bin/bash \n\
+if [[ \"\$RUNNING_MODE\" == \"gevent\" ]]; then \n\
+    config=\"gunicorn_gevent.py\" \n\
+elif [[ \"\$RUNNING_MODE\" == \"eventlet\" ]]; then \n\
+    config=\"gunicorn_eventlet.py\" \n\
+else \n\
+    config=\"gunicorn_sync.py\" \n\
+fi \n\
 if [[ \"\$DEBUG\" == \"True\" || \"\${LOGLEVEL}\" == \"DEBUG\" ]]; then \n\
     echo \"Running in dev mode\" \n\
-    cd /app/dev && gunicorn authome.wsgi --bind=:8080 --config=gunicorn.py \n\
+    cd /app/dev && gunicorn authome.wsgi --config=\${config} \n\
 else \n\
     echo \"Running in release mode\" \n\
-    cd /app/release && gunicorn authome.wsgi --bind=:8080 --config=gunicorn.py \n\
+    cd /app/release && gunicorn authome.wsgi --config=\${config} \n\
 fi \n\
 " > start_app
 

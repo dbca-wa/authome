@@ -73,10 +73,10 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
             try:
                 #login to a standalone server to get the standalone session cookie 
                 self.start_auth2_server("standalone",18060,auth2_env=auth2_envs.get("standalone"))
-                res = requests.get(self.get_login_user_url("test_user01@test.com","standalone"),headers=self.headers,verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_login_user_url("test_user01@test.com",servername="standalone"),headers=self.headers,verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 session_cookie = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
-                res = requests.get(self.get_profile_url("standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 user_profile = res.json()
                 self.assertEqual(user_profile["authenticated"],True,msg="User should have already loged in.auth2_envs={}".format(auth2_envs))
@@ -87,7 +87,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 #start server 'standalone2' whose previous session cache is the session cache of server 'standalone'
                 #use the session cookie to access server 'standalone2' to migrate the session to session cache of server 'standalone'
                 self.start_auth2_server("standalone2",18061,auth2_env=auth2_envs.get("standalone2"))
-                res = requests.get(self.get_profile_url("standalone2"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="standalone2"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 self.assertEqual(self.clean_cookie(res.cookies.get(settings.SESSION_COOKIE_NAME)),None,msg="Session is migrated from previous session cache. and the client session cookie should not be changed, response should not return session cookie..auth2_envs={}".format(auth2_envs))
                 user_profile2 = res.json()
@@ -98,7 +98,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 print("\n")
     
                 #session has migrated from previous cache,check whether the session in the original session cache is invalidated.
-                res = requests.get(self.get_profile_url("standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 user_profile3 = res.json()
                 self.assertEqual(user_profile3["authenticated"],False,msg="The original session has been migrated, can't use it to access anymore.auth2_envs={}".format(auth2_envs))
@@ -157,11 +157,11 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
             try:
                 #login to a standalone server to get a standalone session
                 self.start_auth2_server("standalone",18060,auth2_env=auth2_envs.get("standalone"))
-                res = requests.get(self.get_login_user_url("test_user01@test.com","standalone"),headers=self.headers,verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_login_user_url("test_user01@test.com",servername="standalone"),headers=self.headers,verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 session_cookie = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
                 cache_key_prefix = self.get_settings("CACHE_KEY_PREFIX","standalone")
-                res = requests.get(self.get_profile_url("standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 user_profile = res.json()
                 self.assertEqual(user_profile["authenticated"],True,msg="User should have already loged in.auth2_envs={}".format(auth2_envs))
@@ -174,7 +174,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 auth01_lb_hash_key = "auth2_clusher_hash_key-{}".format("auth01")
                 auth01_cache_key_prefix,auth01_standalone_cache_key_prefix = self.get_settings(["CACHE_KEY_PREFIX","STANDALONE_CACHE_KEY_PREFIX"],"auth01")
                 self.cluster_headers["X-LB-HASH-KEY"] = auth01_lb_hash_key
-                res = requests.get(self.get_profile_url("auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 print("\n".join("{}={}".format(k,v) for k,v in res.json().items()))
                 print("\n")
@@ -193,7 +193,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
     
                 #session has migrated from standalone server to cluster server,
                 #check the original session 
-                res = requests.get(self.get_profile_url("standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 user_profile3 = res.json()
                 if cache_key_prefix == auth01_cache_key_prefix:
@@ -204,7 +204,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
     
                 #try to migrate the standalone session to cluster server again.
                 #The same session cookie should be returned
-                res = requests.get(self.get_profile_url("auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth01_session_cookie2 = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
                 self.assertEqual(auth01_session_cookie2,auth01_session_cookie,msg="The session cookie should be same no matter how many times a session is migrated to the same cluster server.auth2_envs={}".format(auth2_envs))
@@ -288,10 +288,10 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 self.start_auth2_server("standalone2",18061,auth2_env=auth2_envs.get("standalone2"))
                 standalone_cache_key_prefix = self.get_settings("CACHE_KEY_PREFIX","standalone")
                 standalone2_cache_key_prefix = self.get_settings("CACHE_KEY_PREFIX","standalone2")
-                res = requests.get(self.get_login_user_url("test_user01@test.com","standalone"),headers=self.headers,verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_login_user_url("test_user01@test.com",servername="standalone"),headers=self.headers,verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 session_cookie = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
-                res = requests.get(self.get_profile_url("standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 user_profile = res.json()
                 self.assertEqual(user_profile["authenticated"],True,msg="User should have already loged in.auth2_envs={}".format(auth2_envs))
@@ -304,7 +304,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 auth02a_cache_key_prefix,auth02a_standalone_cache_key_prefix = self.get_settings(["CACHE_KEY_PREFIX","STANDALONE_CACHE_KEY_PREFIX"],"auth02a")
                 auth02_lb_hash_key = "auth2_clusher_hash_key-{}".format("auth02")
                 self.cluster_headers["X-LB-HASH-KEY"] = auth02_lb_hash_key
-                res = requests.get(self.get_profile_url("auth02a"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth02a"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth02_session_cookie = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
                 returned_auth02_lb_hash_key,auth02_clusterid,auth2_signature,auth02_session_key = auth02_session_cookie.split("|",3)
@@ -321,14 +321,14 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
 
                 #session has migrated from server 'standalone' to cluster server 'auth02a',
                 #the session should be invalidated in auth2 server 'standalone'
-                res = requests.get(self.get_profile_url("standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 user_profile3 = res.json()
                 self.assertEqual(user_profile3["authenticated"],False,msg="The original session has been migrated, can't use it to access anymore.auth2_envs={}".format(auth2_envs))
                 self.assertEqual(self.is_session_deleted(session_cookie,"standalone"),True,msg="The migrated session data should be '{{\"migrated\":True}}'.auth2_envs={}".format(auth2_envs))
     
                 #the session should be invalidated in auth2 server 'standalone2' if cache key prefix is different; otherwise shoule be still available
-                res = requests.get(self.get_profile_url("standalone2"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="standalone2"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 user_profile4 = res.json()
                 if standalone2_cache_key_prefix == auth02a_cache_key_prefix:
@@ -338,7 +338,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                     self.assertEqual(self.is_session_deleted(session_cookie,"standalone2"),True,msg="The migrated session data should be '{{\"migrated\":True}}'.auth2_envs={}".format(auth2_envs))
 
                 #try to migrate the standalone session to cluster server again.
-                res = requests.get(self.get_profile_url("auth02a"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth02a"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth02_session_cookie2 = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
                 self.assertEqual(auth02_session_cookie2,auth02_session_cookie,msg="The session cookie should be the same no matter how many times a session is migrated to the same cluster server.auth2_envs={}".format(auth2_envs))
@@ -408,12 +408,12 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 #login to a server 'standalone' to get a standalone session cookie
                 self.start_auth2_server("standalone",18060,auth2_env=auth2_envs.get("standalone"))
                 standalone_cache_key_prefix = self.get_settings("CACHE_KEY_PREFIX","standalone")
-                res = requests.get(self.get_login_user_url("test_user01@test.com","standalone"),headers=self.headers,verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_login_user_url("test_user01@test.com",servername="standalone"),headers=self.headers,verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 session_cookie = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
                 print("session cookie = {}".format(session_cookie))
 
-                res = requests.get(self.get_profile_url("standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 user_profile = res.json()
                 self.assertEqual(user_profile["authenticated"],True,msg="User should have already loged in.auth2_envs=".format(auth2_envs))
@@ -427,7 +427,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 auth02_cache_key_prefix,auth02_standalone_cache_key_prefix = self.get_settings(["CACHE_KEY_PREFIX","STANDALONE_CACHE_KEY_PREFIX"],"auth02")
                 auth02_lb_hash_key = "auth2_clusher_hash_key-{}".format("auth01")
                 self.cluster_headers["X-LB-HASH-KEY"] = auth02_lb_hash_key
-                res = requests.get(self.get_profile_url("auth02"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth02"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth02_session_cookie = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
 
@@ -444,7 +444,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
     
                 #session has migrated from server 'standalone' to cluster server 'auth02',
                 #check whether the session is not available in server 'standalone' and 'auth01'
-                res = requests.get(self.get_profile_url("standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 user_profile3 = res.json()
                 self.assertEqual(user_profile3["authenticated"],False,msg="The original session has been migrated, can't use it to access anymore.auth2_envs=".format(auth2_envs))
@@ -453,7 +453,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 self.assertEqual(self.is_session_deleted(session_cookie,"auth01"),True,msg="The migrated session data should be delete from default cluster server 'auth01' .auth2_envs={}".format(auth2_envs))
     
                 #try to migrate the standalone session to cluster server again.
-                res = requests.get(self.get_profile_url("auth02"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth02"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth02_session_cookie2 = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
                 self.assertEqual(auth02_session_cookie2,auth02_session_cookie,msg="The session cookie should be the same no matter how many times a session is migrated to the same cluster server.auth2_envs=".format(auth2_envs))
@@ -548,10 +548,10 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 self.start_auth2_server("standalone2",18061,auth2_env=auth2_envs.get("standalone2"))
                 standalone_cache_key_prefix = self.get_settings("CACHE_KEY_PREFIX","standalone")
                 standalone2_cache_key_prefix = self.get_settings("CACHE_KEY_PREFIX","standalone2")
-                res = requests.get(self.get_login_user_url("test_user01@test.com","standalone"),headers=self.headers,verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_login_user_url("test_user01@test.com",servername="standalone"),headers=self.headers,verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 session_cookie = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
-                res = requests.get(self.get_profile_url("standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 user_profile = res.json()
                 self.assertEqual(user_profile["authenticated"],True,msg="User should have already loged in.auth2_envs={}".format(auth2_envs))
@@ -566,7 +566,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 auth03_cache_key_prefix,auth03_standalone_cache_key_prefix = self.get_settings(["CACHE_KEY_PREFIX","STANDALONE_CACHE_KEY_PREFIX"],"auth03")
                 auth03_lb_hash_key = "auth2_clusher_hash_key-{}".format("auth03")
                 self.cluster_headers["X-LB-HASH-KEY"] = auth03_lb_hash_key
-                res = requests.get(self.get_profile_url("auth03"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth03"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth03_session_cookie = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
                 returned_auth03_lb_hash_key,auth03_clusterid,signature,auth03_session_key = auth03_session_cookie.split("|",3)
@@ -583,21 +583,21 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
 
                 #session has migrated from server 'standalone' to cluster server 'auth03',
                 #check whether the session is not available in auth2 server 'standalone'
-                res = requests.get(self.get_profile_url("standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="standalone"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 user_profile3 = res.json()
                 self.assertEqual(user_profile3["authenticated"],False,msg="The original session has been migrated, can't use it to access anymore.auth2_envs={}".format(auth2_envs))
                 self.assertEqual(self.is_session_deleted(session_cookie,"standalone"),True,msg="The migrated session data should be '{{\"migrated\":True}}'.auth2_envs={}".format(auth2_envs))
     
                 #check whether the session is not available in auth2 server 'standalone2'
-                res = requests.get(self.get_profile_url("standalone2"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="standalone2"),headers=self.headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 user_profile4 = res.json()
                 self.assertEqual(user_profile4["authenticated"],False,msg="The original session has been migrated, can't use it to access anymore.auth2_envs={}".format(auth2_envs))
                 self.assertEqual(self.is_session_deleted(session_cookie,"standalone2"),True,msg="The migrated session data should be '{{\"migrated\":True}}'.auth2_envs={}".format(auth2_envs))
 
                 #check whether the session is not available in auth2 server 'auth02a'
-                res = requests.get(self.get_profile_url("auth02a"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth02a"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 user_profile5 = res.json()
                 self.assertEqual(user_profile5["authenticated"],False,msg="The original session has been deleted, can't use it to access anymore.auth2_envs={}".format(auth2_envs))
@@ -606,7 +606,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 self.assertEqual(self.is_session_deleted(session_cookie,"auth02a"),True,msg="The migrated session data should be deleted.auth2_envs={}".format(auth2_envs))
 
                 #try to migrate the standalone session to cluster server again.
-                res = requests.get(self.get_profile_url("auth03"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth03"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth03_session_cookie2 = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
                 self.assertEqual(auth03_session_cookie2,auth03_session_cookie,msg="The session cookie should be the same no matter how many times a session is migrated to the same cluster server.auth2_envs={}".format(auth2_envs))
@@ -669,13 +669,13 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 #login to auth2 server 'auth01' to get a cluster session cookie
                 auth01_lb_hash_key = "auth2_clusher_hash_key-{}".format("auth01")
                 self.cluster_headers["X-LB-HASH-KEY"] = auth01_lb_hash_key
-                res = requests.get(self.get_login_user_url("test_user01@test.com","auth01"),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_login_user_url("test_user01@test.com",servername="auth01"),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth01_session_cookie = self.clean_cookie(self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME]))
                 returned_auth01_lb_hash_key,auth01_clusterid,auth01_signature,auth01_session_key = auth01_session_cookie.split("|",3)
                 self.assertEqual(returned_auth01_lb_hash_key,auth01_lb_hash_key,msg="Returned lb hash key in the session cookie should be the same value as passed in lb hash key.auth2_envs=".format(auth2_envs))
                 self.assertEqual(auth01_clusterid,"AUTH2_01",msg="Returned auth2 cluster name in the session cookie should be the same name as the cluster name of cluster 'auth01'.auth2_envs=".format(auth2_envs))
-                res = requests.get(self.get_profile_url("auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth01_user_profile = res.json()
                 self.assertEqual(auth01_user_profile["authenticated"],True,msg="User should have already loged in.auth2_envs=".format(auth2_envs))
@@ -685,7 +685,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
     
                 #migrate the session to auth2 server 'auth02'
                 self.cluster_headers["X-LB-HASH-KEY"] = auth01_lb_hash_key
-                res = requests.get(self.get_profile_url("auth02"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth02"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth02_session_cookie = self.clean_cookie(self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME]))
                 returned_auth02_lb_hash_key,auth02_clusterid,auth2_signature,auth02_session_key = auth02_session_cookie.split("|",3)
@@ -701,14 +701,14 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
     
                 #session has migrated from auth01 to auth02
                 #check whether the original session is not available in original auth2 serve 'auth01'
-                res = requests.get(self.get_profile_url("auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth01_user_profile2 = res.json()
                 self.assertEqual(auth01_user_profile2["authenticated"],False,msg="The original session has been migrated, can't use it to access anymore.auth2_envs=".format(auth2_envs))
                 self.assertEqual(self.is_session_deleted(auth01_session_cookie,"auth01"),True,msg="The migrated session data should be '{{\"migrated\":True}}'.auth2_envs={}".format(auth2_envs))
     
                 #try to migrate the session from auth01 to auth02 again.
-                res = requests.get(self.get_profile_url("auth02"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth02"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth02_session_cookie2 = self.clean_cookie(self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME]))
                 self.assertEqual(auth02_session_cookie2,auth02_session_cookie,msg="The session cookie should be the same no matter how many times a session is migrated to the same cluster server.auth2_envs=".format(auth2_envs))
@@ -720,7 +720,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
     
                 #migrate back to auth01
                 self.cluster_headers["X-LB-HASH-KEY"] = auth01_lb_hash_key
-                res = requests.get(self.get_profile_url("auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth02_session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth02_session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth01_user_profile3 = res.json()
                 auth01_session_cookie3 = self.clean_cookie(self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME]))
@@ -733,14 +733,14 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
     
                 #session has migrated from auth02 to auth01
                 #it should be failed if try to use the original session to access auth02
-                res = requests.get(self.get_profile_url("auth02"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth02_session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth02"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth02_session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth02_user_profile3 = res.json()
                 self.assertEqual(auth02_user_profile3["authenticated"],False,msg="The original session has been migrated, can't use it to access anymore.auth2_envs=".format(auth2_envs))
                 self.assertEqual(self.is_session_deleted(auth02_session_cookie,"auth02"),True,msg="The migrated session data should be deleted.auth2_envs={}".format(auth2_envs))
     
                 #try to migrate the session from auth02 to auth01 again.
-                res = requests.get(self.get_profile_url("auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth02_session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth02_session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth01_user_profile4 = res.json()
                 auth01_session_cookie4 = self.clean_cookie(self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME]))
@@ -806,10 +806,10 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 self.start_auth2_server("auth01",18060,auth2_env=auth2_envs.get("auth01"))
                 auth01_lb_hash_key = "auth2_clusher_hash_key-{}".format("auth01")
                 self.cluster_headers["X-LB-HASH-KEY"] = auth01_lb_hash_key
-                res = requests.get(self.get_login_user_url("test_user01@test.com","auth01"),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_login_user_url("test_user01@test.com",servername="auth01"),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth01_session_cookie = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
-                res = requests.get(self.get_profile_url("auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth01_user_profile = res.json()
                 self.assertEqual(auth01_user_profile["authenticated"],True,msg="User should have already loged in.auth2_envs={}".format(auth2_envs))
@@ -822,7 +822,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 self.shutdown_auth2_server("auth01")
                 self.start_auth2_server("auth01a",18060,auth2_env=auth2_envs.get("auth01a"))
                 #use the session cookie to access auth01a to migrate the session from previous session cache to auth01a's session cache
-                res = requests.get(self.get_profile_url("auth01a"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth01a"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 self.assertEqual(self.clean_cookie(res.cookies.get(settings.SESSION_COOKIE_NAME)),None,msg="Session is only migrated from previous session cache. and the client session cookie should not be changed..auth2_envs={}".format(auth2_envs))
                 auth01a_user_profile = res.json()
@@ -835,7 +835,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 #session has migrated from previous cache, check whether the session in previous session cache is not available
                 self.shutdown_auth2_server("auth01a")
                 self.start_auth2_server("auth01",18060,auth2_env=auth2_envs.get("auth01"))
-                res = requests.get(self.get_profile_url("auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth01_user_profile2 = res.json()
                 self.assertEqual(auth01_user_profile2["authenticated"],False,msg="The session has been migrated from original session cache..auth2_envs={}".format(auth2_envs))
@@ -904,13 +904,13 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 self.start_auth2_server("auth01",18060,auth2_env=auth2_envs.get("auth01"))
                 auth01_lb_hash_key = "auth2_clusher_hash_key-{}".format("auth01")
                 self.cluster_headers["X-LB-HASH-KEY"] = auth01_lb_hash_key
-                res = requests.get(self.get_login_user_url("test_user01@test.com","auth01"),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_login_user_url("test_user01@test.com",servername="auth01"),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth01_session_cookie = self.clean_cookie(self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME]))
                 returned_auth01_lb_hash_key,auth01_clusterid,auth01_signature,auth01_session_key = auth01_session_cookie.split("|",3)
                 self.assertEqual(returned_auth01_lb_hash_key,auth01_lb_hash_key,msg="Returned lb hash key in the session cookie should be the same value as lb session key in original sesion cookie.auth2_envs=".format(auth2_envs))
                 self.assertEqual(auth01_clusterid,"AUTH2_01",msg="Returned auth2 cluster name in the session cookie should be the same name as the cluster name of cluster 'auth02'.auth2_envs=".format(auth2_envs))
-                res = requests.get(self.get_profile_url("auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth01_user_profile = res.json()
                 self.assertEqual(auth01_user_profile["authenticated"],True,msg="User should have already loged in.auth2_envs={}".format(auth2_envs))
@@ -923,7 +923,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 self.start_auth2_server("auth01a",18060,auth2_env=auth2_envs.get("auth01a"))
                 self.start_auth2_server("auth03",18061,auth2_env=auth2_envs.get("auth03"))
                 self.cluster_headers["X-LB-HASH-KEY"] = auth01_lb_hash_key
-                res = requests.get(self.get_profile_url("auth03"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth03"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth03_user_profile = res.json()
                 auth03_session_cookie = self.clean_cookie(self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME]))
@@ -936,7 +936,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 self.assertEqual(auth03_session_data,auth01_session_data,msg="Session data should not be changed during migration.auth2_envs={}".format(auth2_envs))
 
                 #session has migrated from previous cache, check whether it is not available in the original session cache
-                res = requests.get(self.get_profile_url("auth01a"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth01a"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth01a_user_profile2 = res.json()
                 self.assertEqual(auth01a_user_profile2["authenticated"],False,msg="The original session has been migrated, can't use it to access anymore.auth2_envs={}".format(auth2_envs))
@@ -944,7 +944,7 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
 
                 self.shutdown_auth2_server("auth01a")
                 self.start_auth2_server("auth01",18060,auth2_env=auth2_envs.get("auth01"))
-                res = requests.get(self.get_profile_url("auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
+                res = requests.get(self.get_profile_url(servername="auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:auth01_session_cookie},verify=settings.SSL_VERIFY)
                 res.raise_for_status()
                 auth01_user_profile3 = res.json()
                 self.assertEqual(auth01_user_profile3["authenticated"],False,msg="The original session has been migrated, can't use it to access anymore.auth2_envs={}".format(auth2_envs))

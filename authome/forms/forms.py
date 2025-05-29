@@ -3,7 +3,7 @@ from django import forms as djangoforms
 from django.contrib.postgres.forms import SimpleArrayField
 from django.utils.safestring import mark_safe
 
-from  ..models import UserGroup,UserGroupAuthorization,UserAuthorization,ExactRequestDomain,User,IdentityProvider,CustomizableUserflow
+from  ..models import UserGroup,UserGroupAuthorization,UserAuthorization,ExactRequestDomain,User,IdentityProvider,CustomizableUserflow,TrafficControl
 from ..widgets import (ReadonlyWidget,text_readonly_widget)
 
 def get_help_text(model_class,field):
@@ -105,4 +105,9 @@ class CustomizableUserflowForm(djangoforms.ModelForm):
             'relogin_url': djangoforms.TextInput(attrs={'style':'width:80%;'}),
             'signout_body': djangoforms.Textarea(attrs={'style':'width:80%;height:500px'})
         }
+
+class TrafficControlForm(djangoforms.ModelForm):
+    class Meta:
+        model = TrafficControl
+        fields = "__all__"
 

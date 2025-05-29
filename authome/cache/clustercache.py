@@ -2,6 +2,7 @@ import logging
 import json
 import requests
 import traceback
+from urllib.parse import quote_plus
 
 from django.conf import settings
 from django.utils import timezone
@@ -9,7 +10,7 @@ from django.urls import reverse
 
 from ..serializers import JSONDecoder
 from .. import utils
-from . import cache,get_usercache
+from .cache import get_usercache,IntervalTaskRunable
 from ..exceptions import Auth2ClusterException
 
 
@@ -52,8 +53,12 @@ def traffic_monitor(name,func):
         
     return _monitor if settings.TRAFFIC_MONITOR_LEVEL > 0 else func
 
+if settings.TRAFFICCONTROL_ENABLED:
+    from .tcontrolcache  import MemoryCache as BaseMemoryCache
+else:
+    from .cache  import MemoryCache as BaseMemoryCache
 
-class MemoryCache(cache.MemoryCache):
+class MemoryCache(BaseMemoryCache):
     def __init__(self):
         super().__init__()
         #not includeing the current cluster
@@ -61,31 +66,31 @@ class MemoryCache(cache.MemoryCache):
         self._default_auth2_cluster = None
         self._current_auth2_cluster = None
         self._auth2_clusters_ts = None
-        self._auth2_clusters_check_time = cache.IntervalTaskRunable("auth2 clusters cache",settings.AUTH2_CLUSTERS_CHECK_INTERVAL) 
+        self._auth2_clusters_check_time = IntervalTaskRunable("auth2 clusters cache",settings.AUTH2_CLUSTERS_CHECK_INTERVAL) 
 
     @property
     def default_auth2_cluster(self):
         """
         In cluster environment, default cluster can be null, but current auth2 cluster can't be null
         """
-        if not self._current_auth2_cluster:
+        if self._current_auth2_cluster is None:
             self.refresh_auth2_clusters(True)
         return self._default_auth2_cluster
 
     @property
     def current_auth2_cluster(self):
-        if not self._current_auth2_cluster:
+        if self._current_auth2_cluster is None:
             self.refresh_auth2_clusters(True)
         return self._current_auth2_cluster
 
     @property
     def auth2_clusters(self):
-        if not self._auth2_clusters:
+        if self._current_auth2_cluster is None:
             self.refresh_auth2_clusters(True)
         return self._auth2_clusters
 
     def refresh_auth2_clusters(self,force=False):
-        if self._auth2_clusters_check_time.can_run() or force or not self._auth2_clusters:
+        if self._auth2_clusters_check_time.can_run() or force or self._current_auth2_cluster is None:
             from ..models import Auth2Cluster
             refreshtime = timezone.localtime()
             l1 = len(self._auth2_clusters)
@@ -139,7 +144,7 @@ class MemoryCache(cache.MemoryCache):
                         DebugLog.warning(DebugLog.INTERCONNECTION_TIMEOUT,None,o.clusterid,None,None,message="Accessing auth2 cluster({1}) times out({0} seconds),{2}".format(settings.AUTH2_INTERCONNECTION_TIMEOUT,o.clusterid,str(ex)),request=request)
                     failed_clusters = utils.add_to_list(failed_clusters,(o,ex))
 
-        if not force_refresh and (retry_clusters or not self._auth2_clusters):
+        if not force_refresh and (retry_clusters or self._current_auth2_cluster is None):
             #some clusters failed
             self.refresh_auth2_clusters(True)
             for o,ex in retry_clusters:
@@ -474,6 +479,19 @@ class MemoryCache(cache.MemoryCache):
         res = self._send_request_to_cluster(None,clusterid,_send_request)
         return res.text
 
+    def get_auth2_onlinestatus(self,clusterid):
+        """
+        get the onlinestatus of the cluster server
+        Return cluster online status
+        """
+        def _send_request(cluster):
+            return requests.get("{}{}".format(
+                cluster.endpoint,
+                reverse('cluster:auth2_onlinestatus')
+            ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT,verify=settings.SSL_VERIFY)
+        res = self._send_request_to_cluster(None,clusterid,_send_request)
+        return json.loads(res.text,cls=JSONDecoder)
+
     def get_auth2_liveness(self,clusterid,serviceid,monitordate):
         """
         get the status of the cluster server
@@ -486,6 +504,39 @@ class MemoryCache(cache.MemoryCache):
             ),headers=self._get_headers(),timeout=settings.AUTH2_INTERCONNECTION_TIMEOUT,verify=settings.SSL_VERIFY)
         res = self._send_request_to_cluster(None,clusterid,_send_request)
         return res.text
+
+    def clear_tcontroldata(self,clusterid,tcontrolid):
+        def _send_request(cluster):
+            url = "{}{}?tcontrol={}".format(
+                cluster.endpoint,
+                reverse('test:clear_tcontroldata'),
+                tcontrolid
+            )
+            return requests.get(url,headers=self._get_headers(),timeout=settings.TRAFFICCONTROL_TIMEOUT,verify=settings.SSL_VERIFY)
+        self._send_request_to_cluster(None,clusterid,_send_request)
+
+    def tcontrol(self,clusterid,tcontrolid,clientip,client,exempt,test=False):
+        """
+        traffic control
+        Return True if allowed; otherwise False
+        """
+        def _send_request(cluster):
+            url = "{}{}?clientip={}&tcontrol={}{}{}".format(
+                cluster.endpoint,
+                reverse('cluster:tcontrol'),
+                quote_plus(clientip),
+                tcontrolid,
+                "&client={}" if client else "",
+                "&exempt=1" if exempt else "",
+                "&test=1" if test else "",
+            )
+            return requests.get(url,headers=self._get_headers(),timeout=settings.TRAFFICCONTROL_TIMEOUT,verify=settings.SSL_VERIFY)
+        try:
+            res = self._send_request_to_cluster(None,clusterid,_send_request)
+            return res.json()
+        except:
+            #other error. ignore traffic control
+            return [True,None]
 
     @property
     def status(self):
@@ -500,7 +551,7 @@ class MemoryCache(cache.MemoryCache):
     @property
     def healthy(self):
         health,msgs = super().healthy
-        if not self._auth2_clusters and not self._default_auth2_cluster:
+        if not self._auth2_clusters and not self._current_auth2_cluster:
             if health:
                 health = False
                 msgs = ["Auth2 cluster cache is empty"]

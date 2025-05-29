@@ -1,0 +1,56 @@
+#!/bin/bash
+echo "Prepare the testing"
+echo "Shutdown auth2 server first"
+SERVERS=11
+while [[ true ]]; do
+    servers=$(ps aux | grep "authome" | grep "python" | wc -l)
+    if [[ ${servers} -gt 0 ]]; then
+        pkill -f "authome"
+        sleep 0.1
+    else
+        echo "Auth2 server is closed."
+        break
+    fi
+done
+echo "Clear previous logs"
+rm ./logs/auth2_8070*.log
+
+i=1
+while [[ ${i} -lt 6 ]]; do
+    echo "==================================================="
+    echo "Traffic control performance testing round ${i}"
+    echo "Begin to start auth2 server"
+    ./start_auth2 auth01 True
+    while [[ true ]]; do
+        servers=$(ps aux | grep "authome" | grep "python" | wc -l)
+        if [[ ${servers} -ne ${SERVERS} ]]; then
+            sleep 0.1
+        else
+            echo "Auth2 server is running."
+            break
+        fi
+    done
+    ./testtcontrolperformance_dev > tcontrolperformancetest_${i}.log 2>&1
+    echo "Shutdown auth2 server after testing"
+    kill $(cat ./logs/auth2_8070.pid)
+    while [[ true ]]; do
+        servers=$(ps aux | grep "authome" | grep "python" | wc -l)
+        if [[ ${servers} -gt 0 ]]; then
+            sleep 0.1
+        else
+            echo "Auth2 server is closed."
+            break
+        fi
+    done
+    cp ./logs/auth2_8070.log ./logs/auth2_8070_${i}.log
+    rm ./logs/auth2_8070.log
+    ((++i))
+done
+
+echo "process auth2 logs"
+i=1
+while [[ ${i} -lt 6 ]]; do
+    python process_tcontrollog.py ./logs/auth2_8070_${i}.log
+    ((++i))
+done
+

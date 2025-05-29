@@ -4,6 +4,7 @@ import json
 import signal
 import time
 import requests
+from urllib.parse import quote_plus
 
 from django.conf import settings
 from django.utils import timezone
@@ -106,12 +107,56 @@ class StartServerMixin(object):
     @classmethod
     def get_profile_url(cls,servername="standalone"):
         url =  "{}/sso/profile".format(cls.get_baseurl(servername))
-        print("profile url = {}".format(url))
         return url
 
     @classmethod
-    def get_login_user_url(cls,user,servername="standalone"):
-        return "{}/test/login_user?user={}".format(cls.get_baseurl(servername),user)
+    def get_auth_url(cls,servername="standalone"):
+        url =  "{}/sso/auth".format(cls.get_baseurl(servername))
+        return url
+
+    @classmethod
+    def get_auth_tcontrol_url(cls,servername="standalone"):
+        url =  "{}/test/sso/auth_tcontrol".format(cls.get_baseurl(servername))
+        return url
+
+    @classmethod
+    def get_auth_optional_url(cls,servername="standalone"):
+        url =  "{}/sso/auth_optional".format(cls.get_baseurl(servername))
+        return url
+
+    @classmethod
+    def get_auth_optional_tcontrol_url(cls,servername="standalone"):
+        url =  "{}/test/sso/auth_optional_tcontrol".format(cls.get_baseurl(servername))
+        return url
+
+    @classmethod
+    def get_basicauth_url(cls,servername="standalone"):
+        url =  "{}/sso/auth_basic".format(cls.get_baseurl(servername))
+        return url
+
+    @classmethod
+    def get_basicauth_tcontrol_url(cls,servername="standalone"):
+        url =  "{}/test/sso/auth_basic_tcontrol".format(cls.get_baseurl(servername))
+        return url
+
+    @classmethod
+    def get_basicauth_optional_url(cls,servername="standalone"):
+        url =  "{}/sso/auth_basic_optional".format(cls.get_baseurl(servername))
+        return url
+
+    @classmethod
+    def get_basicauth_optional_tcontrol_url(cls,servername="standalone"):
+        url =  "{}/test/sso/auth_basic_optional_tcontrol".format(cls.get_baseurl(servername))
+        return url
+
+    @classmethod
+    def get_clear_tcontroldata_url(cls,servername="standalone"):
+        url =  "{}/test/clear_tcontroldata".format(cls.get_baseurl(servername))
+        return url
+
+    @classmethod
+    def get_login_user_url(cls,user,enabletoken=True,refreshtoken=False,servername="standalone"):
+        return "{}/test/login_user?user={}&enabletoken={}&refreshtoken={}".format(cls.get_baseurl(servername),user,enabletoken,refreshtoken)
 
     @classmethod
     def get_logout_url(cls,servername="standalone"):
@@ -132,6 +177,25 @@ class StartServerMixin(object):
     @classmethod
     def get_flush_trafficdata_url(cls,servername="standalone"):
         return "{}/test/trafficdata/flush".format(cls.get_baseurl(servername))
+
+    @classmethod
+    def get_update_model_url(cls,modelname,servername="standalone"):
+        return "{}/test/model/{}/update".format(cls.get_baseurl(servername),modelname)
+
+    @classmethod
+    def get_delete_model_url(cls,modelname,servername="standalone"):
+        return "{}/test/model/{}/delete".format(cls.get_baseurl(servername),modelname)
+
+    @classmethod
+    def get_refresh_modelcache_url(cls,modelname,servername="standalone"):
+        return "{}/test/model/{}/refreshcache".format(cls.get_baseurl(servername),modelname)
+
+    @classmethod
+    def get_test_tcontrol_url(cls,tcontrol,client,clientip,exempt=False,debug=False,servername="standalone"):
+        if client:
+            return "{}/test/tcontrol?tcontrol={}&client={}&clientip={}&exempt={}&debug={}".format(cls.get_baseurl(servername),tcontrol,client,quote_plus(clientip),1 if exempt else 0,1 if debug else 0)
+        else:
+            return "{}/test/tcontrol?tcontrol={}&clientip={}&exempt={}&debug={}".format(cls.get_baseurl(servername),tcontrol,quote_plus(clientip),1 if exempt else 0,1 if debug else 0)
 
     def get_settings(self,names,servername="standalone"):
         """
@@ -168,19 +232,19 @@ class StartServerMixin(object):
             self.assertEqual(res.status_code,404,"The session({1}) doesn't exist in auth2 server '{0}'".format(servername,session_cookie))
             return None
 
-    def save_traffic_data(self,session_cookie,servername="standalone"):
+    def save_traffic_data(self,authdata,session_cookie,servername="standalone"):
         """
         Save and return the traffic data
         """
-        res = requests.get("{}?{}".format(self.get_save_trafficdata_url(servername),urlencode({"session":session_cookie})),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
+        res = requests.get("{}?{}".format(self.get_save_trafficdata_url(servername),urlencode({"session":session_cookie})),headers=self.cluster_headers,verify=settings.SSL_VERIFY,auth=authdata)
         res.raise_for_status()
         return json.loads(res.text,cls=JSONDecoder)["data"]
 
-    def flush_traffic_data(self,session_cookie,servername="standalone"):
+    def flush_traffic_data(self,authdata,session_cookie,servername="standalone"):
         """
         Flush the traffic data to redis
         """
-        res = requests.get("{}?{}".format(self.get_flush_trafficdata_url(servername),urlencode({"session":session_cookie})),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
+        res = requests.get("{}?{}".format(self.get_flush_trafficdata_url(servername),urlencode({"session":session_cookie})),headers=self.cluster_headers,verify=settings.SSL_VERIFY,auth=authdata)
         res.raise_for_status()
         data = json.loads(res.text,cls=JSONDecoder)
         if data["flushed"]:

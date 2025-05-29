@@ -1,7 +1,7 @@
 from datetime import timedelta,datetime
 import logging
 
-from django.db import models
+from django.db import models as django_models
 from django.conf import settings
 from django.utils import timezone
 from django.contrib.postgres.fields import ArrayField
@@ -11,44 +11,48 @@ from .. import utils
 
 logger = logging.getLogger(__name__)
 
-class TrafficDataProcessStatus(models.Model):
-    cluster = models.ForeignKey(Auth2Cluster, on_delete=models.SET_NULL,null=True,editable=False)
-    clusterid = models.CharField(max_length=32,editable=False,null=True,unique=True)
-    last_saved_batchid = models.DateTimeField(editable=False,null=True)
-    last_processed_batchid = models.DateTimeField(editable=False,null=True)
-    disabled = models.BooleanField(default=False)
+class TrafficDataProcessStatus(django_models.Model):
+    cluster = django_models.ForeignKey(Auth2Cluster, on_delete=django_models.SET_NULL,null=True,editable=False)
+    clusterid = django_models.CharField(max_length=32,editable=False,null=True,unique=True)
+    last_saved_batchid = django_models.DateTimeField(editable=False,null=True)
+    last_processed_batchid = django_models.DateTimeField(editable=False,null=True)
+    disabled = django_models.BooleanField(default=False)
 
-class TrafficData(models.Model):
-    cluster = models.ForeignKey(Auth2Cluster, on_delete=models.SET_NULL,null=True,editable=False)
-    clusterid = models.CharField(max_length=32,editable=False,null=True)
-    servers = ArrayField(models.CharField(max_length=512,null=False),editable=False,null=True)
-    start_time = models.DateTimeField(editable=False,db_index=True)
-    end_time = models.DateTimeField(editable=False)
-    batchid = models.DateTimeField(editable=False,db_index=True)
-    requests = models.PositiveIntegerField(default=0,editable=False)
-    total_time = models.FloatField(null=True,editable=False)
-    min_time = models.FloatField(null=True,editable=False)
-    max_time = models.FloatField(null=True,editable=False)
-    avg_time = models.FloatField(null=True,editable=False)
-    get_remote_sessions = models.PositiveIntegerField(default=0,editable=False)
-    delete_remote_sessions = models.PositiveIntegerField(default=0,editable=False)
-    status = models.JSONField(null=True,editable=False)
-    domains = models.JSONField(null=True,editable=False)
+class TrafficData(django_models.Model):
+    cluster = django_models.ForeignKey(Auth2Cluster, on_delete=django_models.SET_NULL,null=True,editable=False)
+    clusterid = django_models.CharField(max_length=32,editable=False,null=True)
+    servers = ArrayField(django_models.CharField(max_length=512,null=False),editable=False,null=True)
+    start_time = django_models.DateTimeField(editable=False,db_index=True)
+    end_time = django_models.DateTimeField(editable=False)
+    batchid = django_models.DateTimeField(editable=False,db_index=True)
+    requests = django_models.PositiveIntegerField(default=0,editable=False)
+    total_time = django_models.FloatField(null=True,editable=False)
+    min_time = django_models.FloatField(null=True,editable=False)
+    max_time = django_models.FloatField(null=True,editable=False)
+    avg_time = django_models.FloatField(null=True,editable=False)
+    redis_requests = django_models.PositiveIntegerField(default=0,editable=False)
+    redis_avg_time = django_models.FloatField(null=True,editable=False)
+    db_requests = django_models.PositiveIntegerField(default=0,editable=False)
+    db_avg_time = django_models.FloatField(null=True,editable=False)
+    get_remote_sessions = django_models.PositiveIntegerField(default=0,editable=False)
+    delete_remote_sessions = django_models.PositiveIntegerField(default=0,editable=False)
+    status = django_models.JSONField(null=True,editable=False)
+    domains = django_models.JSONField(null=True,editable=False)
 
     class Meta:
-        verbose_name_plural = "{}Traffic Data".format(" " * 6)
+        verbose_name_plural = "{}Traffic Data".format(" " * 5)
         unique_together = [["clusterid","start_time","end_time","batchid"]]
 
-class SSOMethodTrafficData(models.Model):
-    traffic_data = models.ForeignKey(TrafficData, on_delete=models.CASCADE)
-    sso_method = models.CharField(max_length=32,editable=False)
-    requests = models.PositiveIntegerField(default=0,editable=False)
-    total_time = models.FloatField(null=True,editable=False)
-    min_time = models.FloatField(null=True,editable=False)
-    max_time = models.FloatField(null=True,editable=False)
-    avg_time = models.FloatField(null=True,editable=False)
-    status = models.JSONField(null=True,editable=False)
-    domains = models.JSONField(null=True,editable=False)
+class SSOMethodTrafficData(django_models.Model):
+    traffic_data = django_models.ForeignKey(TrafficData, on_delete=django_models.CASCADE)
+    sso_method = django_models.CharField(max_length=32,editable=False)
+    requests = django_models.PositiveIntegerField(default=0,editable=False)
+    total_time = django_models.FloatField(null=True,editable=False)
+    min_time = django_models.FloatField(null=True,editable=False)
+    max_time = django_models.FloatField(null=True,editable=False)
+    avg_time = django_models.FloatField(null=True,editable=False)
+    status = django_models.JSONField(null=True,editable=False)
+    domains = django_models.JSONField(null=True,editable=False)
 
     class Meta:
         verbose_name_plural = "{}auth2 sso method traffic data".format(" " * 0)
@@ -89,7 +93,7 @@ def _end_of_month(dt):
 
 
 
-class TrafficReport(models.Model):
+class TrafficReport(django_models.Model):
     DAILY_REPORT = 1
     WEEKLY_REPORT = 2
     MONTHLY_REPORT = 3
@@ -105,23 +109,27 @@ class TrafficReport(models.Model):
     ]
     REPORT_NAMES = dict(REPORT_TYPES)
 
-    cluster = models.ForeignKey(Auth2Cluster, on_delete=models.SET_NULL,null=True,editable=False)
-    clusterid = models.CharField(max_length=32,editable=False,null=True)
-    report_type = models.PositiveSmallIntegerField(choices=REPORT_TYPES)
-    start_time = models.DateTimeField(editable=False,db_index=True)
-    end_time = models.DateTimeField(editable=False)
-    requests = models.PositiveIntegerField(default=0,editable=False)
-    total_time = models.FloatField(null=True,editable=False)
-    min_time = models.FloatField(null=True,editable=False)
-    max_time = models.FloatField(null=True,editable=False)
-    avg_time = models.FloatField(null=True,editable=False)
-    status = models.JSONField(null=True,editable=False)
-    get_remote_sessions = models.PositiveIntegerField(default=0,editable=False)
-    delete_remote_sessions = models.PositiveIntegerField(default=0,editable=False)
-    domains = models.JSONField(null=True,editable=False)
+    cluster = django_models.ForeignKey(Auth2Cluster, on_delete=django_models.SET_NULL,null=True,editable=False)
+    clusterid = django_models.CharField(max_length=32,editable=False,null=True)
+    report_type = django_models.PositiveSmallIntegerField(choices=REPORT_TYPES)
+    start_time = django_models.DateTimeField(editable=False,db_index=True)
+    end_time = django_models.DateTimeField(editable=False)
+    requests = django_models.PositiveIntegerField(default=0,editable=False)
+    total_time = django_models.FloatField(null=True,editable=False)
+    min_time = django_models.FloatField(null=True,editable=False)
+    max_time = django_models.FloatField(null=True,editable=False)
+    avg_time = django_models.FloatField(null=True,editable=False)
+    status = django_models.JSONField(null=True,editable=False)
+    redis_requests = django_models.PositiveIntegerField(default=0,editable=False)
+    redis_avg_time = django_models.FloatField(null=True,editable=False)
+    db_requests = django_models.PositiveIntegerField(default=0,editable=False)
+    db_avg_time = django_models.FloatField(null=True,editable=False)
+    get_remote_sessions = django_models.PositiveIntegerField(default=0,editable=False)
+    delete_remote_sessions = django_models.PositiveIntegerField(default=0,editable=False)
+    domains = django_models.JSONField(null=True,editable=False)
 
     class Meta:
-        verbose_name_plural = "{}Traffic Report".format(" " * 5)
+        verbose_name_plural = "{}Traffic Report".format(" " * 4)
         unique_together = [["clusterid","report_type","start_time"]]
 
     @classmethod
@@ -129,16 +137,16 @@ class TrafficReport(models.Model):
         return cls.REPORT_NAMES.get(report_type,str(report_type))
         
 
-class SSOMethodTrafficReport(models.Model):
-    report = models.ForeignKey(TrafficReport, on_delete=models.CASCADE)
-    sso_method = models.CharField(max_length=32,editable=False)
-    requests = models.PositiveIntegerField(default=0,editable=False)
-    total_time = models.FloatField(null=True,editable=False)
-    min_time = models.FloatField(null=True,editable=False)
-    max_time = models.FloatField(null=True,editable=False)
-    avg_time = models.FloatField(null=True,editable=False)
-    status = models.JSONField(null=True,editable=False)
-    domains = models.JSONField(null=True,editable=False)
+class SSOMethodTrafficReport(django_models.Model):
+    report = django_models.ForeignKey(TrafficReport, on_delete=django_models.CASCADE)
+    sso_method = django_models.CharField(max_length=32,editable=False)
+    requests = django_models.PositiveIntegerField(default=0,editable=False)
+    total_time = django_models.FloatField(null=True,editable=False)
+    min_time = django_models.FloatField(null=True,editable=False)
+    max_time = django_models.FloatField(null=True,editable=False)
+    avg_time = django_models.FloatField(null=True,editable=False)
+    status = django_models.JSONField(null=True,editable=False)
+    domains = django_models.JSONField(null=True,editable=False)
 
     class Meta:
         verbose_name_plural = "{}auth2 sso method traffic report".format(" " * 0)
