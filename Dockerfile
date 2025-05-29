@@ -54,9 +54,9 @@ RUN find ./ -type f -iname '*.py' -exec sed -i 's/DebugLog\.attach_request/#Debu
 
 WORKDIR /app
 RUN echo "#!/bin/bash \n\
-if [[ \"\$SYNC_MODE\" == \"gevent\" ]]; then \n\
+if [[ \"\$RUNNING_MODE\" == \"gevent\" ]]; then \n\
     config=\"gunicorn_gevent.py\" \n\
-elif [[ \"\$SYNC_MODE\" == \"eventlet\" ]]; then \n\
+elif [[ \"\$RUNNING_MODE\" == \"eventlet\" ]]; then \n\
     config=\"gunicorn_eventlet.py\" \n\
 else \n\
     config=\"gunicorn_sync.py\" \n\

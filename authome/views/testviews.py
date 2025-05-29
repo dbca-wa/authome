@@ -120,10 +120,10 @@ def pseudo_auth(logics):
             defaultcacheclient = defaultcache.redis_client
             defaultcacheclient.execute_command("blpop","__does_not_exist__",logic[1])
         elif method == "computing":
-            if settings.SYNC_MODE == "eventlet":
+            if settings.RUNNING_MODE == "eventlet":
                 import eventlet
                 eventlet.patcher.original('time').sleep(logic[1])
-            elif settings.SYNC_MODE == "gevent":
+            elif settings.RUNNING_MODE == "gevent":
                 import gevent
                 gevent.monkey.get_original("time","sleep")(logic[1])
             else:
