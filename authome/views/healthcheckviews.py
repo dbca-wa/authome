@@ -69,6 +69,9 @@ def _auth2_liveness(request,serviceid,monitordate):
 
 serverinfo_re = re.compile("['\"](?P<serverid>[a-zA-Z0-9_\\-\\.:]+)readytime['\"][^a-zA-Z0-9_\\-\\.]+(?P<readytime>[0-9][0-9\\- :]*[0-9])?.+['\"](?P=serverid)heartbeat['\"][^a-zA-Z0-9_\\-\\.]+(?P<heartbeat>[0-9][0-9\\- :]*[0-9])?",re.DOTALL)
 def _auth2_local_onlinestatus():
+    """
+    return a sorted tuple: ([sorted auth2 server(readytime, heartbeattime, serverid) list],[ sorted failed auth2 server(heartbeat time,serverid) list])
+    """
     clusterid = settings.AUTH2_CLUSTERID if settings.AUTH2_CLUSTER_ENABLED else "standalone"
     p = os.path.join(settings.AUTH2_MONITORING_DIR,"auth2",clusterid)
     servers = [[],[]]
@@ -100,7 +103,11 @@ def auth2_local_onlinestatus(request):
     return JsonResponse({"onlinestatus":_auth2_local_onlinestatus()},status=200,encoder=JSONEncoder)
 
 def _populate_onlinestatus(serverstatuslist,now,earliestMonitorDay,monitortime4Now):
-    #if the latest heartbeat is later than now - 15 seconds, set the latest heartbeat to now
+    """
+    if the latest heartbeat is later than now - 15 seconds, set the latest heartbeat to now
+    Return the online status list. [[starttime,endtime, serverslist] ]
+    """
+
     for server in serverstatuslist:
         if server[1] >= monitortime4Now:
             server[1] = now
@@ -211,7 +218,7 @@ def auth2_onlinestatus(request):
     onlinestatuslist = _populate_onlinestatus(allservers[0],now,earliestMonitorDay,monitortime4Now)
     failedserverlist = allservers[1]
 
-    #get hte servers from other cluster
+    #get the servers from other cluster
     if settings.AUTH2_CLUSTER_ENABLED and len(cache.auth2_clusters) > 0:
         for onlinestatus in onlinestatuslist:
             for server in onlinestatus[2]:
@@ -226,7 +233,7 @@ def auth2_onlinestatus(request):
             onlinestatuslist = _populate_onlinestatus(allservers[0],now,earliestMonitorDay,monitortime4Now)
             for onlinestatus in onlinestatuslist:
                  for server in onlinestatus[2]:
-                     server[2] = "{}.{}".format(settings.AUTH2_CLUSTERID,server[2])
+                     server[2] = "{}.{}".format(clusterid,server[2])
             clusteronlinestatuslist.append(onlinestatuslist)
 
             for failedserver in allservers[1]:
@@ -244,7 +251,7 @@ def auth2_onlinestatus(request):
         while any(indexlist[pos] < len(clusteronlinestatuslist[pos]) for pos in range(length)):
             #find the online_endtime and populate the serverlist
             for pos in range(length):
-                print("{}: pos={}, index={},length={}".format(onlinestatus[:2],pos,indexlist[pos],len(clusteronlinestatuslist[pos])))
+                #print("{}: pos={}, index={},length={}".format(onlinestatus[:2],pos,indexlist[pos],len(clusteronlinestatuslist[pos])))
                 clusteronlinestatus = clusteronlinestatuslist[pos][indexlist[pos]]
                 if clusteronlinestatus[0] <= onlinestatus[0]:
                     #this clusteronlinestatus includes the time "oneline_begintime"
@@ -276,7 +283,7 @@ def auth2_onlinestatus(request):
             #advance the indexlist
             for pos in poslist:
                 indexlist[pos] += 1
-            print("***={}".format(onlinestatus[:2]))
+            #print("***={}".format(onlinestatus[:2]))
             onlinestatus = [onlinestatus[1],None,[]]
 
     #format the datetime
