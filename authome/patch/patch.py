@@ -14,7 +14,7 @@ from social_core.exceptions import AuthException
 from ..models import User,UserToken
 from authome.models import DebugLog
 from ..cache import get_usercache
-from ..exceptions import UserDoesNotExistException,InvalidDomainException
+from ..exceptions import UserDoesNotExistException,InvalidDomainException,Auth2ClusterException
 from .. import utils
 
 from .. import performance
@@ -190,6 +190,8 @@ def get_response_for_exception():
     def _response_for_exception(request, exc):
         from .. import views
         if isinstance(exc, AuthException):
+            return views.handler400(request,exc)
+        elif isinstance(exc, Auth2ClusterException):
             return views.handler400(request,exc)
         elif isinstance(exc, InvalidDomainException):
             return HttpResponseForbidden(str(exc))
