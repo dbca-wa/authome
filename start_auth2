@@ -69,7 +69,7 @@ then
 else
     if [[ "$PORT" == "" ]]
     then
-        PORT=8060
+        PORT=9060
     fi
     echo "port=${PORT}, backend=${backend}, envfile=${envfile}"
 fi
