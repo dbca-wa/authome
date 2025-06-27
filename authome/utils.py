@@ -619,5 +619,5 @@ def decode_integer(s,base=len(NUMBER2CHAR)):
 xssattack_re = re.compile("""(?P<htmltag>\\<(/ *)?[a-zA-Z0-9_\\-]+( +[a-zA-Z0-9\\-_]+( *= *['"]?.+['"]?)?)* */? *\\>)""")
 def check_xssattack(s):
     if not s:
-        return True
+        return False
     return xssattack_re.search(s)

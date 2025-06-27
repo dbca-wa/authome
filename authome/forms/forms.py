@@ -20,8 +20,8 @@ class UserEditForm(UserCreateForm):
 class SystemUserCreateForm(djangoforms.ModelForm):
 
     def _post_clean(self):
-        super()._post_clean()
         self.instance.systemuser = True
+        super()._post_clean()
     class Meta:
         model = User
         fields = ("username","email")

@@ -1720,12 +1720,12 @@ class User(AbstractUser):
 
     def clean(self):
         super().clean()
-        if not self.first_name :
+        if not self.first_name and not self.systemuser:
             raise ValidationError("The user's first_name is empty.")
         elif utils.check_xssattack(self.first_name):
             raise ValidationError("The user's first_name includes a html tag.")
 
-        if not self.last_name :
+        if not self.last_name and not self.systemuser:
             raise ValidationError("The user's last_name is empty.")
         elif utils.check_xssattack(self.last_name):
             raise ValidationError("The user's last_name includes a html tag.")
