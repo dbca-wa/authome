@@ -222,22 +222,30 @@ def auth2_onlinestatus(request):
     if settings.AUTH2_CLUSTER_ENABLED and len(cache.auth2_clusters) > 0:
         for onlinestatus in onlinestatuslist:
             for server in onlinestatus[2]:
-                 server[2] = "{}.{}".format(settings.AUTH2_CLUSTERID,server[2])
+                if not server[2].startswith("{}.".format(settings.AUTH2_CLUSTERID)):
+                    server[2] = "{}.{}".format(settings.AUTH2_CLUSTERID,server[2])
         for failedserver in failedserverlist:
-            failedserver[1] = "{}.{}".format(settings.AUTH2_CLUSTERID,failedserver[1])
+            if not failedserver[1].startswith("{}.".format(settings.AUTH2_CLUSTERID)):
+                failedserver[1] = "{}.{}".format(settings.AUTH2_CLUSTERID,failedserver[1])
 
         clusteronlinestatuslist = [onlinestatuslist]
 
         for clusterid  in cache.auth2_clusters.keys():
-            allservers = cache.get_auth2_onlinestatus(clusterid)["onlinestatus"]
+            try:
+                allservers = cache.get_auth2_onlinestatus(clusterid)["onlinestatus"]
+            except :
+                #can't get the status, ignore this clusterid
+                continue
             onlinestatuslist = _populate_onlinestatus(allservers[0],now,earliestMonitorDay,monitortime4Now)
             for onlinestatus in onlinestatuslist:
-                 for server in onlinestatus[2]:
-                     server[2] = "{}.{}".format(clusterid,server[2])
+                for server in onlinestatus[2]:
+                    if not server[2].startswith("{}.".format(clusterid)):
+                        server[2] = "{}.{}".format(clusterid,server[2])
             clusteronlinestatuslist.append(onlinestatuslist)
 
             for failedserver in allservers[1]:
-                failedserver[1] = "{}.{}".format(clusterid,failedserver[1])
+                if not failedserver[1].startswith("{}.".format(clusterid)):
+                    failedserver[1] = "{}.{}".format(clusterid,failedserver[1])
             failedserverlist.extend(allservers[1])
 
         failedserverlist.sort()
@@ -305,9 +313,13 @@ def auth2_onlinestatus(request):
                 else:
                     server[2][index][1] = utils.format_datetime(server[2][index][1])
 
-    for server in failedserverlist:
-        if server[0]:
-            server[0] = utils.format_datetime(server[0])
+    
+    for i in range(len(failedserverlist) - 1,-1,-1):
+        if failedserverlist[i][0] and failedserverlist[i][0] >= earliestMonitorDay:
+            failedserverlist[i][0] = utils.format_datetime(failedserverlist[i][0])
+        else:
+            #expired
+            del failedserverlist[i]
 
     return TemplateResponse(request,"authome/auth2onlinestatus.html",context={"onlinestatuslist":onlinestatuslist,"failedserverlist":failedserverlist})
         
