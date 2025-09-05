@@ -193,8 +193,9 @@ def profile_edit(request):
                 request.user.save(update_fields=["first_name","last_name","modified"])
                 if settings.AUTH2_CLUSTER_ENABLED:
                     changed_clusters,not_changed_clusters,failed_clusters = cache.user_changed(request.user.id)
+                    #just a cluster notification information, it is not critical, hide for self service, but log a error message
                     if failed_clusters:
-                        msg = "Failed to send change event of the user({1}<{0}>) to some cluseters.{2} ".format(request.user.id,request.user.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters])
+                        logger.error("Failed to send change event of the user({1}<{0}>) to some cluseters.{2} ".format(request.user.id,request.user.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters]))
 
         return HttpResponseRedirect(_get_redirect_url(request,msg))
 
@@ -225,7 +226,8 @@ def _enable_token(request,enable):
                 models.UserToken(user=user,enabled=True).save()
         msgs = messages.get_messages(request)
         if msgs:
-            msg = "\n".join(str(m) for m  in msgs if m.level in (messages.WARNING,messages.ERROR))
+            #msg = "\n".join(str(m) for m  in msgs if m.level in (messages.WARNING,messages.ERROR))
+            msg = "\n".join(str(m) for m  in msgs if m.level in [messages.ERROR])
     except Exception as ex:
         msg = "{}:Failed to {} the access token..{}".format(user.email,"enable" if enable else "disable",traceback.format_exc())
         logger.error(msg)
@@ -260,7 +262,8 @@ def revoke_token(request):
             pass
         msgs = messages.get_messages(request)
         if msgs:
-            msg = "\n".join(str(m) for m  in msgs if m.level in (messages.WARNING,messages.ERROR))
+            #msg = "\n".join(str(m) for m  in msgs if m.level in (messages.WARNING,messages.ERROR))
+            msg = "\n".join(str(m) for m  in msgs if m.level in [messages.ERROR])
     except Exception as ex:
         msg = "{}:Failed to revoke access token..{}".format(user.email,traceback.format_exc())
         logger.error(msg)
@@ -299,7 +302,8 @@ def create_token(request,index):
 
         msgs = messages.get_messages(request)
         if msgs:
-            msg = "\n".join(str(m) for m  in msgs if m.level in (messages.WARNING,messages.ERROR))
+            #msg = "\n".join(str(m) for m  in msgs if m.level in (messages.WARNING,messages.ERROR))
+            msg = "\n".join(str(m) for m  in msgs if m.level in [messages.ERROR])
     except Exception as ex:
         msg = "{}:Failed to generate access token..{}".format(user.email,traceback.format_exc())
         logger.error(msg)
