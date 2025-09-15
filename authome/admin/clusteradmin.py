@@ -265,6 +265,15 @@ class BaseAuth2ClusterAdmin(admin.ExtraToolsMixin,admin.DeleteMixin,admin.Dateti
             return self._get_cache_status(obj,models.IdentityProvider.__name__,f_name=self.f_cache_status_name,default=("N/A","",""))
     _idp_status.short_description = "IDP Status"
 
+    def _clusterid(self,obj):
+        if not obj :
+            return ""
+        elif obj.clusterid == settings.AUTH2_CLUSTERID:
+            return "{}*".format(obj.clusterid)
+        else:
+            return obj.clusterid
+    _clusterid.short_description = "ClusterID"
+
     def has_change_permission(self, request, obj=None):
         return False
 
@@ -276,11 +285,11 @@ class BaseAuth2ClusterAdmin(admin.ExtraToolsMixin,admin.DeleteMixin,admin.Dateti
 
 if settings.AUTH2_MONITORING_DIR:
     class Auth2ClusterAdmin(BaseAuth2ClusterAdmin):
-        list_display = ('clusterid','_running_status','default','endpoint','_usergroup_status','_usergroupauthorization_status','_userflow_status','_idp_status')
-        readonly_fields = ('clusterid','_running_status','default','endpoint','_usergroup_status','_usergroup_lastrefreshed','_usergroupauthorization_status','_usergroupauthorization_lastrefreshed','_userflow_status','_userflow_lastrefreshed','_idp_status','_idp_lastrefreshed','modified','registered')
+        list_display = ('_clusterid','_running_status','endpoint','_usergroup_status','_usergroupauthorization_status','_userflow_status','_idp_status')
+        readonly_fields = ('_clusterid','directconnect','_running_status','default','endpoint','_usergroup_status','_usergroup_lastrefreshed','_usergroupauthorization_status','_usergroupauthorization_lastrefreshed','_userflow_status','_userflow_lastrefreshed','_idp_status','_idp_lastrefreshed','modified','registered')
         fields = readonly_fields
 else:
     class Auth2ClusterAdmin(BaseAuth2ClusterAdmin):
-        list_display = ('clusterid','_running_status','default','endpoint','_last_heartbeat','_usergroup_status','_usergroupauthorization_status','_userflow_status','_idp_status')
-        readonly_fields = ('clusterid','_running_status','default','endpoint','_last_heartbeat','_usergroup_status','_usergroup_lastrefreshed','_usergroupauthorization_status','_usergroupauthorization_lastrefreshed','_userflow_status','_userflow_lastrefreshed','_idp_status','_idp_lastrefreshed','modified','registered')
+        list_display = ('_clusterid','_running_status','endpoint','_last_heartbeat','_usergroup_status','_usergroupauthorization_status','_userflow_status','_idp_status')
+        readonly_fields = ('_clusterid','directconnect','_running_status','default','endpoint','_last_heartbeat','_usergroup_status','_usergroup_lastrefreshed','_usergroupauthorization_status','_usergroupauthorization_lastrefreshed','_userflow_status','_userflow_lastrefreshed','_idp_status','_idp_lastrefreshed','modified','registered')
         fields = readonly_fields

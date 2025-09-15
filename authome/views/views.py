@@ -39,7 +39,7 @@ from pyotp.totp import TOTP
 import time
 
 from .. import models
-from ..cache import cache, get_defaultcache
+from ..cache import cache, get_defaultcache,get_usercache
 from .. import utils
 from .. import emails
 from ..exceptions import HttpResponseException,UserDoesNotExistException,PolicyNotConfiguredException
@@ -568,7 +568,14 @@ def is_usertoken_valid(user,token):
     check whether the user token is valid or not
     """
     usertoken = load_usertoken(user)
-    return usertoken and usertoken.is_valid(token)
+    valid = usertoken and usertoken.is_valid(token)
+    if valid or not user.systemuser:
+        return valid
+    else:
+        #Reload the user token and check again for system user.
+        usertoken = load_usertoken(user,refresh=True)
+        return usertoken and usertoken.is_valid(token)
+
 
 def _auth_basic(request,not_authentiated_response_factory=basic_auth_required_response_factory):
     """
@@ -990,6 +997,10 @@ def auth_local(request):
                     if timeout:
                         request.session["session_timeout"] = timeout
 
+                    usercache = get_usercache(user.id)
+                    if usercache:
+                        usercache.set(settings.GET_USER_KEY(user.id),user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
+
                     if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                         return HttpResponseRedirect(next_url)
                     else:
@@ -1065,6 +1076,11 @@ def auth_local(request):
             timeout = models.UserGroup.get_session_timeout(usergroups)
             if timeout:
                 request.session["session_timeout"] = timeout
+
+
+            usercache = get_usercache(user.id)
+            if usercache:
+                usercache.set(settings.GET_USER_KEY(user.id),user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
 
             if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                 return HttpResponseRedirect(next_url)

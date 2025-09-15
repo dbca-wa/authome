@@ -78,10 +78,10 @@ if settings.USER_CACHE_ALIAS:
 
         return user or anonymoususer
 
-    def load_usertoken(user):
+    def load_usertoken(user,refresh=False):
         """
         Return user's access token
-        Return None if user has not access token
+        Return None if user has no access token
         """
         usertoken = None
         try:
@@ -89,14 +89,15 @@ if settings.USER_CACHE_ALIAS:
             usertokenkey = settings.GET_USERTOKEN_KEY(user.id)
             usercache = get_usercache(user.id)
             
-            performance.start_processingstep("get_usertoken_from_cache")
-            try:
-                usertoken = usercache.get(usertokenkey)
-            except:
-                pass
-            finally:
-                performance.end_processingstep("get_usertoken_from_cache")
-                pass
+            if refresh:
+                performance.start_processingstep("get_usertoken_from_cache")
+                try:
+                    usertoken = usercache.get(usertokenkey)
+                except:
+                    pass
+                finally:
+                    performance.end_processingstep("get_usertoken_from_cache")
+                    pass
 
             if not usertoken:
                 #Access token not found in the user cache, retrieve it from database
@@ -149,7 +150,7 @@ else:
 
         return user or anonymoususer
 
-    def load_usertoken(userid):
+    def load_usertoken(userid,refresh=False):
         """
         Return user's access token
         Return None if user has not access token

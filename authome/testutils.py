@@ -40,7 +40,7 @@ class StartServerMixin(object):
 
 
     @classmethod
-    def clean_cookie(cls,cookie):
+    def unquotedcookie(cls,cookie):
         if not cookie:
             return cookie
         if cookie[0] == cookie[-1] and cookie[0] in ("'","\""):
@@ -62,7 +62,7 @@ class StartServerMixin(object):
         auth2_env = " && ".join("export {0}=\"{1}\"".format(k,(auth2_env or {}).get(k,cls.default_env.get(k))) for k,v in cls.default_env.items())
           
         command = "/bin/bash -c 'set -a && export PORT={2} && source {0}/.env.{1} && {3} && poetry run python manage.py runserver 0.0.0.0:{2}'".format(settings.BASE_DIR,servername,port,auth2_env) 
-        print("Start auth2 server:{}".format(command))
+        print("Start auth2 server({}):{}".format(servername,command))
         cls.process_map[servername] = (subprocess.Popen(command,shell=True,preexec_fn=os.setsid,stdout=subprocess.PIPE),port)
         expired = 60
         while (True):
@@ -255,6 +255,7 @@ class StartServerMixin(object):
 
 
     def is_session_deleted(self,session_cookie,servername="standalone"):
+        print("Check whether session is deleted from the server({}) or not".format(servername))
         return self.get_session_data(session_cookie,servername=servername,exist=False) is None
 
     def get_cluster_session_cookie(self,clusterid,session_cookie,lb_hash_key=None):

@@ -7,6 +7,7 @@ from django.utils import timezone
 from ..cache import cache
 from .. import utils
 from authome.models import DebugLog
+from ..views import auth_basic
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +39,17 @@ def traffic_monitor(name,func,slowrequestenabled=True):
             except:
                 logger.error("Failed to log the request.{}".format(traceback.format_exc()))
         
-        
     return _monitor if settings.TRAFFIC_MONITOR_LEVEL > 0 else func
+
+def basic_auth_wrapper(func):
+    def _func(request,*args,**kwargs):
+        res = auth_basic(request)
+        if res.status_code >= 300:
+            return res
+        return func(request,*args,**kwargs)
+
+    return _func
+        
 """
 _requests = 0
 def traffic_monitor_debug(name,func):

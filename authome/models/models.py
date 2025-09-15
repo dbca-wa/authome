@@ -6,7 +6,8 @@ import math
 from datetime import timedelta
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError,ObjectDoesNotExist
+from django.db.utils import DatabaseError
 from django.utils import timezone
 from django.db import transaction
 from django.db import models as django_models
@@ -1848,6 +1849,151 @@ class UserToken(django_models.Model):
     def save(self,*args,**kwargs):
         with transaction.atomic():
             super().save(*args,**kwargs)
+
+class ReservedUser(object):
+    def __init__(self,email):
+        self.email = email
+        self.user = None
+        self.usertoken = None
+        self.loaduser()
+        self.loadusertoken()
+
+    def reset(self):
+        self.user =  None
+        self.usertoken = None
+
+    def reset_usertoken(self):
+        self.usertoken = None
+
+    def reset_user(self):
+        self.user =  None
+
+    @property
+    def auth_credential(self):
+        self.loaduser()
+        self.loadusertoken()
+        return (self.user.email,self.usertoken.token)
+
+
+    def _get_or_createuser(self):
+        tempuser = User(email=self.email,systemuser=True,is_active=True)
+        tempuser.clean()
+        return User.objects.get_or_create(email=self.email.lower(),defaults={
+            "username":self.email,
+            "systemuser":True,
+            "is_staff": tempuser.is_staff,
+            "is_active": tempuser.is_active,
+            "comments":"An auth2 reserved user is created and managed by auth2 automatically, please don't delete or modify it."
+        })
+
+    def loaduser(self):
+        #load or create the user if not loaded before
+        if not self.user:
+            self.user,created = self._get_or_createuser()
+
+        #active the user if it is inactive
+        if not self.user.is_active:
+            self.user.is_active = True
+            try:
+                self.user.save(update_fields=["is_active"])
+            except DatabaseError as ex:
+                if "connection" in str(ex).lower():
+                    raise ex
+                else:
+                    #failed to active the user,maybe it was accidently deleted, recreate the user again
+                    self.user,created = self._get_or_createuser()
+
+    def _get_or_createusertoken(self):
+        tmptoken = UserToken(user=self.user,enabled=True)
+        tmptoken.generate_token(28)
+        return UserToken.objects.get_or_create(user=self.user,defaults={
+            "enabled":True,
+            "token":tmptoken.token,
+            "expired":tmptoken.expired,
+            "created":tmptoken.created
+        })
+
+    def loadusertoken(self):
+        created = False
+        #load or create the usertoken if not loaded before
+        if not self.usertoken:
+            #get or create the  user token 
+            try:
+                self.usertoken,created = self._get_or_createusertoken()
+            except DatabaseError as ex:
+                if "connection" in str(ex).lower():
+                    raise ex
+                else:
+                    #failed to create the user token,maybe user was accidently deleted, reload the user and try again
+                    self.user = None
+                    self.loaduser()
+                    self.usertoken,created = self._get_or_createusertoken()
+
+        if not created:
+            #existing user token
+            #check whether the token will expire soon or not, regenerate and enable the user token if necessary
+            renewdate = timezone.localdate() + timedelta(days=1)
+            while not self.usertoken.token or self.usertoken.expired <= renewdate :
+                #token will be expired in one day, renew it
+                currenttoken = self.usertoken.token
+                self.usertoken.generate_token(28)
+                if currenttoken:
+                    qs = UserToken.objects.filter(user=self.user,token=currenttoken)
+                else:
+                    qs = UserToken.objects.filter(user=self.user,token__isnull=True)
+
+                updated = qs.update(
+                    enabled = True,
+                    token = self.usertoken.token,
+                    expired = self.usertoken.expired,
+                    created = self.usertoken.created
+                )
+                if updated > 0:
+                    #update successfully
+                    self.usertoken.enabled = True
+                    usercache = get_usercache(self.user.id)
+                    if usercache:
+                        #Only cache the user token only if it is already cached
+                        usercache.set(settings.GET_USERTOKEN_KEY(self.user.id),self.usertoken,settings.STAFF_CACHE_TIMEOUT if self.user.is_staff else settings.USER_CACHE_TIMEOUT)
+                else:
+                    #update failed, two reason
+                    #1. already updated by others
+                    #2. token doesn't exist anymore
+                    try:
+                        self.usertoken = UserToken.objects.get(user=self.user)
+                    except ObjectDoesNotExist as ex:
+                        # token doesn't exist anymore, recreate the token
+                        try:
+                            self.usertoken,created = self._get_or_createusertoken()
+                        except DatabaseError as ex1:
+                            if "connection" in str(ex1).lower():
+                                raise ex1
+                            else:
+                                #failed to create the user token, maybe user was accidently deleted.
+                                self.user = None
+                                self.loaduser()
+                                self.usertoken,created = self._get_or_createusertoken()
+
+            #enable the token if it is  not enabled
+            if not self.usertoken.enabled:
+                self.usertoken.enabled = True
+                try:
+                    self.usertoken.save(update_fields=["enabled"])
+                except DatabaseError as ex:
+                    if "connection" in str(ex).lower():
+                        raise ex
+                    else:
+                        # token doesn't exist anymore, recreate 
+                        try:
+                            self.usertoken,created = self._get_or_createusertoken()
+                        except DatabaseError as ex1:
+                            if "connection" in str(ex1).lower():
+                                raise ex1
+                            else:
+                                # failed to create the user token, recreate the user again
+                                self.user = None
+                                self.loaduser()
+                                self.usertoken,created = self._get_or_createusertoken()
 
 class UserTOTP(django_models.Model):
     email = django_models.CharField(max_length=64,null=False,editable=False,unique=True)

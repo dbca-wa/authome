@@ -39,7 +39,7 @@ class UserSessionTimeoutTestCase(testutils.StartServerMixin,BaseTestCase):
                 res = requests.get(self.get_login_user_url(user,servername="auth01"),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
                 after_login = timezone.localtime()
                 res.raise_for_status()
-                session_cookie = self.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
+                session_cookie = self.unquotedcookie(res.cookies[settings.SESSION_COOKIE_NAME])
                 time.sleep(5)
                 sessiondata,ttl1 = self.get_session_data(session_cookie,"auth01",exist=True)
                 if timeout:

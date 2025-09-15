@@ -368,14 +368,16 @@ def _check_clusterhealth():
     for cluster in models.Auth2Cluster.objects.only("clusterid").order_by("clusterid"):
         if cluster.clusterid == settings.AUTH2_CLUSTERID:
             cluster_working,cluster_status = _check_localhealth()
+            key = "{}*".format(cluster.clusterid)
         else:
             cluster_working,cluster_status = cache.cluster_healthcheck(cluster.clusterid)
+            key = cluster.clusterid
         if cluster_working:
             working = True
         if cluster_status:
-            content[cluster.clusterid] =  {"working":cluster_working,"status":cluster_status}
+            content[key] =  {"working":cluster_working,"status":cluster_status}
         else:
-            content[cluster.clusterid] =  {"working":cluster_working}
+            content[key] =  {"working":cluster_working}
 
     content["working"] = working
     content.move_to_end("working",last=False)

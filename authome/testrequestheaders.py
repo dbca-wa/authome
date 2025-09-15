@@ -41,7 +41,7 @@ class RequestHeaderTestCase(testutils.StartServerMixin,TestCase):
         res = requests.get(cls.get_login_user_url("test_user01@dbca.wa.gov.au"),verify=settings.SSL_VERIFY,auth=cls.UNITEST_AUTH)
         res.raise_for_status()
         userprofile = res.json()
-        cls.session_key = cls.clean_cookie(res.cookies[settings.SESSION_COOKIE_NAME])
+        cls.session_key = cls.unquotedcookie(res.cookies[settings.SESSION_COOKIE_NAME])
 
         cls.sso_headers = {"remote-user":"email","x-email":"email","x-first-name":"first_name","x-last-name":"last_name","x-groups":"groups"}
         cls.user_sso_headers = {}

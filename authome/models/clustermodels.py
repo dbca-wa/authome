@@ -20,6 +20,7 @@ class Auth2Cluster(django_models.Model):
     clusterid = django_models.CharField(max_length=32,unique=True,null=False)
     endpoint = django_models.CharField(max_length=512,null=False)
     default = django_models.BooleanField(default=False,editable=False)
+    directconnect = django_models.BooleanField(default=False,editable=False)
     usergroup_lastrefreshed = django_models.DateTimeField(editable=False,null=True)
     usergroupauthorization_lastrefreshed = django_models.DateTimeField(editable=False,null=True)
     userflow_lastrefreshed = django_models.DateTimeField(editable=False,null=True)
@@ -40,14 +41,14 @@ class Auth2Cluster(django_models.Model):
         elif settings.DEFAULT_AUTH2_CLUSTER:
             #update the previous default cluster server to non cluster server
             cls.objects.filter(default=True).exclude(clusterid=settings.AUTH2_CLUSTERID).update(default=False,modified=timezone.localtime())
-            
+
         cls.objects.update_or_create(clusterid=settings.AUTH2_CLUSTERID,defaults={
             "endpoint" : settings.AUTH2_CLUSTER_ENDPOINT,
             "default" : settings.DEFAULT_AUTH2_CLUSTER,
+            "directconnect": settings.AUTH2_CLUSTER_DIRECT_CONNECT,
             "last_heartbeat":timezone.localtime(),
             "modified":timezone.localtime()
         })
-
 
     def __str__(self):
         return self.clusterid
@@ -114,6 +115,9 @@ if settings.AUTH2_CLUSTER_ENABLED:
     class UserListener4Cluster(object):
         @staticmethod
         def user_changed(instance):
+            if instance.email == cache._cluster_interconnect_user_email and cache._cluster_interconnect_user:
+                cache._cluster_interconnect_user.reset_user()
+
             changed_clusters,not_changed_clusters,failed_clusters = cache.user_changed(instance.id)
             if failed_clusters:
                 msg = "Failed to send change event of the user({1}<{0}>) to some cluseters.{2} ".format(instance.id,instance.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters])
@@ -138,6 +142,9 @@ if settings.AUTH2_CLUSTER_ENABLED:
         @staticmethod
         def usertoken_changed(instance):
             user = instance.user
+            if user.email == cache._cluster_interconnect_user_email and cache._cluster_interconnect_user:
+                cache._cluster_interconnect_user.reset_usertoken()
+
             changed_clusters,not_changed_clusters,failed_clusters = cache.usertoken_changed(user.id)
             if failed_clusters:
                 msg = "Failed to send token change event of the user({1}<{0}>) to some cluseters.{2} ".format(user.id,user.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters])
