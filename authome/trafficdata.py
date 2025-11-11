@@ -10,6 +10,7 @@ from django.db import transaction
 
 from . import models
 from . import utils
+from .cache import cache
 from .views.monitorviews import  _save_trafficdata,_sum,_add_avg
 
 logger = logging.getLogger(__name__)
@@ -46,12 +47,10 @@ def _save_cluster_traffic_data(batchid):
         if status_obj and status_obj.disabled:
             continue
         try:
-            res = requests.get("{}/cluster/trafficdata/save?batchid={}".format(
-                cluster.endpoint,
-                encoded_batchid
-            ),headers={"HOST":settings.AUTH2_DOMAIN},verify=settings.SSL_VERIFY)
-            res.raise_for_status()
-            data = res.json().get("result",[]) 
+            if cluster.clusterid == settings.AUTH2_CLUSTERID:
+                data = _save_traffic_data(batchid)
+            else:
+                data = cache.save_trafficdata2db(cluster.clusterid,encoded_batchid)
             if data:
                 data.sort(key=lambda o:o[0]) 
                 data = "\n    ".join("start_time={}, end_time={}, requests={}, get_remote_session={}, delete_remote_sessions={}".format(*d) for d in data)
@@ -129,7 +128,7 @@ def _populate_reports():
 
             if data.batchid == BATCHID_END:
                 continue
-            if not data.requests and not data.get_remote_sessions and not data.delete_remote_sessions:
+            if not data.requests and not data.get_remote_sessions and not data.delete_remote_sessions and not data.db_requests and not data.redis_requests:
                 #no requests
                 continue
 
@@ -228,7 +227,18 @@ def _populate_reports():
                                 _add_avg(method_traffic_report.domains)
                             else:
                                 method_traffic_report.domains = method_data.domains
+
     
                         method_traffic_report.changed = True
+
+                        if method_data.sso_method == "Redis":
+                            traffic_reports[method_report_key[0]].redis_requests = method_traffic_report.requests
+                            traffic_reports[method_report_key[0]].redis_avg_time = method_traffic_report.avg_time
+                            traffic_reports[method_report_key[0]].changed = True
+                        elif method_data.sso_method == "DB":
+                            traffic_reports[method_report_key[0]].db_requests = method_traffic_report.requests
+                            traffic_reports[method_report_key[0]].db_avg_time = method_traffic_report.avg_time
+                            traffic_reports[method_report_key[0]].changed = True
+
     if not traffic_reports :
         logger.info("No new traffic data and all traffic reports are latest.")

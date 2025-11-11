@@ -150,6 +150,17 @@ def model_cachestatus(request):
 
     return JsonResponse(content,status=200)
 
+def tcontrol(request):
+    client = request.GET.get("client")
+    clientip = request.GET.get("clientip")
+    tcontrol = cache.tcontrols.get(int(request.GET.get("tcontrol")))
+    exempt = True if request.GET.get("exempt") == "1" else False
+    test = True if request.GET.get("test") == "1" else False
 
-
+    if not tcontrol or not tcontrol.active:
+        #not traffic control configured
+        result = [True,"Tcontrol Not Configured",0]
+    else:
+        result = views._check_tcontrol(tcontrol,clientip,client,exempt)
+    return JsonResponse(result, safe=False)
 

@@ -1,11 +1,10 @@
 import os
 import tomllib
 
-from .utils import env, get_digest_function
+from django.utils import timezone
+from .utils import env, get_digest_function,is_cluster
 from datetime import timedelta
 import dj_database_url
-
-from . import redis
 
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -19,6 +18,7 @@ TESTMODE = env("TESTMODE",default=False)
 
 RELEASE = False if LOGLEVEL in ["DEBUG"] else True
 
+SECURE_SSL_REDIRECT = env("SECURE_SSL_REDIRECT",default=False)
 SECRET_KEY = env('SECRET_KEY', 'PlaceholderSecretKey')
 PREVIOUS_SECRET_KEY=env("PREVIOUS_SECRET_KEY",default=None)
 if not DEBUG:
@@ -49,11 +49,35 @@ AUTHENTICATION_BACKENDS = (
 )
 IGNORE_LOADING_ERROR = env('IGNORE_LOADING_ERROR',False)
 
+#enable auth2 cluster feature by setting AUTH2_CLUSTERID
+AUTH2_CLUSTERID=env("AUTH2_CLUSTERID",default=None)
+AUTH2_CLUSTER_ENDPOINT=env("AUTH2_CLUSTER_ENDPOINT",default=None)
+AUTH2_CLUSTER_DIRECT_CONNECT=env("AUTH2_CLUSTER_DIRECT_CONNECT",default=True)
+
+DEFAULT_AUTH2_CLUSTER=env("DEFAULT_AUTH2_CLUSTER",default=False)
+AUTH2_CLUSTERS_CHECK_INTERVAL=env("AUTH2_CLUSTERS_CHECK_INTERVAL",default=60)
+if AUTH2_CLUSTERS_CHECK_INTERVAL <= 0:
+    AUTH2_CLUSTERS_CHECK_INTERVAL = 60
+
+AUTH2_CLUSTER_ENABLED = True if AUTH2_CLUSTERID and AUTH2_CLUSTER_ENDPOINT else False
+if AUTH2_CLUSTER_ENABLED:
+    if not SECRET_KEY:
+        raise Exception("Must set SECRET_KEY for auth2 cluster feature")
+
 EMAIL_HOST = env('EMAIL_HOST', default="")
 EMAIL_PORT = env('EMAIL_PORT', 25)
 
 AUTH2_DOMAIN = env("AUTH2_DOMAIN",default="auth2.dbca.wa.gov.au")
 AUTH2_MONITORING_DIR=env("AUTH2_MONITORING_DIR")
+AUTH2_MONITOR_EXPIREDAYS=env("AUTH2_MONITOR_EXPIREDAYS",default=10)
+
+
+CAPTCHA_CHARS_IMAGE = env("CAPTCHA_CHARS_IMAGE",default="34689ABDEFGHJKLMNPQRTWXY")
+CAPTCHA_CHARS_AUDIO = env("CAPTCHA_CHARS_AUDIO",default="0123456789")
+CAPTCHA_DEFAULT_KIND = env("CAPTCHA_DEFAULT_KIND",default="image")
+CAPTCHA_LEN = env("CAPTCHA_LEN",default=4)
+if CAPTCHA_LEN < 4:
+    CAPTCHA_LEN = 4
 
 TOTP_SECRET_KEY_LENGTH = env("TOTP_SECRET_KEY_LENGTH",default=128)
 TOTP_ISSUER = env("TOTP_ISSUER",default="DBCA")
@@ -123,6 +147,9 @@ SESSION_COOKIE_SAMESITE = _get_samesite(SESSION_COOKIE_SAMESITE)
 GUEST_SESSION_AGE=env('GUEST_SESSION_AGE',default=3600) #login session timeout in seconds
 SESSION_AGE=env('SESSION_AGE',default=1209600)
 SESSION_COOKIE_AGE=SESSION_AGE + 86400
+
+RAISE_EXCEPTION_4_INVALID_DOMAIN = env("RAISE_EXCEPTION_4_INVALID_DOMAIN",default=True)
+DOMAIN_WHITELIST=env('DOMAIN_WHITELIST',default=[".dbca.wa.gov.au",".dpaw.wa.gov.au"])
 
 if SESSION_COOKIE_DOMAIN:
     _session_cookie_domain_len = len(SESSION_COOKIE_DOMAIN)
@@ -207,14 +234,35 @@ TEMPLATES = [
 
 DATABASES = {
     # Defined in DATABASE_URL env variable.
-    'default': dj_database_url.config(),
+    'default': dj_database_url.config()
 }
 
-DATABASES['default']["CONN_MAX_AGE"] = 3600
 if "OPTIONS" in DATABASES['default']:
     DATABASES['default']["OPTIONS"]["options"] = "-c default_transaction_read_only=off"
 else:
     DATABASES['default']["OPTIONS"] = {"options": "-c default_transaction_read_only=off"}
+
+pool = DATABASES['default']["OPTIONS"].get("pool",False)
+if isinstance(pool,str):
+    DATABASES['default']["OPTIONS"]["pool"]=dict([d.strip().split("=",1) for d in pool.split(",") if d.strip()])
+    for k in DATABASES['default']["OPTIONS"]["pool"].keys():
+        v = DATABASES['default']["OPTIONS"]["pool"][k]
+        try:
+            DATABASES['default']["OPTIONS"]["pool"][k] = int(v)
+        except ValueError as ex:
+            try:
+                DATABASES['default']["OPTIONS"]["pool"][k] = float(v)
+            except ValueError as ex:
+                if v.lower() == "true":
+                    DATABASES['default']["OPTIONS"]["pool"][k] = True
+                elif v.lower() == "false":
+                    DATABASES['default']["OPTIONS"]["pool"][k] = False
+
+    
+if not DATABASES['default']["OPTIONS"].get("pool",False):
+    DATABASES['default']["CONN_MAX_AGE"] = env("CONN_MAX_AGE",default=3600)
+    DATABASES['default']["CONN_HEALTH_CHECKS"] = env("CONN_HEALTH_CHECKS",default=False)
+    
 
 # Static files configuration
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
@@ -306,6 +354,7 @@ PASSCODE_DAILY_LIMIT = env("PASSCODE_DAILY_LIMIT",100)
 PASSCODE_TRY_TIMES = env("PASSCODE_TRY_TIMES",3)
 PASSCODE_LENGTH=env('PASSCODE_LENGTH',default=6)
 PASSCODE_AGE=env('PASSCODE_AGE',default=300) #the age of verify code, in seconds
+PASSCODE_RESEND_INTERVAL=env('PASSCODE_RESEND_INTERVAL',default=45) #the interval to resend passcode, in seconds
 SIGNUP_TOKEN_LENGTH=env('SIGNUP_TOKEN_LENGTH',default=64)
 SIGNUP_TOKEN_AGE=env('SIGNUP_TOKEN_AGE',default=3600) #the age of signup token, in seconds
 
@@ -346,7 +395,7 @@ LOGGING = {
 ENABLE_B2C_JS_EXTENSION = env("ENABLE_B2C_JS_EXTENSION",default=True)
 ADD_AUTH2_LOCAL_OPTION = env("ADD_AUTH2_LOCAL_OPTION",default=True)
 
-SYNC_MODE = env("SYNC_MODE",True)
+RUNNING_MODE = env("RUNNING_MODE",default="sync")
 
 CACHE_KEY_PREFIX=env('CACHE_KEY_PREFIX',default="") or None
 CACHE_KEY_VERSION_ENABLED = env('CACHE_KEY_VERSION_ENABLED',default=True)
@@ -399,14 +448,112 @@ else:
     #KEY_PREFIX is None and KEY_VERSION_ENABLED is False
     STANDALONE_KEY_FUNCTION = lambda key,key_prefix,version : key
 
+CACHE_SERVER = env("CACHE_SERVER")
+CACHE_SERVER_OPTIONS = env("CACHE_SERVER_OPTIONS",default={})
+
+CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
+CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
+
+PREVIOUS_CACHE_SESSION_SERVER = env("PREVIOUS_CACHE_SESSION_SERVER")
+PREVIOUS_CACHE_SESSION_SERVER_OPTIONS = env("PREVIOUS_CACHE_SESSION_SERVER_OPTIONS",default={})
+
+CACHE_USER_SERVER = env("CACHE_USER_SERVER")
+CACHE_USER_SERVER_OPTIONS = env("CACHE_USER_SERVER_OPTIONS",default={})
+
+USER_CACHE_ALIAS = None
+PREVIOUS_SESSION_CACHE_ALIAS=None
+
+GET_DEFAULT_CACHE_KEY = lambda key:key
+GET_USER_KEY = lambda userid:str(userid)
+GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
+
+SESSION_CACHES = 0
+PREVIOUS_SESSION_CACHES = 0
+SESSION_CACHES = 0
+USER_CACHES = 0
+
+TRAFFIC_MONITOR_LEVEL = env('TRAFFIC_MONITOR_LEVEL',default=0) #0: disabled, 1:summary, 2: per domain
+if not CACHE_SERVER or not CACHE_SERVER.lower().startswith('redis'):
+    TRAFFIC_MONITOR_LEVEL = 0
+if TRAFFIC_MONITOR_LEVEL > 0:
+    try:
+        REDIS_TRAFFIC_MONITOR_LEVEL = int(env('REDIS_TRAFFIC_MONITOR_LEVEL',default=0))
+    except:
+        REDIS_TRAFFIC_MONITOR_LEVEL = 0
+    try:
+        DB_TRAFFIC_MONITOR_LEVEL = int(env('DB_TRAFFIC_MONITOR_LEVEL',default=0))
+    except:
+        DB_TRAFFIC_MONITOR_LEVEL = 0
+else:
+    REDIS_TRAFFIC_MONITOR_LEVEL = 0
+    DB_TRAFFIC_MONITOR_LEVEL = 0
+
+TRAFFIC_MONITOR_INTERVAL=env('TRAFFIC_MONITOR_INTERVAL',default=3600)
+if TRAFFIC_MONITOR_INTERVAL and TRAFFIC_MONITOR_INTERVAL > 0:
+    if 86400 % TRAFFIC_MONITOR_INTERVAL > 0 :
+        #One day can't be divided by interval, invalid, reset it to one hour
+        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
+    else:
+        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=TRAFFIC_MONITOR_INTERVAL)
+else:
+    TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
+
+if REDIS_TRAFFIC_MONITOR_LEVEL > 0:
+    import redis
+    class MonitorEnabledConnection(redis.Connection):
+        _cache = None
+        def send_command(self, *args, **kwargs):
+            try:
+                starttime = timezone.localtime()
+                status = "OK"
+                return super().send_command(*args,**kwargs)
+            except Exception as ex:
+                status = ex.__class__.__name__
+                raise
+            finally:
+                #cache and ignore the exceptions which are thrown before cache is fully initialized
+                try:
+                    MonitorEnabledConnection._cache.log_redisrequest("Redis",args[0],starttime,status)
+                except:
+                    try:
+                        from . import cache
+                        MonitorEnabledConnection._cache = cache.cache
+                    except:
+                        MonitorEnabledConnection._cache = None
+                        
+        def send_packed_command(self, command, check_health=True):
+            try:
+                starttime = timezone.localtime()
+                status = "OK"
+                return super().send_packed_command(command,check_health=check_health)
+            except Exception as ex:
+                status = ex.__class__.__name__
+                raise
+            finally:
+                #cache and ignore the exceptions which are thrown before cache is fully initialized
+                try:
+                    MonitorEnabledConnection._cache.log_redisrequest("Redis","pipeline",starttime,status)
+                except:
+                    try:
+                        from . import cache
+                        MonitorEnabledConnection._cache = cache.cache
+                    except:
+                        MonitorEnabledConnection._cache = None
+                
+                
 def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
     if server.lower().startswith('redis'):
         if "max_connections" not in options:
-            options["max_connections"] = 2
-
-        cluster = options.pop("cluster",None)
+            options["max_connections"] = 10
+        if REDIS_TRAFFIC_MONITOR_LEVEL > 0:
+            options["connection_class"] = MonitorEnabledConnection
+        if "cluster" in options:
+            options = dict(options)
+            cluster = options.pop("cluster")
+        else:
+            cluster = None
         if cluster is None:
-            cluster = redis.is_cluster(server)
+            cluster = is_cluster(server)
 
         if cluster:
             if "require_full_coverage" not in options:
@@ -433,30 +580,6 @@ def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
             'LOCATION': server,
             "OPTIONS": options
         }
-
-CACHE_SERVER = env("CACHE_SERVER")
-CACHE_SERVER_OPTIONS = env("CACHE_SERVER_OPTIONS",default={})
-
-CACHE_SESSION_SERVER = env("CACHE_SESSION_SERVER")
-CACHE_SESSION_SERVER_OPTIONS = env("CACHE_SESSION_SERVER_OPTIONS",default={})
-
-PREVIOUS_CACHE_SESSION_SERVER = env("PREVIOUS_CACHE_SESSION_SERVER")
-PREVIOUS_CACHE_SESSION_SERVER_OPTIONS = env("PREVIOUS_CACHE_SESSION_SERVER_OPTIONS",default={})
-
-CACHE_USER_SERVER = env("CACHE_USER_SERVER")
-CACHE_USER_SERVER_OPTIONS = env("CACHE_USER_SERVER_OPTIONS",default={})
-
-USER_CACHE_ALIAS = None
-PREVIOUS_SESSION_CACHE_ALIAS=None
-
-GET_DEFAULT_CACHE_KEY = lambda key:key
-GET_USER_KEY = lambda userid:str(userid)
-GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
-
-SESSION_CACHES = 0
-PREVIOUS_SESSION_CACHES = 0
-SESSION_CACHES = 0
-USER_CACHES = 0
 
 if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     CACHES = {}
@@ -527,35 +650,8 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
     if STAFF_CACHE_TIMEOUT <= 0:
         STAFF_CACHE_TIMEOUT = None
 
-TRAFFIC_MONITOR_LEVEL = env('TRAFFIC_MONITOR_LEVEL',default=0) #0: disabled, 1:summary, 2: per domain
-if not CACHE_SERVER or not CACHE_SERVER.lower().startswith('redis'):
-    TRAFFIC_MONITOR_LEVEL = 0
-
-TRAFFIC_MONITOR_INTERVAL=env('TRAFFIC_MONITOR_INTERVAL',default=3600)
-if TRAFFIC_MONITOR_INTERVAL and TRAFFIC_MONITOR_INTERVAL > 0:
-    if 86400 % TRAFFIC_MONITOR_INTERVAL > 0 :
-        #One day can't be divided by interval, invalid, reset it to one hour
-        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
-    else:
-        TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=TRAFFIC_MONITOR_INTERVAL)
-else:
-    TRAFFIC_MONITOR_INTERVAL = timedelta(seconds=3600)
-
 
 TEST_RUNNER=env("TEST_RUNNER","django.test.runner.DiscoverRunner")
-
-#enable auth2 cluster feature by setting AUTH2_CLUSTERID
-AUTH2_CLUSTERID=env("AUTH2_CLUSTERID",default=None)
-AUTH2_CLUSTER_ENDPOINT=env("AUTH2_CLUSTER_ENDPOINT",default=None)
-DEFAULT_AUTH2_CLUSTER=env("DEFAULT_AUTH2_CLUSTER",default=False)
-AUTH2_CLUSTERS_CHECK_INTERVAL=env("AUTH2_CLUSTERS_CHECK_INTERVAL",default=60)
-if AUTH2_CLUSTERS_CHECK_INTERVAL <= 0:
-    AUTH2_CLUSTERS_CHECK_INTERVAL = 60
-
-AUTH2_CLUSTER_ENABLED = True if AUTH2_CLUSTERID and AUTH2_CLUSTER_ENDPOINT else False
-if AUTH2_CLUSTER_ENABLED:
-    if not SECRET_KEY:
-        raise Exception("Must set SECRET_KEY for auth2 cluster feature")
 
 START_OF_WEEK_MONDAY = env("START_OF_WEEK_MONDAY",default=True)
 
@@ -575,6 +671,84 @@ else:
 SSL_VERIFY=env("SSL_VERIFY",default=True)
 
 SOCIAL_AUTH_ADMIN_SEARCH_FIELDS=["uid"]
+
+#TRAFFIC CONTROL SETTINGS
+TRAFFICCONTROL_ENABLED = env('TRAFFICCONTROL_ENABLED',default=False)
+TRAFFICCONTROL_MAX_BUCKETS=env('TRAFFICCONTROL_MAX_BUCKETS',default=25)
+TRAFFICCONTROL_TIMEDIFF=env('TRAFFICCONTROL_TIMEDIFF',default=5)# milliseconds, the maximum time difference among auth2 server processes, it should be less than a few milliseconds
+TRAFFICCONTROL_TIMEDIFF=timedelta(milliseconds=TRAFFICCONTROL_TIMEDIFF)
+    
+TRAFFICCONTROL_BOOKINGTIMEOUT=env('TRAFFICCONTROL_BOOKINGTIMEOUT',default=300)# seconds, the default timeout setting of  concurrency traffic control
+if TRAFFICCONTROL_BOOKINGTIMEOUT <= 0:
+    TRAFFICCONTROL_BOOKINGTIMEOUT = 300
+elif TRAFFICCONTROL_BOOKINGTIMEOUT > 1800:
+    TRAFFICCONTROL_BOOKINGTIMEOUT = 1800
+    
+if TRAFFICCONTROL_ENABLED:
+    TRAFFICCONTROL_COOKIE_NAME = env('TRAFFICCONTROL_COOKIE_NAME')
+    TRAFFICCONTROL_CACHE_CHECK_HOURS=env('TRAFFICCONTROL_CACHE_CHECK_HOURS',default=[0]) #the hours in the day when traffic control can be checked
+    TRAFFICCONTROL_CACHE_CHECK_INTERVAL=env('TRAFFICCONTROL_CACHE_CHECK_INTERVAL',default=0) #in seconds,the interval to check traffic control cache, if it is not greater than 0, use TRAFFICCONTROL_CACHE_CHECK_HOURS
+    if TRAFFICCONTROL_CACHE_CHECK_INTERVAL < 0:
+        TRAFFICCONTROL_CACHE_CHECK_INTERVAL = 0
+    
+    TRAFFICCONTROL_CLUSTERID=env('TRAFFICCONTROL_CLUSTERID')
+    TRAFFICCONTROL_TIMEOUT = env('TRAFFICCONTROL_TIMEOUT',default=100)
+    if not TRAFFICCONTROL_TIMEOUT or TRAFFICCONTROL_TIMEOUT <= 0:
+        TRAFFICCONTROL_TIMEOUT = 0.1
+    else:
+        TRAFFICCONTROL_TIMEOUT /= 1000
+
+    TRAFFICCONTROL_CACHE_SERVER = env("TRAFFICCONTROL_CACHE_SERVER")
+    TRAFFICCONTROL_CACHE_SERVER_OPTIONS = env("TRAFFICCONTROL_CACHE_SERVER_OPTIONS",default={})
+    
+    TRAFFICCONTROL_CACHE_ALIAS = None
+    
+    if CACHE_SERVER  or TRAFFICCONTROL_CACHE_SERVER:
+        if AUTH2_CLUSTER_ENABLED:
+            if TRAFFICCONTROL_CACHE_SERVER:
+                TRAFFICCONTROL_CLUSTERID = AUTH2_CLUSTERID
+                TRAFFICCONTROL_SUPPORTED = True
+            elif TRAFFICCONTROL_CLUSTERID == AUTH2_CLUSTERID:
+                #current auth2 cluster supports traffic control
+                TRAFFICCONTROL_SUPPORTED = True
+            else:
+                #current auth2 cluster does not support traffic control, dependents on other cluster to implement traffic control
+                TRAFFICCONTROL_SUPPORTED = False
+                TRAFFICCONTROL_CACHE_SERVERS = 0
+        else:
+            #standalone auth2 server, should always support traffic control
+            TRAFFICCONTROL_SUPPORTED = True
+    
+        if TRAFFICCONTROL_SUPPORTED :
+            if TRAFFICCONTROL_CACHE_SERVER:
+                TRAFFICCONTROL_CACHE_SERVER = [s.strip() for s in TRAFFICCONTROL_CACHE_SERVER.split(",") if s and s.strip()]
+                TRAFFICCONTROL_CACHE_SERVERS = len(TRAFFICCONTROL_CACHE_SERVER)
+                if TRAFFICCONTROL_CACHE_SERVERS == 1:
+                    TRAFFICCONTROL_CACHE_ALIAS = "tcontrol"
+                    CACHES[TRAFFICCONTROL_CACHE_ALIAS] = GET_CACHE_CONF(TRAFFICCONTROL_CACHE_ALIAS,TRAFFICCONTROL_CACHE_SERVER[0],TRAFFICCONTROL_CACHE_SERVER_OPTIONS,key_function=lambda key,key_prefix,version : key)
+                else:
+                    for i in range(0,TRAFFICCONTROL_CACHE_SERVERS) :
+                        name = "tcontrol{}".format(i)
+                        CACHES[name] = GET_CACHE_CONF(name,TRAFFICCONTROL_CACHE_SERVER[i],env("TRAFFICCONTROL_CACHE_SERVER{}_OPTIONS".format(i),default=TRAFFICCONTROL_CACHE_SERVER_OPTIONS),key_function=lambda key,key_prefix,version : key)
+    
+                    def TRAFFICCONTROL_CACHE_ALIAS(key):
+                        h = hash(key) % TRAFFICCONTROL_CACHE_SERVERS
+                        
+                    TRAFFICCONTROL_CACHE_ALIAS = lambda key:"tcontrol{}".format(hash(key) % TRAFFICCONTROL_CACHE_SERVERS)
+                GET_TRAFFICCONTROL_CACHE_KEY = lambda key:"T_{}".format(key)
+            else:
+                TRAFFICCONTROL_CACHE_ALIAS = "default"
+                TRAFFICCONTROL_CACHE_SERVERS = 1
+                if CACHE_KEY_PREFIX:
+                    trafficcontrol_key_pattern = "{}:T_{{}}".format(CACHE_KEY_PREFIX)
+                    GET_TRAFFICCONTROL_CACHE_KEY = lambda key:trafficcontrol_key_pattern.format(key)
+                else:
+                    GET_TRAFFICCONTROL_CACHE_KEY = lambda key:"T_{}".format(key)
+    else:
+        TRAFFICCONTROL_ENABLED = False
+        TRAFFICCONTROL_SUPPORTED = False
+else:
+    TRAFFICCONTROL_SUPPORTED = False
 
 # Sentry settings
 project = tomllib.load(open(os.path.join(BASE_DIR, "pyproject.toml"), "rb"))

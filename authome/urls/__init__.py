@@ -6,6 +6,7 @@ from .. import models
 from .urls import urlpatterns,logger
 from .. import views
 from .  import selfserviceurls
+from .. import monitordb
 
 handler400 = views.handler400
 

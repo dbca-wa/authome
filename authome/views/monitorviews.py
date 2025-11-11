@@ -139,6 +139,43 @@ def _get_localstatus():
                         errors["caches"] = OrderedDict()
                     errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_servers[name])
 
+    if settings.TRAFFICCONTROL_SUPPORTED:
+        if settings.TRAFFICCONTROL_CACHE_SERVER:
+            if settings.TRAFFICCONTROL_CACHE_SERVERS  == 1:
+                name = "tcontrol"
+                if settings.TRAFFICCONTROL_CACHE_SERVER[0].lower().startswith("redis"):
+                    cache_healthy,cache_servers[name] = caches[name].server_status
+                else:
+                    cache_healthy,cache_error = utils.ping_cacheserver(name)
+                    if cache_healthy:
+                        cache_servers[name] = "server = {} ,  status = OK".format(settings.TRAFFICCONTROL_CACHE_SERVER[0])
+                    else:
+                        cache_servers[name] = "server = {} ,  error = {}".format(settings.TRAFFICCONTROL_CACHE_SERVER[0],cache_error)
+    
+                if not cache_healthy:
+                    healthy = False
+                    if "caches" not in errors:
+                        errors["caches"] = OrderedDict()
+                    errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_servers[name])
+    
+            else:
+                for i in range(settings.TRAFFICCONTROL_CACHE_SERVERS):
+                    name = "tcontrol{}".format(i)
+                    if settings.TRAFFICCONTROL_CACHE_SERVER[i].lower().startswith("redis"):
+                        cache_healthy,cache_servers[name] = caches[name].server_status
+                    else:
+                        cache_healthy,cache_error = utils.ping_cacheserver(name)
+                        if cache_healthy:
+                            cache_servers[name] = "server = {} ,  status = OK".format(TRAFFICCONTROL_CACHE_SERVER[i])
+                        else:
+                            cache_servers[name] = "server = {} ,  error = {}".format(TRAFFICCONTROL_CACHE_SERVER[i],cache_error)
+    
+                    if not cache_healthy:
+                        healthy = False
+                        if "caches" not in errors:
+                            errors["caches"] = OrderedDict()
+                        errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_servers[name])
+    
     cache_healthy,cache_msgs = cache.healthy
     healthy = healthy and cache_healthy
     if not cache_healthy:
@@ -273,6 +310,30 @@ def _check_localhealth():
                 if not cache_working:
                     working = False
 
+    if settings.TRAFFICCONTROL_SUPPORTED:
+        if settings.TRAFFICCONTROL_CACHE_SERVER:
+            if settings.TRAFFICCONTROL_CACHE_SERVERS  == 1:
+                name = settings.TRAFFICCONTROL_CACHE_ALIAS
+                if settings.TRAFFICCONTROL_CACHE_SERVER[0].lower().startswith("redis"):
+                    cache_working,pingstatus = caches[name].ping()
+                else:
+                    cache_working,pingstatus = utils.ping_cacheserver(name)
+                status["caches"][name] = {"ping":cache_working,"pingstatus":pingstatus}
+                if not cache_working:
+                    working = False
+    
+            else:
+                for i in range(settings.TRAFFICCONTROL_CACHE_SERVERS):
+                    name = "tcontrol{}".format(i)
+                    if settings.TRAFFICCONTROL_CACHE_SERVER[i].lower().startswith("redis"):
+                        cache_working,pingstatus = caches[name].ping()
+                    else:
+                        cache_working,cache_error = utils.ping_cacheserver(name)
+                    status["caches"][name] = {"ping":cache_working,"pingstatus":pingstatus}
+    
+                    if not cache_working:
+                        working = False
+
     if not working :
         if not settings.AUTH2_CLUSTER_ENABLED:
             working = True
@@ -307,14 +368,16 @@ def _check_clusterhealth():
     for cluster in models.Auth2Cluster.objects.only("clusterid").order_by("clusterid"):
         if cluster.clusterid == settings.AUTH2_CLUSTERID:
             cluster_working,cluster_status = _check_localhealth()
+            key = "{}*".format(cluster.clusterid)
         else:
             cluster_working,cluster_status = cache.cluster_healthcheck(cluster.clusterid)
+            key = cluster.clusterid
         if cluster_working:
             working = True
         if cluster_status:
-            content[cluster.clusterid] =  {"working":cluster_working,"status":cluster_status}
+            content[key] =  {"working":cluster_working,"status":cluster_status}
         else:
-            content[cluster.clusterid] =  {"working":cluster_working}
+            content[key] =  {"working":cluster_working}
 
     content["working"] = working
     content.move_to_end("working",last=False)
@@ -470,7 +533,7 @@ def _save_trafficdata(batchid):
     with transaction.atomic():
         #save the data to db
         for data in traffic_datas.values():
-            if not data.get("sso_requests",{}).get("requests") and not data.get("get_remote_session",{}).get("requests") and not data.get("delete_remote_session",{}).get("requests"):
+            if not data.get("sso_requests",{}).get("requests") and not data.get("get_remote_session",{}).get("requests") and not data.get("delete_remote_session",{}).get("requests") and not data.get("Redis",{}).get("requests") and not data.get("DB",{}).get("requests"):
                 #no requests
                 logger.debug("Ignore empty data")
                 continue
@@ -488,6 +551,10 @@ def _save_trafficdata(batchid):
                 avg_time=data["sso_requests"].get("avgtime"),
                 status=data["sso_requests"].get("status"),
                 domains=data["sso_requests"].get("domains"),
+                redis_requests = data.get("Redis",{}).get("requests") or 0,
+                redis_avg_time = data.get("Redis",{}).get("avgtime") or 0,
+                db_requests = data.get("DB",{}).get("requests") or 0,
+                db_avg_time = data.get("DB",{}).get("avgtime") or 0,
                 get_remote_sessions = data.get("get_remote_session",{}).get("requests") or 0,
                 delete_remote_sessions = data.get("delete_remote_session",{}).get("requests") or 0
             )

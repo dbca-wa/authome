@@ -2,14 +2,17 @@ import re
 import logging
 import traceback
 import random
+import math
 from datetime import timedelta
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError,ObjectDoesNotExist
+from django.db.utils import DatabaseError
 from django.utils import timezone
-from django.db import models, transaction
+from django.db import transaction
+from django.db import models as django_models
 from django.contrib.postgres.fields.array import ArrayField as DjangoArrayField
-from django.db.models.signals import pre_delete, pre_save, post_save, post_delete
+from django.db.models.signals import pre_delete, pre_save, post_save, post_delete,m2m_changed
 from django.dispatch import receiver
 from django.contrib.auth.models import AbstractUser,UserManager
 from django.utils.html import mark_safe
@@ -64,7 +67,7 @@ The following lists all valid options in the checking order
     4. Exact path  : Starts with '=', represents a single request path . For example =/register
 """
 
-sortkey_c = models.Func('sortkey',function='C',template='(%(expressions)s) COLLATE "%(function)s"')
+sortkey_c = django_models.Func('sortkey',function='C',template='(%(expressions)s) COLLATE "%(function)s"')
 
 class ArrayField(DjangoArrayField):
     """
@@ -284,7 +287,7 @@ class CacheableMixin(object):
         cls.get_model_change_cls().refresh_cache_if_required()
 
 
-class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
+class IdentityProvider(CacheableMixin,DbObjectMixin,django_models.Model):
     """
     The identity provider to authenticate user.
     IdentityProvider 'local' means local account
@@ -307,18 +310,18 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     _editable_columns = ("name","userflow","logout_url","logout_method","secretkey_expireat")
 
     #meaningful name set in auth2, this name will be used in some other place, so change it only if necessary
-    name = models.CharField(max_length=64,unique=True,null=True)
+    name = django_models.CharField(max_length=64,unique=True,null=True)
     #unique name returned from b2c
-    idp = models.CharField(max_length=256,unique=True,null=False,editable=False)
+    idp = django_models.CharField(max_length=256,unique=True,null=False,editable=False)
     #the user flow id dedicated for this identity provider
-    userflow = models.CharField(max_length=64,blank=True,null=True)
+    userflow = django_models.CharField(max_length=64,blank=True,null=True)
     #the logout url to logout the user from identity provider
-    logout_url = models.CharField(max_length=512,blank=True,null=True)
+    logout_url = django_models.CharField(max_length=512,blank=True,null=True)
     #the way to logout from idp
-    logout_method = models.PositiveSmallIntegerField(choices=LOGOUT_METHODS,blank=True,null=True)
-    secretkey_expireat = models.DateTimeField(null=True,editable=True,blank=True)
-    modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
-    created = models.DateTimeField(auto_now_add=timezone.now)
+    logout_method = django_models.PositiveSmallIntegerField(choices=LOGOUT_METHODS,blank=True,null=True)
+    secretkey_expireat = django_models.DateTimeField(null=True,editable=True,blank=True)
+    modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
         verbose_name_plural = "{}Identity Providers".format(" " * 9)
@@ -332,6 +335,11 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
         self.name = self.name.strip()
         if not self.name:
             raise ValidationError("Name is empty")
+        elif utils.check_xssattack(self.name):
+            raise ValidationError("Name includes a html tag")
+
+        if self.userflow and utils.check_xssattack(self.userflow):
+            raise ValidationError("Userflow includes a html tag")
 
     @classmethod
     def refresh_cache(cls):
@@ -384,7 +392,7 @@ class IdentityProvider(CacheableMixin,DbObjectMixin,models.Model):
     def __str__(self):
         return self.name or self.idp
 
-class CustomizableUserflow(CacheableMixin,DbObjectMixin,models.Model):
+class CustomizableUserflow(CacheableMixin,DbObjectMixin,django_models.Model):
     """
     Customize userflow for domain.
     The domain '*' is the default settings.
@@ -526,28 +534,28 @@ Email: enquiries@dbca.wa.gov.au
 
     _editable_columns = ("default","mfa_set","mfa_reset","password_reset","page_layout","fixed","extracss","verifyemail_from","verifyemail_subject","verifyemail_body","signedout_url","relogin_url","signout_body","sortkey")
 
-    domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
-    fixed = models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
-    default = models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
-    mfa_set = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa set user flow")
-    mfa_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The mfa reset user flow")
-    password_reset = models.CharField(max_length=64,null=True,blank=True,help_text="The user password reset user flow")
+    domain = django_models.CharField(max_length=128,null=False,help_text=help_text_domain)
+    fixed = django_models.CharField(max_length=64,null=True,blank=True,help_text="The only user flow used by this domain if configured")
+    default = django_models.CharField(max_length=64,null=True,blank=True,help_text="The default user flow used by this domain")
+    mfa_set = django_models.CharField(max_length=64,null=True,blank=True,help_text="The mfa set user flow")
+    mfa_reset = django_models.CharField(max_length=64,null=True,blank=True,help_text="The mfa reset user flow")
+    password_reset = django_models.CharField(max_length=64,null=True,blank=True,help_text="The user password reset user flow")
 
-    extracss = models.TextField(null=True,blank=True)
-    page_layout = models.TextField(null=True,blank=True)
+    extracss = django_models.TextField(null=True,blank=True)
+    page_layout = django_models.TextField(null=True,blank=True)
 
-    verifyemail_from = models.EmailField(null=True,blank=True)
-    verifyemail_subject = models.CharField(max_length=512,null=True,blank=True)
-    verifyemail_body = models.TextField(null=True,blank=True)
+    verifyemail_from = django_models.EmailField(null=True,blank=True)
+    verifyemail_subject = django_models.CharField(max_length=512,null=True,blank=True)
+    verifyemail_body = django_models.TextField(null=True,blank=True)
 
-    signedout_url = models.CharField(max_length=256,null=True,blank=True,help_text="Redirect to this url after sign out from sso")
-    relogin_url = models.CharField(max_length=256,null=True,blank=True,help_text="A link can be used in signed out page to let user relogin to the system after signout from sso.")
-    signout_body = models.TextField(null=True,blank=True,help_text="The body template used in the signed out page")
+    signedout_url = django_models.CharField(max_length=256,null=True,blank=True,help_text="Redirect to this url after sign out from sso")
+    relogin_url = django_models.CharField(max_length=256,null=True,blank=True,help_text="A link can be used in signed out page to let user relogin to the system after signout from sso.")
+    signout_body = django_models.TextField(null=True,blank=True,help_text="The body template used in the signed out page")
 
-    sortkey = models.CharField(max_length=128,editable=True,help_text="A sorting string consisted with a 2 digitals and string separated by ':', the sorting string is auto generated if the digitals is in {}".format(RequestDomain.all_base_sort_keys()))
+    sortkey = django_models.CharField(max_length=128,editable=True,help_text="A sorting string consisted with a 2 digitals and string separated by ':', the sorting string is auto generated if the digitals is in {}".format(RequestDomain.all_base_sort_keys()))
 
-    modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
-    created = models.DateTimeField(auto_now_add=timezone.now)
+    modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
         verbose_name_plural = "{}Customizable Userflows".format(" " * 10)
@@ -748,7 +756,7 @@ class ExactUserEmail(UserEmail):
 
     @property
     def qs_filter(self):
-        return models.Q(email=self.config)
+        return django_models.Q(email=self.config)
 
     def contain(self,useremail):
         if isinstance(useremail,RegexUserEmail):
@@ -763,7 +771,7 @@ class DomainEmail(UserEmail):
 
     @property
     def qs_filter(self):
-        return models.Q(email__endswith=self.config)
+        return django_models.Q(email__endswith=self.config)
 
     def contain(self,useremail):
         if isinstance(useremail,AllUserEmail):
@@ -792,7 +800,7 @@ class RegexUserEmail(UserEmail):
 
     @property
     def qs_filter(self):
-        return models.Q(email__regex=self._qs_re)
+        return django_models.Q(email__regex=self._qs_re)
 
     def contain(self,useremail):
         return None
@@ -802,7 +810,7 @@ class UserEmailPattern(UserEmail):
     def __init__(self,email):
         super().__init__(email)
         try:
-            self._qs_re = r"^{}$".format(email.replace(".","\\.").replace('*','[a-zA-Z0-9\\._\\-\\+]*'))
+            self._qs_re = r"^{}$".format(email.replace(".","\\.").replace('*','[a-zA-Z0-9\\._\\-\\+#]*'))
             self._re = re.compile(self._qs_re)
         except Exception as ex:
             raise ValidationError("The regex email config({}) is invalid.{}".format(email,str(ex)))
@@ -812,7 +820,7 @@ class UserEmailPattern(UserEmail):
 
     @property
     def qs_filter(self):
-        return models.Q(email__regex=self._qs_re)
+        return django_models.Q(email__regex=self._qs_re)
 
     def contain(self,useremail):
         if isinstance(useremail,AllUserEmail):
@@ -857,21 +865,21 @@ class UserEmailPattern(UserEmail):
 
             return p_index >= len(self.config)
 
-class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
+class UserGroup(CacheableMixin,DbObjectMixin,django_models.Model):
     _useremails = None
     _excluded_useremails = None
 
     _editable_columns = ("users","parent_group","excluded_users","identity_provider","groupid","session_timeout")
 
-    name = models.CharField(max_length=32,unique=True,null=False)
-    groupid = models.SlugField(max_length=32,null=False,blank=True)
-    parent_group = models.ForeignKey('self', on_delete=models.SET_NULL,null=True,blank=True)
-    users = ArrayField(models.CharField(max_length=64,null=False),help_text=help_text_users)
-    excluded_users = ArrayField(models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
-    identity_provider = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,null=True,blank=True,limit_choices_to=~models.Q(idp__exact=IdentityProvider.AUTH_EMAIL_VERIFY[0]))
-    session_timeout = models.PositiveSmallIntegerField(null=True,editable=True,blank=True,help_text="Session timeout in seconds, 0 means never timeout")
-    modified = models.DateTimeField(editable=False,db_index=True)
-    created = models.DateTimeField(auto_now_add=timezone.now)
+    name = django_models.CharField(max_length=32,unique=True,null=False)
+    groupid = django_models.SlugField(max_length=32,null=False,blank=True)
+    parent_group = django_models.ForeignKey('self', on_delete=django_models.SET_NULL,null=True,blank=True)
+    users = ArrayField(django_models.CharField(max_length=64,null=False),help_text=help_text_users)
+    excluded_users = ArrayField(django_models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
+    identity_provider = django_models.ForeignKey(IdentityProvider, on_delete=django_models.SET_NULL,null=True,blank=True,limit_choices_to=~django_models.Q(idp__exact=IdentityProvider.AUTH_EMAIL_VERIFY[0]))
+    session_timeout = django_models.PositiveSmallIntegerField(null=True,editable=True,blank=True,help_text="Session timeout in seconds, 0 means never timeout")
+    modified = django_models.DateTimeField(editable=False,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
         unique_together = [["users","excluded_users"]]
@@ -882,8 +890,8 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
     def sessiontimeout(self):
         if self.session_timeout is not None:
             return self.session_timeout
-        elif self.parent_group:
-            return self.parent_group.sessiontimeout
+        elif self.parent_group_id is not None:
+            return (cache.usergroups.get(self.parent_group_id) or self.parent_group).sessiontimeout
         else:
             return 0
 
@@ -908,22 +916,24 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
         return timeout
 
     @classmethod
-    def get_groupnames(cls,usergroups):
+    def get_pk_and_names(cls,usergroups):
         """
-        return groupname string seprated by "," based on usergroups
+        return (groupname string seprated by "," based on usergroups, group pks)
         """
         groupnames = []
+        pks = set()
         index = 0
         for usergroup in usergroups:
             group = usergroup
             index = len(groupnames)
             while group:
+                pks.add(group.id)
                 if group.groupid in groupnames:
                     break
                 if group.groupid:
                     groupnames.insert(index,group.groupid)
                 group = group.parent_group
-        return ",".join(groupnames)
+        return (",".join(groupnames),pks)
 
     def is_changed(self,update_fields=None):
         changed = super().is_changed(update_fields)
@@ -937,8 +947,9 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
         super().clean()
         self.name = self.name.strip()
         if not self.name:
-            raise ValidationError("Name is empty")
-
+            raise ValidationError("Name is empty.")
+        elif utils.check_xssattack(self.name):
+            raise ValidationError("Name includs a html tag.")
         user_emails = self.get_useremails(self.users)
         if user_emails:
             self.users = [u.config for u in user_emails]
@@ -1055,13 +1066,11 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
         if users:
             user_emails = []
             for user in users:
-                try:
+                if user:
                     user_email = UserEmail.get_instance(user)
                     if not user_email:
                         continue
                     user_emails.append(user_email)
-                except:
-                    continue
             user_emails.sort(key=lambda o:o.sort_key)
             match_all_user = next((u for u in user_emails if u.match_all),None)
             if match_all_user:
@@ -1218,11 +1227,11 @@ class UserGroup(CacheableMixin,DbObjectMixin,models.Model):
                 elif group.parent_group :
                     _add_group(usergroups,group.parent_group)
             if usergroups:
-                usergroups = (usergroups,cls.get_groupnames(usergroups))
+                usergroups = (usergroups,*cls.get_pk_and_names(usergroups))
                 if cacheable:
                     cache.set_email_groups(email,usergroups)
             else:
-                usergroups = (usergroups,"")
+                usergroups = (usergroups,"",set())
 
 
         return usergroups
@@ -1327,7 +1336,7 @@ class RegexRequestPath(RequestPath):
         return True if self._re.search(path) else False
 
 
-class AuthorizationMixin(DbObjectMixin,models.Model):
+class AuthorizationMixin(DbObjectMixin,django_models.Model):
 
     _request_domain = None
     _excluded_request_paths = None
@@ -1338,12 +1347,12 @@ class AuthorizationMixin(DbObjectMixin,models.Model):
 
     _editable_columns = ("domain","paths","excluded_paths")
 
-    domain = models.CharField(max_length=128,null=False,help_text=help_text_domain)
-    paths = ArrayField(models.CharField(max_length=512,null=False),null=True,blank=True,help_text=help_text_paths)
-    excluded_paths = ArrayField(models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
-    sortkey = models.CharField(max_length=128,editable=False)
-    modified = models.DateTimeField(auto_now=timezone.now,db_index=True)
-    created = models.DateTimeField(auto_now_add=timezone.now)
+    domain = django_models.CharField(max_length=128,null=False,help_text=help_text_domain)
+    paths = ArrayField(django_models.CharField(max_length=512,null=False),null=True,blank=True,help_text=help_text_paths)
+    excluded_paths = ArrayField(django_models.CharField(max_length=128,null=False),null=True,blank=True,help_text=help_text_paths)
+    sortkey = django_models.CharField(max_length=128,editable=False)
+    modified = django_models.DateTimeField(auto_now=timezone.now,db_index=True)
+    created = django_models.DateTimeField(auto_now_add=timezone.now)
 
     class Meta:
         abstract = True
@@ -1600,11 +1609,11 @@ def can_access(email,domain,path):
         return False
 
 class UserAuthorization(CacheableMixin,AuthorizationMixin):
-    user = models.EmailField(max_length=64)
+    user = django_models.EmailField(max_length=64)
 
     class Meta:
         unique_together = [["user","domain"]]
-        verbose_name_plural = "{}User Authorizations".format(" " * 7)
+        verbose_name_plural = "User Authorizations"
 
     @classmethod
     def get_model_change_cls(self):
@@ -1646,7 +1655,7 @@ class UserAuthorization(CacheableMixin,AuthorizationMixin):
         return self.user
 
 class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
-    usergroup = models.ForeignKey(UserGroup, on_delete=models.CASCADE)
+    usergroup = django_models.ForeignKey(UserGroup, on_delete=django_models.CASCADE)
 
     class Meta:
         unique_together = [["usergroup","domain"]]
@@ -1665,6 +1674,11 @@ class UserGroupAuthorization(CacheableMixin,AuthorizationMixin):
         refreshtime = timezone.localtime()
         for authorization in UserGroupAuthorization.objects.all().order_by("usergroup","sortkey"):
             size += 1
+            #try to get the data from cache to avoid a extra db access
+            try:
+                authorization.usergroup = cache.usergroups[authorization.usergroup_id]
+            except:
+                pass
 
             if not previous_usergroup:
                 usergroupauthorization[authorization.usergroup] = [authorization]
@@ -1694,19 +1708,29 @@ class NormalUserManager(UserManager):
         return super().get_queryset().filter(systemuser=False)
 
 class User(AbstractUser):
-    last_idp = models.ForeignKey(IdentityProvider, on_delete=models.SET_NULL,editable=False,null=True)
-    systemuser = models.BooleanField(default=False,editable=False)
-    comments = models.TextField(null=True,editable=True,blank=True)
-    modified = models.DateTimeField(auto_now=timezone.now)
+    last_idp = django_models.ForeignKey(IdentityProvider, on_delete=django_models.SET_NULL,editable=False,null=True)
+    systemuser = django_models.BooleanField(default=False,editable=False)
+    comments = django_models.TextField(null=True,editable=True,blank=True)
+    modified = django_models.DateTimeField(auto_now=timezone.now)
 
     class Meta(AbstractUser.Meta):
         swappable = 'AUTH_USER_MODEL'
         db_table = "auth_user"
-        verbose_name_plural = "{}Users".format(" " * 14)
+        verbose_name_plural = "Users"
         unique_together = [["email"]]
 
     def clean(self):
         super().clean()
+        if not self.first_name and not self.systemuser:
+            raise ValidationError("The user's first_name is empty.")
+        elif utils.check_xssattack(self.first_name):
+            raise ValidationError("The user's first_name includes a html tag.")
+
+        if not self.last_name and not self.systemuser:
+            raise ValidationError("The user's last_name is empty.")
+        elif utils.check_xssattack(self.last_name):
+            raise ValidationError("The user's last_name includes a html tag.")
+
         self.email = self.email.strip().lower() if self.email else None
         if not self.email:
             raise ValidationError("Email is empty")
@@ -1726,7 +1750,7 @@ class User(AbstractUser):
     def __str__(self):
         return self.email
 
-class UserToken(models.Model):
+class UserToken(django_models.Model):
     DISABLED = -1
     NOT_CREATED = -2
     EXPIRED = -3
@@ -1736,15 +1760,15 @@ class UserToken(models.Model):
     RANDOM_CHARS="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYA0123456789~!@#$%^&*()-_+=`{}[];':\",./<>?"
     RANDOM_CHARS_MAX_INDEX = len(RANDOM_CHARS) - 1
 
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,primary_key=True,related_name="token",editable=False)
-    enabled = models.BooleanField(default=False,editable=False)
-    token = models.CharField(max_length=128,null=True,editable=False)
-    created = models.DateTimeField(null=True,editable=False)
-    expired = models.DateField(null=True,editable=False)
-    modified = models.DateTimeField(editable=False,db_index=True,auto_now=True)
+    user = django_models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=django_models.CASCADE,primary_key=True,related_name="token",editable=False)
+    enabled = django_models.BooleanField(default=False,editable=False)
+    token = django_models.CharField(max_length=128,null=True,editable=False)
+    created = django_models.DateTimeField(null=True,editable=False)
+    expired = django_models.DateField(null=True,editable=False)
+    modified = django_models.DateTimeField(editable=False,db_index=True,auto_now=True)
 
     class Meta:
-        verbose_name_plural = "{}Access Tokens".format(" " * 8)
+        verbose_name_plural = "Access Tokens"
 
     def __str__(self):
         return self.user.email
@@ -1826,18 +1850,163 @@ class UserToken(models.Model):
         with transaction.atomic():
             super().save(*args,**kwargs)
 
-class UserTOTP(models.Model):
-    email = models.CharField(max_length=64,null=False,editable=False,unique=True)
-    secret_key = models.CharField(max_length=512,null=False,editable=False)
-    timestep = models.PositiveSmallIntegerField(null=False,editable=False)
-    prefix = models.CharField(max_length=64,null=False,editable=False)
-    issuer = models.CharField(max_length=64,null=False,editable=False)
-    name = models.CharField(max_length=128,null=False,editable=False)
-    algorithm = models.CharField(max_length=32,null=False,editable=False)
-    digits = models.PositiveSmallIntegerField(null=False,editable=False)
-    last_verified_code = models.CharField(max_length=16,null=True,editable=False)
-    last_verified = models.DateTimeField(null=True,editable=False)
-    created = models.DateTimeField(null=False,editable=False)
+class ReservedUser(object):
+    def __init__(self,email):
+        self.email = email
+        self.user = None
+        self.usertoken = None
+        self.loaduser()
+        self.loadusertoken()
+
+    def reset(self):
+        self.user =  None
+        self.usertoken = None
+
+    def reset_usertoken(self):
+        self.usertoken = None
+
+    def reset_user(self):
+        self.user =  None
+
+    @property
+    def auth_credential(self):
+        self.loaduser()
+        self.loadusertoken()
+        return (self.user.email,self.usertoken.token)
+
+
+    def _get_or_createuser(self):
+        tempuser = User(email=self.email,systemuser=True,is_active=True)
+        tempuser.clean()
+        return User.objects.get_or_create(email=self.email.lower(),defaults={
+            "username":self.email,
+            "systemuser":True,
+            "is_staff": tempuser.is_staff,
+            "is_active": tempuser.is_active,
+            "comments":"An auth2 reserved user is created and managed by auth2 automatically, please don't delete or modify it."
+        })
+
+    def loaduser(self):
+        #load or create the user if not loaded before
+        if not self.user:
+            self.user,created = self._get_or_createuser()
+
+        #active the user if it is inactive
+        if not self.user.is_active:
+            self.user.is_active = True
+            try:
+                self.user.save(update_fields=["is_active"])
+            except DatabaseError as ex:
+                if "connection" in str(ex).lower():
+                    raise ex
+                else:
+                    #failed to active the user,maybe it was accidently deleted, recreate the user again
+                    self.user,created = self._get_or_createuser()
+
+    def _get_or_createusertoken(self):
+        tmptoken = UserToken(user=self.user,enabled=True)
+        tmptoken.generate_token(28)
+        return UserToken.objects.get_or_create(user=self.user,defaults={
+            "enabled":True,
+            "token":tmptoken.token,
+            "expired":tmptoken.expired,
+            "created":tmptoken.created
+        })
+
+    def loadusertoken(self):
+        created = False
+        #load or create the usertoken if not loaded before
+        if not self.usertoken:
+            #get or create the  user token 
+            try:
+                self.usertoken,created = self._get_or_createusertoken()
+            except DatabaseError as ex:
+                if "connection" in str(ex).lower():
+                    raise ex
+                else:
+                    #failed to create the user token,maybe user was accidently deleted, reload the user and try again
+                    self.user = None
+                    self.loaduser()
+                    self.usertoken,created = self._get_or_createusertoken()
+
+        if not created:
+            #existing user token
+            #check whether the token will expire soon or not, regenerate and enable the user token if necessary
+            renewdate = timezone.localdate() + timedelta(days=1)
+            while not self.usertoken.token or self.usertoken.expired <= renewdate :
+                #token will be expired in one day, renew it
+                currenttoken = self.usertoken.token
+                self.usertoken.generate_token(28)
+                if currenttoken:
+                    qs = UserToken.objects.filter(user=self.user,token=currenttoken)
+                else:
+                    qs = UserToken.objects.filter(user=self.user,token__isnull=True)
+
+                updated = qs.update(
+                    enabled = True,
+                    token = self.usertoken.token,
+                    expired = self.usertoken.expired,
+                    created = self.usertoken.created
+                )
+                if updated > 0:
+                    #update successfully
+                    self.usertoken.enabled = True
+                    usercache = get_usercache(self.user.id)
+                    if usercache:
+                        #Only cache the user token only if it is already cached
+                        usercache.set(settings.GET_USERTOKEN_KEY(self.user.id),self.usertoken,settings.STAFF_CACHE_TIMEOUT if self.user.is_staff else settings.USER_CACHE_TIMEOUT)
+                else:
+                    #update failed, two reason
+                    #1. already updated by others
+                    #2. token doesn't exist anymore
+                    try:
+                        self.usertoken = UserToken.objects.get(user=self.user)
+                    except ObjectDoesNotExist as ex:
+                        # token doesn't exist anymore, recreate the token
+                        try:
+                            self.usertoken,created = self._get_or_createusertoken()
+                        except DatabaseError as ex1:
+                            if "connection" in str(ex1).lower():
+                                raise ex1
+                            else:
+                                #failed to create the user token, maybe user was accidently deleted.
+                                self.user = None
+                                self.loaduser()
+                                self.usertoken,created = self._get_or_createusertoken()
+
+            #enable the token if it is  not enabled
+            if not self.usertoken.enabled:
+                self.usertoken.enabled = True
+                try:
+                    self.usertoken.save(update_fields=["enabled"])
+                except DatabaseError as ex:
+                    if "connection" in str(ex).lower():
+                        raise ex
+                    else:
+                        # token doesn't exist anymore, recreate 
+                        try:
+                            self.usertoken,created = self._get_or_createusertoken()
+                        except DatabaseError as ex1:
+                            if "connection" in str(ex1).lower():
+                                raise ex1
+                            else:
+                                # failed to create the user token, recreate the user again
+                                self.user = None
+                                self.loaduser()
+                                self.usertoken,created = self._get_or_createusertoken()
+
+class UserTOTP(django_models.Model):
+    email = django_models.CharField(max_length=64,null=False,editable=False,unique=True)
+    secret_key = django_models.CharField(max_length=512,null=False,editable=False)
+    timestep = django_models.PositiveSmallIntegerField(null=False,editable=False)
+    prefix = django_models.CharField(max_length=64,null=False,editable=False)
+    issuer = django_models.CharField(max_length=64,null=False,editable=False)
+    name = django_models.CharField(max_length=128,null=False,editable=False)
+    algorithm = django_models.CharField(max_length=32,null=False,editable=False)
+    digits = django_models.PositiveSmallIntegerField(null=False,editable=False)
+    last_verified_code = django_models.CharField(max_length=16,null=True,editable=False)
+    last_verified = django_models.DateTimeField(null=True,editable=False)
+    created = django_models.DateTimeField(null=False,editable=False)
 
     class Meta:
         verbose_name_plural = "{}User TOTPs".format(" " * 8)
@@ -1925,8 +2094,8 @@ if defaultcache:
         def status(cls):
             try:
                 last_refreshed = cls.get_cachetime()
-                last_synced = defaultcache.get(cls.key)
-                if not last_synced:
+                cls.last_synced = defaultcache.get(cls.key)
+                if not cls.last_synced:
                     if last_refreshed:
                         return (UP_TO_DATE,last_refreshed)
                     else:
@@ -1936,7 +2105,7 @@ if defaultcache:
                 count =  cls.model.objects.all().count()
                 if count != cls.get_cachesize():
                     #cache is outdated
-                    if last_synced > last_refreshed:
+                    if cls.last_synced > last_refreshed:
                         return (OUTDATED,last_refreshed)
                     else:
                         return (OUT_OF_SYNC,last_refreshed)
@@ -1948,14 +2117,14 @@ if defaultcache:
                 if o:
                     if last_refreshed and last_refreshed >= o.modified:
                         return (UP_TO_DATE,last_refreshed)
-                    elif o.modified > last_synced:
+                    elif o.modified > cls.last_synced:
                         return (OUT_OF_SYNC,last_refreshed)
                 else:
                     return (UP_TO_DATE,last_refreshed)
     
                 if not last_refreshed:
                     return (OUTDATED,last_refreshed)
-                elif last_synced > last_refreshed:
+                elif cls.last_synced > last_refreshed:
                     return (OUTDATED,last_refreshed)
                 else:
                     return (UP_TO_DATE,last_refreshed)
@@ -1985,7 +2154,6 @@ if defaultcache:
                 DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to check whether the model '{}' is changed or not.{}".format(cls.__name__,traceback.format_exc()))
                 return False
 
-
     class IdentityProviderChange(ModelChange):
         key = "idp_last_modified"
         model = IdentityProvider
@@ -2008,12 +2176,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=IdentityProvider)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             IdentityProviderChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=IdentityProvider)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             IdentityProviderChange.change()
 
     class CustomizableUserflowChange(ModelChange):
@@ -2038,12 +2206,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=CustomizableUserflow)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             CustomizableUserflowChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=CustomizableUserflow)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             CustomizableUserflowChange.change()
 
     class UserGroupChange(ModelChange):
@@ -2070,12 +2238,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=UserGroup)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             UserGroupChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=UserGroup)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             UserGroupChange.change()
 
     class UserAuthorizationChange(ModelChange):
@@ -2102,12 +2270,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=UserAuthorization)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             UserAuthorizationChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=UserAuthorization)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             UserAuthorizationChange.change()
 
     class UserGroupAuthorizationChange(ModelChange):
@@ -2134,12 +2302,12 @@ if defaultcache:
 
         @staticmethod
         @receiver(post_save, sender=UserGroupAuthorization)
-        def post_save(sender,*args,**kwargs):
+        def post_save_model(sender,*args,**kwargs):
             UserGroupAuthorizationChange.change()
 
         @staticmethod
         @receiver(post_delete, sender=UserGroupAuthorization)
-        def post_delete(sender,*args,**kwargs):
+        def post_delete_model(sender,*args,**kwargs):
             UserGroupAuthorizationChange.change()
 
 else:
@@ -2184,6 +2352,7 @@ else:
             else:
                 #logger.debug("{} is not changed, no need to refresh cache data".format(cls.__name__[:-6]))
                 return False
+
 
     class IdentityProviderChange(ModelChange):
         model = IdentityProvider

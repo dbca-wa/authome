@@ -12,6 +12,7 @@ import logging
 import traceback
 import threading
 from datetime import timedelta,datetime
+import redis
 
 from django.utils import timezone
 from django.contrib.auth import REDIRECT_FIELD_NAME
@@ -477,14 +478,14 @@ def add_to_map(m,k,v):
     else:
         m[k] = v
         return m
-
+ping_db_sql = "select 1"
 def ping_database(dbalias):
     status = {}
     healthy = True
     starttime = timezone.localtime()
     with connections[dbalias].cursor() as cursor:
         try:
-            cursor.execute("select 1")
+            cursor.execute(ping_db_sql)
             v = cursor.fetchone()[0]
             if v != 1:
                 healthy = False
@@ -537,3 +538,86 @@ def create_secret_key(length=64):
     return get_random_string(length, string.digits + string.ascii_letters + "`~!@$%^&*()_+-={}|[]:;,./<>?")
 
 
+def is_cluster(url):
+    ex = None
+    for redisurl in url.split(";"):
+        redisurl = redisurl.strip()
+        if not redisurl:
+            continue
+        client = None
+        try:
+            client = redis.Redis.from_url(redisurl)
+            data = client.info("cluster")
+            logger.debug("Redis server({}) is cluster {}".format(redisurl,"enabled" if data["cluster_enabled"] else "disabled"))
+            return True if data["cluster_enabled"] else False
+        except Exception as e:
+            if client:
+                client.close()
+            ex = e
+    if ex:
+        raise Exception("No available redis server.{}".format(str(ex)))
+    else: 
+        raise Exception("No available redis server.")
+
+authome_module_prefix=None
+def get_callstack(only_include_authome_module=True):
+    global authome_module_prefix
+    if not authome_module_prefix:
+        from django.conf import settings
+        authome_module_prefix = 'File "{}'.format(settings.BASE_DIR)
+
+    if only_include_authome_module:
+        return "\n".join(line for line in traceback.format_stack()[:-1] if line.strip().startswith(authome_module_prefix))
+    else:
+        return "\n".join(line for line in traceback.format_stack()[:-1])
+
+
+def remove_file(f):
+    try:
+        os.remove(f)
+    except Exception as ex:
+        logger.error("Failed to remove the file '{}'. {}".format(f,str(ex)))
+
+
+NUMBER2CHAR = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz[]{};:,./<>?|+=-_()*&^%$#@!`~"
+CHAR2NUMBER = {}
+index = 0
+for s in NUMBER2CHAR:
+    CHAR2NUMBER[s] = index
+    index += 1
+     
+def encode_integer(n,base=len(NUMBER2CHAR)):
+    if not n:
+        return "0"
+    result = None
+    while n > 0:
+        d = n % base
+        if result:
+            result = "{}{}".format(NUMBER2CHAR[d],result)
+        else:
+            result = NUMBER2CHAR[d]
+        n = int((n - d) / base)
+
+    return result
+
+def decode_integer(s,base=len(NUMBER2CHAR)):
+    if not s:
+        return 0
+    result = 0
+    i = len(s)
+    for c in s:
+        i -= 1
+        if i == 0:
+            result += CHAR2NUMBER[c]
+        elif i == 1:
+            result += CHAR2NUMBER[c] * base
+        else:
+            result += CHAR2NUMBER[c] * pow(base,i)
+
+    return result
+ 
+xssattack_re = re.compile("""(?P<htmltag>\\<(/ *)?[a-zA-Z0-9_\\-]+( +[a-zA-Z0-9\\-_]+( *= *['"]?.+['"]?)?)* */? *\\>)""")
+def check_xssattack(s):
+    if not s:
+        return False
+    return xssattack_re.search(s)

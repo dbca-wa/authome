@@ -1,5 +1,12 @@
-from datetime import timedelta
-from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden, JsonResponse, HttpResponseNotAllowed, HttpResponseNotFound
+from datetime import timedelta,datetime
+import tempfile
+import os
+import math
+import socket
+import random
+import subprocess
+from django.core.cache import caches
+from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden, JsonResponse, HttpResponseNotAllowed, HttpResponseNotFound,FileResponse
 from django.template.response import TemplateResponse
 from django.contrib.auth import logout
 from django.urls import reverse
@@ -32,13 +39,13 @@ from pyotp.totp import TOTP
 import time
 
 from .. import models
-from .. cache import cache, get_defaultcache
+from ..cache import cache, get_defaultcache,get_usercache
 from .. import utils
 from .. import emails
 from ..exceptions import HttpResponseException,UserDoesNotExistException,PolicyNotConfiguredException
 from ..patch import load_user,anonymoususer,load_usertoken
 from ..sessionstore import SessionStore
-from ..models import DebugLog
+from authome.models import DebugLog
 
 from .. import performance
 
@@ -68,7 +75,7 @@ def succeed_response_factory(request):
     else:
         return SUCCEED_RESPONSE
 
-FORBIDDEN_RESPONSE = HttpResponseForbidden()
+FORBIDDEN_RESPONSE = HttpResponseForbidden("Denied")
 def forbidden_response_factory(request):
     if request.session.cookie_changed or request.session.is_empty():
         return HttpResponseForbidden()
@@ -119,6 +126,12 @@ def _get_next_url(request):
     5. get the domain from next url, if failed, use request host, and then use this domain to build a absoulute next  url
     """
     next_url = request.GET.get(REDIRECT_FIELD_NAME)
+    if next_url:
+        domain = utils.get_domain(next_url)
+        if domain and not cache.check_clientdomain(domain):
+            #next_url is invalid, use the default next url
+            next_url = None
+
     #try to get next url from request
     if not next_url and request.headers.get("x-upstream-request-uri"):
         next_url = "https://{}{}".format(request.get_host(),request.headers.get("x-upstream-request-uri"))
@@ -131,6 +144,7 @@ def _get_next_url(request):
         #found next url, build its absolute url
         domain = utils.get_domain(next_url)
         if not domain:
+            #no domain in next_url, use request host as domain
             domain = request.get_host()
         next_url = get_absolute_url(next_url,domain)
         logger.debug("Found next url '{}'".format(next_url))
@@ -227,7 +241,13 @@ def get_post_b2c_logout_url(request,encode=True):
         encode: encode the url if True;
     Return 	quoted post logout url
     """
-    host = request.GET.get("domain") or request.get_host()
+    host = request.GET.get("domain")
+    if host:
+        if not cache.check_clientdomain(host):
+            #invalid domain, back to use the request host
+            host = request.get_host()
+    else:
+        host = request.get_host()
 
     message = request.GET.get("message")
     #get the idp and idepid
@@ -253,13 +273,28 @@ def get_post_b2c_logout_url(request,encode=True):
     relogin_url = None
     if next_url:
         domain,next_url= utils.get_domain_path(next_url)
-        domain = domain or host
-        next_url = next_url or "/"
+        if domain:
+            if not cache.check_clientdomain(domain):
+                domain = host
+                next_url = "/"
+            else:
+                next_url = next_url or "/"
+        else:
+            domain = host
+            next_url = next_url or "/"
     else:
         relogin_url = request.GET.get("relogin")
         if relogin_url:
             domain,relogin_url= utils.get_domain_path(relogin_url)
-            domain = domain or host
+            if domain:
+                if not cache.check_clientdomain(domain):
+                    domain = host
+                    relogin_url = "/"
+                else:
+                    relogin_url = relogin_url or "/"
+            else:
+                domain = host
+                relogin_url = relogin_url or "/"
         else:
             domain = host
 
@@ -422,6 +457,70 @@ def auth(request):
         return auth_required_response_factory(request)
 
 @csrf_exempt
+def auth_captcha(request):
+    """
+    Only captcha is required
+    """
+    res = _auth(request)
+    if res and res.status_code == 403:
+        #authenticated but not authorized.
+        return res
+
+    requestpath = utils.get_request_path(request)
+    key = "captcha_{}".format(requestpath)
+
+    if request.session.get(key) == "T":
+        #captcha checked
+        del request.session[key]
+        if res:
+            #authenticated, but can be authorized or not authorized
+            return res
+        else:
+            #not authenticated
+            return SUCCEED_RESPONSE
+    else:
+        #captcha required
+        if request.session.get(key) == "R":
+            #captcha requirement flag is already set
+            request.session.modified = False
+        else:
+            request.session[key] = "R"
+
+        return auth_required_response_factory(request)
+
+@csrf_exempt
+def auth_and_captcha(request):
+    """
+    Both auth and captcha are required
+    """
+    res = _auth(request)
+    if res:
+        if res.status_code == 403:
+            #authenticated but not authorized.
+            return res
+
+        #authenticated, but can be authorized or not authorized
+        requestpath = utils.get_request_path(request)
+        key = "captcha_{}".format(requestpath)
+
+        if request.session.get(key) == "T":
+            #captcha checked
+            del request.session[key]
+            return res
+        else:
+            #captcha required
+            if request.session.get(key) == "R":
+                #captcha requirement flag is already set
+                request.session.modified = False
+            else:
+                request.session[key] = "R"
+
+            return auth_required_response_factory(request)
+    else:
+        #not authenticated
+        return auth_required_response_factory(request)
+
+@csrf_exempt
 def auth_optional(request):
     """
     view method for path '/sso/auth_optional'
@@ -469,15 +568,14 @@ def is_usertoken_valid(user,token):
     check whether the user token is valid or not
     """
     usertoken = load_usertoken(user)
-    return usertoken and usertoken.is_valid(token)
+    valid = usertoken and usertoken.is_valid(token)
+    if valid or not user.systemuser:
+        return valid
+    else:
+        #Reload the user token and check again for system user.
+        usertoken = load_usertoken(user,refresh=True)
+        return usertoken and usertoken.is_valid(token)
 
-@csrf_exempt
-def auth_basic_optional(request):
-    return _auth_basic(request,not_authentiated_response_factory=auth_not_required_response_factory)
-
-@csrf_exempt
-def auth_basic(request):
-    return _auth_basic(request,)
 
 def _auth_basic(request,not_authentiated_response_factory=basic_auth_required_response_factory):
     """
@@ -605,6 +703,15 @@ def _auth_basic(request,not_authentiated_response_factory=basic_auth_required_re
         #return basi auth required response if any exception occured.
         return not_authentiated_response_factory(request)
 
+@csrf_exempt
+def auth_basic_optional(request):
+    return _auth_basic(request,not_authentiated_response_factory=auth_not_required_response_factory)
+
+@csrf_exempt
+def auth_basic(request):
+    return _auth_basic(request)
+
+
 email_re = re.compile("^[a-zA-Z0-9\\.!#\\$\\%\\&’'\\*\\+\\/\\=\\?\\^_`\\{\\|\\}\\~\\-]+@[a-zA-Z0-9\\-]+(\\.[a-zA-Z0-9\\-]+)*$")
 VALID_CODE_CHARS = string.digits if settings.PASSCODE_DIGITAL else (string.ascii_uppercase + string.digits)
 VALID_TOKEN_CHARS = string.ascii_uppercase + string.digits
@@ -623,12 +730,20 @@ def set_expirable_session_data(session,key,value,timeout,now=None):
     session[get_expire_key(key)] = now + timedelta(seconds=timeout)
 
 def get_expirable_session_data(session,key,default=None,now=None):
+    """
+    Return a tuple(data, data age in seconds) if found, otherwise return(default,None)
+    """
     now = now or timezone.localtime()
     expireat = session.get(get_expire_key(key))
     if expireat and now <= expireat:
-        return session.get(key) or default
+        data = session.get(key) or default
+        if data:
+            age = int((expireat - now).total_seconds())
+            return (data, age if age else 1)
+        else:
+            return (default,None)
     else:
-        return default
+        return (default,None)
 
 def del_expirable_session_data(session,key):
     try:
@@ -646,10 +761,17 @@ def auth_local(request):
     and sigin in to auth2 domain first and then signin to other domain via login_domain.
     """
     if request.method == "GET":
+        #register the client domain
+        cache.register_clientdomain(request.get_host())
+
         next_url = _get_next_url(request)
     else:
         next_url = request.POST.get("next","")
-        if not next_url:
+        if next_url:
+            domain = utils.get_domain(next_url)
+            if domain and not cache.check_clientdomain(domain):
+                return HttpResponseForbidden("Redirecting to '{}' is strictly forbidden.".format(next_url))
+        else:
             domain = request.get_host()
             if domain == settings.AUTH2_DOMAIN:
                 next_url = "https://{}/sso/setting".format(domain)
@@ -669,7 +791,15 @@ def auth_local(request):
 
     page_layout,extracss = _get_userflow_pagelayout(request,next_url_domain)
 
-    context = {"body":page_layout,"extracss":extracss,"domain":next_url_domain,"next":next_url,"expiretime":utils.format_timedelta(settings.PASSCODE_AGE,unit='s')}
+    context = {
+        "body":page_layout,
+        "extracss":extracss,
+        "domain":next_url_domain,
+        "next":next_url,
+        "expiretime":utils.format_timedelta(settings.PASSCODE_AGE,unit='s'),
+        "passcode_age":settings.PASSCODE_AGE - 5,
+        "passcode_resend_interval":settings.PASSCODE_RESEND_INTERVAL
+    }
 
     now = timezone.localtime()
     if request.method == "GET":
@@ -688,6 +818,7 @@ def auth_local(request):
         action = request.POST.get("action")
         email = request.POST.get("email","").strip().lower()
         context["email"] = email
+
         if not action:
             context["messages"] = [("error","Action is missing")]
             context["codeid"] = request.POST.get("codeid")
@@ -717,10 +848,13 @@ def auth_local(request):
                     code = None
                     codeid = None
                 else:
-                    code = get_expirable_session_data(request.session,codekey,None,now)
+                    code,codeage = get_expirable_session_data(request.session,codekey,None,now)
                     if code and code.startswith(codeid + "="):
                         #codeid is matched, reuse the existing code
-                        context["messages"] = [("info",mark_safe("Verification code has already been sent to {}<br>Please entery the verification code.".format(email)))]
+                        context["messages"] = [("info",mark_safe("Your verification code has been sent."))]
+                        context["passcode_age"] = codeage
+                        resend_interval = settings.PASSCODE_RESEND_INTERVAL - (settings.PASSCODE_AGE - codeage)
+                        context["passcode_resend_interval"] = resend_interval if resend_interval > 0 else 0
                         logger.debug("Verification code has already been sent to {}, no need to send again".format(context["email"]))
                     else:
                         #code is outdated, generate a new one
@@ -731,7 +865,7 @@ def auth_local(request):
                 if defaultcache:
                     sendcode_number = int(defaultcache.get(sendcode_number_key,0) or 0)
                 else:
-                    sendcode_number = get_expirable_session_data(request.session,sendcode_number_key,0,now)
+                    sendcode_number = get_expirable_session_data(request.session,sendcode_number_key,0,now)[0]
 
                 if sendcode_number >= settings.PASSCODE_DAILY_LIMIT:
                     #The daily limits of sending veriy code was reached.
@@ -760,11 +894,21 @@ def auth_local(request):
                 )
                 #send email
                 emails.send_email(userflow.verifyemail_from,context["email"],userflow.verifyemail_subject,verifyemail_body)
-                context["messages"] = [("info",mark_safe("Verification code has been sent to {}<br>Please enter the verification code.".format(email)))]
+                if action == "resendcode":
+                    context["messages"] = [
+                        ("info",mark_safe("Your new verification code has been sent.")),
+                        ("warning",mark_safe("The previous code is no longer valid.")),
+                    ]
+                else:
+                    context["messages"] = [("info",mark_safe("Your verification code has been sent."))]
+
                 logger.debug("Verification code has been sent to {}.".format(context["email"]))
             context["codeid"] = codeid
             return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
         elif action == "verifycode":
+            codekey = get_verifycode_key(email)
+            code,codeage = get_expirable_session_data(request.session,codekey,None,now)
+
             codeid = request.POST.get("codeid")
             if not codeid:
                 context["messages"] = [("error","Codeid is missing.")]
@@ -780,32 +924,39 @@ def auth_local(request):
 
             inputcode = request.POST.get("code","").strip().upper()
             if not inputcode:
-                context["messages"] = [("error","Please input the code to verify.")]
+                context["messages"] = [("error","Please input the verification code to verify.")]
+                context["passcode_age"] = codeage
+                resend_interval = settings.PASSCODE_RESEND_INTERVAL - (settings.PASSCODE_AGE - codeage)
+                context["passcode_resend_interval"] = resend_interval if resend_interval > 0 else 0
                 return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
 
             context["code"] = inputcode
 
             verifycode_number_key = get_verifycode_number_key(email)
 
-            codekey = get_verifycode_key(email)
-            code = get_expirable_session_data(request.session,codekey,None,now)
             if not code:
-                context["messages"] = [("error","The verification code has expired. Send a new code")]
+                context["messages"] = [("error","The verification code is expired. Send a new verification code")]
                 return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
             elif not code.startswith(codeid + "="):
-                context["messages"] = [("error","The verfication code was sent by other device,please resend the code again.")]
+                context["messages"] = [("error","The verfication code was sent by other device,please resend the verification code again.")]
                 return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
             else:
                 verifycode_number = request.session.get(verifycode_number_key) or 0
                 if verifycode_number >= settings.PASSCODE_TRY_TIMES:
                     #The limits of verifying the current code was reached,.
-                    context["messages"] = [("error","You have exceeded the number({}) of retries allowed.".format(settings.PASSCODE_TRY_TIMES))]
+                    context["messages"] = [("error","You have tried too many times, please resend the verification code again.")]
+                    context["passcode_age"] = 0
+                    resend_interval = settings.PASSCODE_RESEND_INTERVAL - (settings.PASSCODE_AGE - codeage)
+                    context["passcode_resend_interval"] = resend_interval if resend_interval > 0 else 0
                     return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
                 elif code[len(codeid) + 1:] != inputcode:
                     #code is invalid.
                     #increase the failed verifing times.
                     request.session[verifycode_number_key] = verifycode_number + 1
-                    context["messages"] = [("error","The input code is invalid, please check the email and verify again.")]
+                    context["messages"] = [("error","The code you entered is invalid. Check your email and try again or send a new code.")]
+                    context["passcode_age"] = codeage
+                    resend_interval = settings.PASSCODE_RESEND_INTERVAL - (settings.PASSCODE_AGE - codeage)
+                    context["passcode_resend_interval"] = resend_interval if resend_interval > 0 else 0
                     return TemplateResponse(request,"authome/signin_verifycode.html",context=context)
 
             #verify successfully
@@ -846,6 +997,10 @@ def auth_local(request):
                     if timeout:
                         request.session["session_timeout"] = timeout
 
+                    usercache = get_usercache(user.id)
+                    if usercache:
+                        usercache.set(settings.GET_USER_KEY(user.id),user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
+
                     if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                         return HttpResponseRedirect(next_url)
                     else:
@@ -876,7 +1031,7 @@ def auth_local(request):
                 return TemplateResponse(request,"authome/signin_inputemail.html",context=context)
 
             tokenkey = get_signuptoken_key(email)
-            token = get_expirable_session_data(request.session,tokenkey,None,now)
+            token = get_expirable_session_data(request.session,tokenkey,None,now)[0]
             if not token:
                 context["codeid"] = get_codeid()
                 context["messages"] = [("error","The signup token is expired, please signin again.")]
@@ -922,6 +1077,11 @@ def auth_local(request):
             if timeout:
                 request.session["session_timeout"] = timeout
 
+
+            usercache = get_usercache(user.id)
+            if usercache:
+                usercache.set(settings.GET_USER_KEY(user.id),user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
+
             if next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                 return HttpResponseRedirect(next_url)
             else:
@@ -933,11 +1093,174 @@ def auth_local(request):
     else:
         return  HttpResponseNotAllowed(["GET","POST"])
 
+captchabasedir = os.environ.get("CAPTCHA_BASEDIR")
+if captchabasedir:
+    if captchabasedir.endswith("/"):
+        captchabasedir = captchabasedir[:-1]
+else:
+    captchabasedir = os.path.join(tempfile.gettempdir(),"auth2captchas")
+captchabasedirlen = len(captchabasedir)
+
+def _generate_captcha(kind):
+    code = None
+    validchars = settings.CAPTCHA_CHARS_IMAGE if kind == "image" else settings.CAPTCHA_CHARS_AUDIO 
+    for i in range(settings.CAPTCHA_LEN):
+        if code:
+            code += validchars[random.choice(range(len(validchars)))]
+        else:
+            code = validchars[random.choice(range(len(validchars)))]
+
+    result = subprocess.run(["python","captchautil.py",kind,code],capture_output=True)
+    if result.returncode != 0:
+        raise Exception("Failed to generate {} captcha.{}".format(kind,result))
+    return (code,result.stdout.decode("UTF-8").strip())
+
+def check_auth_and_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND):
+    """
+    check authentication and generate and check captcha
+    """
+    if request.user.is_authenticated and request.user.is_active:
+        #authenticated
+        return check_captcha(request,kind=kind,auth=True)
+    else:
+        return home(request)
+
+imagefile = "authome/check_captcha_image.html"
+audiofile = "authome/check_captcha_audio.html"
+imagefileWithAuth = "authome/check_auth_and_captcha_image.html"
+audiofileWithAuth = "authome/check_auth_and_captcha_audio.html"
+def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
+    """
+    generate and check captcha
+    """
+    if request.method == "GET":
+        #register the client domain
+        cache.register_clientdomain(request.get_host())
+
+        next_url = _get_next_url(request)
+    else:
+        next_url = request.POST.get("next","")
+        if next_url:
+            domain = utils.get_domain(next_url)
+            if domain and not cache.check_clientdomain(domain):
+                return HttpResponseForbidden("Redirecting to '{}' is strictly forbidden.".format(next_url))
+        else:
+            domain = request.get_host()
+            if domain == settings.AUTH2_DOMAIN:
+                next_url = "https://{}/sso/setting".format(domain)
+            else:
+                next_url = "https://{}".format(domain)
+
+    next_url_domain = utils.get_domain(next_url)
+    key = "captcha_{}{}".format(*utils.get_domain_path(next_url))
+    filekey = "captchafile_{}{}".format(*utils.get_domain_path(next_url))
+    if key not in request.session:
+        #not forward from next_url, not allowed to generate the captcha
+        #redirect to next_url
+        return HttpResponseRedirect(next_url)
+
+    if request.session[key] == "T":
+        #already checked the captcha, redirect to next_url
+        return HttpResponseRedirect(next_url)
+
+    page_layout,extracss = _get_userflow_pagelayout(request,next_url_domain)
+
+    context = {
+        "body":page_layout,
+        "extracss":extracss,
+        "domain":next_url_domain,
+        "next":next_url,
+        "expiretime":utils.format_timedelta(settings.PASSCODE_AGE,unit='s'),
+        "passcode_age":settings.PASSCODE_AGE - 5,
+        "passcode_resend_interval":settings.PASSCODE_RESEND_INTERVAL,
+        "captcha_len":settings.CAPTCHA_LEN
+    }
+
+    now = timezone.localtime()
+
+    if not request.get_host().endswith(settings.SESSION_COOKIE_DOMAIN):
+        #post request is sent from other domain, invalid, redirect to auth2 to let user login to session cookie domain first
+        return HttpResponse(status=404)
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+    else:
+        action = "GET"
+
+    tempfile = (imagefileWithAuth if kind == "image" else audiofileWithAuth) if auth else (imagefile if kind == "image" else audiofile)
+
+    if action == "refresh":
+        outfile = request.session.get(filekey)
+        if outfile:
+            utils.remove_file(outfile)
+
+        code,outfile = _generate_captcha(kind)
+        request.session[key] = code
+        request.session[filekey] = outfile
+        context["outfile"] = outfile[captchabasedirlen:]
+        return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
+    elif action == "check":
+        code = request.POST.get("code").upper()
+        saved_code = request.session.get(key)
+        if not saved_code or len(saved_code) != settings.CAPTCHA_LEN:
+            outfile = request.session.get(filekey)
+            if outfile:
+                utils.remove_file(outfile)
+
+            code,outfile = _generate_captcha(kind)
+            request.session[key] = code
+            request.session[filekey] = outfile
+            context["outfile"] = outfile[captchabasedirlen:]
+            context["messages"] = [("error","Code is expired!")]
+            return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
+        elif not code or code != saved_code:
+            outfile = request.session.get(filekey)
+            if not outfile:
+                code,outfile = _generate_captcha(kind)
+                request.session[key] = code
+                request.session[filekey] = outfile
+                context["outfile"] = outfile[captchabasedirlen:]
+                context["messages"] = [("error","Code is expired.")]
+            else:
+                context["code"] = code
+                context["outfile"] = outfile[captchabasedirlen:]
+                context["messages"] = [("error","Code doesn't match.")]
+            return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
+        else:
+            #code matched
+            request.session[key] = "T"
+            outfile = request.session.get(filekey)
+            if outfile:
+                #remote the  file of the matched code
+                utils.remove_file(outfile)
+            del request.session[filekey]
+
+            return HttpResponseRedirect(next_url)
+    else:
+        #request is sent from session cookie domain, show the page to input email
+        savedcode = request.session.get(key)
+        outfile = request.session.get(filekey)
+        if outfile:
+            #remove the expired captcha file
+            utils.remove_file(outfile)
+        #generate a new captcha
+        code,outfile = _generate_captcha(kind)
+        request.session[key] = code
+        request.session[filekey] = outfile
+        context["outfile"] = outfile[captchabasedirlen:]
+        return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
+
+def captcha(request,captchadir,captchafile):
+    #with open(os.path.join(captchabasedir,captchadir,captchafile)) as f:
+    #    return FileResponse(f, as_attachment=False)
+    return FileResponse(open(os.path.join(captchabasedir,captchadir,captchafile),'rb'), as_attachment=False)
 
 def logout_view(request):
     """
     View method for path '/sso/auth_logout'
     """
+    cache.register_clientdomain(request.get_host())
+
     from ..backends import AzureADB2COAuth2
     host = request.get_host()
     if not host.endswith(settings.SESSION_COOKIE_DOMAIN):
@@ -997,7 +1320,7 @@ def login_domain(request):
     DebugLog.log(DebugLog.CREATE_COOKIE,utils.get_lb_hash_key(session_cookie),utils.get_clusterid(session_cookie),utils.get_session_key(session_cookie),session_cookie,message="Return a new session cookie({}) for domain({})".format("{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPARATOR,domain or host),domain or host),userid=None,target_session_cookie="{}{}{}".format(session_cookie,settings.SESSION_COOKIE_DOMAIN_SEPARATOR,domain or host),request=request)
     return res
 
-
+sessioncookiedomain = ".{}".format(settings.SESSION_COOKIE_DOMAIN)
 def home(request):
     """
     View method for path '/'
@@ -1005,20 +1328,48 @@ def home(request):
     redirect to '/sso/forbidden' if authenticated but not authorized
     Trigger authentication user flow if not authenticated
     """
+    #register client domain
+    cache.register_clientdomain(request.get_host())
     next_url = request.GET.get('next', None)
     if next_url:
         #build an absolute url
         if not next_url.startswith("http"):
             if next_url[0] == "/":
+                #without domain
                 host = request.get_host()
                 next_url = "https://{}{}".format(host,next_url)
             else:
+                #with domain
                 next_url = "https://{}".format(next_url)
-
-    if next_url and "?" in next_url:
-        next_path = next_url[0:next_url.index('?')]
+                domain = utils.get_domain(next_url)
+                if not domain or not cache.check_clientdomain(domain):
+                    #client domain is invalid
+                    next_url = None
+        else:
+            #an complete url
+            domain = utils.get_domain(next_url)
+            if not domain or not cache.check_clientdomain(domain):
+                #client domain is invalid
+                next_url = None
+    #now, next_url should be None or an complete url               
+    if next_url:
+        if "?" in next_url:
+            next_path = next_url[0:next_url.index('?')]
+        elif "#" in next_url:
+            next_path = next_url[0:next_url.index('#')]
+        else:
+            next_path = next_url
     else:
-        next_path = next_url
+        next_path = None
+    #next_path should be None or a complete url without paramters and anchor
+    if not request.user.is_authenticated:
+        #user is not authenticated 
+        if request.get_host() != settings.SESSION_COOKIE_DOMAIN and not request.get_host().endswith(sessioncookiedomain):
+            #not the subdomain of the session cookie domain, maybe the user is authenticated into auth2, redirect to auth2 domain to check
+            if not next_url:
+                next_url = "https://{}".format(request.get_host())
+            return HttpResponseRedirect("https://{}/sso?next={}".format(settings.AUTH2_DOMAIN,urllib.parse.quote(next_url)))
+
     #check whether rquest is authenticated and authorized
     if not request.user.is_authenticated or not request.user.is_active:
         if next_path and any(next_path.endswith(p) for p in ["/sso/auth_logout","/sso/signedout","/sso/signout_socialmedia"]):
@@ -1033,12 +1384,20 @@ def home(request):
                         relogin_url = "https://{}{}".format(utils.get_domain(next_url) or request.get_host(),relogin_url)
 
             if relogin_url:
+                domain = utils.get_domain(relogin_url)
+                if domain and not cache.check_clientdomain(domain):
+                    #relogin url is invalid.
+                    relogin_url = None
+
+            if relogin_url:
                 next_url = relogin_url
                 if not next_url.startswith("http"):
                     if next_url[0] == "/":
+                        #relative url
                         host = utils.get_domain(next_path)
                         next_url = "https://{}{}".format(host,next_url)
                     else:
+                        #url without protocol
                         next_url = "https://{}".format(next_url)
             else:
                 #can't find next_url, use default next_url
@@ -1053,18 +1412,19 @@ def home(request):
 
         if (not request.user.is_authenticated and request.session.expired_session_key) or (request.user.is_authenticated and not request.user.is_active):
             #session expired or user is inactive, logout from backend
-            request.session["next"]=next_url
+            if next_url:
+                request.session["next"]=next_url
             return logout_view(request)
         else:
             #not authenticated, authenticate user via azure b2c
-            url = reverse('social:begin', args=['azuread-b2c-oauth2'])
+            url = "https://{}{}".format(settings.AUTH2_DOMAIN,reverse('social:begin', args=['azuread-b2c-oauth2']))
             if next_url:
                 #has next_url, add next url to authentication url as url parameter
                 next_url_domain = utils.get_domain(next_url)
                 if next_url_domain and not next_url_domain.endswith(settings.SESSION_COOKIE_DOMAIN):
                     #crosss domain authentication
-                    next_url = "https://{}?{}".format(settings.AUTH2_DOMAIN,urlencode({'next': next_url}))
-                url = '{}?{}'.format(url,urlencode({'next': next_url}))
+                    next_url = "https://{}/sso?next={}".format(settings.AUTH2_DOMAIN,urllib.parse.quote(next_url))
+                url = '{}?next={}'.format(url,urllib.parse.quote(next_url))
             else:
                 #no next_url, clean the next url  from session
                 try:
@@ -1095,10 +1455,15 @@ def home(request):
                         relogin_url = "https://{}{}".format(utils.get_domain(next_url) or request.get_host(),relogin_url)
 
             if relogin_url:
+                domain = utils.get_domain(relogin_url)
+                if domain and not cache.check_clientdomain(domain):
+                    relogin_url = None
+
+            if relogin_url:
                 next_url = relogin_url
                 if not next_url.startswith("http"):
                     if next_url[0] == "/":
-                        host = utils.get_domain(next_path)
+                        host = utils.get_domain(next_url)
                         next_url = "https://{}{}".format(host,next_url)
                     else:
                         next_url = "https://{}".format(next_url)
@@ -1223,8 +1588,14 @@ def signout_socialmedia(request):
     else:
         context["failed_message"] = "Failed to logout from the social media '{}' because popup window was blocked".format(context["idp"])
 
-    if request.GET.get("relogin"):
-        context["relogin"] = request.GET.get("relogin")
+    relogin_url = request.GET.get("relogin")
+    if relogin_url:
+        domain = utils.get_domain(relogin_url)
+        if domain and not cache.check_clientdomain(domain):
+            relogin_url = None
+
+    if relogin_url:
+        context["relogin"] = relogin_url
     else:
         userflow_signout =  _get_userflow_signout(request,domain)
         if userflow_signout.relogin_url:
@@ -1260,8 +1631,14 @@ def signedout(request):
         context["idp"] = request.GET.get("idp")
         context["idplogout"] = request.GET.get("idplogout")
 
-    if request.GET.get("relogin"):
-        context["relogin"] = request.GET.get("relogin")
+    relogin_url = request.GET.get("relogin")
+    if relogin_url:
+        domain = utils.get_domain(relogin_url)
+        if domain and not cache.check_clientdomain(domain):
+            relogin_url = None
+
+    if relogin_url:
+        context["relogin"] = relogin_url
     else:
         if userflow_signout.relogin_url:
             context["relogin"] = userflow_signout.relogin_url
@@ -1545,95 +1922,13 @@ def forbidden(request):
 
     return TemplateResponse(request,"authome/forbidden.html",context=context)
 
-def profile_edit(request):
-    """
-    View method for path '/sso/profile/edit'
-    """
-    def _get_context(next_url):
-        domain = utils.get_domain(next_url)
-        page_layout,extracss = _get_userflow_pagelayout(request,domain)
 
-        return {"body":page_layout,"extracss":extracss,"domain":domain,"next":next_url,"user":request.user}
-
-
-    if request.method == "GET":
-        next_url = _get_next_url(request)
-        context = _get_context(next_url)
-        return TemplateResponse(request,"authome/profile_edit.html",context=context)
-    else:
-        next_url = request.POST.get("next")
-
-        action = request.POST.get("action")
-        if action == "change":
-            first_name = (request.POST.get("first_name") or "").strip()
-            last_name = (request.POST.get("last_name") or "").strip()
-            if not first_name:
-                context = _get_context(next_url)
-                context["messages"] = [("error","Fist name is empty")]
-                return TemplateResponse(request,"authome/profile_edit.html",context=context)
-            if not last_name:
-                context = _get_context(next_url)
-                context["messages"] = [("error","Last name is empty")]
-                return TemplateResponse(request,"authome/profile_edit.html",context=context)
-
-            if request.user.first_name != first_name or request.user.last_name != last_name:
-                request.user.first_name = first_name
-                request.user.last_name = last_name
-                request.user.save(update_fields=["first_name","last_name","modified"])
-
-        next_url_parsed = utils.parse_url(next_url)
-        if next_url_parsed["path"].startswith("/sso/profile"):
-            if next_url_parsed["domain"]:
-                if next_url_parsed["parameters"]:
-                    next_url = "https://{}/sso/setting?{}".format(next_url_parsed["domain"],next_url_parsed["parameters"])
-                else:
-                    next_url = "https://{}/sso/setting".format(next_url_parsed["domain"])
-            else:
-                if next_url_parsed["parameters"]:
-                    next_url = "/sso/setting?{}".format(next_url_parsed["parameters"])
-                else:
-                    next_url = "/sso/setting"
-
-        return HttpResponseRedirect(next_url)
-
-
-@never_cache
-@psa("/sso/profile/edit/complete")
-def profile_edit_b2c(request,backend):
-    """
-    View method for path '/sso/profile/edit'
-    Start a profile edit user flow
-    called after user authentication
-    """
-    next_url = _get_next_url(request)
-    domain = utils.get_domain(next_url)
-
-    request.session[REDIRECT_FIELD_NAME] = next_url
-    request.policy = models.CustomizableUserflow.get_userflow(domain).profile_edit
-    return do_auth(request.backend, redirect_name="__already_set")
 
 def _do_login(*args,**kwargs):
     """
     Dummy login method
     """
     pass
-
-@never_cache
-@csrf_exempt
-@psa("/sso/profile/edit/complete")
-def profile_edit_complete(request,backend,*args,**kwargs):
-    """
-    View method for path '/sso/profile/edit/complete'
-    Callback url from b2c to complete a user profile editing request
-    """
-    domain = utils.get_domain(request.session.get(utils.REDIRECT_FIELD_NAME))
-    request.policy = models.CustomizableUserflow.get_userflow(domain).profile_edit
-    request.http_error_code = 417
-    request.http_error_message = "Failed to edit user profile.{}"
-
-    return do_complete(request.backend, _do_login, user=request.user,
-                       redirect_name=REDIRECT_FIELD_NAME, request=request,
-                       *args, **kwargs)
 
 @never_cache
 @psa("/sso/password/reset/complete")
@@ -1643,6 +1938,9 @@ def password_reset(request,backend):
     Start a password reset user flow
     Triggered by hyperlink 'Forgot your password' in idp selection page
     """
+    #register the client domain
+    cache.register_clientdomain(request.get_host())
+
     next_url = _get_next_url(request)
     domain = utils.get_domain(next_url)
 
@@ -1675,6 +1973,9 @@ def mfa_set(request,backend):
     Start a user mfa set user flow
     called after user authentication
     """
+    #register the client domain
+    cache.register_clientdomain(request.get_host())
+
     next_url = _get_next_url(request)
     domain = utils.get_domain(next_url)
 
@@ -1707,6 +2008,9 @@ def mfa_reset(request,backend):
     Start a user mfa set user flow
     called after user authentication
     """
+    #register the client domain
+    cache.register_clientdomain(request.get_host())
+
     next_url = _get_next_url(request)
     domain = utils.get_domain(next_url)
 

@@ -1,7 +1,7 @@
 import logging
 
 from django.conf import settings
-from django.db import models
+from django.db import models as django_models
 from django.db.models.signals import pre_delete, pre_save, post_save, post_delete
 from django.utils import timezone
 from django.dispatch import receiver
@@ -16,20 +16,21 @@ logger = logging.getLogger(__name__)
 
 defaultcache = get_defaultcache()
 
-class Auth2Cluster(models.Model):
-    clusterid = models.CharField(max_length=32,unique=True,null=False)
-    endpoint = models.CharField(max_length=512,null=False)
-    default = models.BooleanField(default=False,editable=False)
-    usergroup_lastrefreshed = models.DateTimeField(editable=False,null=True)
-    usergroupauthorization_lastrefreshed = models.DateTimeField(editable=False,null=True)
-    userflow_lastrefreshed = models.DateTimeField(editable=False,null=True)
-    idp_lastrefreshed = models.DateTimeField(editable=False,null=True)
-    last_heartbeat = models.DateTimeField(editable=False)
-    registered = models.DateTimeField(auto_now_add=timezone.now)
-    modified = models.DateTimeField(editable=False,auto_now=False)
+class Auth2Cluster(django_models.Model):
+    clusterid = django_models.CharField(max_length=32,unique=True,null=False)
+    endpoint = django_models.CharField(max_length=512,null=False)
+    default = django_models.BooleanField(default=False,editable=False)
+    directconnect = django_models.BooleanField(default=False,editable=False)
+    usergroup_lastrefreshed = django_models.DateTimeField(editable=False,null=True)
+    usergroupauthorization_lastrefreshed = django_models.DateTimeField(editable=False,null=True)
+    userflow_lastrefreshed = django_models.DateTimeField(editable=False,null=True)
+    idp_lastrefreshed = django_models.DateTimeField(editable=False,null=True)
+    last_heartbeat = django_models.DateTimeField(editable=False)
+    registered = django_models.DateTimeField(auto_now_add=timezone.now)
+    modified = django_models.DateTimeField(editable=False,auto_now=False)
 
     class Meta:
-        verbose_name_plural = "{}Auth2 Clusters".format(" " * 7)
+        verbose_name_plural = "{}Auth2 Clusters".format(" " * 6)
 
     @classmethod
     def register(cls,only_update_heartbeat=False):
@@ -40,14 +41,14 @@ class Auth2Cluster(models.Model):
         elif settings.DEFAULT_AUTH2_CLUSTER:
             #update the previous default cluster server to non cluster server
             cls.objects.filter(default=True).exclude(clusterid=settings.AUTH2_CLUSTERID).update(default=False,modified=timezone.localtime())
-            
+
         cls.objects.update_or_create(clusterid=settings.AUTH2_CLUSTERID,defaults={
             "endpoint" : settings.AUTH2_CLUSTER_ENDPOINT,
             "default" : settings.DEFAULT_AUTH2_CLUSTER,
+            "directconnect": settings.AUTH2_CLUSTER_DIRECT_CONNECT,
             "last_heartbeat":timezone.localtime(),
             "modified":timezone.localtime()
         })
-
 
     def __str__(self):
         return self.clusterid
@@ -78,12 +79,12 @@ class Auth2ClusterListener(object):
 def refresh_cache_wrapper(cls,column):
     _original_func = getattr(cls,"refresh_cache")
     def _func(cls):
+        refreshtime = _original_func()
         try:
-            refreshtime = _original_func()
             setattr(cache.current_auth2_cluster,column,refreshtime)
             cache.current_auth2_cluster.save(update_fields=[column,"modified"])
-        except:
-            logger.error("Failed to save the latest refresh time({1}) to auth2 cluster '{0}'".format(cache.current_auth2_cluster.cluserid,column))
+        except Exception as ex:
+            logger.error("Failed to save the latest refresh time({1}) to auth2 cluster '{0}'. {2}".format(cache.current_auth2_cluster.clusterid,column,str(ex)))
         return refreshtime
     return _func
 
@@ -114,6 +115,9 @@ if settings.AUTH2_CLUSTER_ENABLED:
     class UserListener4Cluster(object):
         @staticmethod
         def user_changed(instance):
+            if instance.email == cache._cluster_interconnect_user_email and cache._cluster_interconnect_user:
+                cache._cluster_interconnect_user.reset_user()
+
             changed_clusters,not_changed_clusters,failed_clusters = cache.user_changed(instance.id)
             if failed_clusters:
                 msg = "Failed to send change event of the user({1}<{0}>) to some cluseters.{2} ".format(instance.id,instance.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters])
@@ -138,6 +142,9 @@ if settings.AUTH2_CLUSTER_ENABLED:
         @staticmethod
         def usertoken_changed(instance):
             user = instance.user
+            if user.email == cache._cluster_interconnect_user_email and cache._cluster_interconnect_user:
+                cache._cluster_interconnect_user.reset_usertoken()
+
             changed_clusters,not_changed_clusters,failed_clusters = cache.usertoken_changed(user.id)
             if failed_clusters:
                 msg = "Failed to send token change event of the user({1}<{0}>) to some cluseters.{2} ".format(user.id,user.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters])

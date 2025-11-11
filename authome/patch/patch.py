@@ -7,14 +7,14 @@ from django.utils import timezone
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.handlers import exception
-from django.http import HttpRequest
+from django.http import HttpRequest,HttpResponseForbidden
 
 from social_core.exceptions import AuthException
 
 from ..models import User,UserToken
 from authome.models import DebugLog
 from ..cache import get_usercache
-from ..exceptions import UserDoesNotExistException
+from ..exceptions import UserDoesNotExistException,InvalidDomainException,Auth2ClusterException
 from .. import utils
 
 from .. import performance
@@ -78,10 +78,10 @@ if settings.USER_CACHE_ALIAS:
 
         return user or anonymoususer
 
-    def load_usertoken(user):
+    def load_usertoken(user,refresh=False):
         """
         Return user's access token
-        Return None if user has not access token
+        Return None if user has no access token
         """
         usertoken = None
         try:
@@ -89,14 +89,15 @@ if settings.USER_CACHE_ALIAS:
             usertokenkey = settings.GET_USERTOKEN_KEY(user.id)
             usercache = get_usercache(user.id)
             
-            performance.start_processingstep("get_usertoken_from_cache")
-            try:
-                usertoken = usercache.get(usertokenkey)
-            except:
-                pass
-            finally:
-                performance.end_processingstep("get_usertoken_from_cache")
-                pass
+            if refresh:
+                performance.start_processingstep("get_usertoken_from_cache")
+                try:
+                    usertoken = usercache.get(usertokenkey)
+                except:
+                    pass
+                finally:
+                    performance.end_processingstep("get_usertoken_from_cache")
+                    pass
 
             if not usertoken:
                 #Access token not found in the user cache, retrieve it from database
@@ -149,7 +150,7 @@ else:
 
         return user or anonymoususer
 
-    def load_usertoken(userid):
+    def load_usertoken(userid,refresh=False):
         """
         Return user's access token
         Return None if user has not access token
@@ -191,6 +192,10 @@ def get_response_for_exception():
         from .. import views
         if isinstance(exc, AuthException):
             return views.handler400(request,exc)
+        elif isinstance(exc, Auth2ClusterException):
+            return views.handler400(request,exc)
+        elif isinstance(exc, InvalidDomainException):
+            return HttpResponseForbidden(str(exc))
         else:
             try:
                 useremail = request.user.email

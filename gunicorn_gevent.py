@@ -1,9 +1,16 @@
+import gevent.monkey
+gevent.monkey.patch_all()
 # Gunicorn configuration settings.
 import multiprocessing
 import os
 
 
-#bind = ":8080"
+try:
+    port = int(os.environ["PORT"])
+except:
+    port = 8080
+bind = ":{}".format(port)
+
 # Don't start too many workers:
 try:
     workers = int(os.environ["AUTH2_WORKERS"])
@@ -13,6 +20,7 @@ except:
 if not workers or workers < 1:
     workers = multiprocessing.cpu_count() + 2
 
+worker_class = "gevent"
 worker_connections = 50000
 # Give workers an expiry:
 max_requests = 100000

@@ -9,7 +9,7 @@
 
 {% block realcontent %}
 
-<form method="post" action="{% url 'auth_local' %}" id="attributeVerification" class="localAccount">
+<form method="post" action="{% url 'auth_local' %}" id="attributeVerification" class="localAccount" onsubmit="return submitonce();">
 {% csrf_token %}
 <input type="hidden" id="id_token" name="token" value="{{token}}">
 <input type="hidden" id="id_next" name="next" value="{{next}}">

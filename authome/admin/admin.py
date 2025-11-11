@@ -218,7 +218,7 @@ class UserGroupsMixin(RequestMixin):
         if not obj :
             return ""
         else:
-            usergroups,usergroupnames = models.UserGroup.find_groups(obj.email,cacheable=False)
+            usergroups,usergroupnames,grouppks = models.UserGroup.find_groups(obj.email,cacheable=False)
             result = None
             for group in usergroups:
                 url = reverse(self.group_change_url_name, args=(group.id,))
@@ -235,6 +235,16 @@ class UserGroupsMixin(RequestMixin):
 
             return mark_safe("{} ({})".format(result,usergroupnames))
     _usergroups.short_description = "User Groups"
+
+    def _session_timeout(self,obj):
+        if not obj :
+            return "-"
+        else:
+            usergroups = models.UserGroup.find_groups(obj.email,cacheable=False)[0]
+            return models.UserGroup.get_session_timeout(usergroups) or "-"
+    _session_timeout.short_description = "Session Timeout"
+
+        
 
     def _usergroupnames(self,obj):
         if not obj :
@@ -283,12 +293,12 @@ class DeleteMixin(object):
             self.delete_model(request,o)
 
 class UserAdmin(UserAuthorizationCheckMixin,UserGroupsMixin,DatetimeMixin,CatchModelExceptionMixin,auth.admin.UserAdmin):
-    list_display = ('username', 'email', 'first_name', 'last_name','is_active', 'is_staff','last_idp','_last_login')
+    list_display = ('username', 'email', 'first_name', 'last_name','is_active', 'is_staff','_session_timeout','last_idp','_last_login')
     list_filter = ( 'is_superuser',)
-    readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","is_superuser","_email","_usergroups","last_idp","_modified")
+    readonly_fields = ("_last_login","_date_joined","username","first_name","last_name","is_staff","is_superuser","_email","_usergroups","_session_timeout","last_idp","_modified")
     fieldsets = (
         (None, {'fields': ('_email', )}),
-        ('Personal info', {'fields': ('username','first_name', 'last_name')}),
+        ('Personal info', {'fields': ('username','first_name', 'last_name',"_session_timeout")}),
         ('Permissions', {
             'fields': ('is_active', 'is_staff', 'is_superuser',"_usergroups" ),
         }),
@@ -725,3 +735,4 @@ class UserTOTPAdmin(DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmi
 
     def has_delete_permission(self, request, obj=None):
         return False
+

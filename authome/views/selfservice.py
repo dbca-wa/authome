@@ -1,5 +1,6 @@
 from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
+from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.utils import timezone
 from django.contrib import messages
@@ -18,6 +19,9 @@ from .views  import get_absolute_url, _populate_response,_get_userflow_pagelayou
 logger = logging.getLogger(__name__)
 
 def user_setting(request):
+    #register the client domain
+    cache.register_clientdomain(request.get_host())
+
     #get the auth response
     user = request.user
     if not request.user.is_authenticated or not request.user.is_active:
@@ -125,7 +129,10 @@ def _get_redirect_url(request,msg=None):
         next_url = _get_next_url(request)
 
     next_url_parsed = utils.parse_url(next_url)
-    if next_url_parsed["path"].startswith("/sso/profile"):
+    if next_url_parsed["domain"] and not cache.check_clientdomain(next_url_parsed["domain"]):
+        #client domain is invalid, changed to auth2 domain
+        next_url = "/sso/setting"
+    elif next_url_parsed["path"].startswith("/sso/profile"):
         if next_url_parsed["domain"]:
             if next_url_parsed["parameters"]:
                 next_url = "https://{}/sso/setting?{}".format(next_url_parsed["domain"],next_url_parsed["parameters"])
@@ -155,6 +162,9 @@ def profile_edit(request):
         return {"body":page_layout,"extracss":extracss,"domain":domain,"next":next_url,"user":request.user}
 
 
+    #register the client domain
+    cache.register_clientdomain(request.get_host())
+
     if request.method == "GET":
         next_url = _get_next_url(request)
         context = _get_context(next_url)
@@ -165,28 +175,35 @@ def profile_edit(request):
         if action == "change":
             first_name = (request.POST.get("first_name") or "").strip()
             last_name = (request.POST.get("last_name") or "").strip()
-            if not first_name:
-                context = _get_context(_get_redirect_url(request))
-                context["messages"] = [("error","Fist name is empty")]
-                return TemplateResponse(request,"authome/profile_edit.html",context=context)
-            if not last_name:
-                context = _get_context(_get_redirect_url(request))
-                context["messages"] = [("error","Last name is empty")]
-                return TemplateResponse(request,"authome/profile_edit.html",context=context)
     
             if request.user.first_name != first_name or request.user.last_name != last_name:
                 request.user.first_name = first_name
                 request.user.last_name = last_name
+                try:
+                    request.user.clean()
+                except Exception as ex:
+                    context = _get_context(_get_redirect_url(request))
+
+                    if isinstance(ex,ValidationError):
+                        context["messages"] = [("error",ex.message )]
+                    else:
+                        context["messages"] = [("error",str(ex) )]
+                    return TemplateResponse(request,"authome/profile_edit.html",context=context)
+
                 request.user.save(update_fields=["first_name","last_name","modified"])
                 if settings.AUTH2_CLUSTER_ENABLED:
                     changed_clusters,not_changed_clusters,failed_clusters = cache.user_changed(request.user.id)
+                    #just a cluster notification information, it is not critical, hide for self service, but log a error message
                     if failed_clusters:
-                        msg = "Failed to send change event of the user({1}<{0}>) to some cluseters.{2} ".format(request.user.id,request.user.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters])
+                        logger.error("Failed to send change event of the user({1}<{0}>) to some cluseters.{2} ".format(request.user.id,request.user.email,["{}:{}".format(c,str(e)) for c,e in failed_clusters]))
 
         return HttpResponseRedirect(_get_redirect_url(request,msg))
 
 
 def _enable_token(request,enable):
+    #register the client domain
+    cache.register_clientdomain(request.get_host())
+
     user = request.user
     msg = None
     if not user.is_authenticated:
@@ -209,7 +226,8 @@ def _enable_token(request,enable):
                 models.UserToken(user=user,enabled=True).save()
         msgs = messages.get_messages(request)
         if msgs:
-            msg = "\n".join(str(m) for m  in msgs if m.level in (messages.WARNING,messages.ERROR))
+            #msg = "\n".join(str(m) for m  in msgs if m.level in (messages.WARNING,messages.ERROR))
+            msg = "\n".join(str(m) for m  in msgs if m.level in [messages.ERROR])
     except Exception as ex:
         msg = "{}:Failed to {} the access token..{}".format(user.email,"enable" if enable else "disable",traceback.format_exc())
         logger.error(msg)
@@ -223,6 +241,9 @@ def disable_token(request):
     return _enable_token(request,False)
 
 def revoke_token(request):
+    #register the client domain
+    cache.register_clientdomain(request.get_host())
+
     msg = None
     user = request.user
     if not user.is_authenticated:
@@ -241,7 +262,8 @@ def revoke_token(request):
             pass
         msgs = messages.get_messages(request)
         if msgs:
-            msg = "\n".join(str(m) for m  in msgs if m.level in (messages.WARNING,messages.ERROR))
+            #msg = "\n".join(str(m) for m  in msgs if m.level in (messages.WARNING,messages.ERROR))
+            msg = "\n".join(str(m) for m  in msgs if m.level in [messages.ERROR])
     except Exception as ex:
         msg = "{}:Failed to revoke access token..{}".format(user.email,traceback.format_exc())
         logger.error(msg)
@@ -249,6 +271,9 @@ def revoke_token(request):
     return HttpResponseRedirect(_get_redirect_url(request,msg))
 
 def create_token(request,index):
+    #register the client domain
+    cache.register_clientdomain(request.get_host())
+
     user = request.user
     msg = None
     if not user.is_authenticated:
@@ -277,7 +302,8 @@ def create_token(request,index):
 
         msgs = messages.get_messages(request)
         if msgs:
-            msg = "\n".join(str(m) for m  in msgs if m.level in (messages.WARNING,messages.ERROR))
+            #msg = "\n".join(str(m) for m  in msgs if m.level in (messages.WARNING,messages.ERROR))
+            msg = "\n".join(str(m) for m  in msgs if m.level in [messages.ERROR])
     except Exception as ex:
         msg = "{}:Failed to generate access token..{}".format(user.email,traceback.format_exc())
         logger.error(msg)
