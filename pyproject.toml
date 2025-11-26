@@ -31,7 +31,7 @@ sentry-sdk = {version = "2.16.0", extras = ["django"]}
 captcha = "0.6.0"
 
 [tool.poetry.group.dev.dependencies]
-ipython = "^8.29.0"
+ipython = "^9.7.0"
 coverage = "^5.3"
 coveralls = "^2.1.2"
 mock = "^5.1.0"
