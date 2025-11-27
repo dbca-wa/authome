@@ -26,7 +26,7 @@ PyJWT = "2.9.0"
 psutil = "6.1.0"
 redis = "5.0.4"
 gevent = "24.11.1"
-eventlet = "0.39.1"
+eventlet = "0.40.3"
 sentry-sdk = {version = "2.16.0", extras = ["django"]}
 captcha = "0.6.0"
 
