@@ -144,6 +144,15 @@ def get_request_path(request=None):
     except:
         return None
 
+def get_request_method(request=None):
+    try:
+        if not request:
+            request = _process_data.request
+
+        return request.headers.get("x-upstream-request-method") or request.method
+    except:
+        return None
+
 def get_request_pathinfo(request=None):
     try:
         if not request:
@@ -277,7 +286,7 @@ def env(key, default=None, required=False, value_type=None,subvalue_type=None):
     return _convert(key,value,default=default,required=required,value_type=value_type,subvalue_type=subvalue_type)
 
 
-url_re = re.compile("^(((?P<protocol>[a-z]+)://)?(?P<domain>[^:/\\?#]+)?(:(?P<port>[0-9]+))?)?(?P<path>[/#][^\\?]*)?(\\?(?P<parameters>.+)?)?$",re.IGNORECASE)
+url_re = re.compile("^(((?P<protocol>[a-z]+)?((:?/{2,})|(:+/+)))?(?P<domain>[^:/\\?#]+)?(:(?P<port>[0-9]+))?)?(?P<path>[/#][^\\?]*)?(\\?(?P<parameters>.+)?)?$",re.IGNORECASE)
 def parse_url(url):
     """
     Return domain from url
@@ -303,7 +312,7 @@ def parse_url(url):
             "parameters":None
         }
 
-domain_url_re = re.compile("^((?P<protocol>[a-z]+)://)?(?P<domain>[^:/\\?#]+)",re.IGNORECASE)
+domain_url_re = re.compile("^((?P<protocol>[a-z]+)?((:?/{2,})|(:+/+)))?(?P<domain>[^:/\\?#]+)",re.IGNORECASE)
 def get_domain(url):
     """
     Return domain from url
@@ -317,7 +326,7 @@ def get_domain(url):
     else:
         return None
 
-domain_path_url_re = re.compile("^(((?P<protocol>[a-z]+)://)?(?P<domain>[^:/\\?#]+)?(:(?P<port>[0-9]+))?)?(?P<path>[/\\?#].*)?$",re.IGNORECASE)
+domain_path_url_re = re.compile("^(((?P<protocol>[a-z]+)?((:?/{2,})|(:+/+)))?(?P<domain>[^:/\\?#]+)?(:(?P<port>[0-9]+))?)?(?P<path>[/\\?#].*)?$",re.IGNORECASE)
 def get_domain_path(url):
     """
     Return domain,path from url
@@ -325,12 +334,27 @@ def get_domain_path(url):
     if url:
         m = domain_path_url_re.search(url)
         if m :
-            return (m.group('domain'),m.group("path"))
+            return (m.group('domain'),m.group("path") or "")
         else:
             return (None,None)
     else:
         return (None,None)
 
+def get_absolute_url(url,domain):
+    """
+    Return a absolute url
+    """
+    if url:
+        m = domain_path_url_re.search(url)
+        if m.group("domain") :
+            if m.group("port"):
+                return "{}://{}:{}{}".format(m.group("protocol") or "https",m.group("domain"),m.group("port"),m.group("path") or "")
+            else:
+                return "{}://{}{}".format(m.group("protocol") or "https",m.group("domain"),m.group("path") or "")
+        else:
+            return "{}://{}{}".format(m.group("protocol") or "https",domain,m.group("path") or "")
+    else:
+        return "https://{}".format(domain)
 
 def get_totpurl(secret, name, issuer, timestep, prefix=None,algorithm="SHA1",digits=6):
     """

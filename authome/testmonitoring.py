@@ -70,6 +70,10 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
         super(MonitoringTestCase,cls).setUpClass()
         cls.disable_messages()
 
+        res = requests.get(cls.get_delete_offline_clusters_url(),headers=cls.headers,verify=settings.SSL_VERIFY,auth=cls.UNITEST_AUTH)
+        res.raise_for_status()
+
+
         print("Prepare {} test users".format(cls.TEST_USER_NUMBER))
         testemails = [ "testuser_{:0>4}@{}".format(i,cls.TEST_USER_DOMAIN) for i in range(cls.TEST_USER_BASEID,cls.TEST_USER_BASEID + cls.TEST_USER_NUMBER)]
 
@@ -160,7 +164,7 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
             for k,v in (data["domains"] or {}).items():
                 if k not in dresult:
                     dresult[k] = {}
-                if isinstance(v,dict):
+                if isinstance(v,dict) and v:
                     print("v={}".format(v))
                     dresult[k]["requests"] = dresult[k].get("requests",0) + (v["requests"] or 0)
                     dresult[k]["totaltime"] = dresult[k].get("totaltime",0) + (v["totaltime"] or 0)
@@ -177,6 +181,22 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
         cls = self.__class__
 
         processes = []
+        test_starttime = self.get_next_monitor_time()
+        sleep_time = int((test_starttime - timezone.localtime()).total_seconds()) + 1
+        if sleep_time > 0:
+            print("{0}: Wait {1} seconds to flush the existing traffic data.".format(utils.format_datetime(timezone.localtime()),sleep_time))
+            time.sleep(sleep_time)
+        #send requests to flush the traffic data to redis
+        print("Begin to sent {} requests to auth2 to flush the existing traffic data to redis".format(cls.POST_REQUESTS))
+        for i in range(cls.POST_REQUESTS):
+            self.flush_traffic_data(cls.UNITEST_AUTH,cls.testusers[0])
+
+        print("Begin to sent {} requests to auth2 to save the existing traffic data from redis to db".format(cls.POST_REQUESTS))
+        trafficdata = self.save_traffic_data(cls.UNITEST_AUTH,cls.testusers[0])
+        merged_trafficdata = self.merge_trafficdata(trafficdata)
+        print("The data was saved to db.{}".format(merged_trafficdata))
+
+
         test_starttime = self.get_next_monitor_time()
         test_endtime = test_starttime + timedelta(seconds = self.TEST_TIME)
 
@@ -213,16 +233,6 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
                 cls.POST_REQUESTS
             ))
 
-        #send requests to flush the traffic data to redis
-        print("Begin to sent {} requests to auth2 to flush the existing traffic data to redis".format(cls.POST_REQUESTS))
-        for i in range(50):
-            self.flush_traffic_data(cls.UNITEST_AUTH,cls.testusers[0])
-
-        print("Begin to sent {} requests to auth2 to save the existing traffic data from redis to db".format(cls.POST_REQUESTS))
-        trafficdata = self.save_traffic_data(cls.UNITEST_AUTH,cls.testusers[0])
-        merged_trafficdata = self.merge_trafficdata(trafficdata)
-        print("The data was saved to db.{}".format(merged_trafficdata))
-
         if self.TEST_USER_NUMBER == 1:
             self.run_test(None,0,test_starttime,test_endtime,cls.TEST_REQUESTS)
         else:
@@ -249,7 +259,7 @@ class MonitoringTestCase(testutils.StartServerMixin,TestCase):
 
         #send requests to flush the traffic data to redis
         print("Begin to sent {} requests to auth2 to flush the traffic data to redis".format(cls.POST_REQUESTS))
-        for i in range(50):
+        for i in range(cls.POST_REQUESTS):
             self.flush_traffic_data(cls.UNITEST_AUTH,cls.testusers[0])
 
         #save and return the traffic data

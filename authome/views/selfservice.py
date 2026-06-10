@@ -14,7 +14,7 @@ from ipware.ip import get_client_ip
 from .. import models
 from ..cache import cache
 from .. import utils
-from .views  import get_absolute_url, _populate_response,_get_userflow_pagelayout,_get_next_url,MFA_METHOD_MAPPING, auth_required_response_factory
+from .views  import _populate_response,_get_userflow_pagelayout,_get_next_url,MFA_METHOD_MAPPING, auth_required_response_factory
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +37,13 @@ def user_setting(request):
         if domain != settings.AUTH2_DOMAIN:
             back_url = "https://{}".format(domain)
     else:
-        back_url = get_absolute_url(back_url,domain)
+        back_url = utils.get_absolute_url(back_url,domain)
         parameters = "back={}".format(urllib.parse.quote(back_url))
 
     if not logout_url:
         logout_url = "https://{}/sso/auth_logout".format(domain)
     else:
-        logout_url = get_absolute_url(logout_url,domain)
+        logout_url = utils.get_absolute_url(logout_url,domain)
         if parameters: 
             parameters = "{}&logout={}".format(parameters,urllib.parse.quote(logout_url))
         else:

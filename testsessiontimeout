@@ -1,4 +1,5 @@
 #!/bin/bash
+#Not dependent on any running auth2 server
 # please start the standlone redis and rediscluster first before run this unitest
 #source venv/bin/activate && python manage.py test authome --keepdb
 if [[ "$1" == "" ]]
@@ -49,7 +50,7 @@ TEST_RUNNER=authome.testrunners.NoDatabaseTestRunner
 export CACHE_SERVER="redis://@127.0.0.1:6370/0"
 export CACHE_SERVER_OPTIONS="cluster=False"
 export TEST_RUNNER
-export IGNORE_LOADING_ERROR=True ; poetry run python manage.py test authome --keepdb --pattern="testsessiontimeout.py"
+export IGNORE_LOADING_ERROR=True ; uv run python manage.py test authome --keepdb --pattern="testsessiontimeout.py"
 if [[ "$mode" == "release" ]]
 then
     echo "remove the test code"

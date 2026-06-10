@@ -108,6 +108,9 @@ class PerformanceTestCase(testutils.StartServerMixin,TestCase):
         
         cls.disable_messages()
 
+        res = requests.get(cls.get_delete_offline_clusters_url(),headers=cls.headers,verify=settings.SSL_VERIFY,auth=cls.UNITEST_AUTH)
+        res.raise_for_status()
+
         print("Prepare {} test users".format(cls.TEST_USER_NUMBER))
         testemails = [ "testuser_{:0>4}@{}".format(i,cls.TEST_USER_DOMAIN) for i in range(cls.TEST_USER_BASEID,cls.TEST_USER_BASEID + cls.TEST_USER_NUMBER)]
 

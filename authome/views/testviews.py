@@ -11,7 +11,6 @@ from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 
 from . import views
-from .tcontrolviews import _check_tcontrol
 from .. import models
 from .. import utils
 from ..sessionstore.sessionstore import SessionStore 
@@ -267,10 +266,7 @@ def flush_trafficdata(requests):
     res = views.auth_basic(requests)
     if res.status_code >= 300:
         return res
-    if cache._traffic_data and len(cache._traffic_data) > 1:
-        cache._save_traffic_data(timezone.localtime())
-        cache._traffic_data.clear()
-        cache._traffic_data["serverid"] = utils.get_processid()
+    if cache._save_traffic_data():
         return JsonResponse({"flushed":True,"server":utils.get_processid()},status=200,encoder=JSONEncoder)
     else:
         return JsonResponse({"flushed":False,"server":utils.get_processid()},status=200,encoder=JSONEncoder)
@@ -359,115 +355,18 @@ def search_model_4_test(request,name):
 
     return JsonResponse(result,status=200,encoder=JSONFormater,safe=True)
 
-
-def test_tcontrol(request):
-    client = request.GET.get("client")
-    clientip = request.GET.get("clientip")
-    test = request.GET.get("test","0") == "1"
-    tcontrol = cache.tcontrols.get(int(request.GET.get("tcontrol")))
-    exempt = True if request.GET.get("exempt") == "1" else False
-    if not tcontrol or not tcontrol.active:
-        #not traffic control configured
-        result = [True,"Tcontrol Not Configured",0]
-    else:
-        result = _check_tcontrol(tcontrol,clientip,client,exempt,test=test)
-    return JsonResponse(result, safe=False)
-
-def clear_tcontroldata(request):
-    tcontrol = cache.tcontrols.get(int(request.GET.get("tcontrol")))
-
-    if not settings.TRAFFICCONTROL_SUPPORTED:
-        cahce.clear_tcontroldata(settings.TRAFFICCONTROL_CLUSTERID,tcontrol.id)
-    else:
-        keypattern = "{}*".format(settings.GET_TRAFFICCONTROL_CACHE_KEY(tcontrol.name))
-        for i in range(settings.TRAFFICCONTROL_CACHE_SERVERS):
-            if settings.TRAFFICCONTROL_CACHE_SERVERS == 1:
-                name = "tcontrol"
-            else:
-                name = "tcontrol{}".format(i)
-            client = caches[name].redis_client
-            tcontrolkeys = client.keys(keypattern)
-            if tcontrolkeys:
-                client.delete(*tcontrolkeys)
-
+def delete_offline_clusters(request):
+    clusters = list(models.Auth2Cluster.objects.all())
+    for cluster in clusters:
+        if cluster.clusterid == settings.AUTH2_CLUSTERID:
+            continue
+        healthcheck = cache.cluster_healthcheck(cluster.clusterid)
+        if not healthcheck[0] and isinstance(healthcheck[1],str):
+            #cluster is offline
+            cluster.delete()
     return views.SUCCEED_RESPONSE
 
 
 
-def _tcontrol(request):
-    clientip = request.headers.get("x-real-ip")
 
-    test = request.GET.get("test","1") == "1"
-    domain = request.get_host()
-    path = request.headers.get("x-upstream-request-uri")
-    if path:
-        #get the original request path
-        #remove the query string
-        try:
-            path = path[:path.index("?")]
-        except:
-            pass
-    else:
-        #can't get the original path, use request path directly
-        path = request.path
-
-    method = request.headers.get("x-upstream-request-method") or "GET"
-    if not method:
-        method = models.TrafficControlLocation.GET
-    else:
-        method = models.TrafficControlLocation.METHODS.get(method) or models.TrafficControlLocation.METHODS.get(method.upper()) or models.TrafficControlLocation.GET
-
-    tcontrol = cache.tcontrols.get((domain,path,method))
-    if not tcontrol or not tcontrol.active:
-        #no traffic control policies are enabled.
-        return JsonResponse([True,"_DISABLED_",0], safe=False)
-    exempt = False
-    if request.user.is_authenticated:
-        client = request.user.email
-        if tcontrol.is_exempt(client):
-            #is the user we known,exempt traffic control
-            if (tcontrol.iplimit == 0 or tcontrol.iplimitperiod == 0) and (tcontrol.concurrency == 0 or tcontrol.est_processtime == 0):
-                return JsonResponse([True,None,0], safe=False)
-            else:
-                exempt = True
-    elif settings.TRAFFICCONTROL_COOKIE_NAME:
-        client = request.COOKIES.get(settings.TRAFFICCONTROL_COOKIE_NAME) or None
-    else:
-        client = None
-
-    if settings.TRAFFICCONTROL_SUPPORTED:
-        result = _check_tcontrol(tcontrol,clientip,client,exempt,test)
-    else:
-        result = cahce.tcontrol(settings.TRAFFICCONTROL_CLUSTERID,tcontrol.id,clientip,client,exempt,test)
-    
-    return JsonResponse(result, safe=False)
-
-def test_auth_tcontrol(request):
-    res = views.auth(request)
-    if res.status_code > 300:
-        return res
-    #authentication and authorization succeed
-    #check the traffic control
-    return _tcontrol(request)
-
-def test_auth_optional_tcontrol(request):
-    res = views.auth_optional(request)
-    if res.status_code > 300:
-        return res
-    #check the traffic control
-    return _tcontrol(request)
-
-def test_auth_basic_tcontrol(request):
-    res = views.auth_basic(request)
-    if res.status_code > 300:
-        return res
-    #check the traffic control
-    return _tcontrol(request)
-
-def test_auth_basic_optional_tcontrol(request):
-    res = views.auth_basic_optional(request)
-    if res.status_code > 300:
-        return res
-    #check the traffic control
-    return _tcontrol(request)
 

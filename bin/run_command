@@ -1,0 +1,9 @@
+#!/bin/bash
+#
+if [[ "$DEBUG" == "True" || "${LOGLEVEL}" == "DEBUG" ]]; then
+    echo "Running in dev mode"
+    cd /app/dev && python manage.py "$@"
+else
+    echo "Running in release mode"
+    cd /app/release && python manage.py "$@"
+fi

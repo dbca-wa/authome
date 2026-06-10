@@ -9,9 +9,6 @@ from .tools import *
 if settings.AUTH2_CLUSTER_ENABLED:
     from .clusterviews import *
 
-if settings.TRAFFICCONTROL_ENABLED:
-    from .tcontrolviews import *
-
 if settings.TESTMODE:
     from .testviews import *
 

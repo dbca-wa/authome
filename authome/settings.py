@@ -465,6 +465,7 @@ PREVIOUS_SESSION_CACHE_ALIAS=None
 
 GET_DEFAULT_CACHE_KEY = lambda key:key
 GET_USER_KEY = lambda userid:str(userid)
+GET_USEREMAIL_KEY = lambda useremail:useremail
 GET_USERTOKEN_KEY = lambda userid:"T{}".format(userid)
 
 SESSION_CACHES = 0
@@ -556,6 +557,9 @@ def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
             cluster = is_cluster(server)
 
         if cluster:
+            #Only use primary node for read & write
+            options["read_from_replicas"] = False
+            options["load_balancing_strategy"] = None
             if "require_full_coverage" not in options:
                 options["require_full_coverage"] = False
             return {
@@ -648,7 +652,15 @@ if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:
 
     STAFF_CACHE_TIMEOUT = env("STAFF_CACHE_TIMEOUT",86400 * 14)
     if STAFF_CACHE_TIMEOUT <= 0:
-        STAFF_CACHE_TIMEOUT = None
+        STAFF_CACHE_TIMEOUT = 86400 * 14
+
+    STAFFEMAIL_CACHE_TIMEOUT = env("STAFFEMAIL_CACHE_TIMEOUT",86400 * 28)
+    if STAFFEMAIL_CACHE_TIMEOUT <= 0:
+        STAFFEMAIL_CACHE_TIMEOUT = 86400 * 28
+
+    USEREMAIL_CACHE_TIMEOUT = env("USEREMAIL_CACHE_TIMEOUT",86400)
+    if USEREMAIL_CACHE_TIMEOUT <= 0:
+        USEREMAIL_CACHE_TIMEOUT = 86400
 
 
 TEST_RUNNER=env("TEST_RUNNER","django.test.runner.DiscoverRunner")
@@ -672,87 +684,12 @@ SSL_VERIFY=env("SSL_VERIFY",default=True)
 
 SOCIAL_AUTH_ADMIN_SEARCH_FIELDS=["uid"]
 
-#TRAFFIC CONTROL SETTINGS
-TRAFFICCONTROL_ENABLED = env('TRAFFICCONTROL_ENABLED',default=False)
-TRAFFICCONTROL_MAX_BUCKETS=env('TRAFFICCONTROL_MAX_BUCKETS',default=25)
-TRAFFICCONTROL_TIMEDIFF=env('TRAFFICCONTROL_TIMEDIFF',default=5)# milliseconds, the maximum time difference among auth2 server processes, it should be less than a few milliseconds
-TRAFFICCONTROL_TIMEDIFF=timedelta(milliseconds=TRAFFICCONTROL_TIMEDIFF)
-    
-TRAFFICCONTROL_BOOKINGTIMEOUT=env('TRAFFICCONTROL_BOOKINGTIMEOUT',default=300)# seconds, the default timeout setting of  concurrency traffic control
-if TRAFFICCONTROL_BOOKINGTIMEOUT <= 0:
-    TRAFFICCONTROL_BOOKINGTIMEOUT = 300
-elif TRAFFICCONTROL_BOOKINGTIMEOUT > 1800:
-    TRAFFICCONTROL_BOOKINGTIMEOUT = 1800
-    
-if TRAFFICCONTROL_ENABLED:
-    TRAFFICCONTROL_COOKIE_NAME = env('TRAFFICCONTROL_COOKIE_NAME')
-    TRAFFICCONTROL_CACHE_CHECK_HOURS=env('TRAFFICCONTROL_CACHE_CHECK_HOURS',default=[0]) #the hours in the day when traffic control can be checked
-    TRAFFICCONTROL_CACHE_CHECK_INTERVAL=env('TRAFFICCONTROL_CACHE_CHECK_INTERVAL',default=0) #in seconds,the interval to check traffic control cache, if it is not greater than 0, use TRAFFICCONTROL_CACHE_CHECK_HOURS
-    if TRAFFICCONTROL_CACHE_CHECK_INTERVAL < 0:
-        TRAFFICCONTROL_CACHE_CHECK_INTERVAL = 0
-    
-    TRAFFICCONTROL_CLUSTERID=env('TRAFFICCONTROL_CLUSTERID')
-    TRAFFICCONTROL_TIMEOUT = env('TRAFFICCONTROL_TIMEOUT',default=100)
-    if not TRAFFICCONTROL_TIMEOUT or TRAFFICCONTROL_TIMEOUT <= 0:
-        TRAFFICCONTROL_TIMEOUT = 0.1
-    else:
-        TRAFFICCONTROL_TIMEOUT /= 1000
-
-    TRAFFICCONTROL_CACHE_SERVER = env("TRAFFICCONTROL_CACHE_SERVER")
-    TRAFFICCONTROL_CACHE_SERVER_OPTIONS = env("TRAFFICCONTROL_CACHE_SERVER_OPTIONS",default={})
-    
-    TRAFFICCONTROL_CACHE_ALIAS = None
-    
-    if CACHE_SERVER  or TRAFFICCONTROL_CACHE_SERVER:
-        if AUTH2_CLUSTER_ENABLED:
-            if TRAFFICCONTROL_CACHE_SERVER:
-                TRAFFICCONTROL_CLUSTERID = AUTH2_CLUSTERID
-                TRAFFICCONTROL_SUPPORTED = True
-            elif TRAFFICCONTROL_CLUSTERID == AUTH2_CLUSTERID:
-                #current auth2 cluster supports traffic control
-                TRAFFICCONTROL_SUPPORTED = True
-            else:
-                #current auth2 cluster does not support traffic control, dependents on other cluster to implement traffic control
-                TRAFFICCONTROL_SUPPORTED = False
-                TRAFFICCONTROL_CACHE_SERVERS = 0
-        else:
-            #standalone auth2 server, should always support traffic control
-            TRAFFICCONTROL_SUPPORTED = True
-    
-        if TRAFFICCONTROL_SUPPORTED :
-            if TRAFFICCONTROL_CACHE_SERVER:
-                TRAFFICCONTROL_CACHE_SERVER = [s.strip() for s in TRAFFICCONTROL_CACHE_SERVER.split(",") if s and s.strip()]
-                TRAFFICCONTROL_CACHE_SERVERS = len(TRAFFICCONTROL_CACHE_SERVER)
-                if TRAFFICCONTROL_CACHE_SERVERS == 1:
-                    TRAFFICCONTROL_CACHE_ALIAS = "tcontrol"
-                    CACHES[TRAFFICCONTROL_CACHE_ALIAS] = GET_CACHE_CONF(TRAFFICCONTROL_CACHE_ALIAS,TRAFFICCONTROL_CACHE_SERVER[0],TRAFFICCONTROL_CACHE_SERVER_OPTIONS,key_function=lambda key,key_prefix,version : key)
-                else:
-                    for i in range(0,TRAFFICCONTROL_CACHE_SERVERS) :
-                        name = "tcontrol{}".format(i)
-                        CACHES[name] = GET_CACHE_CONF(name,TRAFFICCONTROL_CACHE_SERVER[i],env("TRAFFICCONTROL_CACHE_SERVER{}_OPTIONS".format(i),default=TRAFFICCONTROL_CACHE_SERVER_OPTIONS),key_function=lambda key,key_prefix,version : key)
-    
-                    def TRAFFICCONTROL_CACHE_ALIAS(key):
-                        h = hash(key) % TRAFFICCONTROL_CACHE_SERVERS
-                        
-                    TRAFFICCONTROL_CACHE_ALIAS = lambda key:"tcontrol{}".format(hash(key) % TRAFFICCONTROL_CACHE_SERVERS)
-                GET_TRAFFICCONTROL_CACHE_KEY = lambda key:"T_{}".format(key)
-            else:
-                TRAFFICCONTROL_CACHE_ALIAS = "default"
-                TRAFFICCONTROL_CACHE_SERVERS = 1
-                if CACHE_KEY_PREFIX:
-                    trafficcontrol_key_pattern = "{}:T_{{}}".format(CACHE_KEY_PREFIX)
-                    GET_TRAFFICCONTROL_CACHE_KEY = lambda key:trafficcontrol_key_pattern.format(key)
-                else:
-                    GET_TRAFFICCONTROL_CACHE_KEY = lambda key:"T_{}".format(key)
-    else:
-        TRAFFICCONTROL_ENABLED = False
-        TRAFFICCONTROL_SUPPORTED = False
-else:
-    TRAFFICCONTROL_SUPPORTED = False
+REDISCLUSTER_FAILOVER_CHECK_TIMES = env('REDISCLUSTER_FAILOVER_CHECK_TIMES',default=10) #How many times to check whether the failover process is completed before raising exception
+REDISCLUSTER_FAILOVER_CHECK_INTERVAL = env('REDISCLUSTER_FAILOVER_CHECK_INTERVAL',default=200) / 1000.0#milliseconds, the interval to check whether the failover process is completed or not
 
 # Sentry settings
 project = tomllib.load(open(os.path.join(BASE_DIR, "pyproject.toml"), "rb"))
-VERSION_NO = project["tool"]["poetry"]["version"]
+VERSION_NO = project["project"]["version"]
 SENTRY_DSN = env("SENTRY_DSN", None)
 SENTRY_ENVIRONMENT = env("SENTRY_ENVIRONMENT", None)
 SENTRY_SAMPLE_RATE = env("SENTRY_SAMPLE_RATE", 1.0)  # Error sampling rate

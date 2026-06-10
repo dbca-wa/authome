@@ -9,7 +9,7 @@ from django.conf import settings
 
 import base64
 
-from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access,UserToken,User,CustomizableUserflow
+from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access,UserToken,User,CustomizableUserflow,Auth2Cluster
 from .cache import cache,get_usercache
 from authome import patch
 groupid = 0
@@ -65,18 +65,19 @@ class BaseTestCase(TestCase):
         #delete user group authorization
         if self.test_usergroupauthorization:
             for groupname,domain,paths,excluded_paths in self.test_usergroupauthorization :
-                UserGroupAuthorization.objects.filter(usergroup=UserGroup.objects.get(name=groupname),domain=domain,paths=paths,excluded_paths=excluded_paths).delete()
+                for obj in UserGroupAuthorization.objects.filter(usergroup=UserGroup.objects.get(name=groupname),domain=domain,paths=paths,excluded_paths=excluded_paths):
+                    obj.delete()
     
         #delete user authorization
         if self.test_userauthorization: 
             for user,domain,paths,excluded_paths in self.test_userauthorization:
-                UserAuthorization.objects.filter(user=user,domain=domain,paths=paths,excluded_paths=excluded_paths).delete()
+                for obj in UserAuthorization.objects.filter(user=user,domain=domain,paths=paths,excluded_paths=excluded_paths):
+                    obj.delete()
 
         #delete users
         if self.test_users:
             for user in self.test_users.values():
                 user.delete()
-
 
         #delete UserGroup objects
         if self.test_usergroups:
@@ -102,6 +103,7 @@ class BaseTestCase(TestCase):
 
     def populate_testdata(self):
         #popuate UserGroup objects
+        Auth2Cluster.objects.exclude(clusterid=settings.AUTH2_CLUSTERID).delete()
         if self.test_usergroups:
             uncreated_usergroups = [(UserGroup.public_group(),self.test_usergroups)]
             while uncreated_usergroups:
@@ -128,7 +130,7 @@ class BaseTestCase(TestCase):
                     else:
                         obj = UserGroup(name=name,groupid=name,users=users,excluded_users=excluded_users,parent_group=parent_obj,session_timeout=session_timeout)
                     obj.clean()
-                    print("save usergroup={}".format(obj))
+                    print("create usergroup={}".format(obj))
                     obj.save()
                     if subgroups:
                         uncreated_usergroups.append((obj,subgroups))
@@ -144,11 +146,13 @@ class BaseTestCase(TestCase):
                     obj = User(username=test_user[0],email=test_user[1],first_name=firstname,last_name=lastname)
                 obj.clean()
                 obj.save()
+                print("create user={}({})".format(obj.id,test_user[1]))
                 users[test_user[0]] = obj
                 if len(test_user) >= 3 and test_user[2]:
                     token = UserToken(user=obj,enabled=True)
                     token.generate_token()
                     token.save()
+                    print("create user token={}:{}".format(test_user[1],token.token))
                     usercache = get_usercache(token.user_id)
                     if usercache and usercache.get(settings.GET_USERTOKEN_KEY(token.user_id)):
                         #Only cache the user token only if it is already cached
@@ -181,7 +185,7 @@ class BaseAuthTestCase(BaseTestCase):
     def create_client(self):
         return Auth2Client()
 
-    def setUp(self):
+    def tearDown(self):
         settings.AUTH_CACHE_SIZE=2000
         settings.BASIC_AUTH_CACHE_SIZE=1000
         settings.AUTH_BASIC_CACHE_EXPIRETIME=timedelta(seconds=3600)
@@ -196,13 +200,17 @@ class BaseAuthTestCase(BaseTestCase):
             cache.current_auth2_cluster.register()
             cache._auth2_clusters.clear()
             cache.refresh_auth2_clusters(True)
+        
+        for key in ("gunfire.com","gunfire.com1","gunfire.com2","gunfire.com3","gunfire.com4","gunfire5.com","gunfire.com.au","hacker.com"):
+            for obj in User.objects.filter(email__endswith=key):
+                obj.delete()
 
-        User.objects.filter(email__endswith="@gunfire.com").delete()
-        User.objects.filter(email__endswith="@gunfire.com.au").delete()
-        User.objects.filter(email__endswith="@hacker.com").delete()
-        UserToken.objects.all().delete()
-        UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True).delete()
-        UserAuthorization.objects.all().delete()
+        for obj in UserToken.objects.all():
+            obj.delete()
+        for obj in UserGroup.objects.all().exclude(users=["*"],excluded_users__isnull=True):
+            obj.delete()
+        for obj in UserAuthorization.objects.all():
+            obj.delete()
 
         cache.refresh_authorization_cache(True)
         public_group = UserGroup.objects.filter(users=["*"], excluded_users__isnull=True).first()
@@ -243,4 +251,6 @@ class BaseAuthCacheTestCase(BaseAuthTestCase):
         settings.STAFF_AUTH_CACHE_EXPIRETIME=settings.AUTH_CACHE_EXPIRETIME
         settings.AUTH_CACHE_CLEAN_HOURS = [i for i in range(0,24)]
         settings.AUTHORIZATION_CACHE_CHECK_HOURS = [i for i in range(0,24)]
+
+        Auth2Cluster.objects.exclude(clusterid=settings.AUTH2_CLUSTERID).delete()
 

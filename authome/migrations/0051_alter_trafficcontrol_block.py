@@ -10,9 +10,4 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AlterField(
-            model_name='trafficcontrol',
-            name='block',
-            field=models.BooleanField(default=False, help_text='If true, block the request until the running requests are less than the concurrency limit'),
-        ),
     ]

@@ -139,43 +139,6 @@ def _get_localstatus():
                         errors["caches"] = OrderedDict()
                     errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_servers[name])
 
-    if settings.TRAFFICCONTROL_SUPPORTED:
-        if settings.TRAFFICCONTROL_CACHE_SERVER:
-            if settings.TRAFFICCONTROL_CACHE_SERVERS  == 1:
-                name = "tcontrol"
-                if settings.TRAFFICCONTROL_CACHE_SERVER[0].lower().startswith("redis"):
-                    cache_healthy,cache_servers[name] = caches[name].server_status
-                else:
-                    cache_healthy,cache_error = utils.ping_cacheserver(name)
-                    if cache_healthy:
-                        cache_servers[name] = "server = {} ,  status = OK".format(settings.TRAFFICCONTROL_CACHE_SERVER[0])
-                    else:
-                        cache_servers[name] = "server = {} ,  error = {}".format(settings.TRAFFICCONTROL_CACHE_SERVER[0],cache_error)
-    
-                if not cache_healthy:
-                    healthy = False
-                    if "caches" not in errors:
-                        errors["caches"] = OrderedDict()
-                    errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_servers[name])
-    
-            else:
-                for i in range(settings.TRAFFICCONTROL_CACHE_SERVERS):
-                    name = "tcontrol{}".format(i)
-                    if settings.TRAFFICCONTROL_CACHE_SERVER[i].lower().startswith("redis"):
-                        cache_healthy,cache_servers[name] = caches[name].server_status
-                    else:
-                        cache_healthy,cache_error = utils.ping_cacheserver(name)
-                        if cache_healthy:
-                            cache_servers[name] = "server = {} ,  status = OK".format(TRAFFICCONTROL_CACHE_SERVER[i])
-                        else:
-                            cache_servers[name] = "server = {} ,  error = {}".format(TRAFFICCONTROL_CACHE_SERVER[i],cache_error)
-    
-                    if not cache_healthy:
-                        healthy = False
-                        if "caches" not in errors:
-                            errors["caches"] = OrderedDict()
-                        errors["caches"][name] = utils.add_to_list(errors["caches"].get(name),cache_servers[name])
-    
     cache_healthy,cache_msgs = cache.healthy
     healthy = healthy and cache_healthy
     if not cache_healthy:
@@ -309,30 +272,6 @@ def _check_localhealth():
 
                 if not cache_working:
                     working = False
-
-    if settings.TRAFFICCONTROL_SUPPORTED:
-        if settings.TRAFFICCONTROL_CACHE_SERVER:
-            if settings.TRAFFICCONTROL_CACHE_SERVERS  == 1:
-                name = settings.TRAFFICCONTROL_CACHE_ALIAS
-                if settings.TRAFFICCONTROL_CACHE_SERVER[0].lower().startswith("redis"):
-                    cache_working,pingstatus = caches[name].ping()
-                else:
-                    cache_working,pingstatus = utils.ping_cacheserver(name)
-                status["caches"][name] = {"ping":cache_working,"pingstatus":pingstatus}
-                if not cache_working:
-                    working = False
-    
-            else:
-                for i in range(settings.TRAFFICCONTROL_CACHE_SERVERS):
-                    name = "tcontrol{}".format(i)
-                    if settings.TRAFFICCONTROL_CACHE_SERVER[i].lower().startswith("redis"):
-                        cache_working,pingstatus = caches[name].ping()
-                    else:
-                        cache_working,cache_error = utils.ping_cacheserver(name)
-                    status["caches"][name] = {"ping":cache_working,"pingstatus":pingstatus}
-    
-                    if not cache_working:
-                        working = False
 
     if not working :
         if not settings.AUTH2_CLUSTER_ENABLED:
@@ -520,7 +459,10 @@ def _save_trafficdata(batchid):
             }
             traffic_datas[key] = traffic_data
         else:
-            traffic_data["servers"].append(pdata["serverid"])
+            try:
+                traffic_data["servers"].index(pdata["serverid"])
+            except ValueError as ex:
+                traffic_data["servers"].append(pdata["serverid"])
         for method in sso_requests_keys:
             data = pdata.get(method)
             if data:

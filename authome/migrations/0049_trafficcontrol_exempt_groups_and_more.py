@@ -10,14 +10,4 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='trafficcontrol',
-            name='exempt_groups',
-            field=models.ManyToManyField(to='authome.usergroup'),
-        ),
-        migrations.AddField(
-            model_name='trafficcontrol',
-            name='exempt_include',
-            field=models.BooleanField(default=True, help_text='Exempt the traffic control for the user groups which is include/exclude the exempt_groups'),
-        ),
     ]

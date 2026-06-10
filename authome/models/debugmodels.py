@@ -38,11 +38,6 @@ class DebugLog(django_models.Model):
     DOMAIN_NOT_MATCH = 202
     SESSION_COOKIE_HACKED = 210
 
-    USER_TRAFFIC_CONTROL = 300
-    IP_TRAFFIC_CONTROL = 301
-    CONCURRENCY_TRAFFIC_CONTROL = 302
-    TRAFFIC_CONTROL_ERROR = 399
-
     CATEGORIES = [
         (CREATE_COOKIE , "Create cookie"),
         (UPDATE_COOKIE , "Update cookie"),
@@ -67,11 +62,6 @@ class DebugLog(django_models.Model):
         (LB_HASH_KEY_NOT_MATCH , "LB key not match"),
         (DOMAIN_NOT_MATCH, "Domain not match"),
         (SESSION_COOKIE_HACKED,"Session cookie hacked"),
-
-        (USER_TRAFFIC_CONTROL,"User Traffic Control"),
-        (IP_TRAFFIC_CONTROL,"IP Traffic Control"),
-        (CONCURRENCY_TRAFFIC_CONTROL,"Concurrency Traffic Control"),
-        (TRAFFIC_CONTROL_ERROR,"Traffic Control Error"),
 
         (ERROR,"Error")
 
@@ -188,25 +178,4 @@ class DebugLog(django_models.Model):
             log.save()
         except:
             logger.error("Failed to log the message '{}' to DebugLog.{}".format(message,traceback.format_exc()))
-
-    @classmethod
-    def tcontrol(cls,category,tcontrol_name,ip,email,message,save=True):
-        """
-        Return DebugLog 
-        """
-        log = None
-        try:
-            log = DebugLog(
-                clusterid = settings.AUTH2_CLUSTERID if settings.AUTH2_CLUSTER_ENABLED else None,
-                lb_hash_key = ip,
-                message = message,
-                category=category,
-                email = email,
-                request=tcontrol_name
-            )
-            if save:
-                log.save()
-        except:
-            logger.error("Failed to log the message '{}' to DebugLog.{}".format(message,traceback.format_exc()))
-        return log
 

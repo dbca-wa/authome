@@ -23,34 +23,34 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
     def test_validation(self):
         index = 0
         for test_data,expected_result in [
-            (("test1",None,["@test1.com"],["blocked1@test1.com","blocked2@test1.com"],True),None),
-            (("test2","test1",["developer_*@test1.com"],None,True),None),
-            (("test2","test1",["developer*@test1.com","blocked1@test1.com"],None,False),ValidationError("The excluded email pattern({}) in the parent group({}) is contained by the current group({})".format("blocked1@test1.com","test1","test2"))),
-            (("test2","test1",["developer_*@test1.com"],["blocked1@test1.com"],False),ValidationError("The excluded email pattern({}) is not contained by email patterns configured in current group({})".format("blocked1@test1.com","test2"))),
-            (("test2","test1",["@test1.com"],["blocked1@test1.com"],False),ValidationError("The excluded email pattern({}) in the parent group({}) is contained by the current group({})".format("blocked2@test1.com","test1","test2"))),
-            (("test2","test1",["developer_*@test1.com","test2@test2.com"],None,False),ValidationError("The email pattern({}) in the current group({}) is not contained by the parent group({})".format("test2@test2.com","test2","test1"))),
+            (("test1",None,["@gunfire1.com"],["blocked1@gunfire1.com","blocked2@gunfire1.com"],True),None),
+            (("test2","test1",["developer_*@gunfire1.com"],None,True),None),
+            (("test2","test1",["developer*@gunfire1.com","blocked1@gunfire1.com"],None,False),ValidationError("The excluded email pattern({}) in the parent group({}) is contained by the current group({})".format("blocked1@gunfire1.com","test1","test2"))),
+            (("test2","test1",["developer_*@gunfire1.com"],["blocked1@gunfire1.com"],False),ValidationError("The excluded email pattern({}) is not contained by email patterns configured in current group({})".format("blocked1@gunfire1.com","test2"))),
+            (("test2","test1",["@gunfire1.com"],["blocked1@gunfire1.com"],False),ValidationError("The excluded email pattern({}) in the parent group({}) is contained by the current group({})".format("blocked2@gunfire1.com","test1","test2"))),
+            (("test2","test1",["developer_*@gunfire1.com","test2@gunfire2.com"],None,False),ValidationError("The email pattern({}) in the current group({}) is not contained by the parent group({})".format("test2@gunfire2.com","test2","test1"))),
 
-            (("test3","test1",["developer_*@test1.com","blocked1@test1.com"],None,True),ValidationError("The excluded email pattern({}) in the parent group({}) is contained by the current group({})".format("blocked1@test1.com","test1","test3"))),
+            (("test3","test1",["developer_*@gunfire1.com","blocked1@gunfire1.com"],None,True),ValidationError("The excluded email pattern({}) in the parent group({}) is contained by the current group({})".format("blocked1@gunfire1.com","test1","test3"))),
 
-            (("test4","test1",["developer_*@test1.com"],["blocked1@test1.com"],True),ValidationError("The excluded email pattern({}) is not contained by email patterns configured in current group({})".format("blocked1@test1.com","test4"))),
+            (("test4","test1",["developer_*@gunfire1.com"],["blocked1@gunfire1.com"],True),ValidationError("The excluded email pattern({}) is not contained by email patterns configured in current group({})".format("blocked1@gunfire1.com","test4"))),
 
-            (("test5","test1",["@test1.com"],["blocked1@test1.com"],True),ValidationError("The excluded email pattern({}) in the parent group({}) is contained by the current group({})".format("blocked2@test1.com","test1","test5"))),
+            (("test5","test1",["@gunfire1.com"],["blocked1@gunfire1.com"],True),ValidationError("The excluded email pattern({}) in the parent group({}) is contained by the current group({})".format("blocked2@gunfire1.com","test1","test5"))),
 
-            (("test6","test1",["developer_*@test1.com","test2@test2.com"],None,True),ValidationError("The email pattern({}) in the current group({}) is not contained by the parent group({})".format("test2@test2.com","test6","test1"))),
+            (("test6","test1",["developer_*@gunfire1.com","test2@gunfire2.com"],None,True),ValidationError("The email pattern({}) in the current group({}) is not contained by the parent group({})".format("test2@gunfire2.com","test6","test1"))),
 
-            (("test10","test2",["developer_*@test1.com"],None,True),None),
-            (("test11","test10",["developer_*@test1.com"],None,True),None),
-            (("test12","test11",["developer_*@test1.com"],None,True),None),
-            (("test10","test10",["developer_*@test1.com"],None,False),ValidationError("The parent group of the group ({0}) can't be itself".format("test10"))),
-            (("test10","test12",["developer_*@test1.com"],None,False),ValidationError("The parent group({1}) of the group ({0}) can't be descendant of the group({0})".format("test10","test12"))),
-            (("test10","test11",["developer_*@test1.com"],None,False),ValidationError("The parent group({1}) of the group ({0}) can't be descendant of the group({0})".format("test10","test11"))),
+            (("test10","test2",["developer_*@gunfire1.com"],None,True),None),
+            (("test11","test10",["developer_*@gunfire1.com"],None,True),None),
+            (("test12","test11",["developer_*@gunfire1.com"],None,True),None),
+            (("test10","test10",["developer_*@gunfire1.com"],None,False),ValidationError("The parent group of the group ({0}) can't be itself".format("test10"))),
+            (("test10","test12",["developer_*@gunfire1.com"],None,False),ValidationError("The parent group({1}) of the group ({0}) can't be descendant of the group({0})".format("test10","test12"))),
+            (("test10","test11",["developer_*@gunfire1.com"],None,False),ValidationError("The parent group({1}) of the group ({0}) can't be descendant of the group({0})".format("test10","test11"))),
             #test regex user email
-            (("test20","test1",["a@test1.com","b@test1.com"],["^[c-z][^@]*@test1.com$"],True),None),
-            (("test30","test1",["@test1.com"],["^[c-z][^@]*@test1.com$"],True),None),
-            (("test40","test1",["a*@test1.com"],["^[c-z][^@]*@test1.com$"],True),None),
-            (("test50","test1",["^a.*@test1.com$"],["^[c-z][^@]*@test1.com$"],True),None),
-            (("test60","test1",["^a.*@test1.com$"],["c@test1.com"],True),None),
-            (("test70","test1",["^a.*@test1.com$"],["c*@test1.com"],True),None)
+            (("test20","test1",["a@gunfire1.com","b@gunfire1.com"],["^[c-z][^@]*@gunfire1.com$"],True),None),
+            (("test30","test1",["@gunfire1.com"],["^[c-z][^@]*@gunfire1.com$"],True),None),
+            (("test40","test1",["a*@gunfire1.com"],["^[c-z][^@]*@gunfire1.com$"],True),None),
+            (("test50","test1",["^a.*@gunfire1.com$"],["^[c-z][^@]*@gunfire1.com$"],True),None),
+            (("test60","test1",["^a.*@gunfire1.com$"],["c@gunfire1.com"],True),None),
+            (("test70","test1",["^a.*@gunfire1.com$"],["c*@gunfire1.com"],True),None)
         ]:
             index += 1
             if test_data[1]:
@@ -86,7 +86,7 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
         index = 0
         for test_data,expected_data in [
             ((None,["*"]),(["*"],["*"])),
-            ((["test2@test1.com","",None,"test1@test1.com","*1@*.com","@test3.com","^[a-b].*@test4.com$"],None),(["@test3.com","^[a-b].*@test4.com$","*1@*.com","test1@test1.com","test2@test1.com"],None)),
+            ((["test2@gunfire1.com","",None,"test1@gunfire1.com","*1@*.com","@gunfire3.com","^[a-b].*@gunfire4.com$"],None),(["@gunfire3.com","^[a-b].*@gunfire4.com$","*1@*.com","test1@gunfire1.com","test2@gunfire1.com"],None)),
         ]:
             index += 1
             obj = UserGroup(name="test_{}".format(index),groupid="test_{}".format(index),users=test_data[0],excluded_users=test_data[1])
@@ -99,18 +99,18 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
     def test_contain(self):
         index = 0
         for test_data,testcases in [
-            ((["*"],["*"]),[("test1@test1.com",False),("test2@test2.com",False)]),
-            ((["@test1.com"],None),[("test1@test1.com",True),("test12@test1.com",True),("test2@test2.com",False),("test3@test3.com",False)]),
-            ((["test1@test1.com"],None),[("test1@test1.com",True),("test12@test1.com",False),("test2@test2.com",False),("test3@test3.com",False)]),
-            ((["*1@*.com"],None),[("test1@test1.com",True),("test12@test1.com",False),("test1@test2.com",True),("test1@test3.org",False)]),
-            ((["*"],["@test1.com"]),[("test1@test1.com",False),("test2@test2.com",True),("test3@test3.com",True)]),
-            ((["*"],["test1@test1.com"]),[("test1@test1.com",False),("test11@test1.com",True),("test2@test2.com",True)]),
-            ((["*"],["*1@*.com"]),[("test1@test1.com",False),("test1@test2.com",False),("test1@test1.org",True),("test@test.com",True)]),
-            ((["@test1.com","@test2.com","test3@test3.com","*1@*.org"],["test1@test1.com","test1@test.org"]),[("test1@test1.com",False),("test11@test1.com",True),("test2@test2.com",True),("test3@test3.com",True),("test31@test3.com",False),("test1@test.org",False),("test11@test.org",True),("test1@test.com",False)]),
-            ((["@test1.com"],["@test1.com"]),[("test1@test1.com",False),("test2@test2.com",False)]),
+            ((["*"],["*"]),[("test1@gunfire1.com",False),("test2@gunfire2.com",False)]),
+            ((["@gunfire1.com"],None),[("test1@gunfire1.com",True),("test12@gunfire1.com",True),("test2@gunfire2.com",False),("test3@gunfire3.com",False)]),
+            ((["test1@gunfire1.com"],None),[("test1@gunfire1.com",True),("test12@gunfire1.com",False),("test2@gunfire2.com",False),("test3@gunfire3.com",False)]),
+            ((["*1@*.com"],None),[("test1@gunfire1.com",True),("test12@gunfire1.com",False),("test1@gunfire2.com",True),("test1@test3.org",False)]),
+            ((["*"],["@gunfire1.com"]),[("test1@gunfire1.com",False),("test2@gunfire2.com",True),("test3@gunfire3.com",True)]),
+            ((["*"],["test1@gunfire1.com"]),[("test1@gunfire1.com",False),("test11@gunfire1.com",True),("test2@gunfire2.com",True)]),
+            ((["*"],["*1@*.com"]),[("test1@gunfire1.com",False),("test1@gunfire2.com",False),("test1@test1.org",True),("test@gunfire.com",True)]),
+            ((["@gunfire1.com","@gunfire2.com","test3@gunfire3.com","*1@*.org"],["test1@gunfire1.com","test1@test.org"]),[("test1@gunfire1.com",False),("test11@gunfire1.com",True),("test2@gunfire2.com",True),("test3@gunfire3.com",True),("test31@gunfire3.com",False),("test1@test.org",False),("test11@test.org",True),("test1@gunfire.com",False)]),
+            ((["@gunfire1.com"],["@gunfire1.com"]),[("test1@gunfire1.com",False),("test2@gunfire2.com",False)]),
             #test regex user email
-            ((["*"],["^[c-z][^@]*@test1.com$"]),[("test1@test1.com",False),("test2@test2.com",True),("c@test1.com",False),("dz@test1.com",False),("a@test1.com",True)]),
-            ((["^[a-d][^@]*@test1.com$","^[c-z][^@]*@test2.com$"],["^[c-z][^@]*@test1.com$"]),[("test1@test1.com",False),("test2@test2.com",True),("c@test1.com",False),("dz@test1.com",False),("a@test1.com",True),("cd@test2.com",True),("a@test2.com",False),("a@test3.com",False)]),
+            ((["*"],["^[c-z][^@]*@gunfire1.com$"]),[("test1@gunfire1.com",False),("test2@gunfire2.com",True),("c@gunfire1.com",False),("dz@gunfire1.com",False),("a@gunfire1.com",True)]),
+            ((["^[a-d][^@]*@gunfire1.com$","^[c-z][^@]*@gunfire2.com$"],["^[c-z][^@]*@gunfire1.com$"]),[("test1@gunfire1.com",False),("test2@gunfire2.com",True),("c@gunfire1.com",False),("dz@gunfire1.com",False),("a@gunfire1.com",True),("cd@gunfire2.com",True),("a@gunfire2.com",False),("a@gunfire3.com",False)]),
         ]:
             index += 1
             obj = UserGroup(name="test_{}".format(index),groupid="test_{}".format(index),users=test_data[0],excluded_users=test_data[1])
@@ -122,23 +122,23 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
 
     def test_find(self):
         self.test_usergroups = [
-            ("testcompany",["@test1.com"],None,[
-                ("developers",["dev_*@test1.com"],None,[
-                    ("app_developers",["dev_app_*@test1.com"],["dev_app_test*@test1.com"],[
-                        ("app_dev_leaders",["dev_app_leader*@test1.com"],None,[
-                            ("app_dev_manager",["dev_app_leader_manager*@test1.com"],None,None)
+            ("testcompany",["@gunfire1.com"],None,[
+                ("developers",["dev_*@gunfire1.com"],None,[
+                    ("app_developers",["dev_app_*@gunfire1.com"],["dev_app_test*@gunfire1.com"],[
+                        ("app_dev_leaders",["dev_app_leader*@gunfire1.com"],None,[
+                            ("app_dev_manager",["dev_app_leader_manager*@gunfire1.com"],None,None)
                         ])
                     ])
                 ]),
-                ("supporters",["support_*@test1.com"],None,[])
+                ("supporters",["support_*@gunfire1.com"],None,[])
             ]),
-            ("reportgroup",["report1@test1.com","dev_report1@test1.com","dev_app_report1@test1.com","dev_app_leader_report1@test1.com","dev_app_leader_manager_report1@test1.com","support_report1@test1.com"],None,None),
+            ("reportgroup",["report1@gunfire1.com","dev_report1@gunfire1.com","dev_app_report1@gunfire1.com","dev_app_leader_report1@gunfire1.com","dev_app_leader_manager_report1@gunfire1.com","support_report1@gunfire1.com"],None,None),
             #test regex
-            ("testcompany2",["^[^@]+@test2.com$"],None,[
-                ("developers2",["dev_*@test2.com"],["^dev_.*fake.*@test2.com$"],[
-                    ("app_developers2",["dev_app_*@test2.com"],["^dev_app_.*fake.*@test2.com$"],[
-                        ("app_dev_leaders2",["^dev_app_leader.*@test2.com$"],None,[
-                            ("app_dev_manager2",["^dev_app_leader_manager.*@test2.com$"],None,None)
+            ("testcompany2",["^[^@]+@gunfire2.com$"],None,[
+                ("developers2",["dev_*@gunfire2.com"],["^dev_.*fake.*@gunfire2.com$"],[
+                    ("app_developers2",["dev_app_*@gunfire2.com"],["^dev_app_.*fake.*@gunfire2.com$"],[
+                        ("app_dev_leaders2",["^dev_app_leader.*@gunfire2.com$"],None,[
+                            ("app_dev_manager2",["^dev_app_leader_manager.*@gunfire2.com$"],None,None)
                         ])
                     ])
                 ])
@@ -146,30 +146,30 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
 
         ]
         testcases = [
-            ("test@test.com",[UserGroup.public_group().name],[UserGroup.public_group().groupid]),
-            ("sales@test1.com",["testcompany"],[UserGroup.public_group().groupid,"testcompany"]),
-            ("support_1@test1.com",["supporters"],[UserGroup.public_group().groupid,"testcompany","supporters"]),
-            ("dev_1@test1.com",["developers"],[UserGroup.public_group().groupid,"testcompany","developers"]),
-            ("dev_app_1@test1.com",["app_developers"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers"]),
-            ("dev_app_leader1@test1.com",["app_dev_leaders"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders"]),
-            ("dev_app_leader_manager1@test1.com",["app_dev_manager"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders","app_dev_manager"]),
+            ("test@gunfire.com",[UserGroup.public_group().name],[UserGroup.public_group().groupid]),
+            ("sales@gunfire1.com",["testcompany"],[UserGroup.public_group().groupid,"testcompany"]),
+            ("support_1@gunfire1.com",["supporters"],[UserGroup.public_group().groupid,"testcompany","supporters"]),
+            ("dev_1@gunfire1.com",["developers"],[UserGroup.public_group().groupid,"testcompany","developers"]),
+            ("dev_app_1@gunfire1.com",["app_developers"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers"]),
+            ("dev_app_leader1@gunfire1.com",["app_dev_leaders"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders"]),
+            ("dev_app_leader_manager1@gunfire1.com",["app_dev_manager"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders","app_dev_manager"]),
 
-            ("report1@test1.com",["testcompany","reportgroup"],[UserGroup.public_group().groupid,"testcompany","reportgroup"]),
-            ("support_report1@test1.com",["supporters","reportgroup"],[UserGroup.public_group().groupid,"testcompany","supporters","reportgroup"]),
-            ("dev_report1@test1.com",["developers","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","reportgroup"]),
-            ("dev_app_report1@test1.com",["app_developers","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","reportgroup"]),
-            ("dev_app_leader_report1@test1.com",["app_dev_leaders","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders","reportgroup"]),
-            ("dev_app_leader_manager_report1@test1.com",["app_dev_manager","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders","app_dev_manager","reportgroup"]),
+            ("report1@gunfire1.com",["testcompany","reportgroup"],[UserGroup.public_group().groupid,"testcompany","reportgroup"]),
+            ("support_report1@gunfire1.com",["supporters","reportgroup"],[UserGroup.public_group().groupid,"testcompany","supporters","reportgroup"]),
+            ("dev_report1@gunfire1.com",["developers","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","reportgroup"]),
+            ("dev_app_report1@gunfire1.com",["app_developers","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","reportgroup"]),
+            ("dev_app_leader_report1@gunfire1.com",["app_dev_leaders","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders","reportgroup"]),
+            ("dev_app_leader_manager_report1@gunfire1.com",["app_dev_manager","reportgroup"],[UserGroup.public_group().groupid,"testcompany","developers","app_developers","app_dev_leaders","app_dev_manager","reportgroup"]),
             #regex test
 
-            ("dev_1@test2.com",["developers2"],[UserGroup.public_group().groupid,"testcompany2","developers2"]),
-            ("dev_1_fake@test2.com",["testcompany2"],[UserGroup.public_group().groupid,"testcompany2"]),
-            ("dev_app_fake@test2.com",["testcompany2"],[UserGroup.public_group().groupid,"testcompany2"]),
-            ("dev_app_leader_fake@test2.com",["testcompany2"],[UserGroup.public_group().groupid,"testcompany2"]),
-            ("dev_app_leader_manager_fake@test2.com",["testcompany2"],[UserGroup.public_group().groupid,"testcompany2"]),
-            ("dev_app_1@test2.com",["app_developers2"],[UserGroup.public_group().groupid,"testcompany2","developers2","app_developers2"]),
-            ("dev_app_leader1@test2.com",["app_dev_leaders2"],[UserGroup.public_group().groupid,"testcompany2","developers2","app_developers2","app_dev_leaders2"]),
-            ("dev_app_leader_manager1@test2.com",["app_dev_manager2"],[UserGroup.public_group().groupid,"testcompany2","developers2","app_developers2","app_dev_leaders2","app_dev_manager2"]),
+            ("dev_1@gunfire2.com",["developers2"],[UserGroup.public_group().groupid,"testcompany2","developers2"]),
+            ("dev_1_fake@gunfire2.com",["testcompany2"],[UserGroup.public_group().groupid,"testcompany2"]),
+            ("dev_app_fake@gunfire2.com",["testcompany2"],[UserGroup.public_group().groupid,"testcompany2"]),
+            ("dev_app_leader_fake@gunfire2.com",["testcompany2"],[UserGroup.public_group().groupid,"testcompany2"]),
+            ("dev_app_leader_manager_fake@gunfire2.com",["testcompany2"],[UserGroup.public_group().groupid,"testcompany2"]),
+            ("dev_app_1@gunfire2.com",["app_developers2"],[UserGroup.public_group().groupid,"testcompany2","developers2","app_developers2"]),
+            ("dev_app_leader1@gunfire2.com",["app_dev_leaders2"],[UserGroup.public_group().groupid,"testcompany2","developers2","app_developers2","app_dev_leaders2"]),
+            ("dev_app_leader_manager1@gunfire2.com",["app_dev_manager2"],[UserGroup.public_group().groupid,"testcompany2","developers2","app_developers2","app_dev_leaders2","app_dev_manager2"]),
 
 
         ]
@@ -274,7 +274,7 @@ class UserAuthorizationTestCase(object):#BaseAuthCacheTestCase):
 class UserGroupAuthorizationTestCase(UserAuthorizationTestCase):
 
     def get_role(self,index):
-        group = UserGroup(name="test{:0>3}".format(index),groupid="test{:0>3}".format(index).format(index),users=["@test.com"])
+        group = UserGroup(name="test{:0>3}".format(index),groupid="test{:0>3}".format(index).format(index),users=["@gunfire.com"])
         group.clean()
         group.save()
         return group

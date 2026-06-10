@@ -20,7 +20,7 @@ from django.contrib import messages
 
 import hashlib
 
-from ..cache import cache,get_defaultcache,get_usercache
+from ..cache import cache,get_defaultcache,get_usercache,get_usercache_by_email
 from .. import signals
 from .. import utils
 from .debugmodels import DebugLog
@@ -2035,6 +2035,10 @@ class UserListener(object):
         usercache = get_usercache(instance.id)
         if usercache:
             usercache.delete(settings.GET_USER_KEY(instance.id))
+
+        usercache = get_usercache_by_email(instance.email)
+        if usercache:
+            usercache.delete(settings.GET_USEREMAIL_KEY(instance.email))
 
 class UserTokenListener(object):
     @staticmethod

@@ -197,10 +197,3 @@ admin_site.register(NormalUserToken,UserAccessTokenAdmin)
 admin_site.register(auth2_models.IdentityProvider,IdentityProviderAdmin)
 admin_site.register(auth2_models.CustomizableUserflow,CustomizableUserflowAdmin)
 admin_site.register(auth2_models.UserTOTP,UserTOTPAdmin)
-
-if settings.TRAFFICCONTROL_ENABLED:
-    if settings.AUTH2_CLUSTER_ENABLED:
-        from .clusteradmin import TrafficControlAdmin
-    else:
-        from .tcontroladmin import TrafficControlAdmin
-    admin_site.register(auth2_models.TrafficControl,TrafficControlAdmin)

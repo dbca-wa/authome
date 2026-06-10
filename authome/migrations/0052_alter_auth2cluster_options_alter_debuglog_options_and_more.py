@@ -19,10 +19,6 @@ class Migration(migrations.Migration):
             options={'verbose_name_plural': '   Auth2 Logs'},
         ),
         migrations.AlterModelOptions(
-            name='trafficcontrol',
-            options={'verbose_name_plural': '       Traffic Control'},
-        ),
-        migrations.AlterModelOptions(
             name='trafficdata',
             options={'verbose_name_plural': '     Traffic Data'},
         ),
@@ -41,10 +37,5 @@ class Migration(migrations.Migration):
         migrations.AlterModelOptions(
             name='usertoken',
             options={'verbose_name_plural': 'Access Tokens'},
-        ),
-        migrations.AddField(
-            model_name='trafficcontrol',
-            name='timeout',
-            field=models.PositiveIntegerField(help_text='The maximum seconds between the booking time and the current time.', null=True),
         ),
     ]

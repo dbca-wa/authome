@@ -1,0 +1,16 @@
+#!/bin/bash
+
+if [[ "$RUNNING_MODE" == "gevent" ]]; then
+    config="gunicorn_gevent.py"
+elif [[ "$RUNNING_MODE" == "eventlet" ]]; then
+    config="gunicorn_eventlet.py"
+else
+    config="gunicorn_sync.py"
+fi
+if [[ "$DEBUG" == "True" || "${LOGLEVEL}" == "DEBUG" ]]; then
+    echo "Running in dev mode"
+    cd /app/dev && gunicorn authome.wsgi --config=${config}
+else
+    echo "Running in release mode"
+    cd /app/release && gunicorn authome.wsgi --config=${config}
+fi

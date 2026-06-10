@@ -43,7 +43,7 @@ class AuthTestCase(BaseAuthTestCase):
  
     def test_auth_optional(self):
         self.test_users = [
-            ("staff_1@gunfire.com","staff_1@gunfire.com")
+            ("staff_2@gunfire.com","staff_2@gunfire.com")
         ]
         self.test_usergroups = [
             ("all_user",["*@*.*"],None,None)
@@ -58,7 +58,7 @@ class AuthTestCase(BaseAuthTestCase):
         self.assertEqual(res.status_code,204,msg="Should return 204 response for unauthenticated request")
         
         #test sso_auth after authentication   
-        self.client.force_login(self.test_users["staff_1@gunfire.com"])
+        self.client.force_login(self.test_users["staff_2@gunfire.com"])
         res = self.client.get(self.auth_optional_url)
         self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
         self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
@@ -70,7 +70,7 @@ class AuthTestCase(BaseAuthTestCase):
  
     def test_auth_basic(self):
         self.test_users = [
-            ("staff_1@gunfire.com","staff_1@gunfire.com",True)
+            ("staff_3@gunfire.com","staff_3@gunfire.com",True)
         ]
         self.test_usergroups = [
             ("all_user",["*@*.*"],None,None)
@@ -88,23 +88,26 @@ class AuthTestCase(BaseAuthTestCase):
         self.assertEqual(res.status_code,401,msg="Should return 401 response for unauthenticated request")
 
         #test sso token auth
-        user=self.test_users["staff_1@gunfire.com"]
-        for username,token in ((user.username,user.token.token),(user.email,user.token.token)):
-            res = self.client.get(self.auth_basic_url,authorization=self.basic_auth(username,token))
-            self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
-            self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
-    
-            for i in range(0,5):
+        try:
+            user=self.test_users["staff_3@gunfire.com"]
+            for username,token in ((user.username,user.token.token),(user.email,user.token.token)):
                 res = self.client.get(self.auth_basic_url,authorization=self.basic_auth(username,token))
                 self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
-                self.assertEqual(res.get('X-auth-cache-hit'),'success',msg="Already authenticated, should hit the cache")
-
-            res = self.client.get(self.auth_basic_url,authorization=self.basic_auth(username,"faketoken"))
-            self.assertEqual(res.status_code,401,msg="Should return 401 response for unauthenticated request")
+                self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hit the cache")
+        
+                for i in range(0,5):
+                    res = self.client.get(self.auth_basic_url,authorization=self.basic_auth(username,token))
+                    self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
+                    self.assertEqual(res.get('X-auth-cache-hit'),'success',msg="Already authenticated, should hit the cache")
+    
+                res = self.client.get(self.auth_basic_url,authorization=self.basic_auth(username,"faketoken"))
+                self.assertEqual(res.status_code,401,msg="Should return 401 response for unauthenticated request")
+        finally:
+            pass
 
     def test_auth_basic_optional(self):
         self.test_users = [
-            ("staff_1@gunfire.com","staff_1@gunfire.com",True)
+            ("staff_4@gunfire.com","staff_4@gunfire.com",True)
         ]
         self.test_usergroups = [
             ("all_user",["*@*.*"],None,None)
@@ -122,7 +125,7 @@ class AuthTestCase(BaseAuthTestCase):
         self.assertEqual(res.status_code,401,msg="Should return 401 response for unauthenticated request")
 
         #test sso token auth
-        user=self.test_users["staff_1@gunfire.com"]
+        user=self.test_users["staff_4@gunfire.com"]
         for username,token in ((user.username,user.token.token),(user.email,user.token.token)):
             res = self.client.get(self.auth_basic_optional_url,authorization=self.basic_auth(username,token))
             self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
@@ -138,7 +141,7 @@ class AuthTestCase(BaseAuthTestCase):
 
     def test_auth_basic_over_auth(self):
         self.test_users = [
-            ("staff_1@gunfire.com","staff_1@gunfire.com",True)
+            ("staff_5@gunfire.com","staff_5@gunfire.com",True)
         ]
         self.test_usergroups = [
             ("all_user",["*@*.*"],None,None)
@@ -153,7 +156,7 @@ class AuthTestCase(BaseAuthTestCase):
         self.assertEqual(res.status_code,401,msg="Should return 401 response for unauthenticated request")
         
         #test sso_auth after authentication   
-        self.client.force_login(self.test_users["staff_1@gunfire.com"])
+        self.client.force_login(self.test_users["staff_5@gunfire.com"])
         res = self.client.get(self.auth_url)
         self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
         self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hitting the cache")
@@ -163,7 +166,7 @@ class AuthTestCase(BaseAuthTestCase):
         self.assertEqual(res.get('X-auth-cache-hit'),'success',msg="Already authenticated, should hit the cache")
 
         #test sso token auth
-        user=self.test_users["staff_1@gunfire.com"]
+        user=self.test_users["staff_5@gunfire.com"]
         for username,token in ((user.username,user.token.token),(user.email,user.token.token)):
             res = self.client.get(self.auth_basic_url,authorization=self.basic_auth(username,token))
             self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
@@ -176,8 +179,8 @@ class AuthTestCase(BaseAuthTestCase):
 
     def test_auth_basic_over_auth_with_different_user(self):
         self.test_users = [
-            ("staff_1@gunfire.com","staff_1@gunfire.com",False),
-            ("staff_2@gunfire.com","staff_2@gunfire.com",True)
+            ("staff_6@gunfire.com","staff_6@gunfire.com",False),
+            ("staff_7@gunfire.com","staff_7@gunfire.com",True)
         ]
         self.test_usergroups = [
             ("all_user",["*@*.*"],None,None)
@@ -192,7 +195,7 @@ class AuthTestCase(BaseAuthTestCase):
         self.assertEqual(res.status_code,401,msg="Should return 401 response for unauthenticated request")
         
         #test sso_auth after authentication   
-        user1=self.test_users["staff_1@gunfire.com"]
+        user1=self.test_users["staff_6@gunfire.com"]
         self.client.force_login(user1)
         res = self.client.get(self.auth_url)
         self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
@@ -203,8 +206,9 @@ class AuthTestCase(BaseAuthTestCase):
         self.assertEqual(res.get('X-auth-cache-hit'),'success',msg="Already authenticated, should hit the cache")
 
         #test sso token auth
-        user2=self.test_users["staff_2@gunfire.com"]
+        user2=self.test_users["staff_7@gunfire.com"]
         for username,token in ((user2.username,user2.token.token),(user2.email,user2.token.token)):
+        #for username,token in ((user2.username,user2.token.token),):
             res = self.client.get(self.auth_basic_url,authorization=self.basic_auth(username,token))
             self.assertEqual(res.status_code,200,msg="Should return 200 response for authenticated request")
             self.assertEqual(res.has_header('X-auth-cache-hit'),False,msg="Should authenticate the user without hitting the cache")
@@ -223,7 +227,7 @@ class AuthTestCase(BaseAuthTestCase):
 
     def test_auth_basic_negative(self):
         self.test_users = [
-            ("staff_1@gunfire.com","staff_1@gunfire.com",True)
+            ("staff_8@gunfire.com","staff_8@gunfire.com",True)
         ]
         self.test_usergroups = [
             ("all_user",["*@*.*"],None,None)
@@ -234,7 +238,7 @@ class AuthTestCase(BaseAuthTestCase):
         self.populate_testdata()
 
         #test sso token auth
-        user=self.test_users["staff_1@gunfire.com"]
+        user=self.test_users["staff_8@gunfire.com"]
         for username,usertoken in ((user.username,user.token),):
             token = usertoken.token
             res = self.client.get(self.auth_basic_url,authorization=self.basic_auth(username,token))
@@ -340,7 +344,7 @@ class AuthTestCase(BaseAuthTestCase):
     def test_check_auth_basic_per_request(self):
         settings.CHECK_AUTH_BASIC_PER_REQUEST = True
         self.test_users = [
-            ("staff_1@gunfire.com","staff_1@gunfire.com",True)
+            ("staff_9@gunfire.com","staff_9@gunfire.com",True)
         ]
         self.test_usergroups = [
             ("all_user",["*@*.*"],None,None)
@@ -351,7 +355,7 @@ class AuthTestCase(BaseAuthTestCase):
         self.populate_testdata()
 
         #test sso token auth
-        user=self.test_users["staff_1@gunfire.com"]
+        user=self.test_users["staff_9@gunfire.com"]
         for username,usertoken in ((user.username,user.token),):
             token = usertoken.token
             res = self.client.get(self.auth_basic_url,authorization=self.basic_auth(username,token))

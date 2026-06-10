@@ -1,14 +1,17 @@
 import subprocess
+import collections
 import os
 import json
 import signal
 import time
 import requests
 from urllib.parse import quote_plus
+import logging.config
 
 from django.conf import settings
 from django.utils import timezone
 from django.utils.http import urlencode
+from django.core.cache import caches
 
 from . import  utils
 from .serializers import JSONDecoder
@@ -61,7 +64,7 @@ class StartServerMixin(object):
 
         auth2_env = " && ".join("export {0}=\"{1}\"".format(k,(auth2_env or {}).get(k,cls.default_env.get(k))) for k,v in cls.default_env.items())
           
-        command = "/bin/bash -c 'set -a && export PORT={2} && source {0}/.env.{1} && {3} && poetry run python manage.py runserver 0.0.0.0:{2}'".format(settings.BASE_DIR,servername,port,auth2_env) 
+        command = "/bin/bash -c 'set -a && export PORT={2} && source {0}/.env.{1} && {3} && uv run python manage.py runserver 0.0.0.0:{2}'".format(settings.BASE_DIR,servername,port,auth2_env) 
         print("Start auth2 server({}):{}".format(servername,command))
         cls.process_map[servername] = (subprocess.Popen(command,shell=True,preexec_fn=os.setsid,stdout=subprocess.PIPE),port)
         expired = 60
@@ -76,7 +79,7 @@ class StartServerMixin(object):
                     #print("{} : Server({}) is not ready.{}".format(utils.format_datetime(timezone.localtime()),servername,str(ex)))
                     time.sleep(1)
                 else:
-                    raise("{} : Failed to start server({}).{}".format(utils.format_datetime(timezone.localtime()),servername,str(ex)))
+                    raise Exception("{} : Failed to start server({}).{}".format(utils.format_datetime(timezone.localtime()),servername,str(ex)))
                 
 
     @classmethod
@@ -115,18 +118,8 @@ class StartServerMixin(object):
         return url
 
     @classmethod
-    def get_auth_tcontrol_url(cls,servername="standalone"):
-        url =  "{}/test/sso/auth_tcontrol".format(cls.get_baseurl(servername))
-        return url
-
-    @classmethod
     def get_auth_optional_url(cls,servername="standalone"):
         url =  "{}/sso/auth_optional".format(cls.get_baseurl(servername))
-        return url
-
-    @classmethod
-    def get_auth_optional_tcontrol_url(cls,servername="standalone"):
-        url =  "{}/test/sso/auth_optional_tcontrol".format(cls.get_baseurl(servername))
         return url
 
     @classmethod
@@ -135,28 +128,17 @@ class StartServerMixin(object):
         return url
 
     @classmethod
-    def get_basicauth_tcontrol_url(cls,servername="standalone"):
-        url =  "{}/test/sso/auth_basic_tcontrol".format(cls.get_baseurl(servername))
-        return url
-
-    @classmethod
     def get_basicauth_optional_url(cls,servername="standalone"):
         url =  "{}/sso/auth_basic_optional".format(cls.get_baseurl(servername))
         return url
 
     @classmethod
-    def get_basicauth_optional_tcontrol_url(cls,servername="standalone"):
-        url =  "{}/test/sso/auth_basic_optional_tcontrol".format(cls.get_baseurl(servername))
-        return url
-
-    @classmethod
-    def get_clear_tcontroldata_url(cls,servername="standalone"):
-        url =  "{}/test/clear_tcontroldata".format(cls.get_baseurl(servername))
-        return url
-
-    @classmethod
     def get_login_user_url(cls,user,enabletoken=True,refreshtoken=False,servername="standalone"):
         return "{}/test/login_user?user={}&enabletoken={}&refreshtoken={}".format(cls.get_baseurl(servername),user,enabletoken,refreshtoken)
+
+    @classmethod
+    def get_delete_offline_clusters_url(cls,servername="standalone"):
+        return "{}/test/deleteofflineclusters".format(cls.get_baseurl(servername))
 
     @classmethod
     def get_logout_url(cls,servername="standalone"):
@@ -189,13 +171,6 @@ class StartServerMixin(object):
     @classmethod
     def get_refresh_modelcache_url(cls,modelname,servername="standalone"):
         return "{}/test/model/{}/refreshcache".format(cls.get_baseurl(servername),modelname)
-
-    @classmethod
-    def get_test_tcontrol_url(cls,tcontrol,client,clientip,exempt=False,debug=False,servername="standalone"):
-        if client:
-            return "{}/test/tcontrol?tcontrol={}&client={}&clientip={}&exempt={}&debug={}".format(cls.get_baseurl(servername),tcontrol,client,quote_plus(clientip),1 if exempt else 0,1 if debug else 0)
-        else:
-            return "{}/test/tcontrol?tcontrol={}&clientip={}&exempt={}&debug={}".format(cls.get_baseurl(servername),tcontrol,quote_plus(clientip),1 if exempt else 0,1 if debug else 0)
 
     def get_settings(self,names,servername="standalone"):
         """
@@ -269,3 +244,151 @@ class StartServerMixin(object):
 
         sig = utils.sign_session_cookie(lb_hash_key,clusterid,session_key,settings.SECRET_KEY)
         return "{}|{}|{}|{}".format(lb_hash_key,clusterid,signature,session_key)
+
+
+
+def set_process_logconfig(logfile:str):
+    loggingconfig = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'formatters': {
+            'default': {'format': '%(asctime)s %(levelname)-8s %(name)-12s %(message)s'},
+            'verbose': {'format': '%(asctime)s %(levelname)-8s %(message)s'},
+        },
+        'handlers': {
+            'default': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'filename': logfile,
+                'maxBytes': 4194304,  # 5MB
+                'backupCount': 5,
+                'formatter': 'default',
+            }
+        },
+        'loggers': {
+            'django': {
+                'handlers': ['default'],
+                'propagate': True,
+            },
+            'django.request': {
+                'handlers': ['default'],
+                'level': 'WARNING',
+                'propagate': False,
+            },
+            'authome': {
+                'handlers': ['default'],
+                'level': settings.LOGLEVEL,
+            },
+        }
+    }
+    logging.config.dictConfig(loggingconfig)
+
+class RedisClusterTestCaseMixin(object):
+    """
+    Test redis cluster cache
+    Required test env: Redis cluster with 3 groups, each group has one master server and one slave server
+    """
+    TEST_REDISCLUSTER_CACHE = utils.env("TEST_REDISCLUSTER_CACHE",default="default")
+    TEST_REDISCLUSTER_NODE_TIMEOUT = utils.env("TEST_REDISCLUSTER_NODE_TIMEOUT",15000) #milliseconds
+
+
+    nodes = None
+    nodeids = None
+    #redis cluster groups, each group is a list which contain the group node
+    groups = None
+    #map between node and (group, the number of the nodes in the group)
+    groupmap = None
+
+    @classmethod
+    def get_cluster_metadata(cls,start_all_server=False,print_log=False):
+        cls._cache = caches[cls.TEST_REDISCLUSTER_CACHE]
+        cls._redis_client = cls._cache.redis_client
+
+        cluster_nodes = 0
+
+        for group in cls._redis_client.clustergroups:
+            for nodename in group:
+                cluster_nodes += 1
+                if start_all_server:
+                    cls.start_redisserver(nodename,start=True)
+
+        nodes = collections.OrderedDict()
+        nodeids = collections.OrderedDict()
+        groups = []
+        groupmap = collections.OrderedDict()
+
+        #redis cluster groups, each group is a list which contain the group node
+        #Get the cluster nodes
+        while True:
+            clustermetadata = cls._redis_client.cluster_nodes()
+            if start_all_server:
+                if cluster_nodes != len(clustermetadata) or any( ("fail" in nodemetadata["flags"] or not nodemetadata["connected"]) for nodemetadata in clustermetadata.values()):
+                    time.sleep(1)
+                    continue
+            break
+        #populate the nodes map between node name and (node id, master flag, slaves or master node)
+        for nodename,nodemetadata in clustermetadata.items():
+                nodeids[nodemetadata["node_id"]] = nodename
+                if "fail" in nodemetadata["flags"] or not nodemetadata["connected"]:
+                    nodes[nodename] = {"id":nodemetadata["node_id"],"is_master":None}
+                elif "master" in nodemetadata["flags"]:
+                    nodes[nodename] = {"id":nodemetadata["node_id"],"is_master":True, "slaves":[]}
+                else:
+                    nodes[nodename] = {"id":nodemetadata["node_id"],"is_master":False, "master":None}
+
+        #populate the cluster group list with (node name,master?,running?), master node should be the first node.
+        #populate the cluster group map between node name and (cluster group , index in the cluster groups)
+        for clustergroup in cls._redis_client.clustergroups:
+            group = []
+            groups.append(group)
+            groupindex = len(groups) - 1
+            for nodename in clustergroup:
+                #find/create the group in groups and groupmap
+                groupmap[nodename] = [group,groupindex]
+                    
+                if nodename in clustermetadata:
+                    #already added into 
+                    nodemetadata = clustermetadata[nodename]
+                    if "master" in nodemetadata["flags"] and "fail" not in nodemetadata["flags"] and nodemetadata["connected"]:
+                        group.insert(0,[nodename,True,True])
+                    elif "master" not in nodemetadata["flags"] and "master_id" in nodemetadata and "fail" not in nodemetadata["flags"] and nodemetadata["connected"]:
+                        group.append([nodename,False,True])
+                        if nodes[nodeids[nodemetadata["master_id"]]]["is_master"]:
+                            nodes[nodeids[nodemetadata["master_id"]]]["slaves"].append(nodename)
+                        nodes[nodename]["master"] = nodeids[nodemetadata["master_id"]]
+                    else:
+                        group.append([nodename,False,False])
+                else:
+                    group.append([nodename,False,False])
+        if print_log:
+            cls.print_metadata(nodeids,nodes,groups,groupmap)
+
+        return (nodeids,nodes,groups,groupmap)
+
+    
+    @classmethod
+    def print_metadata(cls,nodeids=None,nodes=None,groups=None,groupmap=None):
+        print("==============Print the redis cluster metadata====================")
+        print("============redis Cluster Nodeids===================")
+        print(json.dumps(nodeids or cls.nodeids,indent=4))
+        print("============redis Cluster Nodes===================")
+        print(json.dumps(nodes or cls.nodes,indent=4))
+        print("============redis Cluster Groups===================")
+        print(json.dumps(groups or cls.groups,indent=4))
+        print("============redis Cluster map between node and group===================")
+        print(json.dumps(groupmap or cls.groupmap,indent=4))
+        print("---------------------------------------------------------------------")
+
+    @classmethod
+    def start_redisserver(cls,nodename:str,start:bool=True):
+        """
+        Start/stop redis server
+        nodename: host:port
+        """
+        if start:
+            result = subprocess.run(["/home/rockyc/projects/commonservice/start_redisserver",nodename.split(':')[1]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,text=True,bufsize=0)
+            if result.returncode != 0:
+                raise Exception("Failed to start redis server({}).".format(nodename))
+        else:
+            result = subprocess.run(["/home/rockyc/projects/commonservice/stop_redisserver",nodename.split(':')[1]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,text=True,bufsize=0)
+            if result.returncode != 0:
+                raise Exception("Failed to stop redis server({}).".format(nodename))

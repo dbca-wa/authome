@@ -56,10 +56,7 @@ def traffic_monitor(name,func):
         
     return _monitor if settings.TRAFFIC_MONITOR_LEVEL > 0 else func
 
-if settings.TRAFFICCONTROL_ENABLED:
-    from .tcontrolcache  import MemoryCache as BaseMemoryCache
-else:
-    from .cache  import MemoryCache as BaseMemoryCache
+from .cache  import MemoryCache as BaseMemoryCache
 
 class MemoryCache(BaseMemoryCache):
     def __init__(self):
@@ -321,6 +318,7 @@ class MemoryCache(BaseMemoryCache):
                 usercache = get_usercache(userid)
                 if usercache:
                     usercache.delete(settings.GET_USERTOKEN_KEY(userid))
+
             except Exception as ex:
                 logger.error("Failed to delete the user({}) from user cache.{}".format(userid,str(ex)))
                 local_succeed = False
@@ -582,44 +580,11 @@ class MemoryCache(BaseMemoryCache):
         res = self._send_request_to_cluster(None,clusterid,_send_request)
         return res.text
 
-    def clear_tcontroldata(self,clusterid,tcontrolid):
-        def _send_request(cluster):
-            url = "{}{}?tcontrol={}".format(
-                cluster.endpoint,
-                reverse('test:clear_tcontroldata'),
-                tcontrolid
-            )
-            return requests.get(url,**self._requests_kwargs(cluster))
-        self._send_request_to_cluster(None,clusterid,_send_request)
-
-    def tcontrol(self,clusterid,tcontrolid,clientip,client,exempt,test=False):
-        """
-        traffic control
-        Return True if allowed; otherwise False
-        """
-        def _send_request(cluster):
-            url = "{}{}?clientip={}&tcontrol={}{}{}".format(
-                cluster.endpoint,
-                reverse('cluster:tcontrol'),
-                quote_plus(clientip),
-                tcontrolid,
-                "&client={}" if client else "",
-                "&exempt=1" if exempt else "",
-                "&test=1" if test else "",
-            )
-            return requests.get(url,**self._requests_kwargs(cluster))
-        try:
-            res = self._send_request_to_cluster(None,clusterid,_send_request)
-            return res.json()
-        except:
-            #other error. ignore traffic control
-            return [True,None]
-
     @property
     def status(self):
         result = super().status
         result["Auth2Clusters"] = {
-            "auth2_clusters":None if self._auth2_clusters else ["{}={}({})".format(o.clusterid,o.endpoint,utils.utils.format_datetime(o.last_heartbeat)) for o in self._auth2_clusters.values()],
+            "auth2_clusters":["{}={}({})".format(o.clusterid,o.endpoint,utils.utils.format_datetime(o.last_heartbeat)) for o in self._auth2_clusters.values()] if self._auth2_clusters else None,
             "latest_refresh_time":utils.format_datetime( self._auth2_clusters_ts),
             "next_check_time":utils.format_datetime(self._auth2_clusters_check_time.next_runtime)
         }

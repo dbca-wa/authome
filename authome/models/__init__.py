@@ -4,7 +4,6 @@ import logging
 from django.conf import settings
 
 from .models import *
-from .tcontrolmodels import *
 from .clustermodels import *
 from .trafficmodels import *
 from .debugmodels import *
@@ -21,6 +20,10 @@ def initialize():
         except:
             if not settings.IGNORE_LOADING_ERROR:
                 raise Exception("Failed to load Auth2Cluster cache during server starting.{}".format(traceback.format_exc()))    
+        finally:
+            logger.debug("Succeed to register auth2 cluster server '{}'".format(settings.AUTH2_CLUSTERID))
+            pass
+
         
     
     logger.debug("Begin to load authorization cache")
@@ -30,14 +33,6 @@ def initialize():
         if not settings.IGNORE_LOADING_ERROR:
             raise Exception("Failed to load UserGroup and UserGroupAuthorization cache during server starting.{}".format(traceback.format_exc()))
     
-    if settings.TRAFFICCONTROL_ENABLED:
-        logger.debug("Begin to load TrafficControl cache")
-        try:
-            cache.refresh_tcontrol_cache(True)
-        except:
-            if not settings.IGNORE_LOADING_ERROR:
-                raise Exception("Failed to load TrafficControl cache during server starting.{}".format(traceback.format_exc()))
-        
     logger.debug("Begin to load IDP cache")
     try:
         cache.refresh_idp_cache(True)

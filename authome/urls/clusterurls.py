@@ -24,7 +24,3 @@ if settings.AUTH2_MONITORING_DIR:
     urlpatterns.append(path('auth2onlinestatus', basic_auth_wrapper(views.auth2_local_onlinestatus),name="auth2_onlinestatus"))
     urlpatterns.append(path('liveness/<str:clusterid>/<str:serviceid>/<str:monitordate>.html', basic_auth_wrapper(views.auth2_liveness),name="auth2_liveness"))
 
-if settings.TRAFFICCONTROL_SUPPORTED:
-    urlpatterns.append(path('tcontrol', basic_auth_wrapper(views.tcontrol),name="tcontrol"))
-
-

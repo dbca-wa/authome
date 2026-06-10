@@ -558,7 +558,6 @@ class ClusterTestCase(testutils.StartServerMixin,TestCase):
                 session_data,ttl = self.get_session_data(session_cookie,"standalone")
                 print("\n".join("{}={}".format(k,v) for k,v in user_profile.items()))
                 print("\n")
-    
                 #migrate the session to cluster server 'auth03'
                 self.start_auth2_server("auth02a",18062,auth2_env=auth2_envs.get("auth02a"))
                 self.start_auth2_server("auth03",18063,auth2_env=auth2_envs.get("auth03"))

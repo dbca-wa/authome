@@ -1,43 +1,55 @@
-[tool.poetry]
+[project]
 name = "authome"
 version = "1.0.1"
 description = "HTTP service for single sign-on session tracking"
-authors = ["ASI <asi@dbca.wa.gov.au>"]
+authors = [{ name = "ASI", email = "asi@dbca.wa.gov.au" }]
+requires-python = ">=3.12,<3.13"
 license = "Apache-2.0"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "Django==5.2.14",
+    "django-ipware==7.0.1",
+    "social-auth-app-django==5.9.0",
+    "social-auth-core==4.9.1",
+    "psycopg[binary]==3.3.4",
+    "psycopg-pool==3.3.1",
+    "gunicorn[fast]==26.0.0",
+    "dj-database-url==3.1.2",
+    "django-dotenv==1.4.2",
+    "django-extensions==4.1",
+    "dj-static==0.0.6",
+    "python-memcached==1.62",
+    "qrcode==8.2",
+    "pyotp==2.9.0",
+    "Pillow==12.2.0",
+    "PyJWT==2.12.1",
+    "psutil==7.2.2",
+    "redis==7.4.0",
+    "gevent==26.4.0",
+    "eventlet==0.41.0",
+    "sentry-sdk[django]==2.59.0",
+    "captcha==0.7.1",
+]
 
-[tool.poetry.dependencies]
-python = "~3.12"
-Django = "5.2.8"
-django-ipware = "7.0.1"
-social-auth-app-django = "5.4.1"
-social-auth-core = "4.5.4"
-psycopg = "3.2.6"
-psycopg-pool = "3.2.6"
-gunicorn = "22.0.0"
-dj-database-url = "2.3.0"
-django-dotenv = "1.4.2"
-django-extensions = "3.2.3"
-dj-static = "0.0.6"
-python-memcached = "1.62"
-qrcode = "7.4.2"
-pyotp = "2.9.0"
-Pillow = "10.3.0"
-PyJWT = "2.9.0"
-psutil = "6.1.0"
-redis = "5.0.4"
-gevent = "24.11.1"
-eventlet = "0.39.1"
-sentry-sdk = {version = "2.16.0", extras = ["django"]}
-captcha = "0.6.0"
+[dependency-groups]
+dev = [
+    "ipython>=8.29.0,<9",
+    "coverage>=5.3,<6",
+    "coveralls>=2.1.2,<3",
+    "mock>=5.1.0,<6",
+    "ipdb>=0.13.4,<0.14",
+    "pipdeptree>=2.25.0,<3",
+]
 
-[tool.poetry.group.dev.dependencies]
-ipython = "^8.29.0"
-coverage = "^5.3"
-coveralls = "^2.1.2"
-mock = "^5.1.0"
-ipdb = "^0.13.4"
-pipdeptree = "^2.25.0"
+[tool.uv]
+default-groups = "all"
+
+[tool.uv.build-backend]
+module-root = ""
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.9.2,<0.10.0"]
+build-backend = "uv_build"

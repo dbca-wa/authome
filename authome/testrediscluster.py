@@ -4,6 +4,7 @@ import time
 import random
 import json
 import collections
+import logging
 from datetime import datetime,timedelta
 
 from django.test import TestCase
@@ -12,17 +13,22 @@ from django.conf import settings
 from django.core.cache import caches
 
 from . import utils
+from . import testutils
 
+
+logger = logging.getLogger(__name__)
 
 class DataMismatchException(Exception):
     pass
 
-class RedisClusterTestCase(TestCase):
-    TEST_REDISCLUSTER_CACHE = utils.env("TEST_REDISCLUSTER_CACHE",default="default")
-    TEST_KEYS_PER_GROUP = utils.env("TEST_KEYS_PER_GROUP",default=1000)
-    TEST_PROCESSES_PER_GROUP = utils.env("TEST_PROCESSES_PER_GROUP",default=2)
-    REQUEST_INTERVAL = utils.env("REQUEST_INTERVAL",default=1) #milliseconds
-    TEST_TIME = utils.env("TEST_TIME",default=10) #seconds
+class RedisClusterTestCase(testutils.RedisClusterTestCaseMixin,TestCase):
+    """
+    Test redis cluster cache
+    """
+    TEST_REDISCLUSTER_GROUP_KEYS = utils.env("TEST_REDISCLUSTER_GROUP_KEYS",default=1000)
+    TEST_REDISCLUSTER_PROCESSES_PER_GROUP = utils.env("TEST_REDISCLUSTER_PROCESSES_PER_GROUP",default=2)
+    REQUEST_INTERVAL = utils.env("TEST_REDISCLUSTER_REQUEST_INTERVAL",default=1) #milliseconds
+    TEST_TIME = utils.env("TEST_REDISCLUSTER_TIME",default=60) #seconds
 
 
     nodes = collections.OrderedDict()
@@ -42,6 +48,9 @@ class RedisClusterTestCase(TestCase):
         "errors": {
         },
         "groups": {
+        },
+        "manage_servers":{
+
         }
     }
 
@@ -49,63 +58,90 @@ class RedisClusterTestCase(TestCase):
     @classmethod
     def setUpClass(cls):
         super(RedisClusterTestCase,cls).setUpClass()
-        cls._cache = caches[cls.TEST_REDISCLUSTER_CACHE]
-        if cls.REQUEST_INTERVAL :
-            cls.REQUEST_INTERVAL = cls.REQUEST_INTERVAL / 1000
-        cls._redis_client = cls._cache.redis_client
-        nodes = cls._redis_client.cluster_nodes()
-        nodeservers = [node for node in nodes.keys()]
-        nodeservers.sort()
-        for node in nodeservers:
-            data = nodes[node]
-            cls.nodeids[data["node_id"]] = node
-            if "fail" in data["flags"]:
-                cls.nodes[node] = {"id":data["node_id"],"is_master":None}
-            elif "master" in data["flags"]:
-                cls.nodes[node] = {"id":data["node_id"],"is_master":True, "slaves":[]}
-            else:
-                cls.nodes[node] = {"id":data["node_id"],"is_master":False, "master":None}
+        cls.nodeids,cls.nodes,cls.groups,cls.groupmap = cls.get_cluster_metadata(start_all_server=True,print_log=True)
 
-        print("============Reids Cluster Nodeids===================")
-        print(json.dumps(cls.nodeids,indent=4))
-        for node in nodeservers:
-            data = nodes[node]
-            if "master" in data["flags"] and "fail" not in data["flags"]:
-                cls.groups.append([node])
-                cls.groupmap[node] = (cls.groups[-1],len(cls.groups) - 1)
-
-
-        for node in nodeservers:
-            data = nodes[node]
-            if "master" not in data["flags"] and "master_id" in data:
-                group = cls.groupmap[cls.nodeids[data["master_id"]]]
-                group[0].append(node)
-                cls.groupmap[node] = group
-                cls.nodes[cls.nodeids[data["master_id"]]]["slaves"].append(node)
-                cls.nodes[node]["master"] = cls.nodeids[data["master_id"]]
-
-        for group in cls.groups:
-            group.sort()
-
-        cls.groups.sort(key = lambda g:g[0])
-
-        print("============Reids Cluster Nodes===================")
-        print(json.dumps(cls.nodes,indent=4))
-        print("============Reids Cluster Groups===================")
-        print(json.dumps(cls.groups,indent=4))
-        print("============Reids Cluster map between node and group===================")
-        print(json.dumps(cls.groupmap,indent=4))
-
-    def run_test(self,c_conn,group,groupdata,test_starttime,test_endtime):
+    def manage_redisserver(self,c_conn,group,test_starttime,test_endtime):
+        """
+        shutdown/restart the redis server
+        """
         try:
             cls = self.__class__
+            #wait until test starttime
             sleep_time = (test_starttime - timezone.localtime()).total_seconds()
             if sleep_time and sleep_time > 0:
                 time.sleep(sleep_time)
 
-            
+            shutdown = False
+            managed_node = None
+            while (timezone.localtime() < test_endtime) :
+                managed_node = group[0]
+                #10 seconds passed since last time to shutdown/start server
+                if group[0][2]:
+                    #the first node is running.
+                    #the first node should be the master, shutdown it
+                    shutdown = True
+                    self.start_redisserver(group[0][0],start=False)
+                    #the first node should not be the master node anymore
+                    group[0][1] = False
+                    #the first node should not be running anymore
+                    group[0][2] = False
+                    #the second node should be the master right now, 
+                    group[1][1] = True
+                else:
+                    #already shutdown before, restart it
+                    shutdown = False
+                    self.start_redisserver(group[0][0],start=True)
+                    group[0][2] = True
+                    #move the restarted redis server to last,  and  will stop/restart another redis server next time
+                    group.append(group.pop(0))
+
+                if managed_node[0] not in cls.requestdata["manage_servers"]:
+                    cls.requestdata["manage_servers"][managed_node[0]] = {"shutdown":0,"start":0}
+                if shutdown:
+                    cls.requestdata["manage_servers"][managed_node[0]]["shutdown"] += 1
+                else:
+                    cls.requestdata["manage_servers"][managed_node[0]]["start"] += 1
+
+                time.sleep(10)
+
+            #The first group node has been shutdown, restart it .
+            if not group[0][2]:
+                #already shutdown before, restart it
+                managed_node = group[0]
+                self.start_redisserver(group[0][0],start=True)
+                group.append(group.pop(0))
+
+                if managed_node[0] not in cls.requestdata["manage_servers"]:
+                    cls.requestdata["manage_servers"][managed_node[0]] = {"shutdown":0,"start":0}
+                cls.requestdata["manage_servers"][managed_node[0]]["start"] += 1
+
+    
+            if c_conn:
+                c_conn.send(cls.requestdata)
+                c_conn.close()
+        except Exception as ex:
+            if c_conn:
+                c_conn.send(ex)
+                c_conn.close()
+            else:
+                raise
+
+    def run_test(self,c_conn,group,groupdata,test_starttime,test_endtime):
+        """
+        Run the test for one cluster group
+        group: a list of [node name,master?,running], the first element is always the master node
+        """
+        try:
+            testutils.set_process_logconfig("./logs/{}.log".format(group[0][0].replace(":",".")))
+            cls = self.__class__
+            #wait until test starttime
+            sleep_time = (test_starttime - timezone.localtime()).total_seconds()
+            if sleep_time and sleep_time > 0:
+                time.sleep(sleep_time)
+
             testingdata = {}
             getvalue=False
+            last_shutdowntime = test_starttime
             while (timezone.localtime() < test_endtime) :
                 starttime = timezone.localtime()
                 key = groupdata[random.randrange(len(groupdata))]
@@ -126,8 +162,9 @@ class RedisClusterTestCase(TestCase):
                     cls.requestdata["errors"][ex.__class__.__name__] = cls.requestdata["errors"].get(ex.__class__.__name__,0) + 1
                 except Exception as ex:
                     error = "{}({})".format(ex.__class__.__name__,traceback.format_exc())
-                    print("Failed to {} {} from redis cluster group({}).error = {}".format("get" if getvalue else "set",key,group, error))
-                    cls.requestdata["errors"][error] = cls.requestdata["errors"].get(error,0) + 1
+                    errorkey = "{}({})".format(ex.__class__.__name__,str(ex))
+                    logger.debug("Failed to {} {} from redis cluster group({}).error = {}".format("get" if getvalue else "set",key,group, error))
+                    cls.requestdata["errors"][errorkey] = cls.requestdata["errors"].get(error,0) + 1
 
                 endtime = timezone.localtime()
                 processtime = (endtime - starttime).total_seconds()
@@ -160,9 +197,17 @@ class RedisClusterTestCase(TestCase):
             else:
                 raise
 
-    def merge_requestdata(self,group,requestdata):
+    def merge_redisserver_managementdata(self,group,requestdata):
         cls = self.__class__
-        group = ",".join(group)
+        cls.requestdata["manage_servers"].update(requestdata["manage_servers"])
+
+
+    def merge_requestdata(self,group,requestdata):
+        """
+        group:list of [nodename,master?,running]
+        """
+        cls = self.__class__
+        group = ",".join([node[0] for node in group])
         def _merge_requestdata(totaldata,requestdata):
             processtime = requestdata["min_processtime"]
             if not totaldata["min_processtime"] or totaldata["min_processtime"] >  processtime:
@@ -203,6 +248,8 @@ class RedisClusterTestCase(TestCase):
         _merge_requestdata(cls.requestdata,requestdata)
 
     def test_rediscluster(self):
+        print("\n\n*************************************************")
+        print("Test concurrent accessing with redis server crashing at any time")
         cls = self.__class__
         #prepare 1000 keys for each group
         keypattern = "testkey_{:010d}"
@@ -211,7 +258,7 @@ class RedisClusterTestCase(TestCase):
         groupsdata = [[]  for g in cls.groups]
 
         #prepare the data key for testing
-        #generate the same amount of keys (cls.TEST_KEYS_PER_GROUP) for each redis cluster group
+        #generate the same amount of keys (cls.TEST_REDISCLUSTER_GROUP_KEYS) for each redis cluster group
         counter = 0
         while True:
             index += 1
@@ -219,33 +266,38 @@ class RedisClusterTestCase(TestCase):
             node = cls._redis_client.get_node_from_key(key)
             
             group = cls.groupmap[node.name]
-            if len(groupsdata[group[1]]) < cls.TEST_KEYS_PER_GROUP:
+            if len(groupsdata[group[1]]) < cls.TEST_REDISCLUSTER_GROUP_KEYS:
                 groupsdata[group[1]].append(key)
 
-            if any(len(groupdata) < cls.TEST_KEYS_PER_GROUP for groupdata in groupsdata ):
+            if any(len(groupdata) < cls.TEST_REDISCLUSTER_GROUP_KEYS for groupdata in groupsdata ):
                 counter += 1
-                if counter % cls.TEST_KEYS_PER_GROUP == 0:
-                    print("Total {} keys generated.\n{}".format(counter,"\n".join( "{}={}".format(cls.groups[i],len(groupsdata[i])) for i in range(len(groupsdata)) )))
+                if counter % cls.TEST_REDISCLUSTER_GROUP_KEYS == 0:
+                    print("Total {} keys generated.\n{}".format(counter,"\n".join( "{}={}".format(",".join([ node[0] for node in cls.groups[i]]),len(groupsdata[i])) for i in range(len(groupsdata)) )))
                 continue
             else:
-                print("Total {} keys generated.\n{}".format(counter,"\n".join( "{}={}".format(cls.groups[i],len(groupsdata[i])) for i in range(len(groupsdata)) )))
+                print("Total {} keys generated.\n{}".format(counter,"\n".join( "{}={}".format(",".join([ node[0] for node in cls.groups[i]]),len(groupsdata[i])) for i in range(len(groupsdata)) )))
                 break
 
+        manage_redisserver_processes = []
         processes = []
         now = timezone.localtime()
         test_starttime = now + timedelta(seconds = 10)
         test_endtime = test_starttime + timedelta(seconds = self.TEST_TIME)
-        keys_per_process = int(cls.TEST_KEYS_PER_GROUP / cls.TEST_PROCESSES_PER_GROUP)
+        keys_per_process = int(cls.TEST_REDISCLUSTER_GROUP_KEYS / cls.TEST_REDISCLUSTER_PROCESSES_PER_GROUP)
         start_index = 0
         end_index = 0
 
         #start the process to test redis cluster
         #each key is operated by only one process
         for i in range(len(cls.groups)):
-            for j in range(self.TEST_PROCESSES_PER_GROUP):
+            #Create the processes to shutdown/start redis server
+            p_conn, c_conn = Pipe()
+            manage_redisserver_processes.append((cls.groups[i],p_conn,Process(target=self.manage_redisserver,args=(c_conn,cls.groups[i],test_starttime,test_endtime))))
+
+            for j in range(self.TEST_REDISCLUSTER_PROCESSES_PER_GROUP):
                 start_index = keys_per_process * j
-                if j == self.TEST_PROCESSES_PER_GROUP - 1:
-                    end_index = cls.TEST_KEYS_PER_GROUP
+                if j == self.TEST_REDISCLUSTER_PROCESSES_PER_GROUP - 1:
+                    end_index = cls.TEST_REDISCLUSTER_GROUP_KEYS
                 else:
                     end_index = start_index + keys_per_process
                 p_conn, c_conn = Pipe()
@@ -259,21 +311,29 @@ class RedisClusterTestCase(TestCase):
     Testing Groups: {4}({5})
     Processes Per Group: {6}
     Keys Per Group: {7}
-    Keys Per Process: {8}""".format(
+    Keys Per Process: {8}
+    Process to manage redisserver: {9}""".format(
             utils.format_datetime(test_starttime),
             utils.format_datetime(test_endtime),
             cls.REQUEST_INTERVAL * 1000,
             len(processes),
             len(cls.groups),
             cls.groups,
-            cls.TEST_PROCESSES_PER_GROUP,
-            cls.TEST_KEYS_PER_GROUP,
-            keys_per_process
+            cls.TEST_REDISCLUSTER_PROCESSES_PER_GROUP,
+            cls.TEST_REDISCLUSTER_GROUP_KEYS,
+            keys_per_process,
+            len(manage_redisserver_processes)
 
         ))
-        for group,p_conn,p in processes:
+        #start the testing processes 
+        for group,p_conn,p in manage_redisserver_processes:
             p.start()
     
+        #start the testing processes 
+        for group,p_conn,p in processes:
+            p.start()
+
+        #Wait the testing processes to finish and merge the testing result
         exs = []
         for group,p_conn,p in processes:
             result = p_conn.recv()
@@ -284,11 +344,21 @@ class RedisClusterTestCase(TestCase):
             
             self.merge_requestdata(group,result)
 
+        #Wait the redis management processes to finish and merge the testing result
+        for group,p_conn,p in manage_redisserver_processes:
+            result = p_conn.recv()
+            p.join()
+            if isinstance(result,Exception):
+                exs.append(result)
+                continue
+            
+            self.merge_redisserver_managementdata(group,result)
 
-
+        #print the the testing result
+        print("==========Test Result=================")
         print("==========Test Result=================")
         print(json.dumps(cls.requestdata,indent=4))
-        
+
         if exs:
             print("===========Exceptions================")
             for ex in exs:

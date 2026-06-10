@@ -71,7 +71,7 @@ def _save_traffic_data(batchid):
             data = "\n    ".join("start_time={}, end_time={}, requests={}, get_remote_session={}, delete_remote_sessions={}".format(*d) for d in data)
             logger.info("Succeed to save the traffic data .batchid={}\n    {}".format(batchid,data))
         else:
-            logger.info("No new traffic data.batchid={}\n    {}".format(batchid))
+            logger.info("No new traffic data.batchid={}".format(batchid))
             pass
     except:
         msg = "Failed to save the traffic data.{}".format(traceback.format_exc())

@@ -156,3 +156,5 @@ class AuthTestCase(TestCase):
     def test_auth_dual_without_creds(self):
         response = self.client.get(self.auth_dual_url)
         self.assertEqual(response.status_code, 200)
+
+

@@ -43,7 +43,7 @@ from ..cache import cache, get_defaultcache,get_usercache
 from .. import utils
 from .. import emails
 from ..exceptions import HttpResponseException,UserDoesNotExistException,PolicyNotConfiguredException
-from ..patch import load_user,anonymoususer,load_usertoken
+from ..patch import load_user,load_user_by_email,anonymoususer,load_usertoken
 from ..sessionstore import SessionStore
 from authome.models import DebugLog
 
@@ -139,6 +139,13 @@ def _get_next_url(request):
     if not next_url:
         #get next url from session
         next_url = request.session.get(REDIRECT_FIELD_NAME)
+        if next_url:
+            domain = utils.get_domain(next_url)
+            if domain != request.get_host():
+                #the domain of cached next url is not equal with the current request host.
+                #don't use the cached next url
+                next_url = None
+
 
     if next_url:
         #found next url, build its absolute url
@@ -146,7 +153,7 @@ def _get_next_url(request):
         if not domain:
             #no domain in next_url, use request host as domain
             domain = request.get_host()
-        next_url = get_absolute_url(next_url,domain)
+        next_url = utils.get_absolute_url(next_url,domain)
         logger.debug("Found next url '{}'".format(next_url))
     else:
         #next url is not found, use default next url
@@ -165,6 +172,7 @@ basic_auth_re = re.compile('^Basic\\s+([a-zA-Z0-9+/=]+)$' )
 def _parse_basic(basic_auth):
     """
     Parse the basic header to a tuple(username,password)
+    username is a email address, already turn it to lower case.
     Throw excepton if can't find the basic auth data
     """
     if not basic_auth:
@@ -175,7 +183,9 @@ def _parse_basic(basic_auth):
     basic_auth_raw = base64.b64decode(match.group(1)).decode('utf-8')
     if ':' not in basic_auth_raw:
         raise Exception('Missing password')
-    return basic_auth_raw.split(":", 1)
+    data = basic_auth_raw.split(":", 1)
+    data[0] = data[0].lower()
+    return data
 
 def check_authorization(request,useremail,domain=None,path=None):
     """
@@ -208,21 +218,6 @@ def check_authorization(request,useremail,domain=None,path=None):
     else:
         logger.debug("User({}) can't access https://{}{}".format(useremail,domain,path))
         return forbidden_response_factory(request)
-
-def get_absolute_url(url,domain):
-    """
-    Get a absolute http url
-    """
-    if url.startswith("http"):
-        #url is already an absolute url
-        return url
-
-    if url.startswith("/"):
-        #relative url in domain
-        return "https://{}{}".format(domain,url)
-    else:
-        #absoulte url without protocol
-        return "https://{}".format(url)
 
 def get_post_b2c_logout_url(request,encode=True):
     """
@@ -461,6 +456,10 @@ def auth_captcha(request):
     """
     Only captcha is required
     """
+    allowed_requests = int(request.headers.get("x-allowed-requests-after-captcha",1))
+    if allowed_requests <= 0:
+        allowed_requests = 1
+
     res = _auth(request)
     if res and res.status_code == 403:
         #authenticated but not authorized.
@@ -468,31 +467,48 @@ def auth_captcha(request):
 
     requestpath = utils.get_request_path(request)
     key = "captcha_{}".format(requestpath)
+    v = request.session.get(key)
+    if isinstance(v,str):
+        v = None
 
-    if request.session.get(key) == "T":
-        #captcha checked
-        del request.session[key]
+    if v is None: 
+        #captcha required
+        request.session[key] = allowed_requests * -1
+        return auth_required_response_factory(request)
+    elif v == allowed_requests * -1:
+        #captcha required
+        request.session.modified = False
+        return auth_required_response_factory(request)
+    elif v < 0 :
+        #captcha required
+        request.session[key] = allowed_requests * -1
+        return auth_required_response_factory(request)
+    elif v == 0:
+        #no allowed requests
+        #captcha required
+        request.session[key] = CAPTCHA_REQUIRED * -1
+        return auth_required_response_factory(request)
+    else:
+        if v == 1:
+            del request.session[key]
+        else:
+            request.session[key] = v - 1
         if res:
             #authenticated, but can be authorized or not authorized
             return res
         else:
             #not authenticated
             return SUCCEED_RESPONSE
-    else:
-        #captcha required
-        if request.session.get(key) == "R":
-            #captcha requirement flag is already set
-            request.session.modified = False
-        else:
-            request.session[key] = "R"
-
-        return auth_required_response_factory(request)
 
 @csrf_exempt
 def auth_and_captcha(request):
     """
     Both auth and captcha are required
     """
+    allowed_requests = int(request.headers.get("x-allowed-requests-after-captcha",1))
+    if allowed_requests <= 0:
+        allowed_requests = 1
+
     res = _auth(request)
     if res:
         if res.status_code == 403:
@@ -502,20 +518,31 @@ def auth_and_captcha(request):
         #authenticated, but can be authorized or not authorized
         requestpath = utils.get_request_path(request)
         key = "captcha_{}".format(requestpath)
+        v = request.session.get(key)
 
-        if request.session.get(key) == "T":
-            #captcha checked
-            del request.session[key]
-            return res
-        else:
+        if v is None: 
             #captcha required
-            if request.session.get(key) == "R":
-                #captcha requirement flag is already set
-                request.session.modified = False
-            else:
-                request.session[key] = "R"
-
+            request.session[key] = allowed_requests * -1
             return auth_required_response_factory(request)
+        elif v == allowed_requests * -1:
+            #captcha required
+            request.session.modified = False
+            return auth_required_response_factory(request)
+        elif v < 0 :
+            #captcha required
+            request.session[key] = allowed_requests * -1
+            return auth_required_response_factory(request)
+        elif v == 0:
+            #no allowed requests
+            #captcha required
+            request.session[key] = CAPTCHA_REQUIRED * -1
+            return auth_required_response_factory(request)
+        else:
+            if v == 1:
+                del request.session[key]
+            else:
+                request.session[key] = v - 1
+            return res
     else:
         #not authenticated
         return auth_required_response_factory(request)
@@ -656,17 +683,11 @@ def _auth_basic(request,not_authentiated_response_factory=basic_auth_required_re
 
     #not found the cached reponse, not authenticated before.
     try:
-        performance.start_processingstep("fetch_user_with_email_from_db")
-        try:
-            user = models.User.objects.get(email__iexact=useremail)
-        finally:
-            performance.end_processingstep("fetch_user_with_email_from_db")
-            pass
-
-        if request.user.is_authenticated and user.email == request.user.email:
+        if request.user.is_authenticated and useremail == request.user.email:
             #the user of the token auth is the same user as the authenticated session user;use the session authentication data directly
             return  _auth(request)
 
+        user = load_user_by_email(useremail)
         #user session is not authenticated or the user of the user token is not the same user as the authenticated sesion user.
         #check whther user token is valid
         if user.is_active and is_usertoken_valid(user,token):
@@ -770,7 +791,9 @@ def auth_local(request):
         if next_url:
             domain = utils.get_domain(next_url)
             if domain and not cache.check_clientdomain(domain):
-                return HttpResponseForbidden("Redirecting to '{}' is strictly forbidden.".format(next_url))
+                return HttpResponseForbidden("Redirecting to '{}' is strictly forbidden.".format(urllib.parse.quote(next_url)))
+
+            next_url = utils.get_absolute_url(next_url,request.get_host())
         else:
             domain = request.get_host()
             if domain == settings.AUTH2_DOMAIN:
@@ -1143,7 +1166,7 @@ def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
         if next_url:
             domain = utils.get_domain(next_url)
             if domain and not cache.check_clientdomain(domain):
-                return HttpResponseForbidden("Redirecting to '{}' is strictly forbidden.".format(next_url))
+                return HttpResponseForbidden("Redirecting to '{}' is strictly forbidden.".format(urllib.parse.quote(next_url)))
         else:
             domain = request.get_host()
             if domain == settings.AUTH2_DOMAIN:
@@ -1153,15 +1176,17 @@ def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
 
     next_url_domain = utils.get_domain(next_url)
     key = "captcha_{}{}".format(*utils.get_domain_path(next_url))
-    filekey = "captchafile_{}{}".format(*utils.get_domain_path(next_url))
     if key not in request.session:
         #not forward from next_url, not allowed to generate the captcha
         #redirect to next_url
         return HttpResponseRedirect(next_url)
-
-    if request.session[key] == "T":
+    val = request.session[key]
+    if val > 0:
         #already checked the captcha, redirect to next_url
         return HttpResponseRedirect(next_url)
+
+    codekey = "captchacode_{}{}".format(*utils.get_domain_path(next_url))
+    filekey = "captchafile_{}{}".format(*utils.get_domain_path(next_url))
 
     page_layout,extracss = _get_userflow_pagelayout(request,next_url_domain)
 
@@ -1178,9 +1203,9 @@ def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
 
     now = timezone.localtime()
 
-    if not request.get_host().endswith(settings.SESSION_COOKIE_DOMAIN):
-        #post request is sent from other domain, invalid, redirect to auth2 to let user login to session cookie domain first
-        return HttpResponse(status=404)
+    #if not request.get_host().endswith(settings.SESSION_COOKIE_DOMAIN):
+    #    #request is sent from other domain, invalid
+    #    return HttpResponse(status=404)
 
     if request.method == "POST":
         action = request.POST.get("action")
@@ -1195,20 +1220,20 @@ def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
             utils.remove_file(outfile)
 
         code,outfile = _generate_captcha(kind)
-        request.session[key] = code
+        request.session[codekey] = code
         request.session[filekey] = outfile
         context["outfile"] = outfile[captchabasedirlen:]
         return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
     elif action == "check":
         code = request.POST.get("code").upper()
-        saved_code = request.session.get(key)
+        saved_code = request.session.get(codekey)
         if not saved_code or len(saved_code) != settings.CAPTCHA_LEN:
             outfile = request.session.get(filekey)
             if outfile:
                 utils.remove_file(outfile)
 
             code,outfile = _generate_captcha(kind)
-            request.session[key] = code
+            request.session[codekey] = code
             request.session[filekey] = outfile
             context["outfile"] = outfile[captchabasedirlen:]
             context["messages"] = [("error","Code is expired!")]
@@ -1217,7 +1242,7 @@ def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
             outfile = request.session.get(filekey)
             if not outfile:
                 code,outfile = _generate_captcha(kind)
-                request.session[key] = code
+                request.session[codekey] = code
                 request.session[filekey] = outfile
                 context["outfile"] = outfile[captchabasedirlen:]
                 context["messages"] = [("error","Code is expired.")]
@@ -1228,24 +1253,25 @@ def check_captcha(request,kind=settings.CAPTCHA_DEFAULT_KIND,auth=False):
             return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
         else:
             #code matched
-            request.session[key] = "T"
+            request.session[key] = val * -1
             outfile = request.session.get(filekey)
             if outfile:
                 #remote the  file of the matched code
                 utils.remove_file(outfile)
             del request.session[filekey]
+            del request.session[codekey]
 
             return HttpResponseRedirect(next_url)
     else:
         #request is sent from session cookie domain, show the page to input email
-        savedcode = request.session.get(key)
+        savedcode = request.session.get(codekey)
         outfile = request.session.get(filekey)
         if outfile:
             #remove the expired captcha file
             utils.remove_file(outfile)
         #generate a new captcha
         code,outfile = _generate_captcha(kind)
-        request.session[key] = code
+        request.session[codekey] = code
         request.session[filekey] = outfile
         context["outfile"] = outfile[captchabasedirlen:]
         return TemplateResponse(request,imagefile if kind == "image" else audiofile,context=context)
@@ -1911,7 +1937,7 @@ def forbidden(request):
     can also be called from other view method
     Provide a consistent,customized forbidden page.
     """
-    url = get_absolute_url(request.GET.get("path") or request.get_full_path(),request.get_host())
+    url = utils.get_absolute_url(request.GET.get("path") or request.get_full_path(),request.get_host())
     parsed_url = utils.parse_url(url)
     domain = parsed_url["domain"]
     path = parsed_url["path"]

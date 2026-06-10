@@ -162,7 +162,8 @@ class AuthorizationCacheTestCase(BaseAuthCacheTestCase):
                         obj.clean()
                         obj.save()
                     elif action == "delete":
-                        UserGroup.objects.filter(name=configdata[0]).delete()
+                        for obj in UserGroup.objects.filter(name=configdata[0]):
+                            obj.delete()
                     else:
                         raise Exception("Unknown action '{1}' for table '{0}'".format(table,action))
 
@@ -184,7 +185,8 @@ class AuthorizationCacheTestCase(BaseAuthCacheTestCase):
                         obj.clean()
                         obj.save()
                     elif action == "delete":
-                        UserGroupAuthorization.objects.filter(usergroup=usergroup,domain=configdata[1]).delete()
+                        for obj in UserGroupAuthorization.objects.filter(usergroup=usergroup,domain=configdata[1]):
+                            obj.delete()
                     else:
                         raise Exception("Unknown action '{1}' for table '{0}'".format(table,action))
 

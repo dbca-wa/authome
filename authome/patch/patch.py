@@ -13,7 +13,7 @@ from social_core.exceptions import AuthException
 
 from ..models import User,UserToken
 from authome.models import DebugLog
-from ..cache import get_usercache
+from ..cache import get_usercache,get_usercache_by_email
 from ..exceptions import UserDoesNotExistException,InvalidDomainException,Auth2ClusterException
 from .. import utils
 
@@ -67,6 +67,79 @@ if settings.USER_CACHE_ALIAS:
                     performance.end_processingstep("set_user_to_cache")
                     pass
 
+        except KeyError:
+            pass
+        except ObjectDoesNotExist as ex:
+            #user does not exist.
+            #if the current request is auth2_auth, return AUTH_REQUIRED_RESPONSE
+            #if the current request is auth2_optional, return AUTH_NOT_REQUIRED_RESPONSE
+            #otherwise. logout the user
+            raise UserDoesNotExistException()
+
+        return user or anonymoususer
+
+    def load_user_by_email(useremail):
+        """
+        Return the user model instance associated with the given request session.
+        If no user is retrieved, return an instance of `AnonymousUser`.
+        """
+        user = None
+        try:
+            #try to get user data from user cache
+            userkey = settings.GET_USEREMAIL_KEY(useremail)
+            usercache = get_usercache_by_email(useremail)
+            userid = None
+            
+            performance.start_processingstep("get_user_by_email_from_cache")
+            try:
+                #find the userid
+                userid = usercache.get(userkey)
+            except:
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to load the user by email from cache .{}".format(traceback.format_exc()))
+            finally:
+                performance.end_processingstep("get_user_by_email_from_cache")
+                pass
+
+            if userid:
+                try:
+                    user = load_user(userid)
+                except:
+                    pass
+
+                if user and user.email == useremail:
+                    #user loaded, return
+                    return user
+
+            #Can't find the user in user cache, retrieve it from database
+            performance.start_processingstep("fetch_user_by_email_from_db")
+            try:
+                user = User.objects.get(email__iexact=useremail)
+            finally:
+                performance.end_processingstep("fetch_user_by_email_from_db")
+                pass
+            #cache the user object into user cache
+            performance.start_processingstep("set_useremail_to_cache")
+            try:
+                usercache.set(userkey,user.id,settings.STAFFEMAIL_CACHE_TIMEOUT if user.is_staff else settings.USEREMAIL_CACHE_TIMEOUT)
+            except:
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to set the user to cache .{}".format(traceback.format_exc()))
+            finally:
+                performance.end_processingstep("set_useremail_to_cache")
+                pass
+
+            if userid and userid == user.id:
+                #user is not catched or cached data is outdated, cache it
+                userkey = settings.GET_USER_KEY(userid)
+                usercache = get_usercache(userid)
+                #cache the user object into user cache
+                performance.start_processingstep("set_user_to_cache")
+                try:
+                    usercache.set(userkey,user,settings.STAFF_CACHE_TIMEOUT if user.is_staff else settings.USER_CACHE_TIMEOUT)
+                except:
+                    DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to set the user to cache .{}".format(traceback.format_exc()))
+                finally:
+                    performance.end_processingstep("set_user_to_cache")
+                    pass
         except KeyError:
             pass
         except ObjectDoesNotExist as ex:
@@ -149,6 +222,31 @@ else:
             raise UserDoesNotExistException()
 
         return user or anonymoususer
+
+    def load_user_by_email(useremail):
+        """
+        Return the user model instance associated with the email address
+        If no user is retrieved, return an instance of `AnonymousUser`.
+        """
+        user = None
+        try:
+            performance.start_processingstep("fetch_user_by_email_from_db")
+            try:
+                user = User.objects.get(email__iexact=useremail)
+            finally:
+                performance.end_processingstep("fetch_user_by_email_from_db")
+                pass
+        except KeyError:
+            pass
+        except ObjectDoesNotExist as ex:
+            #user does not exist.
+            #if the current request is auth2_auth, return AUTH_REQUIRED_RESPONSE
+            #if the current request is auth2_optional, return AUTH_NOT_REQUIRED_RESPONSE
+            #otherwise. logout the user
+            raise UserDoesNotExistException()
+
+        return user or anonymoususer
+
 
     def load_usertoken(userid,refresh=False):
         """
