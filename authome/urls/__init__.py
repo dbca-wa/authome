@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.urls import include, path
+import sys
 
 import authome.patch
 from .. import models
@@ -21,4 +22,17 @@ if settings.TESTMODE:
     urlpatterns.append(path('test/',include((testurls.urlpatterns,'test'),namespace="test")))
     logger.info("Start auth2 in testing mode")
 
-models.initialize()
+# URL checks run before Django's migration command creates the application
+# tables.  Loading the authorization cache here would therefore make an
+# initial ``migrate`` fail with ``relation "authome_usergroup" does not
+# exist``.  Keep the cache initialization for normal application startup,
+# but not for commands that only inspect or apply migrations.
+_migration_commands = {
+    "makemigrations",
+    "migrate",
+    "showmigrations",
+    "sqlmigrate",
+    "squashmigrations",
+}
+if len(sys.argv) < 2 or sys.argv[1] not in _migration_commands:
+    models.initialize()
