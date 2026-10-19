@@ -1,14 +1,18 @@
 version: 2
 updates:
-  - package-ecosystem: 'pip'
+  - package-ecosystem: 'uv'
     directory: '/'
     schedule:
       interval: 'weekly'
     commit-message:
       prefix: '[python] '
+    cooldown:
+      default-days: 7
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
       interval: 'weekly'
     commit-message:
       prefix: '[actions] '
+    cooldown:
+      default-days: 7
