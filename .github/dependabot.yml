@@ -1,12 +1,18 @@
 version: 2
 updates:
-  - package-ecosystem: "pip"
-    directory: "/"
+  - package-ecosystem: 'uv'
+    directory: '/'
     schedule:
-      interval: "weekly"
-  - package-ecosystem: "github-actions"
-    # Workflow files stored in the
-    # default location of `.github/workflows`
-    directory: "/"
+      interval: 'weekly'
+    commit-message:
+      prefix: '[python] '
+    cooldown:
+      default-days: 7
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
+    commit-message:
+      prefix: '[actions] '
+    cooldown:
+      default-days: 7
