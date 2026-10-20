@@ -11,6 +11,11 @@ from .debugmodels import *
 logger = logging.getLogger(__name__)
 
 def initialize():
+    """
+    Can't call it simply during application initialization because of following reason
+    In gunicorn environment, gunicorn will folk the master process to create the worker process, if calling this method during master process intialization, master process will create the database connection, and during folking process, the database connection will be cloned to worker process, that will cause error "SSL error: decryption failed or bad record mac".
+    The solution is calling it in event hook 'post_folk' of gunicorn.
+    """
     if settings.AUTH2_CLUSTER_ENABLED:
         logger.debug("Register auth2 cluster server '{}'".format(settings.AUTH2_CLUSTERID))
         #load cache
