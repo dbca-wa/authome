@@ -871,8 +871,8 @@ class UserGroup(CacheableMixin,DbObjectMixin,django_models.Model):
 
     _editable_columns = ("users","parent_group","excluded_users","identity_provider","groupid","session_timeout")
 
-    name = django_models.CharField(max_length=32,unique=True,null=False)
-    groupid = django_models.SlugField(max_length=32,null=False,blank=True)
+    name = django_models.CharField(max_length=128,unique=True,null=False)
+    groupid = django_models.SlugField(max_length=128,null=False,blank=True)
     parent_group = django_models.ForeignKey('self', on_delete=django_models.SET_NULL,null=True,blank=True)
     users = ArrayField(django_models.CharField(max_length=64,null=False),help_text=help_text_users)
     excluded_users = ArrayField(django_models.CharField(max_length=64,null=False),null=True,blank=True,help_text=help_text_users)
@@ -2080,7 +2080,7 @@ if defaultcache:
             try:
                 defaultcache.set(cls.key,timezone.localtime(),timeout=timeout)
             except Exception as ex:
-                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to set the latest change time of the model '{}' to cache.{}".format(cls.__name__,traceback.format_exc(ex)))
+                DebugLog.warning(DebugLog.ERROR,None,None,None,None,"Failed to set the latest change time of the model '{}' to cache.{}".format(cls.__name__,traceback.format_exc()))
 
         @classmethod
         def get_cachetime(cls):

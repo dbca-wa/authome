@@ -103,6 +103,8 @@ class MemoryCache(BaseMemoryCache):
         return kwargs
 
     def get_auth2_cluster(self,clusterid):
+        if self._current_auth2_cluster is None:
+            self.refresh_auth2_clusters(True)
         return self._auth2_clusters[clusterid]
 
     @property
@@ -130,6 +132,11 @@ class MemoryCache(BaseMemoryCache):
         try:
             if self._auth2_clusters_check_time.can_run() or force or self._current_auth2_cluster is None:
                 from ..models import Auth2Cluster
+                if self._current_auth2_cluster is None:
+                    #this is the first time to load auth2 clusters
+                    #register it
+                    Auth2Cluster.register()
+
                 refreshtime = timezone.localtime()
                 l1 = len(self._auth2_clusters)
                 l2 = 0
@@ -238,6 +245,8 @@ class MemoryCache(BaseMemoryCache):
         exception = None
         endpoint = None
         try:
+            if self._current_auth2_cluster is None:
+                self.refresh_auth2_clusters(True)
             cluster = self._auth2_clusters[clusterid]
             res = f_send_request(cluster)
             if res.status_code == 401:
@@ -584,7 +593,7 @@ class MemoryCache(BaseMemoryCache):
     def status(self):
         result = super().status
         result["Auth2Clusters"] = {
-            "auth2_clusters":["{}={}({})".format(o.clusterid,o.endpoint,utils.utils.format_datetime(o.last_heartbeat)) for o in self._auth2_clusters.values()] if self._auth2_clusters else None,
+            "auth2_clusters":["{}={}({})".format(o.clusterid,o.endpoint,utils.format_datetime(o.last_heartbeat)) for o in self._auth2_clusters.values()] if self._auth2_clusters else None,
             "latest_refresh_time":utils.format_datetime( self._auth2_clusters_ts),
             "next_check_time":utils.format_datetime(self._auth2_clusters_check_time.next_runtime)
         }

@@ -161,6 +161,13 @@ class StartServerMixin(object):
         return "{}/test/trafficdata/flush".format(cls.get_baseurl(servername))
 
     @classmethod
+    def get_sessiontimeout_url(cls,servername="standalone"):
+        return "{}/test/sessiontimeout/get".format(cls.get_baseurl(servername))
+
+    @classmethod
+    def get_search_model_url(cls,modelname,servername="standalone"):
+        return "{}/test/model/{}/search".format(cls.get_baseurl(servername),modelname)
+    @classmethod
     def get_update_model_url(cls,modelname,servername="standalone"):
         return "{}/test/model/{}/update".format(cls.get_baseurl(servername),modelname)
 

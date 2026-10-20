@@ -74,6 +74,10 @@ else
     echo "port=${PORT}, backend=${backend}, envfile=${envfile}"
 fi
 
+export PORT;
+WORKLOAD_PORT=${PORT}
+export WORKLOAD_PORT;
+
 if [[ "$backend" =~ ^true$ ]]
 then
     source .env.monitor
@@ -86,6 +90,8 @@ then
     export RUNNING_MODE="eventlet"
     #export RUNNING_MODE="gevent"
     #export RUNNING_MODE="sync"
+    
+    export WORKLOAD_PROCESS_FILTER="| grep python | grep gunicorn"
     uv run gunicorn authome.wsgi  --config=gunicorn-dev.py  >./logs/auth2_${PORT}.log 2>&1 &
     #poetry run python manage.py runserver 0.0.0.0:$PORT >./logs/auth2_${PORT}.log 2>&1 &
     pid=$!
@@ -109,6 +115,7 @@ else
     fi
     source .env.monitor
     export RUNNING_MODE="sync"
+    export WORKLOAD_PROCESS_FILTER="| grep python | grep runserver"
     uv run python manage.py runserver 0.0.0.0:$PORT
 fi
 

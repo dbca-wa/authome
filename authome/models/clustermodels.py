@@ -34,6 +34,10 @@ class Auth2Cluster(django_models.Model):
 
     @classmethod
     def register(cls,only_update_heartbeat=False):
+        if not settings.AUTH2_CLUSTER_ENDPOINT:
+            #not configured the cluster endpoint, it is not a real cluster 
+            return
+
         if only_update_heartbeat :
             if cls.objects.filter(clusterid=settings.AUTH2_CLUSTERID).update(last_heartbeat=timezone.localtime()):
                 #call by ping, only need to update the heartbeat.

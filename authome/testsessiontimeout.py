@@ -32,9 +32,12 @@ class UserSessionTimeoutTestCase(testutils.StartServerMixin,BaseTestCase):
             sessionage = 36000
             self.start_auth2_server("auth01",18060,auth2_env={"SESSION_AGE":sessionage},start=True)
             for user in ["test1@dbca.wa.gov.au","test@test11.com"]:
-                usergroups = models.UserGroup.find_groups(user)[0]
-                timeout = models.UserGroup.get_session_timeout(usergroups) or 0
-                print("=============================user={} , timeout = {}====================".format(user,timeout))
+                res = requests.get("{}?user={}".format(self.get_sessiontimeout_url(servername="auth01"),user),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
+                res.raise_for_status()
+                res = res.json()
+                usergroups = res["usergroups"]
+                timeout = res["sessiontimeout"] or 0
+                print("=============================user={} , timeout = {}, usergroups = {} ===================".format(user,timeout,usergroups))
                 before_login = timezone.localtime()
                 res = requests.get(self.get_login_user_url(user,servername="auth01"),headers=self.cluster_headers,verify=settings.SSL_VERIFY)
                 after_login = timezone.localtime()

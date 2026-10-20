@@ -20,6 +20,7 @@ urlpatterns = [
     path('model/<slug:name>/delete',csrf_exempt(views.del_model_4_test),name="del_model_4_test"),
     path('model/<slug:name>/search',csrf_exempt(views.search_model_4_test),name="search_model_4_test"),
     path('model/<slug:name>/refreshcache',csrf_exempt(views.refresh_modelcache_4_test),name="refresh_modelcache_4_test"),
+    path('sessiontimeout/get',views.get_sessiontimeout,name="get_sessiontimeout"),
     path('session/get',views.get_session,name="get_session"),
     path('settings/get',views.get_settings,name="get_settings"),
     path('trafficdata/flush',views.flush_trafficdata,name="flush_trafficdata"),

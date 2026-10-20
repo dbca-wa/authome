@@ -3,7 +3,7 @@
 FROM dhi.io/python:3.12-debian13-dev AS build-stage
 #FROM python:3.12.10-slim-bookworm AS build-stage
 RUN apt-get update -y \
-  && apt-get install -y passwd wget gcc libpq-dev procps\
+  && apt-get install -y passwd  gcc libpq-dev \
   && rm -rf /var/lib/apt/lists/* \
   && pip install --upgrade pip
 
@@ -33,7 +33,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
 COPY fonts ./fonts
 
 WORKDIR /app/release
-COPY manage.py gunicorn_sync.py gunicorn_eventlet.py gunicorn_gevent.py testperformance testrequestheaders testrediscluster testperformance pyproject.toml captchautil.py ./
+COPY manage.py basegunicorn.py gunicorn_sync.py gunicorn_eventlet.py gunicorn_gevent.py testperformance testrequestheaders testrediscluster testperformance pyproject.toml captchautil.py ./
 COPY authome ./authome
 COPY templates ./templates
 RUN export IGNORE_LOADING_ERROR=True ; python manage.py collectstatic --noinput --no-post-process
@@ -63,10 +63,6 @@ FROM dhi.io/python:3.12-debian13-dev AS runtime-stage
 #FROM python:3.12.10-slim-bookworm AS runtime-stage
 LABEL org.opencontainers.image.authors=asi@dbca.wa.gov.au
 LABEL org.opencontainers.image.source=https://github.com/dbca-wa/authome
-
-RUN apt-get update -y \
-  && apt-get install -y wget libpq-dev procps\
-  && rm -rf /var/lib/apt/lists/* 
 
 # Copy the user & usergroup
 COPY --from=build-stage /etc/group /etc/

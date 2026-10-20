@@ -217,6 +217,15 @@ def get_settings(request):
         logger.error("Failed to get settings({}).{} ".format(names,str(ex)))
         raise
 
+def get_sessiontimeout(request):
+    """
+    Get user's session timeout
+    """
+    user = request.GET.get("user")
+    usergroups = models.UserGroup.find_groups(user)[0]
+    timeout = models.UserGroup.get_session_timeout(usergroups) or 0
+    return JsonResponse({"usergroups":[g.name for g in usergroups],"sessiontimeout":timeout},status=200)
+
 
 def get_session(request):
     """

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class TrafficDataProcessStatus(django_models.Model):
     cluster = django_models.ForeignKey(Auth2Cluster, on_delete=django_models.SET_NULL,null=True,editable=False)
     clusterid = django_models.CharField(max_length=32,editable=False,null=True,unique=True)
-    last_saved_batchid = django_models.DateTimeField(editable=False,null=True)
+    last_saved_batchid = django_models.DateTimeField(editable=False,null=True,db_index=True)
     last_processed_batchid = django_models.DateTimeField(editable=False,null=True)
     disabled = django_models.BooleanField(default=False)
 
@@ -42,6 +42,9 @@ class TrafficData(django_models.Model):
     class Meta:
         verbose_name_plural = "{}Traffic Data".format(" " * 5)
         unique_together = [["clusterid","start_time","end_time","batchid"]]
+        indexes = [
+            django_models.Index(fields=["batchid","clusterid"])
+        ]
 
 class SSOMethodTrafficData(django_models.Model):
     traffic_data = django_models.ForeignKey(TrafficData, on_delete=django_models.CASCADE)

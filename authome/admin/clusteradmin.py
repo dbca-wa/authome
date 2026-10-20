@@ -186,7 +186,6 @@ class BaseAuth2ClusterAdmin(admin.ExtraToolsMixin,admin.DeleteMixin,admin.Dateti
         urls = super().get_urls()
         info = self.model._meta.app_label, self.model._meta.model_name
         urls.insert(0,path('clusterstatus/', self.cluster_status, name='%s_%s_cluster_status' % info))
-        logger.debug(urls)
         return urls
 
     def cluster_status(self,request):

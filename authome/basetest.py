@@ -9,7 +9,7 @@ from django.conf import settings
 
 import base64
 
-from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access,UserToken,User,CustomizableUserflow,Auth2Cluster
+from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access,UserToken,User,CustomizableUserflow,Auth2Cluster,initialize as initialize_models
 from .cache import cache,get_usercache
 from authome import patch
 groupid = 0
@@ -60,6 +60,33 @@ class BaseTestCase(TestCase):
             print("Running unitest({}) in release mode".format(cls.__name__))
         else:
             print("Running unitest({}) in dev mode".format(cls.__name__))
+
+        
+        #create the public group
+        initialize_models()
+        cache.refresh_usergroups(True)
+        public_group = UserGroup.objects.filter(users=["*"], excluded_users__isnull=True).first()
+        if public_group:
+            public_group.session_timeout = 900
+            public_group.save()
+        else:
+            public_group = UserGroup(name="Public User",groupid="PUBLIC",users=["*"],session_timeout=900)
+            public_group.clean()
+            public_group.save()
+        if not CustomizableUserflow.objects.filter(domain="*").exists():
+            default_flow = CustomizableUserflow(
+                domain='*',
+                default='default',
+                mfa_set="default_mfa_set",
+                mfa_reset="default_mfa_reset",
+                password_reset="default_password_reset",
+                verifyemail_from="oim@dbca.wa.gov.au",
+                verifyemail_subject="test"
+            )
+            default_flow.clean()
+            default_flow.save()
+        cache.refresh_usergroups(True)
+
 
     def delete_testdata(self):
         #delete user group authorization

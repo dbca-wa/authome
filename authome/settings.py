@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'django_extensions',
     'social_django',
     'authome',
+    'dbca_utils'
 ]
 
 AUTHENTICATION_BACKENDS = (
@@ -389,6 +390,10 @@ LOGGING = {
             'handlers': ['console'],
             'level': LOGLEVEL,
         },
+        'healthcheck': {
+            'handlers': ['console'],
+            'level': LOGLEVEL,
+        }
     }
 }
 
@@ -501,6 +506,7 @@ else:
 
 if REDIS_TRAFFIC_MONITOR_LEVEL > 0:
     import redis
+    import logging
     class MonitorEnabledConnection(redis.Connection):
         _cache = None
         def send_command(self, *args, **kwargs):
@@ -567,7 +573,8 @@ def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
                 "KEY_FUNCTION":key_function,
                 "LOCATION": server,
                 "CACHEID" : cacheid,
-                "OPTIONS": options
+                "OPTIONS": options,
+                "TIMEOUT": None
             }
         else:
             return {
@@ -575,14 +582,16 @@ def GET_CACHE_CONF(cacheid,server,options={},key_function=KEY_FUNCTION):
                 "KEY_FUNCTION":key_function,
                 "LOCATION": server,
                 "CACHEID" : cacheid,
-                "OPTIONS": options
+                "OPTIONS": options,
+                "TIMEOUT": None
             }
     else:
         return {
             'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
             "KEY_FUNCTION":key_function,
             'LOCATION': server,
-            "OPTIONS": options
+            "OPTIONS": options,
+            "TIMEOUT": None
         }
 
 if CACHE_SERVER or CACHE_SESSION_SERVER or CACHE_USER_SERVER:

@@ -1,3 +1,4 @@
+from basegunicorn import *
 # Gunicorn configuration settings.
 import multiprocessing
 import os

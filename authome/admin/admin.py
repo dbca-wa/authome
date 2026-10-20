@@ -146,6 +146,7 @@ class DatetimeMixin(object):
         else:
             return timezone.localtime(obj.last_login).strftime("%Y-%m-%d %H:%M:%S")
     _last_login.short_description = "Last Login"
+    _last_login.admin_order_field = "last_login"
 
     def _date_joined(self,obj):
         if not obj or not obj.date_joined :
@@ -361,12 +362,38 @@ class SystemUserAdmin(PermissionCheckMixin,DbcaAccountMixin,UserGroupsMixin,Date
             return obj.email
     _email.short_description = "Email"
 
+class ParentUserGroupFilter(djangoadmin.SimpleListFilter):
+    # The sidebar title displayed above the filter items
+    title = 'Parent Group' 
+    
+    # The URL query parameter used when filtering
+    parameter_name = 'parent_group_id' 
+
+    def lookups(self, request, model_admin):
+        """
+        Returns a sorted list of tuples. 
+        """
+        # find all ids for parent group
+        parentgroups = models.UserGroup.objects.filter(parent_group__isnull=False).order_by("parent_group_id").distinct("parent_group_id").values_list("parent_group_id",flat=True)
+        
+        # Return a list of tuples: (database_value, readable_string)
+        return [(g.id, g.name) for g in models.UserGroup.objects.filter(id__in=parentgroups).order_by("name")]
+
+    def queryset(self, request, queryset):
+        """
+        Filters the primary model's queryset based on the selected value.
+        """
+        if self.value():
+            return queryset.filter(parent_group_id=self.value())
+        return queryset
+
+
 class UserGroupAdmin(PermissionCheckMixin,CacheableListTitleMixin,DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmin):
     list_display = ('name','groupid','parent_group','users','excluded_users','identity_provider','_session_timeout','_modified','_created')
     fields = ('name','groupid','parent_group','users','excluded_users','identity_provider','session_timeout','_modified')
     ordering = ('parent_group','name',)
     search_fields=("name",)
-    list_filter = ['parent_group']
+    list_filter = [ParentUserGroupFilter]
     form = forms.UserGroupForm
 
     model = models.UserGroup
@@ -393,12 +420,18 @@ class UserGroupAdmin(PermissionCheckMixin,CacheableListTitleMixin,DatetimeMixin,
                 return result
     _session_timeout.short_description = "Session Timeout"
 
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "parent_group":
+            # Sort the Author selector alphabetically by 'name'
+            kwargs["queryset"] = models.UserGroup.objects.order_by('name')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
 class UserGroupAuthorizationAdmin(PermissionCheckMixin,CacheableListTitleMixin,DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmin):
     list_display = ('usergroup','domain','paths','excluded_paths','_modified','_created')
     readonly_fields = ('_modified',)
     fields = ('usergroup','domain','paths','excluded_paths','_modified')
     ordering = ('usergroup',models.sortkey_c.asc())
-    search_fields=("domain",)
+    search_fields=("domain","usergroup__name")
     list_filter = ['usergroup']
     form = forms.UserGroupAuthorizationForm
 
@@ -414,6 +447,12 @@ class UserGroupAuthorizationAdmin(PermissionCheckMixin,CacheableListTitleMixin,D
             return ('_modified','usergroup')
         else:
             return ('_modified','usergroup','domain')
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "usergroup":
+            # Sort the Author selector alphabetically by 'name'
+            kwargs["queryset"] = models.UserGroup.objects.order_by('name')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 class UserAuthorizationAdmin(CacheableListTitleMixin,DatetimeMixin,CatchModelExceptionMixin,djangoadmin.ModelAdmin):

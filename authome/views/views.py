@@ -141,7 +141,7 @@ def _get_next_url(request):
         next_url = request.session.get(REDIRECT_FIELD_NAME)
         if next_url:
             domain = utils.get_domain(next_url)
-            if domain != request.get_host():
+            if domain != request.get_host() and request.get_host() != settings.AUTH2_DOMAIN:
                 #the domain of cached next url is not equal with the current request host.
                 #don't use the cached next url
                 next_url = None

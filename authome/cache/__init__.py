@@ -15,6 +15,6 @@ else:
 if settings.TRAFFIC_MONITOR_LEVEL > 0:
     def save_traffic_data():
         if defaultcache:
-            cache._save_traffic_data(timezone.localtime())
+            cache._save_traffic_data()
 
     atexit.register(save_traffic_data)

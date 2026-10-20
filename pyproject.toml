@@ -32,6 +32,7 @@ dependencies = [
     "eventlet==0.41.0",
     "sentry-sdk[django]==2.59.0",
     "captcha==0.7.1",
+    "dbca-utils>=3.0.13,<3.1",
 ]
 
 [dependency-groups]
@@ -49,6 +50,8 @@ default-groups = "all"
 
 [tool.uv.build-backend]
 module-root = ""
+
+[tool.uv.sources]
 
 [build-system]
 requires = ["uv_build>=0.9.2,<0.10.0"]
