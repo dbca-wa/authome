@@ -37,7 +37,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ipython>=8.29.0,<9",
+    "ipython>=8.29.0,<10",
     "coverage>=5.3,<6",
     "coveralls>=2.1.2,<3",
     "mock>=5.1.0,<6",
