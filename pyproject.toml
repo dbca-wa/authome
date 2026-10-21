@@ -33,6 +33,7 @@ dependencies = [
     "sentry-sdk[django]==2.59.0",
     "captcha==0.7.1",
     "dbca-utils>=3.0.13,<3.1",
+    "certifi==2026.10.19"
 ]
 
 [dependency-groups]
