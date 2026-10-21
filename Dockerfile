@@ -9,7 +9,7 @@ RUN apt-get update -y \
 
 # uv install
 # grab /uvx too if you need it
-COPY --from=ghcr.io/astral-sh/uv:0.11.1 /uv /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /bin/
 
 #update permissoins
 #RUN chmod 755 /etc
@@ -63,6 +63,8 @@ FROM dhi.io/python:3.12-debian13-dev AS runtime-stage
 #FROM python:3.12.10-slim-bookworm AS runtime-stage
 LABEL org.opencontainers.image.authors=asi@dbca.wa.gov.au
 LABEL org.opencontainers.image.source=https://github.com/dbca-wa/authome
+
+RUN pip install --upgrade pip
 
 # Copy the user & usergroup
 COPY --from=build-stage /etc/group /etc/
