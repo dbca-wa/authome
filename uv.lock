@@ -65,7 +65,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "captcha", specifier = "==0.7.1" },
-    { name = "certifi", specifier = "==2026.10.19" },
+    { name = "certifi", specifier = ">=2026.10.19" },
     { name = "dbca-utils", specifier = ">=3.0.13,<3.1" },
     { name = "dj-database-url", specifier = "==3.1.2" },
     { name = "dj-static", specifier = "==0.0.6" },
