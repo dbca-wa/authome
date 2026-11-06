@@ -349,23 +349,26 @@ def _populate_response(request,f_cache,cache_key,user,session_key=None):
     Return the populated response,
     """
     #populate the response header data
+    usergroups = models.UserGroup.find_groups(user.email)
     headers = {
-        'email': user.email,
-        'username': user.username,
-        'first_name': user.first_name,
-        'last_name': user.last_name,
-        'full_name' : "{} {}".format(user.first_name,user.last_name),
-        'groups': models.UserGroup.find_groups(user.email)[1],
-        'logout_url' : "/sso/auth_logout"
+        'X-email': user.email,
+        'X-username': user.username,
+        'X-first-name': user.first_name,
+        'X-last-name': user.last_name,
+        'X-full-name' : "{} {}".format(user.first_name,user.last_name),
+        'X-groups': usergroups[1],
+        'X-logout-url' : "/sso/auth_logout"
     }
     if session_key:
-        headers['session_key'] = session_key
+        headers['X-session-key'] = session_key
+
+    if settings.NEW_GROUP_SEPARATOR:
+        headers['X-groups2'] = usergroups[3]
 
     #populate the response and cached reponse.
     response = HttpResponse(content="Succeed")
     cached_response = HttpResponse(content="Succeed")
     for key, val in headers.items():
-        key = "X-" + key.replace("_", "-")
         response[key] = val
         cached_response[key] = val
 
