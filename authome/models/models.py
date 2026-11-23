@@ -920,20 +920,17 @@ class UserGroup(CacheableMixin,DbObjectMixin,django_models.Model):
         """
         return (groupname string seprated by ";" based on usergroups, group pks)
         """
-        groupnames = []
+        groupnames = set()
         pks = set()
         index = 0
         for usergroup in usergroups:
             group = usergroup
-            index = len(groupnames)
             while group:
                 pks.add(group.id)
-                if group.groupid in groupnames:
-                    break
                 if group.groupid:
-                    groupnames.insert(index,group.groupid)
+                    groupnames.add(group.groupid)
                 group = group.parent_group
-        return (settings.GROUP_SEPARATOR.join(groupnames),pks)
+        return (settings.GROUP_SEPARATOR.join(sorted(groupnames)),pks)
 
     def is_changed(self,update_fields=None):
         changed = super().is_changed(update_fields)
