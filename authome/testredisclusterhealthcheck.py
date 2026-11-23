@@ -64,7 +64,7 @@ class RedisClusterHealthcheckTestCase(testutils.RedisClusterTestCaseMixin,TestCa
                 #wait node timeout
                 timeout = cls.TEST_REDISCLUSTER_NODE_TIMEOUT / 1000 + 5
                 print("Wait {} seconds to let redis cluster sync each other".format(timeout))
-                time.sleep(timeout)
+                self.sleep(timeout)
                 cls.nodeids,cls.nodes,cls.groups,cls.groupmap = cls.get_cluster_metadata(start_all_server=False,print_log=True)
 
             crashednodenamemap = {}
@@ -72,7 +72,7 @@ class RedisClusterHealthcheckTestCase(testutils.RedisClusterTestCaseMixin,TestCa
                 print("\n*************************Test Round {}*******************************".format(j + 1))
                 if j > 0:
                     print("Wait 5 seconds and continue...")
-                    time.sleep(5)
+                    self.sleep(5)
                 for i in range(testgroups):
                     group = self.groups[i]
 
@@ -191,7 +191,7 @@ class RedisClusterHealthcheckTestCase(testutils.RedisClusterTestCaseMixin,TestCa
                 #wait node timeout
                 timeout = cls.TEST_REDISCLUSTER_NODE_TIMEOUT / 1000 + 5
                 print("Wait {} seconds to let redis cluster sync each other".format(timeout))
-                time.sleep(timeout)
+                self.sleep(timeout)
                 cls.nodeids,cls.nodes,cls.groups,cls.groupmap = cls.get_cluster_metadata(start_all_server=False,print_log=True)
 
             crashednodenamemap = {}
@@ -199,7 +199,7 @@ class RedisClusterHealthcheckTestCase(testutils.RedisClusterTestCaseMixin,TestCa
                 print("\n*************************Test Round {}*******************************".format(j + 1))
                 if j > 0:
                     print("Wait 5 seconds and continue...")
-                    time.sleep(5)
+                    self.sleep(5)
                 for i in range(testgroups):
                     group = self.groups[i]
 

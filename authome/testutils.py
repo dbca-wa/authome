@@ -6,6 +6,7 @@ import signal
 import time
 import requests
 from urllib.parse import quote_plus
+from datetime import timedelta
 import logging.config
 
 from django.conf import settings
@@ -304,6 +305,17 @@ class RedisClusterTestCaseMixin(object):
     groups = None
     #map between node and (group, the number of the nodes in the group)
     groupmap = None
+
+    def sleep(self,seconds):
+        now  = timezone.localtime()
+        if isinstance(seconds,timedelta):
+            waketime = now + seconds
+        else:
+            waketime = now + timedelta(seconds=seconds)
+
+        while now < waketime:
+            time.sleep((waketime - now).total_seconds())
+            now  = timezone.localtime()
 
     @classmethod
     def get_cluster_metadata(cls,start_all_server=False,print_log=False):

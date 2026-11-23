@@ -74,7 +74,7 @@ class RequestHeaderTestCase(testutils.StartServerMixin,TestCase):
         res.raise_for_status()
         
 
-    def atest_noauth(self):
+    def test_noauth(self):
         cls = self.__class__
         res = requests.get(cls.get_absolute_url(cls.noauth_url),headers=cls.injected_headers,verify=settings.SSL_VERIFY).json()
         res_headers = res.get("headers",{})
