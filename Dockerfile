@@ -1,11 +1,26 @@
 # syntax=docker/dockerfile:1
 # Prepare the base environment.
 FROM dhi.io/python:3.12-debian13-dev AS build-stage
+ARG GCC_RUNTIME_VERSION=14.2.0-19+deb13u0+dhi9
 #FROM python:3.12.10-slim-bookworm AS build-stage
-RUN apt-get update -y \
-  && apt-get install -y passwd  gcc libpq-dev \
-  && rm -rf /var/lib/apt/lists/* \
-  && pip install --upgrade pip
+
+RUN <<EOF
+set -euxo pipefail
+apt-get update -y
+
+# Install the aligned GCC runtime family and dependent packages
+# in one transaction so APT cannot retain incompatible DHI revisions.
+apt-get install -y --allow-downgrades --no-install-recommends \
+  gcc-14-base="${GCC_RUNTIME_VERSION}" \
+  libgcc-s1="${GCC_RUNTIME_VERSION}" \
+  libstdc++6="${GCC_RUNTIME_VERSION}" \
+  libgfortran5="${GCC_RUNTIME_VERSION}" \
+  gcc \
+  passwd \
+  libpq-dev \
+EOF
+
+
 
 # uv install
 # grab /uvx too if you need it
