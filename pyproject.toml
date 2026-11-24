@@ -16,7 +16,7 @@ dependencies = [
     "social-auth-core==4.9.1",
     "psycopg[binary]==3.3.4",
     "psycopg-pool==3.3.1",
-    "gunicorn[fast]==26.0.0",
+    "gunicorn[fast]==26.2.0",
     "dj-database-url==3.1.2",
     "django-dotenv==1.4.2",
     "django-extensions==4.1",
