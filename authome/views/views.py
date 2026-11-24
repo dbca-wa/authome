@@ -349,23 +349,26 @@ def _populate_response(request,f_cache,cache_key,user,session_key=None):
     Return the populated response,
     """
     #populate the response header data
+    usergroups = models.UserGroup.find_groups(user.email)
     headers = {
-        'email': user.email,
-        'username': user.username,
-        'first_name': user.first_name,
-        'last_name': user.last_name,
-        'full_name' : "{} {}".format(user.first_name,user.last_name),
-        'groups': models.UserGroup.find_groups(user.email)[1],
-        'logout_url' : "/sso/auth_logout"
+        'X-email': user.email,
+        'X-username': user.username,
+        'X-first-name': user.first_name,
+        'X-last-name': user.last_name,
+        'X-full-name' : "{} {}".format(user.first_name,user.last_name),
+        'X-groups': usergroups[1],
+        'X-logout-url' : "/sso/auth_logout"
     }
     if session_key:
-        headers['session_key'] = session_key
+        headers['X-session-key'] = session_key
+
+    if settings.NEW_GROUP_SEPARATOR:
+        headers['X-groups2'] = usergroups[3]
 
     #populate the response and cached reponse.
     response = HttpResponse(content="Succeed")
     cached_response = HttpResponse(content="Succeed")
     for key, val in headers.items():
-        key = "X-" + key.replace("_", "-")
         response[key] = val
         cached_response[key] = val
 
@@ -603,24 +606,35 @@ def is_usertoken_valid(user,token):
         usertoken = load_usertoken(user,refresh=True)
         return usertoken and usertoken.is_valid(token)
 
+def _auth4basicauth(request):
+    """
+    view method for path '/sso/auth'
+    Return
+        200 reponse: authenticated and authorized
+        401 response: not authenticated
+        403 reponse: authenticated,but not authorized
+    """
+    request.session.modified = False
+    res = _auth(request)
+    if res:
+        #authenticated, but can be authorized or not authorized
+        return res
+    else:
+        #not authenticated
+        return basic_auth_required_response_factory(request)
 
-def _auth_basic(request,not_authentiated_response_factory=basic_auth_required_response_factory):
+def _auth_basic(request,optional=False):
     """
     view method for path '/sso/auth_basic'
     First authenticate with useremail and user token; if failed,fall back to session authentication
     """
+    not_authentiated_response_factory = auth_not_required_response_factory if optional else basic_auth_required_response_factory
     #get the basic auth header
     auth_basic = request.META.get('HTTP_AUTHORIZATION').strip() if 'HTTP_AUTHORIZATION' in request.META else None
     if not auth_basic:
         #basic auth data not found
         #check whether session is already authenticated or not.
-        res = _auth(request)
-        if res:
-            #already authenticated
-            return res
-        else:
-            #not authenticated, return basic auth required response
-            return not_authentiated_response_factory(request)
+        return auth_optional(request) if optional else _auth4basicauth(request)
 
     #get the user name and user toke by parsing the basic auth data
     try:
@@ -628,18 +642,15 @@ def _auth_basic(request,not_authentiated_response_factory=basic_auth_required_re
     except:
         #failed to parse the basic auth data from request
         #fallback to normal authentication session
-        res = _auth(request)
-        if res:
-            #already authenticated
-            return res
-        else:
-            #not authenticated, return basic auth required response
-            return not_authentiated_response_factory(request)
+        return auth_optional(request) if optional else _auth4basicauth(request)
+
+    if request.user.is_authenticated and useremail == request.user.email:
+        #the user of the token auth is the same user as the authenticated session user;use the session authentication data directly without checking the token
+        return auth_optional(request) if optional else _auth4basicauth(request)
 
     #try to get the reponse from cache with useremail and token
     auth_basic_key = cache.get_basic_auth_key(useremail,token)
     userid,response = cache.get_basic_auth(auth_basic_key)
-
     if response:
         #found the cached reponse, already authenticated
         useremail = response['X-email']
@@ -648,77 +659,57 @@ def _auth_basic(request,not_authentiated_response_factory=basic_auth_required_re
                 #check whehter user token is valid or not
                 #get the user object via useremail
                 user = load_user(userid)
-                if user == anonymoususer or user.email != useremail:
-                    raise Exception("User was changed, check again.")
-
-                if not user.is_active :
+                if user == anonymoususer:
+                    #user doesn't exist; fallback to user session authentication
+                    cache.delete_basic_auth(auth_basic_key)
+                    return auth_optional(request) if optional else _auth4basicauth(request)
+                elif user.email != useremail:
+                    cache.delete_basic_auth(auth_basic_key)
+                    return not_authentiated_response_factory(request)
+                elif not user.is_active or not is_usertoken_valid(user,token):
                     logger.debug("The user({}) is inactive.".format(useremail))
                     cache.delete_basic_auth(auth_basic_key)
                     return not_authentiated_response_factory(request)
-                elif not is_usertoken_valid(user,token):
-                    #token is invalid, remove the cached response
-                    cache.delete_basic_auth(auth_basic_key)
-                    #fallback to session authentication
-                    res = _auth(request)
-                    if res:
-                        #already authenticated, but can be authorized or not authorized
-                        logger.debug("Failed to authenticate the user({}) with token, fall back to use session authentication".format(useremail))
-                        return res
-                    else:
-                        #not authenticated, return basic auth required reponse
-                        logger.debug("Failed to authenticate the user({}) with token".format(useremail))
-                        return not_authentiated_response_factory(request)
 
             request.session.modified = False
             #check authorization
-            res = check_authorization(request,useremail)
-            if res:
-                #not authorized
-                return res
-            else:
-                #authorized
-                return response
+            if not optional:
+                res = check_authorization(request,useremail)
+                if res:
+                    #not authorized
+                    return res
+
+            #authorized or optional
+            return response
         except:
             cache.delete_basic_auth(auth_basic_key)
 
     #not found the cached reponse, not authenticated before.
     try:
-        if request.user.is_authenticated and useremail == request.user.email:
-            #the user of the token auth is the same user as the authenticated session user;use the session authentication data directly
-            return  _auth(request)
-
         user = load_user_by_email(useremail)
         #user session is not authenticated or the user of the user token is not the same user as the authenticated sesion user.
         #check whther user token is valid
-        if user.is_active and is_usertoken_valid(user,token):
+        if user == anonymoususer:
+            #user doesn't exist; fallback to user session authentication
+            return auth_optional(request) if optional else _auth4basicauth(request)
+        elif user.is_active and is_usertoken_valid(user,token):
             #user token is valid, authenticated
             logger.debug("Succeed to authenticate the user({}) with token".format(useremail))
             request.user = user
             request.session.modified = False
+            #check authorization
+            if not optional:
+                res = check_authorization(request,user.email)
+                if res:
+                    #not authorized
+                    return res
+            #authorized or optional
             #populate and cache the authenticated basic auth response
             response = _populate_response(request,cache.set_basic_auth,auth_basic_key,user)
-            #check authorization
-            res = check_authorization(request,user.email)
-            if res:
-                #not authorized
-                return res
-            else:
-                #authorized
-                return response
-        elif not user.is_active :
-            logger.debug("The user({}) is inactive.".format(useremail))
+            return response
+        else :
+            logger.debug("The user({}) is inactive or token is invalid".format(useremail))
             return not_authentiated_response_factory(request)
-        else:
-            #user token is invalid; fallback to user session authentication
-            res = _auth(request)
-            if res:
-                #already authenticated,but can authorized or not authorized
-                logger.debug("Failed to authenticate the user({}) with token, fall back to use session authentication".format(useremail))
-                return res
-            else:
-                #Not authenticated, return basic auth required response
-                logger.debug("Failed to authenticate the user({}) with token".format(useremail))
-                return not_authentiated_response_factory(request)
 
     except Exception as e:
         #return basi auth required response if any exception occured.
@@ -726,7 +717,7 @@ def _auth_basic(request,not_authentiated_response_factory=basic_auth_required_re
 
 @csrf_exempt
 def auth_basic_optional(request):
-    return _auth_basic(request,not_authentiated_response_factory=auth_not_required_response_factory)
+    return _auth_basic(request,optional=True)
 
 @csrf_exempt
 def auth_basic(request):

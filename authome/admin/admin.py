@@ -219,7 +219,10 @@ class UserGroupsMixin(RequestMixin):
         if not obj :
             return ""
         else:
-            usergroups,usergroupnames,grouppks = models.UserGroup.find_groups(obj.email,cacheable=False)
+            if settings.NEW_GROUP_SEPARATOR:
+                usergroups,usergroupnames,grouppks,newusergroupnames = models.UserGroup.find_groups(obj.email,cacheable=False)
+            else:
+                usergroups,usergroupnames,grouppks = models.UserGroup.find_groups(obj.email,cacheable=False)
             result = None
             for group in usergroups:
                 url = reverse(self.group_change_url_name, args=(group.id,))

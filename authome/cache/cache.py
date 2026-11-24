@@ -472,6 +472,8 @@ class _BaseMemoryCache(object):
 
     def get_basic_auth(self,key):
         """
+        the cache key is email address.
+        Delete the cache if token is invalid or expired
         Return the populated http reponse
         """
         data = self._basic_auth_map.get(key[0])

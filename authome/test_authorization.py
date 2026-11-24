@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from django.test import TestCase, Client
+from django.conf import settings
 from django.core.exceptions import ValidationError
 
 from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access
@@ -180,7 +181,10 @@ class UserGroupTestCase(BaseAuthCacheTestCase):
   
         for email,expected_groups,expected_groupnames in testcases:
             expected_groupnames = [g for g in expected_groupnames if g]
-            groups,groupnames,grouppks = UserGroup.find_groups(email)
+            if settings.NEW_GROUP_SEPARATOR:
+                groups,groupnames,grouppks,newgroupnames = UserGroup.find_groups(email)
+            else:
+                groups,groupnames,grouppks = UserGroup.find_groups(email)
             groups = [g.name for g in groups]
             groups.sort()
             if groupnames:

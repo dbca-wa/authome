@@ -43,7 +43,7 @@ class UserSessionTimeoutTestCase(testutils.StartServerMixin,BaseTestCase):
                 after_login = timezone.localtime()
                 res.raise_for_status()
                 session_cookie = self.unquotedcookie(res.cookies[settings.SESSION_COOKIE_NAME])
-                time.sleep(5)
+                self.sleep(5)
                 sessiondata,ttl1 = self.get_session_data(session_cookie,"auth01",exist=True)
                 if timeout:
                     minttl = int((before_login  + timedelta(seconds=timeout)- timezone.localtime()).total_seconds())
@@ -51,7 +51,7 @@ class UserSessionTimeoutTestCase(testutils.StartServerMixin,BaseTestCase):
                     minttl = int((before_login  + timedelta(seconds=sessionage)- timezone.localtime()).total_seconds())
                 self.assertTrue(ttl1 >= minttl,"The ttl({1}) of the user({0}) should be greater than {2}".format(user,ttl1,minttl))
 
-                time.sleep(5)
+                self.sleep(5)
                 before_profile = timezone.localtime()
                 res = requests.get(self.get_profile_url(servername="auth01"),headers=self.cluster_headers,cookies={settings.SESSION_COOKIE_NAME:session_cookie},verify=settings.SSL_VERIFY)
                 after_profile = timezone.localtime()

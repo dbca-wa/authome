@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import time
 from collections import OrderedDict
 from datetime import timedelta
 from importlib import import_module
@@ -6,9 +7,11 @@ from importlib import import_module
 from django.urls import reverse
 from django.test import TestCase, Client
 from django.conf import settings
+from django.utils import timezone
 
 import base64
 
+from . import utils
 from .models import UserGroup,UserGroupAuthorization,UserAuthorization,can_access,UserToken,User,CustomizableUserflow,Auth2Cluster,initialize as initialize_models
 from .cache import cache,get_usercache
 from authome import patch
@@ -16,6 +19,10 @@ groupid = 0
 
 class Auth2Client(Client):
     def get(self,path, authorization=None,domain=None,url=None):
+        if url:
+            domain1,url = utils.get_domain_path(url)
+            if domain1:
+                domain = domain1
         headers={"HOST":settings.AUTH2_DOMAIN,"SERVER_NAME":settings.AUTH2_DOMAIN}
         if authorization:
             headers["AUTHORIZATION"] = authorization
@@ -24,7 +31,8 @@ class Auth2Client(Client):
         elif path in ("/sso/auth","/sso/auth_basic","/sso/auth_optional","/sso/auth_basic_optional"):
             headers["X_UPSTREAM_SERVER_NAME"] = settings.AUTH2_DOMAIN
 
-        if url:
+        if url is not None:
+            url = url or "/"
             headers["X_UPSTREAM_REQUEST_URI"] = url
 
         if settings.AUTH2_CLUSTER_ENABLED:
@@ -52,6 +60,18 @@ class BaseTestCase(TestCase):
     test_userauthorization = None
     test_users = None
     test_usergroups = None
+
+    def sleep(self,seconds):
+        now  = timezone.localtime()
+        if isinstance(seconds,timedelta):
+            waketime = now + seconds
+        else:
+            waketime = now + timedelta(seconds=seconds)
+
+        while now < waketime:
+            time.sleep((waketime - now).total_seconds())
+            now  = timezone.localtime()
+
     @classmethod
     def setUpClass(cls):
         super(BaseTestCase,cls).setUpClass()
@@ -207,6 +227,7 @@ class BaseAuthTestCase(BaseTestCase):
     auth_optional_url = reverse('auth_optional')
     auth_basic_url = reverse('auth_basic')
     auth_basic_optional_url = reverse('auth_basic_optional')
+
 
 
     def create_client(self):

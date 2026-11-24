@@ -918,22 +918,19 @@ class UserGroup(CacheableMixin,DbObjectMixin,django_models.Model):
     @classmethod
     def get_pk_and_names(cls,usergroups):
         """
-        return (groupname string seprated by "," based on usergroups, group pks)
+        return (groupname string seprated by ";" based on usergroups, group pks)
         """
-        groupnames = []
+        groupnames = set()
         pks = set()
         index = 0
         for usergroup in usergroups:
             group = usergroup
-            index = len(groupnames)
             while group:
                 pks.add(group.id)
-                if group.groupid in groupnames:
-                    break
                 if group.groupid:
-                    groupnames.insert(index,group.groupid)
+                    groupnames.add(group.groupid)
                 group = group.parent_group
-        return (",".join(groupnames),pks)
+        return (settings.GROUP_SEPARATOR.join(sorted(groupnames)),pks)
 
     def is_changed(self,update_fields=None):
         changed = super().is_changed(update_fields)
@@ -1227,11 +1224,18 @@ class UserGroup(CacheableMixin,DbObjectMixin,django_models.Model):
                 elif group.parent_group :
                     _add_group(usergroups,group.parent_group)
             if usergroups:
-                usergroups = (usergroups,*cls.get_pk_and_names(usergroups))
+                groupnames,groupids = cls.get_pk_and_names(usergroups)
+                if settings.NEW_GROUP_SEPARATOR:
+                    usergroups = (usergroups,groupnames,groupids,groupnames.replace(settings.GROUP_SEPARATOR,settings.NEW_GROUP_SEPARATOR))
+                else:
+                    usergroups = (usergroups,groupnames,groupids)
                 if cacheable:
                     cache.set_email_groups(email,usergroups)
             else:
-                usergroups = (usergroups,"",set())
+                if settings.NEW_GROUP_SEPARATOR:
+                    usergroups = (usergroups,"",set(),"")
+                else:
+                    usergroups = (usergroups,"",set())
 
 
         return usergroups
@@ -1477,7 +1481,7 @@ class AuthorizationMixin(DbObjectMixin,django_models.Model):
         return True
 
     @staticmethod
-    def find_authorizations(email,domain):
+    def find_authorizations(email,domain,usergroups=None):
         """
         email should be in lower case
         domain should be in lower case
@@ -1495,7 +1499,8 @@ class AuthorizationMixin(DbObjectMixin,django_models.Model):
 
         #try to find the matched usergroupauthorization
         matched_authorizations = []
-        usergroups = UserGroup.find_groups(email)[0]
+        if not usergroups:
+            usergroups = UserGroup.find_groups(email)[0]
 
         matched = False
         for usergroup in usergroups:
@@ -1589,6 +1594,7 @@ def can_access(email,domain,path):
     email = email.lower()
     domain = domain.lower()
     groupskey = cache.get_email_groupskey(email)
+    usergroups = None
     if not groupskey:
         #this method will find email's groups and cache in memory via two maps(email to gorupskey, groupskey to groups)
         usergroups = UserGroup.find_groups(email)[0]
@@ -1601,7 +1607,7 @@ def can_access(email,domain,path):
 
     authorizations = cache.get_authorizations(groupskey,domain)
     if authorizations is None:
-        authorizations = AuthorizationMixin.find_authorizations(email,domain)
+        authorizations = AuthorizationMixin.find_authorizations(email,domain,usergroups=usergroups)
         cache.set_authorizations(groupskey,domain,authorizations)
     if authorizations:
         return any(obj.allow(path) for obj in authorizations)
